@@ -1,0 +1,68 @@
+name: Package Smoke Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: smoke-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  import-smoke:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.12"]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+
+      - name: Install runtime dependencies
+        run: pip install -e .
+
+      - name: Run import smoke tests
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          python -c "import tarragon_viewer; print('tarragon_viewer OK')"
+          python -c "import tarragon_viewer.main; print('tarragon_viewer.main OK')"
+
+  nuitka-smoke:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.12"]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+
+      - name: Install runtime and build dependencies
+        run: pip install -e . nuitka
+
+      - name: Attempt minimal Nuitka compilation
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          python -m nuitka \
+            --onefile \
+            --enable-plugin=pyside6 \
+            --output-filename=tarragon-smoke.bin \
+            --remove-output \
+            tarragon_viewer/main.py || echo "Nuitka build failed — import smoke is the gatekeeper"

@@ -93,6 +93,15 @@ class MainWindow(QMainWindow):
         # TODO(M3): Connect this action to the folder-scanning logic.
         # open_folder_action.triggered.connect(self._on_open_folder)
 
+    def _apply_theme(self) -> None:
+        """Load and apply the QSS stylesheet from theme/app.qss."""
+        from tarragon.theme.loader import ThemeLoader
+
+        loader = ThemeLoader()
+        qss_content = loader.load_qss()
+        self.setStyleSheet(qss_content)
+        logger.debug("Theme applied successfully")
+
     def _on_open_folder(self) -> None:
         """Callback for File → Open Folder (placeholder — wired in M3)."""
         logger.info("Open Folder action triggered")

@@ -17,7 +17,6 @@ def qapp():
 def test_main_window_is_qmainwindow():
     """MainWindow is a subclass of QMainWindow."""
     from PySide6.QtWidgets import QMainWindow
-
     from tarragon.main import MainWindow
 
     assert issubclass(MainWindow, QMainWindow)

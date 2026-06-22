@@ -14,6 +14,20 @@ def qapp():
     yield app
 
 
+# ── Import Tests ───────────────────────────────────────────────────────
+
+
+def test_main_module_imports_cleanly():
+    """main.py can be imported without side effects or errors."""
+    from tarragon import main  # noqa: F401
+
+    assert hasattr(main, "MainWindow")
+    assert hasattr(main, "main")
+
+
+# ── MainWindow Class Tests ─────────────────────────────────────────────
+
+
 def test_main_window_is_qmainwindow():
     """MainWindow is a subclass of QMainWindow."""
     from PySide6.QtWidgets import QMainWindow
@@ -22,13 +36,76 @@ def test_main_window_is_qmainwindow():
     assert issubclass(MainWindow, QMainWindow)
 
 
-def test_main_window_has_title(qapp):  # noqa: ARG001
-    """MainWindow sets a title on initialization."""
+def test_main_window_has_title(qapp, tmp_path):  # noqa: ARG001
+    """MainWindow sets a title on initialization (with services at temp paths)."""
+
+    from tarragon.db import Database
     from tarragon.main import MainWindow
+    from tarragon.settings import Settings
 
-    window = MainWindow()
+    settings = Settings(tmp_path / "test_settings.db")
+    database = Database(tmp_path / "test_main.db")
+    window = MainWindow(settings=settings, database=database)
+    try:
+        assert window.windowTitle() == "Tarragon"
+    finally:
+        window.close()
 
-    assert window.windowTitle() == "Tarragon"
+
+def test_main_window_has_docks(qapp, tmp_path):  # noqa: ARG001
+    """MainWindow (from main.py) creates the three dock panels."""
+
+    from tarragon.db import Database
+    from tarragon.main import MainWindow
+    from tarragon.settings import Settings
+
+    settings = Settings(tmp_path / "test_settings_docks.db")
+    database = Database(tmp_path / "test_main_docks.db")
+    window = MainWindow(settings=settings, database=database)
+    try:
+        assert hasattr(window, "sidebar_dock")
+        assert hasattr(window, "grid_dock")
+        assert hasattr(window, "preview_dock")
+    finally:
+        window.close()
+
+
+def test_main_window_has_database(qapp, tmp_path):  # noqa: ARG001
+    """MainWindow (from main.py) stores a Database reference."""
+
+    from tarragon.db import Database
+    from tarragon.main import MainWindow
+    from tarragon.settings import Settings
+
+    settings = Settings(tmp_path / "test_settings2.db")
+    database = Database(tmp_path / "test_main_dbref.db")
+    window = MainWindow(settings=settings, database=database)
+    try:
+        assert hasattr(window, "_database")
+        assert isinstance(window._database, Database)
+    finally:
+        window.close()
+
+
+def test_main_window_default_size(qapp, tmp_path):  # noqa: ARG001
+    """MainWindow (from main.py) opens at approximately 1200x800."""
+
+    from tarragon.db import Database
+    from tarragon.main import MainWindow
+    from tarragon.settings import Settings
+
+    settings = Settings(tmp_path / "test_settings3.db")
+    database = Database(tmp_path / "test_main_size.db")
+    window = MainWindow(settings=settings, database=database)
+    try:
+        size = window.size()
+        assert size.width() == 1200, f"Expected width 1200, got {size.width()}"
+        assert size.height() == 800, f"Expected height 800, got {size.height()}"
+    finally:
+        window.close()
+
+
+# ── Entry Point Tests ──────────────────────────────────────────────────
 
 
 def test_main_function_exists():

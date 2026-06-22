@@ -1,0 +1,355 @@
+"""Tests for src/tarragon/db.py — schema init and all CRUD operations."""
+
+from __future__ import annotations
+
+import sqlite3
+from pathlib import Path
+
+import pytest
+from tarragon.db import Database
+
+# ── Fixtures ────────────────────────────────────────────────────
+
+
+@pytest.fixture()
+def db() -> Database:
+    """Provide an in-memory database for each test (isolated)."""
+    conn = Database(Path(":memory:"))
+    conn.init_schema()
+    yield conn
+    conn.close()
+
+
+# ── Schema Init ────────────────────────────────────────────────
+
+
+class TestInitSchema:
+    def test_creates_all_7_tables(self, db: Database) -> None:
+        """init_schema() creates all 7 expected tables (excluding internal sqlite_sequence)."""
+        cursor = db._conn.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+        table_names = {row["name"] for row in cursor.fetchall()}
+        # Exclude SQLite's internal autoincrement bookkeeping table
+        user_tables = table_names - {"sqlite_sequence"}
+        expected = {
+            "schema_version",
+            "thumbnails",
+            "tags",
+            "file_tags",
+            "favorites",
+            "settings",
+            "editor_associations",
+        }
+        assert user_tables == expected, f"Missing tables: {expected - user_tables}"
+
+    def test_is_idempotent(self, db: Database) -> None:
+        """Calling init_schema() twice does not error."""
+        # Already initialized by fixture; call again.
+        db.init_schema()  # Should not raise
+
+
+class TestSchemaVersion:
+    def test_version_defaults_to_zero(self, db: Database) -> None:
+        """get_schema_version returns 0 before any version is set."""
+        assert db.get_schema_version() == 0
+
+    def test_set_and_get_roundtrip(self, db: Database) -> None:
+        """Setting a version and reading it back yields the same value."""
+        for version in (1, 42, 999):
+            db.set_schema_version(version)
+            assert db.get_schema_version() == version
+
+    def test_replacing_version(self, db: Database) -> None:
+        """Setting a new version replaces the old one."""
+        db.set_schema_version(5)
+        assert db.get_schema_version() == 5
+        db.set_schema_version(10)
+        assert db.get_schema_version() == 10
+
+
+# ── Thumbnail CRUD ─────────────────────────────────────────────
+
+
+class TestThumbnailUpsert:
+    def test_insert_new_thumbnail(self, db: Database) -> None:
+        """upsert_thumbnail inserts a new record and get_thumbnail returns it."""
+        path = "/images/cat.png"
+        db.upsert_thumbnail(path, mtime=1700000000, size=204800, width=800, height=600)
+
+        result = db.get_thumbnail(path)
+        assert result is not None
+        assert result["path"] == path
+        assert result["mtime"] == 1700000000
+        assert result["size"] == 204800
+        assert result["width"] == 800
+        assert result["height"] == 600
+
+    def test_update_existing_thumbnail(self, db: Database) -> None:
+        """upsert_thumbnail updates mtime/size on conflict."""
+        path = "/images/dog.png"
+        db.upsert_thumbnail(path, mtime=1700000000, size=1000, width=640, height=480)
+        db.upsert_thumbnail(path, mtime=1700000999, size=2000, width=1024, height=768)
+
+        result = db.get_thumbnail(path)
+        assert result["mtime"] == 1700000999
+        assert result["size"] == 2000
+        assert result["width"] == 1024
+        assert result["height"] == 768
+
+    def test_master_cache_path_none(self, db: Database) -> None:
+        """master_cache_path can be omitted (None)."""
+        path = "/images/empty.png"
+        db.upsert_thumbnail(path, mtime=1, size=0, width=1, height=1)
+        result = db.get_thumbnail(path)
+        assert result["master_cache_path"] is None
+
+
+class TestThumbnailDelete:
+    def test_delete_existing(self, db: Database) -> None:
+        """delete_thumbnail removes the record; get returns None."""
+        path = "/images/delete_me.png"
+        db.upsert_thumbnail(path, mtime=1, size=100, width=50, height=50)
+        db.delete_thumbnail(path)
+
+        assert db.get_thumbnail(path) is None
+
+    def test_delete_nonexistent_does_not_error(self, db: Database) -> None:
+        """Deleting a non-existent path silently succeeds."""
+        db.delete_thumbnail("/no/such/file.png")  # Should not raise
+
+
+class TestThumbnailGet:
+    def test_missing_path_returns_none(self, db: Database) -> None:
+        assert db.get_thumbnail("/nonexistent/path.jpg") is None
+
+    def test_created_at_default_is_set(self, db: Database) -> None:
+        """created_at gets a default datetime value."""
+        path = "/images/timestamp.png"
+        db.upsert_thumbnail(path, mtime=1, size=50, width=10, height=10)
+        result = db.get_thumbnail(path)
+        assert result["created_at"] is not None
+
+
+class TestThumbnailListForFolder:
+    def test_returns_matching_paths(self, db: Database) -> None:
+        """list_thumbnails_for_folder returns only paths under the given folder."""
+        db.upsert_thumbnail("/photos/2024/cat.png", mtime=1, size=100, width=10, height=10)
+        db.upsert_thumbnail("/photos/2024/dog.png", mtime=2, size=200, width=10, height=10)
+        db.upsert_thumbnail("/other/rabbit.png", mtime=3, size=300, width=10, height=10)
+
+        results = db.list_thumbnails_for_folder("/photos/2024/")
+        assert len(results) == 2
+        paths = {r["path"] for r in results}
+        assert "/photos/2024/cat.png" in paths
+        assert "/photos/2024/dog.png" in paths
+
+    def test_empty_folder_returns_empty_list(self, db: Database) -> None:
+        result = db.list_thumbnails_for_folder("/nonexistent/folder/")
+        assert result == []
+
+
+# ── Tag CRUD ───────────────────────────────────────────────────
+
+
+class TestEnsureTag:
+    def test_creates_new_tag(self, db: Database) -> None:
+        tag_id = db.ensure_tag("red")
+        assert isinstance(tag_id, int)
+        assert tag_id > 0
+
+    def test_returns_same_id_on_repeat(self, db: Database) -> None:
+        id1 = db.ensure_tag("blue")
+        id2 = db.ensure_tag("blue")
+        assert id1 == id2
+
+    def test_different_tags_get_different_ids(self, db: Database) -> None:
+        id_green = db.ensure_tag("green")
+        id_yellow = db.ensure_tag("yellow")
+        assert id_green != id_yellow
+
+
+class TestAddFileTags:
+    def test_adds_single_tag_to_path(self, db: Database) -> None:
+        tag_id = db.ensure_tag("important")
+        db.add_file_tags(["/a.png"], tag_id)
+
+        assert db.get_file_tag_ids("/a.png") == {tag_id}
+
+    def test_adds_same_tag_to_multiple_paths(self, db: Database) -> None:
+        tag_id = db.ensure_tag("urgent")
+        paths = ["/x.png", "/y.png", "/z.png"]
+        db.add_file_tags(paths, tag_id)
+
+        for p in paths:
+            assert db.get_file_tag_ids(p) == {tag_id}
+
+    def test_default_source_is_user(self, db: Database) -> None:
+        tag_id = db.ensure_tag("manual")
+        db.add_file_tags(["/file.png"], tag_id)
+
+        row = db._conn.execute("SELECT source FROM file_tags WHERE path='/file.png' AND tag_id=?", (tag_id,)).fetchone()
+        assert row["source"] == "user"
+
+
+class TestRemoveFileTags:
+    def test_removes_specific_tag(self, db: Database) -> None:
+        id_a = db.ensure_tag("alpha")
+        id_b = db.ensure_tag("beta")
+        db.add_file_tags(["/t.png"], tag_id=id_a)
+        db.add_file_tags(["/t.png"], tag_id=id_b)
+
+        db.remove_file_tags(["/t.png"], tag_id=id_a)
+        assert db.get_file_tag_ids("/t.png") == {id_b}
+
+    def test_does_not_remove_other_tags(self, db: Database) -> None:
+        id_x = db.ensure_tag("x")
+        id_y = db.ensure_tag("y")
+        db.add_file_tags(["/u.png"], tag_id=id_x)
+        db.add_file_tags(["/v.png"], tag_id=id_y)
+
+        db.remove_file_tags(["/u.png"], tag_id=id_x)
+        assert db.get_file_tag_ids("/v.png") == {id_y}
+
+
+class TestGetFileTagIds:
+    def test_empty_for_missing_path(self, db: Database) -> None:
+        assert db.get_file_tag_ids("/ghost.png") == set()
+
+    def test_multiple_tags_as_set(self, db: Database) -> None:
+        id_1 = db.ensure_tag("one")
+        id_2 = db.ensure_tag("two")
+        db.add_file_tags(["/multi.png"], tag_id=id_1)
+        db.add_file_tags(["/multi.png"], tag_id=id_2)
+
+        assert db.get_file_tag_ids("/multi.png") == {id_1, id_2}
+
+
+class TestReplaceAutoColorTags:
+    def test_replaces_old_auto_color_with_new(self, db: Database) -> None:
+        """Old auto_color tags are deleted and new ones inserted."""
+        old_id = db.ensure_tag("old_red")
+        new_id_a = db.ensure_tag("new_red")
+        new_id_b = db.ensure_tag("new_blue")
+
+        # Set up: old auto_color tag + a user tag
+        db.add_file_tags(["/scene.png"], tag_id=old_id, source="auto_color")
+        db.add_file_tags(["/scene.png"], tag_id=new_id_a, source="user")
+
+        result_before = db.get_file_tag_ids("/scene.png")
+        assert old_id in result_before
+
+        # Replace with new auto_color tags
+        db.replace_auto_color_tags("/scene.png", ["new_red", "new_blue"])
+
+        result_after = db.get_file_tag_ids("/scene.png")
+        assert old_id not in result_after
+        assert new_id_a in result_after  # user tag survives
+        assert new_id_b in result_after
+
+    def test_clears_auto_color_when_empty_list(self, db: Database) -> None:
+        """Passing an empty list removes all auto_color tags for the path."""
+        id_a = db.ensure_tag("a")
+        id_b = db.ensure_tag("b")
+        db.add_file_tags(["/clear.png"], tag_id=id_a, source="auto_color")
+        db.add_file_tags(["/clear.png"], tag_id=id_b, source="user")
+
+        db.replace_auto_color_tags("/clear.png", [])
+
+        assert id_a not in db.get_file_tag_ids("/clear.png")
+        assert id_b in db.get_file_tag_ids("/clear.png")
+
+
+# ── Favorites CRUD ─────────────────────────────────────────────
+
+
+class TestAddFavorite:
+    def test_adds_favorite(self, db: Database) -> None:
+        db.add_favorite("/fav.png", label="sunrise", sort_order=1)
+
+        favorites = db.list_favorites()
+        assert len(favorites) == 1
+        assert favorites[0]["path"] == "/fav.png"
+        assert favorites[0]["label"] == "sunrise"
+        assert favorites[0]["sort_order"] == 1
+
+    def test_default_label_and_sort_order(self, db: Database) -> None:
+        db.add_favorite("/default.png")
+
+        fav = db.list_favorites()[0]
+        assert fav["label"] is None
+        assert fav["sort_order"] == 0
+
+
+class TestRemoveFavorite:
+    def test_removes_existing(self, db: Database) -> None:
+        db.add_favorite("/gone.png")
+        db.remove_favorite("/gone.png")
+
+        assert len(db.list_favorites()) == 0
+
+    def test_no_error_on_missing_path(self, db: Database) -> None:
+        db.remove_favorite("/nowhere.png")  # Should not raise
+
+
+class TestListFavorites:
+    def test_ordered_by_sort_order_then_path(self, db: Database) -> None:
+        db.add_favorite("/b.png", sort_order=1)
+        db.add_favorite("/a.png", sort_order=1)
+        db.add_favorite("/c.png", sort_order=2)
+
+        paths = [f["path"] for f in db.list_favorites()]
+        assert paths == ["/a.png", "/b.png", "/c.png"]
+
+
+# ── Settings CRUD ──────────────────────────────────────────────
+
+
+class TestSettingsCrud:
+    def test_get_missing_returns_none(self, db: Database) -> None:
+        assert db.get_setting("no_such_key") is None
+
+    def test_set_and_get_roundtrip(self, db: Database) -> None:
+        db.set_setting("theme", "dark")
+        assert db.get_setting("theme") == "dark"
+
+    def test_overwrite_value(self, db: Database) -> None:
+        db.set_setting("mode", "fast")
+        db.set_setting("mode", "slow")
+        assert db.get_setting("mode") == "slow"
+
+
+# ── Editor Associations CRUD ───────────────────────────────────
+
+
+class TestEditorAssociations:
+    def test_get_missing_returns_none(self, db: Database) -> None:
+        assert db.get_editor_command(".xyz") is None
+
+    def test_upsert_and_get(self, db: Database) -> None:
+        db.upsert_editor_association(".psd", "gimp {file}")
+        assert db.get_editor_command(".psd") == "gimp {file}"
+
+    def test_overwrite_template(self, db: Database) -> None:
+        db.upsert_editor_association(".xcf", "paint.net {file}")
+        db.upsert_editor_association(".xcf", "krita {file}")
+        assert db.get_editor_command(".xcf") == "krita {file}"
+
+    def test_remove(self, db: Database) -> None:
+        db.upsert_editor_association(".svg", "inkscape {file}")
+        db.remove_editor_association(".svg")
+        assert db.get_editor_command(".svg") is None
+
+
+# ── Context Manager ────────────────────────────────────────────
+
+
+class TestContextManager:
+    def test_closes_connection_on_exit(self, tmp_path: Path) -> None:
+        """Database as context manager closes the connection."""
+        db_file = tmp_path / "cm.db"
+        with Database(db_file) as d:
+            d.init_schema()
+            d.set_setting("test", "1")
+
+        # Connection should be closed — executing raises an error
+        with pytest.raises(sqlite3.ProgrammingError):
+            d._conn.execute("SELECT 1")  # type: ignore[reportAttributeAccessIssue]

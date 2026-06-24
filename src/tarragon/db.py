@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -50,16 +51,39 @@ class Database:
 
     def __init__(self, db_path: Path) -> None:
         self._db_path = db_path
-        self._conn = sqlite3.connect(str(db_path))
+        self._lock = threading.Lock()
+        self._conn = sqlite3.connect(str(db_path), check_same_thread=False)
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.row_factory = sqlite3.Row
+
+    # ── Thread-safe helpers ─────────────────────────────────────
+
+    def _execute(self, sql: str, params: tuple = ()) -> sqlite3.Cursor:
+        """Execute SQL with lock for thread safety."""
+        with self._lock:
+            return self._conn.execute(sql, params)
+
+    def _executemany(self, sql: str, seq: list[tuple]) -> None:
+        """Execute executemany with lock for thread safety."""
+        with self._lock:
+            self._conn.executemany(sql, seq)
+
+    def _executescript(self, sql: str) -> None:
+        """Execute executescript with lock for thread safety."""
+        with self._lock:
+            self._conn.executescript(sql)
+
+    def _commit(self) -> None:
+        """Commit transaction with lock for thread safety."""
+        with self._lock:
+            self._conn.commit()
 
     # ── Lifecycle ────────────────────────────────────────────────
 
     def init_schema(self) -> None:
         """Execute INITIAL_SCHEMA; creates all tables if absent. Idempotent."""
-        self._conn.executescript(INITIAL_SCHEMA)
-        self._conn.commit()
+        self._executescript(INITIAL_SCHEMA)
+        self._commit()
 
     def close(self) -> None:
         """Close the underlying SQLite connection."""
@@ -69,16 +93,16 @@ class Database:
 
     def set_schema_version(self, version: int) -> None:
         """Set the current schema version. Replaces any existing rows."""
-        self._conn.execute("DELETE FROM schema_version")
-        self._conn.execute(
+        self._execute("DELETE FROM schema_version")
+        self._execute(
             "INSERT INTO schema_version (version) VALUES (?)",
             (version,),
         )
-        self._conn.commit()
+        self._commit()
 
     def get_schema_version(self) -> int:
         """Return the stored schema version, or 0 if absent."""
-        row = self._conn.execute("SELECT version FROM schema_version LIMIT 1").fetchone()
+        row = self._execute("SELECT version FROM schema_version LIMIT 1").fetchone()
         return row["version"] if row else 0
 
     # ── Thumbnail CRUD ───────────────────────────────────────────
@@ -93,7 +117,7 @@ class Database:
         master_cache_path: str | None = None,
     ) -> None:
         """Insert or update a thumbnail record."""
-        self._conn.execute(
+        self._execute(
             """
             INSERT INTO thumbnails (path, mtime, size, width, height, master_cache_path)
             VALUES (?, ?, ?, ?, ?, ?)
@@ -106,28 +130,28 @@ class Database:
             """,
             (path, mtime, size, width, height, master_cache_path),
         )
-        self._conn.commit()
+        self._commit()
 
     def delete_thumbnail(self, path: str) -> None:
         """Remove a thumbnail record by path."""
-        self._conn.execute("DELETE FROM thumbnails WHERE path = ?", (path,))
-        self._conn.commit()
+        self._execute("DELETE FROM thumbnails WHERE path = ?", (path,))
+        self._commit()
 
     def get_thumbnail(self, path: str) -> dict | None:
         """Fetch a single thumbnail record as a dict, or None if absent."""
-        row = self._conn.execute("SELECT * FROM thumbnails WHERE path = ?", (path,)).fetchone()
+        row = self._execute("SELECT * FROM thumbnails WHERE path = ?", (path,)).fetchone()
         return _row_to_dict(row) if row else None
 
     def list_thumbnails_for_folder(self, folder_path: str) -> list[dict]:
         """List all thumbnail records whose path starts with folder_path."""
-        cursor = self._conn.execute("SELECT * FROM thumbnails WHERE path LIKE ?", (f"{folder_path}%",))
+        cursor = self._execute("SELECT * FROM thumbnails WHERE path LIKE ?", (f"{folder_path}%",))
         return [_row_to_dict(row) for row in cursor.fetchall()]
 
     # ── Tag CRUD ─────────────────────────────────────────────────
 
     def ensure_tag(self, name: str) -> int:
         """Insert a tag if it doesn't exist; always returns the tag id."""
-        cursor = self._conn.execute(
+        cursor = self._execute(
             "INSERT INTO tags (name) VALUES (?) ON CONFLICT(name) DO UPDATE SET name=name RETURNING id",
             (name,),
         )
@@ -135,46 +159,46 @@ class Database:
 
     def add_file_tags(self, paths: list[str], tag_id: int, source: str = "user") -> None:
         """Associate one or more file paths with a given tag."""
-        self._conn.executemany(
+        self._executemany(
             "INSERT OR IGNORE INTO file_tags (path, tag_id, source) VALUES (?, ?, ?)",
             [(p, tag_id, source) for p in paths],
         )
-        self._conn.commit()
+        self._commit()
 
     def remove_file_tags(self, paths: list[str], tag_id: int) -> None:
         """Remove file-tag associations for the given paths and tag."""
         placeholders = ",".join("?" * len(paths))
-        self._conn.execute(
+        self._execute(
             f"DELETE FROM file_tags WHERE path IN ({placeholders}) AND tag_id = ?",
             (*paths, tag_id),
         )
-        self._conn.commit()
+        self._commit()
 
     def get_file_tag_ids(self, path: str) -> set[int]:
         """Return the set of tag ids associated with a given path."""
-        cursor = self._conn.execute("SELECT tag_id FROM file_tags WHERE path = ?", (path,))
+        cursor = self._execute("SELECT tag_id FROM file_tags WHERE path = ?", (path,))
         return {row["tag_id"] for row in cursor.fetchall()}
 
     def replace_auto_color_tags(self, path: str, tags: list[str]) -> None:
         """Delete old auto_color tags for a path and insert new ones."""
-        self._conn.execute(
+        self._execute(
             "DELETE FROM file_tags WHERE path = ? AND source = 'auto_color'",
             (path,),
         )
         if tags:
             tag_ids: list[int] = []
             for name in tags:
-                cursor = self._conn.execute(
+                cursor = self._execute(
                     "INSERT INTO tags (name) VALUES (?) ON CONFLICT(name) DO UPDATE SET name=name RETURNING id",
                     (name,),
                 )
                 tag_ids.append(cursor.fetchone()["id"])
 
-            self._conn.executemany(
+            self._executemany(
                 "INSERT OR IGNORE INTO file_tags (path, tag_id, source) VALUES (?, ?, ?)",
                 [(path, tid, "auto_color") for tid in tag_ids],
             )
-        self._conn.commit()
+        self._commit()
 
     # ── Favorites CRUD ───────────────────────────────────────────
 
@@ -185,42 +209,42 @@ class Database:
         sort_order: int = 0,
     ) -> None:
         """Add a file to favorites."""
-        self._conn.execute(
+        self._execute(
             "INSERT OR IGNORE INTO favorites (path, label, sort_order) VALUES (?, ?, ?)",
             (path, label, sort_order),
         )
-        self._conn.commit()
+        self._commit()
 
     def remove_favorite(self, path: str) -> None:
         """Remove a file from favorites."""
-        self._conn.execute("DELETE FROM favorites WHERE path = ?", (path,))
-        self._conn.commit()
+        self._execute("DELETE FROM favorites WHERE path = ?", (path,))
+        self._commit()
 
     def list_favorites(self) -> list[dict]:
         """Return all favorite records ordered by sort_order then path."""
-        cursor = self._conn.execute("SELECT * FROM favorites ORDER BY sort_order, path")
+        cursor = self._execute("SELECT * FROM favorites ORDER BY sort_order, path")
         return [_row_to_dict(row) for row in cursor.fetchall()]
 
     # ── Settings CRUD (thin wrapper over settings.py dual access) ─
 
     def get_setting(self, key: str) -> str | None:
         """Read a raw string setting value; None if absent."""
-        row = self._conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+        row = self._execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
         return row["value"] if row else None
 
     def set_setting(self, key: str, value: str) -> None:
         """Persist a raw string setting."""
-        self._conn.execute(
+        self._execute(
             "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
             (key, value),
         )
-        self._conn.commit()
+        self._commit()
 
     # ── Editor associations CRUD ─────────────────────────────────
 
     def get_editor_command(self, extension: str) -> str | None:
         """Return the editor command template for an extension; None if absent."""
-        row = self._conn.execute(
+        row = self._execute(
             "SELECT command_template FROM editor_associations WHERE extension = ?",
             (extension,),
         ).fetchone()
@@ -228,16 +252,16 @@ class Database:
 
     def upsert_editor_association(self, extension: str, command_template: str) -> None:
         """Insert or update an editor association."""
-        self._conn.execute(
+        self._execute(
             "INSERT OR REPLACE INTO editor_associations (extension, command_template) VALUES (?, ?)",
             (extension, command_template),
         )
-        self._conn.commit()
+        self._commit()
 
     def remove_editor_association(self, extension: str) -> None:
         """Remove an editor association by extension."""
-        self._conn.execute("DELETE FROM editor_associations WHERE extension = ?", (extension,))
-        self._conn.commit()
+        self._execute("DELETE FROM editor_associations WHERE extension = ?", (extension,))
+        self._commit()
 
     # ── Context manager protocol ─────────────────────────────────
 

@@ -1,0 +1,833 @@
+"""Tests for ThumbnailGrid and ThumbnailDelegate."""
+
+from __future__ import annotations
+
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+import pytest
+from PySide6.QtCore import (
+    QEvent,
+    QModelIndex,
+    QPoint,
+    QPointF,
+    QRect,
+    QSize,
+    Qt,
+)
+from PySide6.QtGui import QMouseEvent
+from PySide6.QtWidgets import (
+    QListView,
+    QStyle,
+    QStyledItemDelegate,
+    QStyleOptionViewItem,
+    QToolTip,
+)
+from tarragon.models.thumbnail_model import ThumbnailModel
+from tarragon.widgets.thumbnail_grid import (
+    BG_PRIMARY,
+    BG_SECONDARY,
+    GRID_GAP,
+    THUMBNAIL_SIZE,
+    ThumbnailDelegate,
+    ThumbnailGrid,
+)
+
+
+@pytest.fixture(autouse=True)
+def qapp():
+    """Provide a shared QApplication instance for all Qt tests."""
+    from PySide6.QtWidgets import QApplication
+
+    app = QApplication.instance()
+    if app is None:
+        app = QApplication(["test"])
+    yield app
+
+
+@pytest.fixture()
+def delegate():
+    """Provide a fresh ThumbnailDelegate."""
+    return ThumbnailDelegate()
+
+
+@pytest.fixture()
+def grid():
+    """Provide a ThumbnailGrid that is closed after the test."""
+    g = ThumbnailGrid()
+    yield g
+    g.close()
+
+
+@pytest.fixture()
+def grid_with_model(grid):
+    """Provide a ThumbnailGrid backed by a ThumbnailModel with sample paths."""
+    model = ThumbnailModel()
+    model.set_paths(
+        [
+            Path("/fake/images/photo_001.png"),
+            Path("/fake/images/photo_002.jpg"),
+            Path("/fake/images/layer_comp.psd"),
+        ]
+    )
+    grid.set_model(model)
+    return grid, model
+
+
+@pytest.fixture()
+def mock_painter():
+    """Provide a mocked QPainter for paint-method tests."""
+    painter = MagicMock()
+    painter.font.return_value = MagicMock()
+    # Make elidedText pass through the input text by default
+    painter.fontMetrics.return_value.elidedText.side_effect = lambda text, mode, width: text
+    return painter
+
+
+@pytest.fixture()
+def style_option():
+    """Provide a QStyleOptionViewItem with a realistic rect and no special state."""
+    opt = QStyleOptionViewItem()
+    opt.rect = QRect(0, 0, THUMBNAIL_SIZE + GRID_GAP * 2, THUMBNAIL_SIZE + GRID_GAP * 2 + 24)
+    opt.state = QStyle.StateFlag.State_None
+    return opt
+
+
+def _make_index(model, row):
+    """Helper: return a valid QModelIndex for *row* in *model*."""
+    return model.index(row)
+
+
+# ── ThumbnailGrid Tests ──────────────────────────────────────────────
+
+
+def test_thumbnail_grid_is_qlistview():
+    """ThumbnailGrid is a QListView subclass."""
+    assert issubclass(ThumbnailGrid, QListView)
+
+
+def test_thumbnail_grid_icon_mode(qapp):  # noqa: ARG001
+    """ThumbnailGrid uses IconMode view."""
+    grid = ThumbnailGrid()
+    try:
+        assert grid.viewMode() == QListView.ViewMode.IconMode
+    finally:
+        grid.close()
+
+
+def test_thumbnail_grid_has_delegate(qapp):  # noqa: ARG001
+    """ThumbnailGrid has a ThumbnailDelegate set."""
+    grid = ThumbnailGrid()
+    try:
+        delegate = grid.itemDelegate()
+        assert isinstance(delegate, ThumbnailDelegate)
+    finally:
+        grid.close()
+
+
+def test_thumbnail_grid_extended_selection(qapp):  # noqa: ARG001
+    """ThumbnailGrid allows extended (multi) selection."""
+    grid = ThumbnailGrid()
+    try:
+        assert grid.selectionMode() == QListView.SelectionMode.ExtendedSelection
+    finally:
+        grid.close()
+
+
+def test_thumbnail_grid_set_model(qapp):  # noqa: ARG001
+    """ThumbnailGrid accepts a ThumbnailModel."""
+    grid = ThumbnailGrid()
+    model = ThumbnailModel()
+    try:
+        grid.set_model(model)
+        assert grid.model() is model
+    finally:
+        grid.close()
+
+
+# ── ThumbnailDelegate Tests ──────────────────────────────────────────
+
+
+def test_thumbnail_delegate_is_qstyleditemdelegate():
+    """ThumbnailDelegate is a QStyledItemDelegate subclass."""
+    assert issubclass(ThumbnailDelegate, QStyledItemDelegate)
+
+
+def test_thumbnail_delegate_size_hint():
+    """sizeHint returns correct dimensions for a grid cell."""
+    delegate = ThumbnailDelegate()
+    hint = delegate.sizeHint(None, None)  # type: ignore[arg-type]
+    expected_width = THUMBNAIL_SIZE + GRID_GAP * 2
+    expected_height = THUMBNAIL_SIZE + GRID_GAP * 2 + 24
+    assert hint == QSize(expected_width, expected_height)
+
+
+def test_thumbnail_delegate_hover_tracking():
+    """set_hovered_row updates the internal hovered row."""
+    delegate = ThumbnailDelegate()
+    assert delegate._hovered_row == -1
+    delegate.set_hovered_row(5)
+    assert delegate._hovered_row == 5
+    delegate.set_hovered_row(-1)
+    assert delegate._hovered_row == -1
+
+
+# ── Edge Case: Empty Model ───────────────────────────────────────────
+
+
+def test_paint_with_empty_model_does_not_crash(delegate, mock_painter, style_option):
+    """Painting when the model has 0 rows does not raise."""
+    # No paths set — model is empty
+    # Use an invalid index (row 0 on empty model)
+    index = QModelIndex()
+    delegate.paint(mock_painter, style_option, index)
+    # Should complete without exception; fillRect called for background
+    assert mock_painter.save.called
+    assert mock_painter.restore.called
+
+
+def test_grid_with_empty_model_renders_without_error(grid):
+    """ThumbnailGrid backed by an empty model does not crash on viewport update."""
+    model = ThumbnailModel()
+    grid.set_model(model)
+    assert model.rowCount() == 0
+    # Force a viewport update — should not raise
+    grid.viewport().update()
+
+
+# ── Edge Case: Invalid Index in Delegate Paint ───────────────────────
+
+
+def test_paint_with_invalid_index_does_not_crash(delegate, mock_painter, style_option):
+    """Painting with an invalid QModelIndex does not raise."""
+    invalid_index = QModelIndex()
+    assert not invalid_index.isValid()
+    delegate.paint(mock_painter, style_option, invalid_index)
+    assert mock_painter.save.called
+    assert mock_painter.restore.called
+
+
+def test_paint_with_invalid_index_uses_empty_name(delegate, mock_painter, style_option):
+    """Painting with invalid index falls back to empty string for display name."""
+    invalid_index = QModelIndex()
+    delegate.paint(mock_painter, style_option, invalid_index)
+    # drawText should be called with empty string (since data() returns None → "")
+    draw_text_calls = mock_painter.drawText.call_args_list
+    assert len(draw_text_calls) >= 1
+    # The first drawText call should contain empty string for the name
+    first_call_args = draw_text_calls[0].args
+    assert first_call_args[-1] == ""
+
+
+# ── Edge Case: None Data from Model ──────────────────────────────────
+
+
+def test_paint_when_path_role_returns_none(delegate, mock_painter, style_option):
+    """Painting when PathRole returns None does not crash (no pixmap drawn)."""
+    model = ThumbnailModel()
+    model.set_paths([Path("/fake/test.png")])
+    index = model.index(0)
+
+    # Patch index.data to return None for PathRole
+    original_data = index.data
+
+    def mock_data(role):
+        if role == ThumbnailModel.PathRole:
+            return None
+        if role == Qt.ItemDataRole.DisplayRole:
+            return "test.png"
+        return original_data(role)
+
+    with patch.object(index, "data", side_effect=mock_data):
+        delegate.paint(mock_painter, style_option, index)
+
+    # drawPixmap should NOT be called since pixmap would be null/None
+    mock_painter.drawPixmap.assert_not_called()
+    # But save/restore still happen
+    assert mock_painter.save.called
+    assert mock_painter.restore.called
+
+
+def test_paint_when_display_role_returns_none(delegate, mock_painter, style_option):
+    """Painting when DisplayRole returns None uses empty string for name."""
+    model = ThumbnailModel()
+    model.set_paths([Path("/fake/test.png")])
+    index = model.index(0)
+
+    original_data = index.data
+
+    def mock_data(role):
+        if role == Qt.ItemDataRole.DisplayRole:
+            return None
+        return original_data(role)
+
+    with patch.object(index, "data", side_effect=mock_data):
+        delegate.paint(mock_painter, style_option, index)
+
+    # drawText should still be called with empty string
+    draw_text_calls = mock_painter.drawText.call_args_list
+    name_call = draw_text_calls[0]
+    assert name_call.args[-1] == ""
+
+
+# ── Edge Case: Very Long Filenames ───────────────────────────────────
+
+
+def test_paint_with_very_long_filename(delegate, mock_painter, style_option):
+    """Painting with an extremely long filename does not crash."""
+    model = ThumbnailModel()
+    long_name = "a" * 500 + ".png"
+    model.set_paths([Path(f"/fake/{long_name}")])
+    index = model.index(0)
+
+    delegate.paint(mock_painter, style_option, index)
+    # Should complete without exception
+    assert mock_painter.save.called
+    assert mock_painter.restore.called
+    # drawText should be called with the long name
+    draw_text_calls = mock_painter.drawText.call_args_list
+    assert any(long_name in str(call) for call in draw_text_calls)
+
+
+# ── Edge Case: Unicode Filenames ─────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "filename",
+    [
+        pytest.param("日本語ファイル.png", id="japanese"),
+        pytest.param("émojis_🎨🖌️🖼️.png", id="emoji"),
+        pytest.param("кириллица_exposure.tga", id="cyrillic"),
+        pytest.param("中文文件名.psd", id="chinese_psd"),
+        pytest.param("über_straße_final_v2.exr", id="german"),
+    ],
+)
+def test_paint_with_unicode_filename(delegate, mock_painter, style_option, filename):
+    """Painting with various Unicode filenames does not crash."""
+    model = ThumbnailModel()
+    model.set_paths([Path(f"/fake/{filename}")])
+    index = model.index(0)
+
+    delegate.paint(mock_painter, style_option, index)
+    assert mock_painter.save.called
+    assert mock_painter.restore.called
+
+
+# ── Edge Case: Large Model (1000+ items) ─────────────────────────────
+
+
+def test_model_with_1000_items_does_not_crash(grid):
+    """ThumbnailGrid handles a model with 1000+ items without error."""
+    model = ThumbnailModel()
+    paths = [Path(f"/fake/batch_{i:04d}.png") for i in range(1000)]
+    model.set_paths(paths)
+    grid.set_model(model)
+
+    assert model.rowCount() == 1000
+    # Indexing first and last items should work
+    first = model.index(0)
+    last = model.index(999)
+    assert first.isValid()
+    assert last.isValid()
+    assert first.data() == "batch_0000.png"
+    assert last.data() == "batch_0999.png"
+
+
+def test_delegate_size_hint_consistent_across_indices(delegate):
+    """sizeHint returns the same size regardless of index."""
+    model = ThumbnailModel()
+    model.set_paths([Path(f"/fake/img_{i}.png") for i in range(10)])
+
+    hint_0 = delegate.sizeHint(None, model.index(0))
+    hint_5 = delegate.sizeHint(None, model.index(5))
+    hint_9 = delegate.sizeHint(None, model.index(9))
+
+    assert hint_0 == hint_5 == hint_9
+
+
+# ── Edge Case: mouseMoveEvent on Invalid Index ───────────────────────
+
+
+def test_mouse_move_event_over_empty_area_resets_hover(grid_with_model):
+    """mouseMoveEvent over an area with no item resets hover to -1."""
+    grid, model = grid_with_model
+    delegate = grid._delegate
+
+    # First set hover to something
+    delegate.set_hovered_row(1)
+    assert delegate._hovered_row == 1
+
+    # Simulate mouse move to a point that likely has no item (far off)
+    event = QMouseEvent(
+        QMouseEvent.Type.MouseMove,
+        QPointF(-9999, -9999),
+        Qt.MouseButton.NoButton,
+        Qt.MouseButton.NoButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    grid.mouseMoveEvent(event)
+
+    # Hover should be reset since indexAt returns invalid index
+    assert delegate._hovered_row == -1
+
+
+def test_mouse_move_event_triggers_viewport_update(grid_with_model):
+    """mouseMoveEvent triggers a viewport update when hovered row changes."""
+    grid, _ = grid_with_model
+    delegate = grid._delegate
+
+    # Pre-set hover to a known row so the change is detected
+    delegate.set_hovered_row(99)
+
+    with patch.object(grid.viewport(), "update") as mock_update:
+        event = QMouseEvent(
+            QMouseEvent.Type.MouseMove,
+            QPointF(-9999, -9999),  # guaranteed invalid → row = -1
+            Qt.MouseButton.NoButton,
+            Qt.MouseButton.NoButton,
+            Qt.KeyboardModifier.NoModifier,
+        )
+        grid.mouseMoveEvent(event)
+        mock_update.assert_called_once()
+
+
+def test_mouse_move_event_no_update_when_row_unchanged(grid_with_model):
+    """mouseMoveEvent does NOT trigger viewport update when hovered row is unchanged."""
+    grid, _ = grid_with_model
+    delegate = grid._delegate
+
+    # Both current hover and mouse position resolve to row -1
+    delegate.set_hovered_row(-1)
+
+    with patch.object(grid.viewport(), "update") as mock_update:
+        event = QMouseEvent(
+            QMouseEvent.Type.MouseMove,
+            QPointF(-9999, -9999),  # invalid → row = -1 (same as current)
+            Qt.MouseButton.NoButton,
+            Qt.MouseButton.NoButton,
+            Qt.KeyboardModifier.NoModifier,
+        )
+        grid.mouseMoveEvent(event)
+        mock_update.assert_not_called()
+
+
+# ── Edge Case: leaveEvent Resets Hover ───────────────────────────────
+
+
+def test_leave_event_resets_hover_state(grid_with_model):
+    """leaveEvent resets the hovered row to -1."""
+    grid, _ = grid_with_model
+    delegate = grid._delegate
+
+    delegate.set_hovered_row(2)
+    assert delegate._hovered_row == 2
+
+    event = QMouseEvent(
+        QMouseEvent.Type.Leave,
+        QPointF(0, 0),
+        Qt.MouseButton.NoButton,
+        Qt.MouseButton.NoButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    grid.leaveEvent(event)
+
+    assert delegate._hovered_row == -1
+
+
+def test_leave_event_triggers_viewport_update(grid_with_model):
+    """leaveEvent triggers a viewport update for repaint."""
+    grid, _ = grid_with_model
+
+    with patch.object(grid.viewport(), "update") as mock_update:
+        event = QMouseEvent(
+            QMouseEvent.Type.Leave,
+            QPointF(0, 0),
+            Qt.MouseButton.NoButton,
+            Qt.MouseButton.NoButton,
+            Qt.KeyboardModifier.NoModifier,
+        )
+        grid.leaveEvent(event)
+        mock_update.assert_called_once()
+
+
+# ── Edge Case: Multiple Rapid Hover Changes ──────────────────────────
+
+
+def test_rapid_hover_changes_track_correctly(delegate):
+    """Rapid successive hover changes always reflect the latest row."""
+    rows = [0, 5, 3, 99, -1, 42, 0, -1, 7, -1]
+    for row in rows:
+        delegate.set_hovered_row(row)
+        assert delegate._hovered_row == row
+
+
+def test_rapid_hover_changes_via_mouse_events(grid_with_model):
+    """Rapid mouseMoveEvents correctly update hover state each time."""
+    grid, _ = grid_with_model
+    delegate = grid._delegate
+
+    # Simulate a sequence of mouse moves to off-screen points (all invalid)
+    for _ in range(20):
+        event = QMouseEvent(
+            QMouseEvent.Type.MouseMove,
+            QPointF(-1, -1),
+            Qt.MouseButton.NoButton,
+            Qt.MouseButton.NoButton,
+            Qt.KeyboardModifier.NoModifier,
+        )
+        grid.mouseMoveEvent(event)
+
+    assert delegate._hovered_row == -1
+
+
+# ── Edge Case: PSD/PSB Badge Painting ────────────────────────────────
+
+
+def test_paint_psd_file_draws_badge(delegate, mock_painter, style_option):
+    """Painting a .psd file draws the PSD badge overlay."""
+    model = ThumbnailModel()
+    model.set_paths([Path("/fake/layer_composite.psd")])
+    index = model.index(0)
+
+    delegate.paint(mock_painter, style_option, index)
+
+    # There should be a fillRect call for the badge (PSD_BADGE_COLOR)
+    # and a drawText call with "PSD"
+    draw_text_calls = mock_painter.drawText.call_args_list
+
+    # Badge text "PSD" should appear in one of the drawText calls
+    assert any("PSD" in str(call) for call in draw_text_calls)
+
+
+def test_paint_psb_file_draws_badge(delegate, mock_painter, style_option):
+    """Painting a .psb file draws a PSB badge overlay (not PSD)."""
+    model = ThumbnailModel()
+    model.set_paths([Path("/fake/big_document.psb")])
+    index = model.index(0)
+
+    delegate.paint(mock_painter, style_option, index)
+
+    draw_text_calls = mock_painter.drawText.call_args_list
+    # Badge text should be "PSB", not "PSD"
+    assert any("PSB" in str(call) for call in draw_text_calls)
+    assert not any("PSD" in str(call) for call in draw_text_calls)
+
+
+def test_paint_psd_case_insensitive(delegate, mock_painter, style_option):
+    """PSD badge is drawn regardless of file extension case (.PSD, .Psd)."""
+    model = ThumbnailModel()
+    model.set_paths([Path("/fake/UPPER.PSD")])
+    index = model.index(0)
+
+    delegate.paint(mock_painter, style_option, index)
+
+    draw_text_calls = mock_painter.drawText.call_args_list
+    assert any("PSD" in str(call) for call in draw_text_calls)
+
+
+def test_paint_non_psd_file_no_badge(delegate, mock_painter, style_option):
+    """Painting a .png file does NOT draw the PSD badge."""
+    model = ThumbnailModel()
+    model.set_paths([Path("/fake/regular_image.png")])
+    index = model.index(0)
+
+    delegate.paint(mock_painter, style_option, index)
+
+    draw_text_calls = mock_painter.drawText.call_args_list
+    # "PSD" should NOT appear in any drawText call
+    assert not any("PSD" in str(call) for call in draw_text_calls)
+
+
+# ── Edge Case: Selection State Painting ──────────────────────────────
+
+
+def test_paint_selected_item_uses_secondary_bg(delegate, mock_painter, style_option):
+    """Painting a selected item fills background with BG_SECONDARY."""
+    model = ThumbnailModel()
+    model.set_paths([Path("/fake/selected.png")])
+    index = model.index(0)
+
+    # Set the style option to selected state
+    style_option.state = QStyle.StateFlag.State_Selected
+
+    delegate.paint(mock_painter, style_option, index)
+
+    # fillRect should be called with BG_SECONDARY for selected state
+    fill_calls = mock_painter.fillRect.call_args_list
+    assert len(fill_calls) >= 1
+    # First fillRect is the background
+    first_fill_args = fill_calls[0].args
+    assert first_fill_args[1] == BG_SECONDARY
+
+
+def test_paint_selected_item_draws_coral_border(delegate, mock_painter, style_option):
+    """Painting a selected item draws a coral selection border."""
+    model = ThumbnailModel()
+    model.set_paths([Path("/fake/selected.png")])
+    index = model.index(0)
+
+    style_option.state = QStyle.StateFlag.State_Selected
+
+    delegate.paint(mock_painter, style_option, index)
+
+    # setPen should be called with a QPen using CORAL_STRONG
+    # The border pen is set after the text pen — check for drawRect (border)
+    assert mock_painter.drawRect.called
+
+
+def test_paint_hovered_item_uses_lighter_bg(delegate, mock_painter, style_option):
+    """Painting a hovered item fills background with a lighter variant."""
+    model = ThumbnailModel()
+    model.set_paths([Path("/fake/hovered.png")])
+    index = model.index(0)
+
+    # Set this row as hovered
+    delegate.set_hovered_row(0)
+    style_option.state = QStyle.StateFlag.State_None
+
+    delegate.paint(mock_painter, style_option, index)
+
+    fill_calls = mock_painter.fillRect.call_args_list
+    assert len(fill_calls) >= 1
+    # Background should be BG_SECONDARY.lighter(110)
+    expected_color = BG_SECONDARY.lighter(110)
+    first_fill_args = fill_calls[0].args
+    assert first_fill_args[1] == expected_color
+
+
+def test_paint_normal_item_uses_primary_bg(delegate, mock_painter, style_option):
+    """Painting a non-selected, non-hovered item uses BG_PRIMARY."""
+    model = ThumbnailModel()
+    model.set_paths([Path("/fake/normal.png")])
+    index = model.index(0)
+
+    delegate.set_hovered_row(-1)  # ensure not hovered
+    style_option.state = QStyle.StateFlag.State_None
+
+    delegate.paint(mock_painter, style_option, index)
+
+    fill_calls = mock_painter.fillRect.call_args_list
+    assert len(fill_calls) >= 1
+    first_fill_args = fill_calls[0].args
+    assert first_fill_args[1] == BG_PRIMARY
+
+
+# ── Edge Case: Grid Configuration Details ────────────────────────────
+
+
+def test_thumbnail_grid_grid_size_matches_delegate(grid):
+    """Grid size is large enough for delegate cell + extra spacing."""
+    delegate_hint = grid._delegate.sizeHint(None, None)
+    grid_size = grid.gridSize()
+
+    # Grid size should be at least as large as the delegate hint
+    assert grid_size.width() >= delegate_hint.width()
+    assert grid_size.height() >= delegate_hint.height()
+
+
+def test_thumbnail_grid_mouse_tracking_enabled(grid):
+    """ThumbnailGrid has mouse tracking enabled for hover effects."""
+    assert grid.hasMouseTracking()
+
+
+def test_thumbnail_grid_icon_size_matches_thumbnail_size(grid):
+    """Icon size matches THUMBNAIL_SIZE constant."""
+    assert grid.iconSize() == QSize(THUMBNAIL_SIZE, THUMBNAIL_SIZE)
+
+
+def test_thumbnail_grid_wrapping_enabled(grid):
+    """ThumbnailGrid has wrapping enabled for multi-row layout."""
+    assert grid.isWrapping()
+
+
+def test_thumbnail_grid_horizontal_scrollbar_always_off(grid):
+    """Horizontal scrollbar is always off."""
+    assert grid.horizontalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+
+
+def test_thumbnail_grid_uniform_item_sizes(grid):
+    """Uniform item sizes enabled for performance."""
+    assert grid.uniformItemSizes()
+
+
+# ── Edge Case: Delegate Initial State ────────────────────────────────
+
+
+def test_delegate_initial_hover_is_negative_one():
+    """ThumbnailDelegate starts with _hovered_row = -1 (no hover)."""
+    d = ThumbnailDelegate()
+    assert d._hovered_row == -1
+
+
+def test_delegate_set_hovered_row_with_large_value():
+    """set_hovered_row accepts arbitrarily large row numbers."""
+    d = ThumbnailDelegate()
+    d.set_hovered_row(999_999)
+    assert d._hovered_row == 999_999
+
+
+def test_delegate_set_hovered_row_with_negative_value():
+    """set_hovered_row accepts negative values (reset signal)."""
+    d = ThumbnailDelegate()
+    d.set_hovered_row(5)
+    d.set_hovered_row(-1)
+    assert d._hovered_row == -1
+
+
+# ── Edge Case: Paint Save/Restore Pairing ────────────────────────────
+
+
+def test_paint_always_pairs_save_and_restore(delegate, mock_painter, style_option):
+    """paint() always calls save() and restore() exactly once each."""
+    model = ThumbnailModel()
+    model.set_paths([Path("/fake/test.png")])
+    index = model.index(0)
+
+    delegate.paint(mock_painter, style_option, index)
+
+    assert mock_painter.save.call_count == 1
+    assert mock_painter.restore.call_count == 1
+
+
+def test_paint_save_restore_with_invalid_index(delegate, mock_painter, style_option):
+    """paint() pairs save/restore even with an invalid index."""
+    invalid = QModelIndex()
+    delegate.paint(mock_painter, style_option, invalid)
+
+    assert mock_painter.save.call_count == 1
+    assert mock_painter.restore.call_count == 1
+
+
+# ── Edge Case: Multiple Items Painted Sequentially ───────────────────
+
+
+def test_paint_multiple_items_sequentially(delegate, mock_painter, style_option):
+    """Painting multiple items in sequence does not leak state between calls."""
+    model = ThumbnailModel()
+    model.set_paths(
+        [
+            Path("/fake/a.png"),
+            Path("/fake/b.psd"),
+            Path("/fake/c.jpg"),
+        ]
+    )
+
+    for row in range(3):
+        mock_painter.reset_mock()
+        index = model.index(row)
+        delegate.paint(mock_painter, style_option, index)
+        assert mock_painter.save.call_count == 1
+        assert mock_painter.restore.call_count == 1
+
+
+# ── Regression: State_Selected Fix ───────────────────────────────────
+
+
+def test_paint_with_selected_state_does_not_crash(delegate, mock_painter, style_option):
+    """Painting with State_Selected does not crash (regression for QStyle.StateFlag fix)."""
+    model = ThumbnailModel()
+    model.set_paths([Path("/fake/selected.png")])
+    index = model.index(0)
+
+    style_option.state = QStyle.StateFlag.State_Selected
+
+    # Should not raise AttributeError from bad enum access
+    delegate.paint(mock_painter, style_option, index)
+    assert mock_painter.save.called
+    assert mock_painter.restore.called
+
+
+# ── Text Truncation (Elision) ────────────────────────────────────────
+
+
+def test_paint_long_filename_uses_elided_text(delegate, style_option):
+    """Painting with a long filename uses QFontMetrics.elidedText for truncation."""
+    mock_painter = MagicMock()
+    mock_painter.font.return_value = MagicMock()
+    mock_painter.fontMetrics.return_value.elidedText.return_value = "aaaa..."
+
+    model = ThumbnailModel()
+    long_name = "a" * 500 + ".png"
+    model.set_paths([Path(f"/fake/{long_name}")])
+    index = model.index(0)
+
+    delegate.paint(mock_painter, style_option, index)
+
+    # Verify elidedText was called with the long name
+    mock_painter.fontMetrics.return_value.elidedText.assert_called_once()
+    call_args = mock_painter.fontMetrics.return_value.elidedText.call_args
+    assert call_args.args[0] == long_name
+
+    # Verify the elided text was used in drawText
+    draw_text_calls = mock_painter.drawText.call_args_list
+    assert any("aaaa..." in str(call) for call in draw_text_calls)
+
+
+# ── Tooltip Support (helpEvent) ──────────────────────────────────────
+
+
+def test_help_event_returns_true_for_tooltip(delegate):
+    """helpEvent returns True and shows tooltip for ToolTip events."""
+    model = ThumbnailModel()
+    model.set_paths([Path("/fake/test_image.png")])
+    index = model.index(0)
+
+    event = MagicMock()
+    event.type.return_value = QEvent.Type.ToolTip
+    event.globalPos.return_value = QPoint(100, 100)
+
+    view = MagicMock()
+    option = QStyleOptionViewItem()
+
+    with patch.object(QToolTip, "showText") as mock_show:
+        result = delegate.helpEvent(event, view, option, index)
+
+    assert result is True
+    mock_show.assert_called_once()
+    # Verify the full filename was passed to showText
+    call_args = mock_show.call_args
+    assert call_args.args[1] == "test_image.png"
+
+
+def test_help_event_delegates_non_tooltip(delegate):
+    """helpEvent does NOT show tooltip for non-ToolTip events."""
+    model = ThumbnailModel()
+    model.set_paths([Path("/fake/test_image.png")])
+    index = model.index(0)
+
+    event = MagicMock()
+    event.type.return_value = QEvent.Type.MouseMove
+
+    view = MagicMock()
+    option = QStyleOptionViewItem()
+
+    # For non-ToolTip events, showText should NOT be called
+    with patch.object(QToolTip, "showText") as mock_show:
+        # super().helpEvent requires real Qt types, so we patch it out
+        with patch(
+            "tarragon.widgets.thumbnail_grid.QStyledItemDelegate.helpEvent",
+            return_value=False,
+        ):
+            result = delegate.helpEvent(event, view, option, index)
+
+    assert result is False
+    mock_show.assert_not_called()
+
+
+def test_help_event_empty_name_returns_true(delegate):
+    """helpEvent returns True for ToolTip even when name is empty (no tooltip shown)."""
+    invalid_index = QModelIndex()
+
+    event = MagicMock()
+    event.type.return_value = QEvent.Type.ToolTip
+    event.globalPos.return_value = QPoint(0, 0)
+
+    view = MagicMock()
+    option = QStyleOptionViewItem()
+
+    with patch.object(QToolTip, "showText") as mock_show:
+        result = delegate.helpEvent(event, view, option, invalid_index)
+
+    assert result is True
+    # showText should NOT be called since name is empty
+    mock_show.assert_not_called()

@@ -166,6 +166,22 @@ class ThumbnailService(QObject):
                 )
             except Exception:
                 pass  # Render succeeded — don't lose the thumbnail
+
+            # Extract and persist dominant color tags
+            if self._settings.get("color_tag_enabled"):
+                try:
+                    from tarragon.color_tagger import extract_dominant_color_tags
+
+                    tags = extract_dominant_color_tags(
+                        img,
+                        palette_size=self._settings.get("color_tag_palette_size"),
+                        min_share=self._settings.get("color_tag_min_share"),
+                        neutral_s_threshold=self._settings.get("color_tag_neutral_s_threshold"),
+                    )
+                    self._db.replace_auto_color_tags(str(file_info.path), tags)
+                except Exception:
+                    pass  # Color tagging failure shouldn't break the pipeline
+
         self.thumbnailReady.emit(str(file_info.path), img)
 
     def _on_error(self, file_info: FileInfo, error_message: str) -> None:

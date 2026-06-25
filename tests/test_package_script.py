@@ -118,17 +118,16 @@ def test_build_command_includes_tarragon_package(package_module) -> None:
 
 
 def test_build_command_includes_python_path(package_module) -> None:
-    """The Nuitka command must set --python-path to the src directory."""
+    """The Nuitka build must set PYTHONPATH environment variable to the src directory."""
     with patch.object(package_module, "check_dependencies"), patch("subprocess.run") as mock_run:
         package_module.build(onefile=True)
 
     mock_run.assert_called_once()
-    cmd = mock_run.call_args[0][0]
-    python_path_flags = [arg for arg in cmd if arg.startswith("--python-path=")]
-    assert len(python_path_flags) == 1, f"Expected exactly one --python-path flag, got: {python_path_flags}"
-    assert python_path_flags[0].endswith(
-        "src"
-    ), f"--python-path must point to the src directory, got: {python_path_flags[0]}"
+    call_kwargs = mock_run.call_args[1]
+    assert "env" in call_kwargs, "subprocess.run must be called with env parameter"
+    env = call_kwargs["env"]
+    assert "PYTHONPATH" in env, "PYTHONPATH must be set in environment"
+    assert "src" in env["PYTHONPATH"], f"PYTHONPATH must include src directory, got: {env['PYTHONPATH']}"
 
 
 # ---------------------------------------------------------------------------

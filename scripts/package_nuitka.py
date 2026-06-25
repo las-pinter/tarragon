@@ -13,6 +13,7 @@ System dependencies:
     - Windows: Visual Studio Build Tools (MSVC compiler)
 """
 
+import os
 import shutil
 import subprocess
 import sys
@@ -61,7 +62,6 @@ def build(onefile: bool = True) -> None:
         "--standalone",
         "--static-libpython=no",
         "--enable-plugin=pyside6",
-        f"--python-path={project_root / 'src'}",
         "--include-package=tarragon",
         "--include-package=psd_tools",
         "--include-package=PIL",
@@ -76,8 +76,14 @@ def build(onefile: bool = True) -> None:
 
     cmd.append(str(entry_point))
 
+    # Set PYTHONPATH so Nuitka can find the tarragon package in src/
+    env = os.environ.copy()
+    src_path = str(project_root / "src")
+    env["PYTHONPATH"] = src_path + os.pathsep + env.get("PYTHONPATH", "")
+
     print(f"Running: {' '.join(cmd)}")
-    subprocess.run(cmd, check=True, cwd=str(project_root))
+    print(f"PYTHONPATH: {env['PYTHONPATH']}")
+    subprocess.run(cmd, check=True, cwd=str(project_root), env=env)
     print("Build complete! Check dist/ directory for output.")
 
 

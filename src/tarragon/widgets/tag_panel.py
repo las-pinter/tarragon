@@ -165,6 +165,10 @@ class TagPanel(QWidget):
         The row contains a tri-state ``QCheckBox`` and a ``QLabel`` with
         the tag name and usage count.
 
+        Auto-color tags (names starting with ``"color:"``) receive a small
+        color swatch and a dashed border to visually distinguish them from
+        manual tags.
+
         The tag id is stored as a Qt dynamic property (``"tag_id"``) on
         the checkbox so that it can be retrieved later.
         """
@@ -176,7 +180,26 @@ class TagPanel(QWidget):
         checkbox.setTristate(True)
         checkbox.setProperty("tag_id", tag["id"])
 
-        label = QLabel(f"{tag['name']} ({tag['usage_count']})")
+        tag_name = tag["name"]
+        is_auto_color = tag_name.startswith("color:")
+
+        if is_auto_color:
+            # Extract color name (e.g., "color:red" -> "red")
+            color_name = tag_name.split(":", 1)[1]
+
+            # Create color swatch
+            swatch = QLabel()
+            swatch.setFixedSize(16, 16)
+            swatch.setObjectName("colorSwatch")
+            hex_color = self._get_color_hex(color_name)
+            swatch.setStyleSheet(f"background-color: {hex_color}; border: 1px solid #888;")
+            row_layout.addWidget(swatch)
+
+            # Outlined/dashed row style for auto-color tags
+            row.setStyleSheet("border: 1px dashed #555; border-radius: 2px; padding: 2px;")
+            row.setToolTip("Auto color tag")
+
+        label = QLabel(f"{tag_name} ({tag['usage_count']})")
 
         checkbox.stateChanged.connect(
             lambda state, tid=tag["id"]: self._on_checkbox_state_changed(tid, state),
@@ -187,6 +210,26 @@ class TagPanel(QWidget):
 
         self._tag_checkboxes[tag["id"]] = checkbox
         return row
+
+    @staticmethod
+    def _get_color_hex(color_name: str) -> str:
+        """Map color bucket name to hex color for swatch display.
+
+        Returns a default grey (``#888888``) for unrecognised names.
+        """
+        color_map: dict[str, str] = {
+            "red": "#E74C3C",
+            "orange": "#F39C12",
+            "yellow": "#F1C40F",
+            "green": "#27AE60",
+            "teal": "#1ABC9C",
+            "cyan": "#00BCD4",
+            "blue": "#3498DB",
+            "purple": "#9B59B6",
+            "magenta": "#E91E63",
+            "neutral": "#7F8C8D",
+        }
+        return color_map.get(color_name, "#888888")
 
     def _on_checkbox_state_changed(self, tag_id: int, state: int) -> None:
         """Handle a change in a tag checkbox's state.

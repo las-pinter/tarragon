@@ -82,7 +82,7 @@ def test_build_function_exists(package_module) -> None:
 
 def test_build_command_includes_pyside6_plugin(package_module) -> None:
     """The Nuitka command must include the PySide6 plugin flag."""
-    with patch("subprocess.run") as mock_run:
+    with patch.object(package_module, "check_dependencies"), patch("subprocess.run") as mock_run:
         package_module.build(onefile=True)
 
     mock_run.assert_called_once()
@@ -92,7 +92,7 @@ def test_build_command_includes_pyside6_plugin(package_module) -> None:
 
 def test_build_command_includes_entry_point(package_module) -> None:
     """The Nuitka command must reference the main.py entry point."""
-    with patch("subprocess.run") as mock_run:
+    with patch.object(package_module, "check_dependencies"), patch("subprocess.run") as mock_run:
         package_module.build(onefile=True)
 
     mock_run.assert_called_once()

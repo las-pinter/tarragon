@@ -61,6 +61,8 @@ def build(onefile: bool = True) -> None:
         "--standalone",
         "--static-libpython=no",
         "--enable-plugin=pyside6",
+        f"--python-path={project_root / 'src'}",
+        "--include-package=tarragon",
         "--include-package=psd_tools",
         "--include-package=PIL",
         "--include-package=platformdirs",

@@ -1,7 +1,8 @@
-"""Preview panel widget — displays single image preview with metadata."""
+"""Preview panel widget — displays single image preview with metadata and mosaic multi-preview."""
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 
 from PIL import Image, ImageOps
@@ -135,6 +136,93 @@ class PreviewPanel(QWidget):
         self._dimensions_label.clear()
         self._size_label.clear()
         self._format_label.clear()
+
+    def set_multi_preview(
+        self,
+        images: list[Image.Image],
+        total_selected: int,
+        cap: int = 9,
+    ) -> None:
+        """Render N-up mosaic when multiple files are selected.
+
+        Args:
+            images: List of PIL Images to display (capped at ``cap``).
+            total_selected: Total number of selected files (may exceed len(images)).
+            cap: Maximum number of images to show in mosaic (default 9).
+
+        Creates a grid layout:
+            - cols = ceil(sqrt(N)) where N = min(len(images), cap)
+            - rows = ceil(N / cols)
+            - Each cell gets the image scaled to fit
+            - If total_selected > cap, show caption: "Showing {cap} of {total_selected} selected"
+
+        Clears single-image preview state.
+        """
+        # Clear single-image state
+        self._current_image = None
+        self._current_path = None
+        self._cached_pixmap = None
+
+        if not images:
+            self.clear()
+            return
+
+        # Cap the number of images to display
+        display_images = images[:cap]
+        n = len(display_images)
+
+        # Calculate grid dimensions
+        cols = math.ceil(math.sqrt(n))
+        rows = math.ceil(n / cols)
+
+        # Canvas size — use a fixed reasonable size for the mosaic
+        canvas_size = 800
+        cell_w = canvas_size // cols
+        cell_h = canvas_size // rows
+
+        # Create the mosaic canvas (dark background)
+        mosaic = Image.new("RGB", (cols * cell_w, rows * cell_h), color="#242329")
+
+        for idx, img in enumerate(display_images):
+            row_i = idx // cols
+            col_i = idx % cols
+
+            # Resize image to fit cell while maintaining aspect ratio
+            cell_img = img.copy()
+            cell_img.thumbnail((cell_w, cell_h), Image.Resampling.LANCZOS)
+
+            # Center in cell
+            x_offset = col_i * cell_w + (cell_w - cell_img.width) // 2
+            y_offset = row_i * cell_h + (cell_h - cell_img.height) // 2
+
+            # Paste (handle RGBA images)
+            if cell_img.mode == "RGBA":
+                mosaic.paste(cell_img, (x_offset, y_offset), cell_img)
+            else:
+                mosaic.paste(cell_img, (x_offset, y_offset))
+
+        # Convert mosaic PIL Image to QPixmap and display
+        qimage = self._pil_to_qimage(mosaic)
+        pixmap = QPixmap.fromImage(qimage)
+
+        # Scale to fit label
+        label_size = self._image_label.size()
+        scaled_pixmap = pixmap.scaled(
+            label_size,
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+        self._image_label.setPixmap(scaled_pixmap)
+
+        # Update metadata labels for multi-select
+        self._filename_label.setText(f"{total_selected} files selected")
+        self._dimensions_label.clear()
+        self._size_label.clear()
+        self._format_label.clear()
+
+        # Show caption if capped
+        if total_selected > cap:
+            self._format_label.setText(f"Showing {cap} of {total_selected} selected")
 
     def _update_metadata(self, image: Image.Image, path: Path | None) -> None:
         """Update metadata labels wiv image info."""

@@ -3,10 +3,16 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import QDockWidget, QMainWindow, QMenu
+
+from tarragon.db import Database
+from tarragon.services.tag_service import TagService
+from tarragon.widgets.preview_panel import PreviewPanel
+from tarragon.widgets.thumbnail_grid import ThumbnailGrid
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +80,73 @@ class MainWindow(QMainWindow):
         self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.sidebar_dock)
         self.addDockWidget(Qt.DockWidgetArea.TopDockWidgetArea, self.grid_dock)
         self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self.preview_dock)
+
+    # ── Widget Setup ─────────────────────────────────────────────────
+
+    def setup_widgets(self, db: Database, tag_service: TagService) -> None:
+        """Create and wire the main content widgets into dock panels.
+
+        Args:
+            db: Database instance for sidebar favorites.
+            tag_service: TagService instance for tag panel.
+        """
+        from tarragon.widgets.sidebar import SidebarWidget
+        from tarragon.widgets.tag_panel import TagPanel
+
+        # Sidebar
+        self.sidebar_widget = SidebarWidget(db, parent=self)
+        self.sidebar_dock.setWidget(self.sidebar_widget)
+
+        # Preview panel
+        self.preview_panel = PreviewPanel(parent=self)
+        self.preview_dock.setWidget(self.preview_panel)
+
+        # Thumbnail grid
+        self.thumbnail_grid = ThumbnailGrid(parent=self)
+        self.grid_dock.setWidget(self.thumbnail_grid)
+
+        # Tag panel (stored for selection updates)
+        self.tag_panel = TagPanel(tag_service, parent=self)
+
+        # Wire selection signal
+        self.thumbnail_grid.selection_changed.connect(self._on_selection_changed)
+
+    def _on_selection_changed(self, paths: list[str]) -> None:
+        """Handle thumbnail grid selection changes.
+
+        Updates the preview panel (single image or mosaic) and tag panel
+        based on the current selection.
+        """
+        if len(paths) == 0:
+            self.preview_panel.clear()
+        elif len(paths) == 1:
+            # Single selection — load image and show
+            path = Path(paths[0])
+            try:
+                from PIL import Image
+
+                img = Image.open(path)
+                self.preview_panel.set_image(img, path)
+            except Exception:
+                self.preview_panel.clear()
+        else:
+            # Multi-select — load multiple images for mosaic
+            cap = 9
+            images_to_show = min(len(paths), cap)
+            images = []
+            for p in paths[:images_to_show]:
+                try:
+                    from PIL import Image
+
+                    img = Image.open(p)
+                    images.append(img)
+                except Exception:
+                    pass
+            self.preview_panel.set_multi_preview(images, len(paths), cap)
+
+        # Update tag panel
+        if hasattr(self, "tag_panel"):
+            self.tag_panel.set_selection(paths)
 
     # ── Menu Actions ───────────────────────────────────────────────────
 

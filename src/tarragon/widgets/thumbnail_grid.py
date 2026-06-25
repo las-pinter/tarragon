@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QEvent, QModelIndex, QRect, QSize, Qt
+from PySide6.QtCore import QEvent, QItemSelection, QModelIndex, QRect, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QHelpEvent, QMouseEvent, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -161,7 +161,10 @@ class ThumbnailGrid(QListView):
 
     Emits ``doubleClicked(str)`` with the file path when an item is double-clicked
     (wired in M6 for external editor launch).
+    Emits ``selection_changed(list)`` with selected path strings when selection changes.
     """
+
+    selection_changed = Signal(list)  # list of selected path strings
 
     def __init__(self, parent: object | None = None) -> None:
         super().__init__(parent)
@@ -200,3 +203,17 @@ class ThumbnailGrid(QListView):
         self._delegate.set_hovered_row(-1)
         self.viewport().update()
         super().leaveEvent(event)
+
+    def selectionChanged(  # noqa: N802
+        self,
+        selected: QItemSelection,
+        deselected: QItemSelection,
+    ) -> None:
+        """Emit signal with currently selected paths when selection changes."""
+        super().selectionChanged(selected, deselected)
+        paths = []
+        for index in self.selectedIndexes():
+            path = index.data(ThumbnailModel.PathRole)
+            if path:
+                paths.append(path)
+        self.selection_changed.emit(paths)

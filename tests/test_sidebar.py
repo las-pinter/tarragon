@@ -1,0 +1,262 @@
+"""Tests for FavoritesModel and SidebarWidget."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+from PySide6.QtCore import QModelIndex, Qt
+from PySide6.QtWidgets import QApplication, QLabel, QListView, QPushButton
+from tarragon.db import Database
+from tarragon.widgets.sidebar import FavoritesModel, SidebarWidget
+
+# ── Fixtures ──────────────────────────────────────────────────────────
+
+
+@pytest.fixture(autouse=True)
+def qapp():  # noqa: PT004005
+    """Provide a shared QApplication instance for all Qt tests."""
+    app = QApplication.instance()
+    if app is None:
+        app = QApplication(["test"])
+    yield app
+
+
+@pytest.fixture()
+def db() -> Database:
+    """Provide an isolated in-memory database with schema initialised."""
+    conn = Database(Path(":memory:"))
+    conn.init_schema()
+    yield conn
+    conn.close()
+
+
+@pytest.fixture()
+def populated_db(db: Database) -> Database:
+    """Return a database pre-loaded with two favourite entries."""
+    db.add_favorite("/photos/landscape.png", label="Landscapes")
+    db.add_favorite("/photos/portrait.jpg")  # no label — should use filename
+    return db
+
+
+@pytest.fixture()
+def model(db: Database) -> FavoritesModel:
+    """Provide a FavoritesModel backed by an empty database."""
+    return FavoritesModel(db)
+
+
+@pytest.fixture()
+def populated_model(populated_db: Database) -> FavoritesModel:
+    """Provide a FavoritesModel backed by a database with two favourites."""
+    return FavoritesModel(populated_db)
+
+
+@pytest.fixture()
+def sidebar(db: Database) -> SidebarWidget:
+    """Provide a SidebarWidget that is cleaned up after the test."""
+    w = SidebarWidget(db)
+    yield w
+    w.close()
+
+
+# ── FavoritesModel: loading ──────────────────────────────────────────
+
+
+class TestFavoritesModelLoad:
+    def test_loads_from_db(self, populated_model: FavoritesModel) -> None:
+        """Model loads favourites from DB on construction."""
+        assert populated_model.rowCount() == 2
+
+    def test_empty_db_has_zero_rows(self, model: FavoritesModel) -> None:
+        """Model with an empty database has rowCount == 0."""
+        assert model.rowCount() == 0
+
+
+# ── FavoritesModel: data roles ───────────────────────────────────────
+
+
+class TestFavoritesModelData:
+    def test_display_role_returns_label(self, populated_model: FavoritesModel) -> None:
+        """DisplayRole returns the user-provided label when available."""
+        index = populated_model.index(0)
+        display = index.data(Qt.DisplayRole)
+        assert display == "Landscapes"
+
+    def test_display_role_falls_back_to_filename(
+        self,
+        populated_model: FavoritesModel,
+    ) -> None:
+        """DisplayRole returns the file basename when label is None."""
+        index = populated_model.index(1)
+        display = index.data(Qt.DisplayRole)
+        assert display == "portrait.jpg"
+
+    def test_user_role_returns_path(self, populated_model: FavoritesModel) -> None:
+        """UserRole returns the full path string."""
+        index = populated_model.index(0)
+        path = index.data(Qt.UserRole)
+        assert path == "/photos/landscape.png"
+
+    def test_invalid_index_returns_none(self, populated_model: FavoritesModel) -> None:
+        """data() returns None for an invalid index."""
+        result = populated_model.data(QModelIndex())
+        assert result is None
+
+    def test_unsupported_role_returns_none(
+        self,
+        populated_model: FavoritesModel,
+    ) -> None:
+        """data() returns None for unsupported roles."""
+        index = populated_model.index(0)
+        result = index.data(Qt.DecorationRole)
+        assert result is None
+
+
+# ── FavoritesModel: add / remove ─────────────────────────────────────
+
+
+class TestFavoritesModelMutate:
+    def test_add_favorite(self, model: FavoritesModel) -> None:
+        """Adding a favourite via the model increases rowCount."""
+        model.add_favorite("/new/path.png", label="New One")
+        assert model.rowCount() == 1
+        assert model.index(0).data(Qt.DisplayRole) == "New One"
+
+    def test_add_favorite_without_label(self, model: FavoritesModel) -> None:
+        """Adding a favourite without a label uses the filename as display."""
+        model.add_favorite("/new/photo.jpg")
+        assert model.index(0).data(Qt.DisplayRole) == "photo.jpg"
+
+    def test_remove_favorite(self, model: FavoritesModel) -> None:
+        """Adding then removing a favourite decreases rowCount to 0."""
+        model.add_favorite("/remove/me.png", label="Remove Me")
+        assert model.rowCount() == 1
+        model.remove_favorite("/remove/me.png")
+        assert model.rowCount() == 0
+
+    def test_remove_only_one(self, populated_model: FavoritesModel) -> None:
+        """Removing one favourite leaves the other intact."""
+        assert populated_model.rowCount() == 2
+        populated_model.remove_favorite("/photos/landscape.png")
+        assert populated_model.rowCount() == 1
+        assert populated_model.index(0).data(Qt.DisplayRole) == "portrait.jpg"
+
+    def test_favorite_paths(self, populated_model: FavoritesModel) -> None:
+        """favorite_paths() returns all stored paths."""
+        paths = populated_model.favorite_paths()
+        assert paths == ["/photos/landscape.png", "/photos/portrait.jpg"]
+
+    def test_load_from_db_reflects_external_change(
+        self,
+        model: FavoritesModel,
+        db: Database,
+    ) -> None:
+        """load_from_db picks up changes made directly via the database."""
+        db.add_favorite("/external/path.tga", label="External")
+        model.load_from_db()
+        assert model.rowCount() == 1
+        assert model.index(0).data(Qt.DisplayRole) == "External"
+
+
+# ── SidebarWidget: structure ─────────────────────────────────────────
+
+
+class TestSidebarWidgetStructure:
+    def test_creation(self, sidebar: SidebarWidget) -> None:
+        """SidebarWidget is created without error and has expected children."""
+        assert isinstance(sidebar, SidebarWidget)
+
+    def test_has_list_view(self, sidebar: SidebarWidget) -> None:
+        """SidebarWidget contains a QListView."""
+        list_view = sidebar.findChild(QListView)
+        assert list_view is not None
+
+    def test_has_header_label(self, sidebar: SidebarWidget) -> None:
+        """SidebarWidget has a QLabel header with 'Favorites' text."""
+        label = sidebar.findChild(QLabel)
+        assert label is not None
+        assert label.text() == "Favorites"
+
+    def test_has_add_button(self, sidebar: SidebarWidget) -> None:
+        """SidebarWidget has an 'Add Current Folder' button."""
+        buttons = sidebar.findChildren(QPushButton)
+        texts = [b.text() for b in buttons]
+        assert "Add Current Folder" in texts
+
+    def test_has_remove_button(self, sidebar: SidebarWidget) -> None:
+        """SidebarWidget has a 'Remove' button."""
+        buttons = sidebar.findChildren(QPushButton)
+        texts = [b.text() for b in buttons]
+        assert "Remove" in texts
+
+    def test_list_view_has_favorites_model(self, sidebar: SidebarWidget) -> None:
+        """The QListView inside SidebarWidget uses a FavoritesModel."""
+        list_view = sidebar.findChild(QListView)
+        assert list_view is not None
+        assert isinstance(list_view.model(), FavoritesModel)
+
+
+# ── SidebarWidget: functionality ─────────────────────────────────────
+
+
+class TestSidebarWidgetFunctionality:
+    def test_add_current_folder(self, sidebar: SidebarWidget) -> None:
+        """Setting the current folder and clicking 'Add' adds it to the model."""
+        sidebar.set_current_folder("/my/folder")
+        sidebar._on_add_clicked()
+        model = sidebar.findChild(QListView).model()
+        assert model.rowCount() == 1
+        assert model.index(0).data(Qt.UserRole) == "/my/folder"
+
+    def test_add_current_folder_without_path_does_nothing(
+        self,
+        sidebar: SidebarWidget,
+    ) -> None:
+        """Clicking 'Add' without setting a current folder does not add anything."""
+        sidebar._on_add_clicked()
+        model = sidebar.findChild(QListView).model()
+        assert model.rowCount() == 0
+
+    def test_remove_selected_favorite(self, sidebar: SidebarWidget) -> None:
+        """Adding then selecting and removing a favourite works."""
+        sidebar.set_current_folder("/remove/this")
+        sidebar._on_add_clicked()
+        assert sidebar.findChild(QListView).model().rowCount() == 1
+
+        # Select the item
+        list_view = sidebar.findChild(QListView)
+        index = list_view.model().index(0)
+        list_view.selectionModel().select(
+            index,
+            list_view.selectionModel().SelectionFlag.Select,
+        )
+
+        sidebar._on_remove_clicked()
+        assert list_view.model().rowCount() == 0
+
+    def test_favorite_clicked_signal(self, sidebar: SidebarWidget) -> None:
+        """Double-clicking a favourite emits favorite_clicked with the path."""
+        sidebar.set_current_folder("/clicked/path.exr")
+        sidebar._on_add_clicked()
+
+        # Capture the signal
+        captured_args = []
+        sidebar.favorite_clicked.connect(lambda *args: captured_args.append(args))
+
+        list_view = sidebar.findChild(QListView)
+        index = list_view.model().index(0)
+        list_view.doubleClicked.emit(index)
+
+        assert len(captured_args) == 1
+        assert captured_args[0] == ("/clicked/path.exr",)
+
+    def test_remove_button_does_nothing_when_nothing_selected(
+        self,
+        sidebar: SidebarWidget,
+    ) -> None:
+        """Clicking Remove with no selection does not crash."""
+        sidebar.set_current_folder("/safe/path")
+        sidebar._on_add_clicked()
+        # Don't select anything — just click Remove
+        sidebar._on_remove_clicked()
+        assert sidebar.findChild(QListView).model().rowCount() == 1

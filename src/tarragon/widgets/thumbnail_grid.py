@@ -159,12 +159,13 @@ class ThumbnailDelegate(QStyledItemDelegate):
 class ThumbnailGrid(QListView):
     """Icon-mode list view configured as a thumbnail gallery with a custom delegate.
 
-    Emits ``doubleClicked(str)`` with the file path when an item is double-clicked
-    (wired in M6 for external editor launch).
+    Emits ``file_double_clicked(str)`` with the file path when an item is double-clicked
+    (wired for external editor launch).
     Emits ``selection_changed(list)`` with selected path strings when selection changes.
     """
 
     selection_changed = Signal(list)  # list of selected path strings
+    file_double_clicked = Signal(str)  # emits file path on double-click
 
     def __init__(self, parent: object | None = None) -> None:
         super().__init__(parent)
@@ -203,6 +204,15 @@ class ThumbnailGrid(QListView):
         self._delegate.set_hovered_row(-1)
         self.viewport().update()
         super().leaveEvent(event)
+
+    def mouseDoubleClickEvent(self, event: QMouseEvent) -> None:  # noqa: N802
+        """Emit file_double_clicked signal with the path of the double-clicked item."""
+        index = self.indexAt(event.position().toPoint())
+        if index.isValid():
+            path = index.data(ThumbnailModel.PathRole)
+            if path:
+                self.file_double_clicked.emit(path)
+        super().mouseDoubleClickEvent(event)
 
     def selectionChanged(  # noqa: N802
         self,

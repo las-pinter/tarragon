@@ -93,6 +93,9 @@ class MainWindow(QMainWindow):
         from tarragon.widgets.sidebar import SidebarWidget
         from tarragon.widgets.tag_panel import TagPanel
 
+        # Store db for editor launch
+        self._db = db
+
         # Sidebar
         self.sidebar_widget = SidebarWidget(db, parent=self)
         self.sidebar_dock.setWidget(self.sidebar_widget)
@@ -110,6 +113,9 @@ class MainWindow(QMainWindow):
 
         # Wire selection signal
         self.thumbnail_grid.selection_changed.connect(self._on_selection_changed)
+
+        # Wire double-click signal for editor launch
+        self.thumbnail_grid.file_double_clicked.connect(self._on_file_double_clicked)
 
     def _on_selection_changed(self, paths: list[str]) -> None:
         """Handle thumbnail grid selection changes.
@@ -147,6 +153,14 @@ class MainWindow(QMainWindow):
         # Update tag panel
         if hasattr(self, "tag_panel"):
             self.tag_panel.set_selection(paths)
+
+    def _on_file_double_clicked(self, path: str) -> None:
+        """Handle double-click on a thumbnail — launch external editor."""
+        from tarragon.editors import launch_editor
+
+        file_path = Path(path)
+        extension = file_path.suffix
+        launch_editor(self._db, file_path, extension)
 
     # ── Menu Actions ───────────────────────────────────────────────────
 

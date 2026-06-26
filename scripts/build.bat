@@ -14,9 +14,14 @@ set "PROJECT_ROOT=%SCRIPT_DIR%.."
 cd /d "%PROJECT_ROOT%"
 
 REM Create venv if needed
-if not exist ".venv" (
+if not exist ".venv\Scripts\activate.bat" (
     echo ==^> Creating virtual environment...
+    if exist ".venv" rmdir /s /q .venv
     python -m venv .venv
+    if errorlevel 1 (
+        echo ERROR: Failed to create virtual environment
+        exit /b 1
+    )
 )
 
 REM Activate venv

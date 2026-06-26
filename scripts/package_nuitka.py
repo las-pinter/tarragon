@@ -4,6 +4,10 @@
 Usage:
     python scripts/package_nuitka.py [--standalone]
 
+    Or use the build scripts which set up a virtual environment automatically:
+        ./scripts/build.sh          # Linux/macOS
+        scripts\\build.bat          # Windows
+
 Options:
     --standalone    Build as standalone directory instead of onefile
 

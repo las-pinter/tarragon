@@ -82,18 +82,23 @@ Standalone binaries for Windows, macOS, and Linux are coming soon. These won't r
 
 ### Build Your Own Binary
 
-Want to compile Tarragon yourself? We use Nuitka to create standalone binaries:
+Want to compile Tarragon yourself? Use the build scripts, which set up a virtual environment automatically:
 
 ```bash
-# Install Nuitka
-pip install nuitka
+# Linux/macOS
+./scripts/build.sh
 
-# Build standalone binary
-python scripts/package_nuitka.py
+# Windows
+scripts\build.bat
 
 # Or build as standalone directory (faster builds, larger output)
-python scripts/package_nuitka.py --standalone
+./scripts/build.sh --standalone
 ```
+
+The build scripts will:
+1. Create a `.venv` virtual environment (if it doesn't exist)
+2. Install all runtime and build dependencies
+3. Run the Nuitka build
 
 Output goes to `dist/` directory. On Linux you'll get `tarragon-viewer`, on Windows `tarragon-viewer.exe`.
 
@@ -122,8 +127,17 @@ Output goes to `dist/` directory. On Linux you'll get `tarragon-viewer`, on Wind
 ### Development Setup
 
 ```bash
-# Install with dev dependencies
-pip install -e ".[dev]"
+# Option A: Use the build script (creates venv automatically)
+./scripts/build.sh          # Linux/macOS
+scripts\build.bat           # Windows
+
+# Option B: Manual setup
+python3 -m venv .venv
+source .venv/bin/activate   # Linux/macOS
+# or: .venv\Scripts\activate  # Windows
+
+pip install -r requirements.txt
+pip install -r requirements-dev.txt
 
 # Lint
 ruff check .

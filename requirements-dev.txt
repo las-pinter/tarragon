@@ -1,0 +1,12 @@
+# Development dependencies for Tarragon Viewer
+# Testing
+pytest>=8.0
+pytest-qt>=4.2
+pytest-cov>=4.0
+
+# Linting & formatting
+ruff>=0.4
+pre-commit>=3.6
+
+# Type checking
+mypy>=1.0

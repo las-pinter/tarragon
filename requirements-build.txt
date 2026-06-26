@@ -1,0 +1,5 @@
+# Build dependencies for creating standalone binaries with Nuitka
+nuitka>=2.0
+patchelf; sys_platform == "linux"
+zstandard>=0.20
+ordered-set>=4.1

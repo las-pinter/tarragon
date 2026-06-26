@@ -7,35 +7,45 @@ This document describes how to build and release Tarragon as a native binary.
 ## Prerequisites
 
 - Python 3.12+
-- All dependencies installed: `pip install -e .`
-- Nuitka installed: `pip install nuitka`
 - C compiler (GCC on Linux, MSVC on Windows)
+- Linux: `sudo apt-get install python3-dev patchelf`
 
 ## Building
 
-### Linux
+The recommended way to build is using the build scripts, which create an isolated virtual environment:
+
+### Linux/macOS
 
 ```bash
-python scripts/package_nuitka.py
+./scripts/build.sh
 ```
-
-Output: `dist/tarragon-viewer` (single binary)
 
 ### Windows
 
-```bash
-python scripts/package_nuitka.py
+```batch
+scripts\build.bat
 ```
-
-Output: `dist/tarragon-viewer.exe` (single executable)
 
 ### Standalone Directory (alternative)
 
 ```bash
-python scripts/package_nuitka.py --standalone
+./scripts/build.sh --standalone
 ```
 
-Output: `dist/main.dist/` directory with all dependencies
+The build scripts will:
+1. Create a `.venv` virtual environment (if it doesn't exist)
+2. Install runtime and build dependencies from `requirements.txt` and `requirements-build.txt`
+3. Run `scripts/package_nuitka.py`
+
+### Manual Build (without build scripts)
+
+If you prefer to manage the environment yourself:
+
+```bash
+pip install -r requirements.txt
+pip install -r requirements-build.txt
+python scripts/package_nuitka.py
+```
 
 ## Smoke Testing
 

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import ast
 import importlib.util
+import os
+import stat
 from pathlib import Path
 from unittest.mock import patch
 
@@ -12,6 +14,11 @@ import pytest
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 PACKAGE_SCRIPT = PROJECT_ROOT / "scripts" / "package_nuitka.py"
 RELEASE_DOCS = PROJECT_ROOT / "docs" / "release.md"
+REQUIREMENTS_TXT = PROJECT_ROOT / "requirements.txt"
+REQUIREMENTS_DEV_TXT = PROJECT_ROOT / "requirements-dev.txt"
+REQUIREMENTS_BUILD_TXT = PROJECT_ROOT / "requirements-build.txt"
+BUILD_SH = PROJECT_ROOT / "scripts" / "build.sh"
+BUILD_BAT = PROJECT_ROOT / "scripts" / "build.bat"
 
 
 # ---------------------------------------------------------------------------
@@ -150,3 +157,94 @@ def test_release_docs_has_build_instructions(release_docs_path: Path) -> None:
     # Must mention both Linux and Windows
     assert "Linux" in content, "Release docs must mention Linux"
     assert "Windows" in content, "Release docs must mention Windows"
+
+
+# ---------------------------------------------------------------------------
+# Requirements files
+# ---------------------------------------------------------------------------
+
+
+def test_requirements_txt_exists() -> None:
+    """The main requirements.txt file must exist."""
+    assert REQUIREMENTS_TXT.exists(), f"requirements.txt not found: {REQUIREMENTS_TXT}"
+
+
+def test_requirements_txt_has_runtime_deps() -> None:
+    """requirements.txt must list the core runtime dependencies."""
+    content = REQUIREMENTS_TXT.read_text()
+    for dep in ("PySide6", "Pillow", "psd-tools", "platformdirs", "psutil"):
+        assert dep in content, f"requirements.txt must include {dep}"
+
+
+def test_requirements_dev_txt_exists() -> None:
+    """The dev requirements file must exist."""
+    assert REQUIREMENTS_DEV_TXT.exists(), f"requirements-dev.txt not found: {REQUIREMENTS_DEV_TXT}"
+
+
+def test_requirements_dev_txt_has_dev_deps() -> None:
+    """requirements-dev.txt must list development dependencies."""
+    content = REQUIREMENTS_DEV_TXT.read_text()
+    for dep in ("pytest", "ruff", "pre-commit"):
+        assert dep in content, f"requirements-dev.txt must include {dep}"
+
+
+def test_requirements_build_txt_exists() -> None:
+    """The build requirements file must exist."""
+    assert REQUIREMENTS_BUILD_TXT.exists(), f"requirements-build.txt not found: {REQUIREMENTS_BUILD_TXT}"
+
+
+def test_requirements_build_txt_has_build_deps() -> None:
+    """requirements-build.txt must list build dependencies."""
+    content = REQUIREMENTS_BUILD_TXT.read_text()
+    for dep in ("nuitka", "zstandard"):
+        assert dep in content, f"requirements-build.txt must include {dep}"
+
+
+# ---------------------------------------------------------------------------
+# Build scripts
+# ---------------------------------------------------------------------------
+
+
+def test_build_sh_exists() -> None:
+    """The Linux/macOS build script must exist."""
+    assert BUILD_SH.exists(), f"build.sh not found: {BUILD_SH}"
+
+
+def test_build_bat_exists() -> None:
+    """The Windows build script must exist."""
+    assert BUILD_BAT.exists(), f"build.bat not found: {BUILD_BAT}"
+
+
+@pytest.mark.skipif(os.name == "nt", reason="Executable permission is a Unix concept")
+def test_build_sh_is_executable() -> None:
+    """build.sh must have the executable permission bit set."""
+    mode = BUILD_SH.stat().st_mode
+    assert mode & stat.S_IXUSR, "build.sh must be executable by owner"
+
+
+def test_build_sh_references_venv() -> None:
+    """build.sh must create and activate a virtual environment."""
+    content = BUILD_SH.read_text()
+    assert "venv" in content, "build.sh must reference a virtual environment"
+    assert "activate" in content, "build.sh must activate the virtual environment"
+
+
+def test_build_bat_references_venv() -> None:
+    """build.bat must create and activate a virtual environment."""
+    content = BUILD_BAT.read_text()
+    assert "venv" in content, "build.bat must reference a virtual environment"
+    assert "activate" in content, "build.bat must activate the virtual environment"
+
+
+def test_build_sh_installs_requirements() -> None:
+    """build.sh must install from requirements files."""
+    content = BUILD_SH.read_text()
+    assert "requirements.txt" in content, "build.sh must install from requirements.txt"
+    assert "requirements-build.txt" in content, "build.sh must install from requirements-build.txt"
+
+
+def test_build_bat_installs_requirements() -> None:
+    """build.bat must install from requirements files."""
+    content = BUILD_BAT.read_text()
+    assert "requirements.txt" in content, "build.bat must install from requirements.txt"
+    assert "requirements-build.txt" in content, "build.bat must install from requirements-build.txt"

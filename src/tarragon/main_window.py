@@ -7,7 +7,7 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction
-from PySide6.QtWidgets import QDockWidget, QMainWindow, QMenu
+from PySide6.QtWidgets import QDockWidget, QFileDialog, QMainWindow, QMenu
 
 from tarragon.db import Database
 from tarragon.services.tag_service import TagService
@@ -90,6 +90,7 @@ class MainWindow(QMainWindow):
             db: Database instance for sidebar favorites.
             tag_service: TagService instance for tag panel.
         """
+        from tarragon.models.thumbnail_model import ThumbnailModel
         from tarragon.widgets.sidebar import SidebarWidget
         from tarragon.widgets.tag_panel import TagPanel
 
@@ -104,8 +105,10 @@ class MainWindow(QMainWindow):
         self.preview_panel = PreviewPanel(parent=self)
         self.preview_dock.setWidget(self.preview_panel)
 
-        # Thumbnail grid
+        # Thumbnail model and grid
+        self.thumbnail_model = ThumbnailModel(parent=self)
         self.thumbnail_grid = ThumbnailGrid(parent=self)
+        self.thumbnail_grid.set_model(self.thumbnail_model)
         self.grid_dock.setWidget(self.thumbnail_grid)
 
         # Tag panel (stored for selection updates)
@@ -177,8 +180,7 @@ class MainWindow(QMainWindow):
 
         open_folder_action: QAction = file_menu.addAction("Open &Folder…")
         open_folder_action.setStatusTip("Open a folder to browse images")
-        # TODO(M3): Connect this action to the folder-scanning logic.
-        # open_folder_action.triggered.connect(self._on_open_folder)
+        open_folder_action.triggered.connect(self._on_open_folder)
 
     def _apply_theme(self) -> None:
         """Load and apply the QSS stylesheet from theme/app.qss."""
@@ -190,6 +192,28 @@ class MainWindow(QMainWindow):
         logger.debug("Theme applied successfully")
 
     def _on_open_folder(self) -> None:
-        """Callback for File → Open Folder (placeholder — wired in M3)."""
-        logger.info("Open Folder action triggered")
-        # TODO(M3): Implement folder selection and scan logic.
+        """Callback for File → Open Folder — scan folder and populate grid."""
+        from tarragon.scanner import scan_folder
+
+        folder = QFileDialog.getExistingDirectory(self, "Open Folder", "")
+        if not folder:
+            return
+
+        folder_path = Path(folder)
+        logger.info(f"Scanning folder: {folder_path}")
+
+        # Scan folder for images
+        file_infos = scan_folder(folder_path)
+        if not file_infos:
+            logger.warning(f"No images found in {folder_path}")
+            return
+
+        # Update thumbnail model with file paths
+        paths = [fi.path for fi in file_infos]
+        self.thumbnail_model.set_paths(paths)
+
+        # Update sidebar with current folder
+        if hasattr(self, "sidebar_widget"):
+            self.sidebar_widget.set_current_folder(str(folder_path))
+
+        logger.info(f"Found {len(file_infos)} images in {folder_path}")

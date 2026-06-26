@@ -5,7 +5,7 @@ import sys
 
 from PySide6.QtWidgets import QApplication
 
-from tarragon.app_paths import db_path
+from tarragon.app_paths import db_path, ensure_dirs
 from tarragon.db import Database
 from tarragon.main_window import MainWindow as _MainWindow
 from tarragon.settings import Settings
@@ -55,6 +55,8 @@ class MainWindow(_MainWindow):
 
 def main() -> None:
     """Application entry point."""
+    ensure_dirs()  # Create data directories before opening database
+
     app = QApplication(sys.argv)
     app.setOrganizationName("tarragon")
     app.setApplicationName("tarragon")

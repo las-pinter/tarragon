@@ -39,9 +39,9 @@ def test_tokens_json_has_all_sections():
         data = json.load(fh)
 
     required_sections = {"colors", "typography", "spacing", "radius", "motion", "layout"}
-    assert (
-        set(data.keys()) == required_sections
-    ), f"tokens.json sections {set(data.keys())} != expected {required_sections}"
+    assert set(data.keys()) == required_sections, (
+        f"tokens.json sections {set(data.keys())} != expected {required_sections}"
+    )
 
 
 def test_tokens_colors_section():
@@ -140,9 +140,9 @@ def test_coral_and_amber_accent_colors_present():
     coral_muted = get_token("colors", "coral_muted")
     amber_accent = get_token("colors", "amber_accent")
 
-    assert coral_strong == "#E76F51"
-    assert coral_muted == "#C95A42"
-    assert amber_accent == "#F4A261"
+    assert coral_strong == "#F0997B"
+    assert coral_muted == "#D85A30"
+    assert amber_accent == "#FAC775"
 
 
 # ── QSS File Tests ─────────────────────────────────────────────────────
@@ -173,8 +173,8 @@ def test_qss_contains_coral_accent_colors():
 
     loader = ThemeLoader()
     qss = loader.load_qss()
-    assert "#E76F51" in qss, "QSS must contain coral_strong (#E76F51)"
-    assert "#C95A42" in qss, "QSS must contain coral_muted (#C95A42)"
+    assert "#F0997B" in qss, "QSS must contain coral_strong (#F0997B)"
+    assert "#D85A30" in qss, "QSS must contain coral_muted (#D85A30)"
 
 
 def test_qss_contains_amber_accent_color():
@@ -183,7 +183,7 @@ def test_qss_contains_amber_accent_color():
 
     loader = ThemeLoader()
     qss = loader.load_qss()
-    assert "#F4A261" in qss, "QSS must contain amber_accent (#F4A261)"
+    assert "#FAC775" in qss, "QSS must contain amber_accent (#FAC775)"
 
 
 def test_qss_does_not_use_forbidden_properties():
@@ -213,12 +213,14 @@ def test_apply_theme_no_exception(qapp):  # noqa: ARG001
 
 def test_apply_theme_sets_stylesheet(qapp):  # noqa: ARG001
     """After _apply_theme(), the stylesheet is non-empty."""
+    from PySide6.QtWidgets import QApplication
+
     from tarragon.main_window import MainWindow
 
     window = MainWindow()
     try:
         window._apply_theme()
-        style = window.styleSheet()
+        style = QApplication.instance().styleSheet()
         assert isinstance(style, str), "setStyleSheet should store a string"
         assert len(style) > 0, "Style sheet must not be empty after apply"
     finally:
@@ -227,12 +229,14 @@ def test_apply_theme_sets_stylesheet(qapp):  # noqa: ARG001
 
 def test_stylesheet_contains_dark_background(qapp):  # noqa: ARG001
     """The applied stylesheet contains the dark background color."""
+    from PySide6.QtWidgets import QApplication
+
     from tarragon.main_window import MainWindow
 
     window = MainWindow()
     try:
         window._apply_theme()
-        style = window.styleSheet()
+        style = QApplication.instance().styleSheet()
         assert "#16151A" in style, "Applied stylesheet must contain bg_primary"
     finally:
         window.close()
@@ -240,26 +244,30 @@ def test_stylesheet_contains_dark_background(qapp):  # noqa: ARG001
 
 def test_stylesheet_contains_coral_hover_state(qapp):  # noqa: ARG001
     """The applied stylesheet references coral for hover states."""
+    from PySide6.QtWidgets import QApplication
+
     from tarragon.main_window import MainWindow
 
     window = MainWindow()
     try:
         window._apply_theme()
-        style = window.styleSheet()
-        assert "#C95A42" in style, "Applied stylesheet must contain coral_muted for hover/pressed"
+        style = QApplication.instance().styleSheet()
+        assert "#D85A30" in style, "Applied stylesheet must contain coral_muted for hover/pressed"
     finally:
         window.close()
 
 
 def test_stylesheet_contains_amber_select_state(qapp):  # noqa: ARG001
     """The applied stylesheet references amber for selected/focus states."""
+    from PySide6.QtWidgets import QApplication
+
     from tarragon.main_window import MainWindow
 
     window = MainWindow()
     try:
         window._apply_theme()
-        style = window.styleSheet()
-        assert "#F4A261" in style, "Applied stylesheet must contain amber_accent"
+        style = QApplication.instance().styleSheet()
+        assert "#FAC775" in style, "Applied stylesheet must contain amber_accent"
     finally:
         window.close()
 

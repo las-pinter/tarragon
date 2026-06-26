@@ -789,7 +789,7 @@ def test_render_psd_image_nonexistent_file(tmp_path: Path) -> None:
         mock_future.result.return_value = None  # worker returns None
         mock_exec.submit.return_value = mock_future
 
-        result = render_psd_image(tmp_path / "nonexistent.psd")
+        result = render_psd_image(tmp_path / "nonexistent.psd", 20.0, 2, 2)
         assert result is None
         mock_exec.submit.assert_called_once()
 
@@ -807,7 +807,7 @@ def test_render_psd_image_corrupt_file(tmp_path: Path) -> None:
         mock_future.result.side_effect = Exception("Worker failure")
         mock_exec.submit.return_value = mock_future
 
-        result = render_psd_image(tmp_path / "corrupt.psd")
+        result = render_psd_image(tmp_path / "corrupt.psd", 20.0, 2, 2)
         assert result is None
         mock_exec.submit.assert_called_once()
 
@@ -868,7 +868,7 @@ def test_composite_psd_in_process_nonexistent_file_returns_none() -> None:
     """_composite_psd_in_process returns None for a file path that does not exist."""
     from tarragon.thumbnail import _composite_psd_in_process
 
-    result = _composite_psd_in_process("/tmp/this_path_definitely_does_not_exist.psd")
+    result = _composite_psd_in_process("/tmp/this_path_definitely_does_not_exist.psd", 20.0, 2, 2)
     assert result is None
 
 
@@ -879,7 +879,7 @@ def test_composite_psd_in_process_empty_file_returns_none(tmp_path: Path) -> Non
     empty_path = tmp_path / "empty.psd"
     empty_path.write_text("")
 
-    result = _composite_psd_in_process(str(empty_path))
+    result = _composite_psd_in_process(str(empty_path), 20.0, 2, 2)
     assert result is None
 
 
@@ -891,7 +891,7 @@ def test_composite_psd_in_process_truncated_file_returns_none(tmp_path: Path) ->
     # Write just the PSD header magic bytes but no valid layer data
     bad_path.write_bytes(b"8BPS\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00")
 
-    result = _composite_psd_in_process(str(bad_path))
+    result = _composite_psd_in_process(str(bad_path), 20.0, 2, 2)
     assert result is None
 
 
@@ -913,7 +913,7 @@ def test_composite_psd_in_process_missing_psdtools_returns_none(tmp_path: Path) 
         return original_import(name, *args, **kwargs)
 
     with patch("builtins.__import__", side_effect=mock_import):
-        result = _composite_psd_in_process(str(tmp_path / "fake.psd"))
+        result = _composite_psd_in_process(str(tmp_path / "fake.psd"), 20.0, 2, 2)
         assert result is None
 
 
@@ -936,7 +936,7 @@ def test_composite_psd_in_process_large_canvas_uses_tiled_path() -> None:
     mock_psd_cls.open.return_value = mock_psd_instance
 
     with patch("psd_tools.PSDImage", mock_psd_cls):
-        result = _composite_psd_in_process("/fake/large_canvas.psd")
+        result = _composite_psd_in_process("/fake/large_canvas.psd", 20.0, 2, 2)
 
     # Should succeed with tiled path
     assert result is not None
@@ -1022,7 +1022,7 @@ def test_render_psd_image_timeout_returns_none() -> None:
         mock_future.result.side_effect = TimeoutError("timed out after 120 seconds")
         mock_exec.submit.return_value = mock_future
 
-        result = render_psd_image(Path("/fake/timeout_test.psd"))
+        result = render_psd_image(Path("/fake/timeout_test.psd"), 20.0, 2, 2)
         assert result is None
         mock_exec.submit.assert_called_once()
         mock_future.result.assert_called_once_with(timeout=120)
@@ -1039,7 +1039,7 @@ def test_render_psd_image_cancelled_future_returns_none() -> None:
         mock_future.result.side_effect = CancelledError()
         mock_exec.submit.return_value = mock_future
 
-        result = render_psd_image(Path("/fake/cancelled_test.psd"))
+        result = render_psd_image(Path("/fake/cancelled_test.psd"), 20.0, 2, 2)
         assert result is None
         mock_exec.submit.assert_called_once()
 
@@ -1068,11 +1068,11 @@ def test_render_psd_image_after_executor_shutdown_succeeds(tmp_path: Path) -> No
         second_exec.submit.return_value = second_future
 
         # First call — executor is dead (simulating shutdown between calls)
-        result1 = render_psd_image(tmp_path / "test_first.psd")
+        result1 = render_psd_image(tmp_path / "test_first.psd", 20.0, 2, 2)
         assert result1 is None
 
         # Second call — new executor (should work)
-        result2 = render_psd_image(tmp_path / "test_second.psd")
+        result2 = render_psd_image(tmp_path / "test_second.psd", 20.0, 2, 2)
         assert result2 is None
 
         # Verify both submits were called on their respective executors
@@ -1096,7 +1096,7 @@ def test_render_psd_image_concurrent_calls_are_safe(tmp_path: Path) -> None:
         mock_exec = MagicMock()
         mock_get_exec.return_value = mock_exec
 
-        def make_future(_fn, _file_path: str) -> MagicMock:
+        def make_future(*args) -> MagicMock:
             mock_future = MagicMock()
             mock_future.result.return_value = None
             return mock_future
@@ -1107,7 +1107,7 @@ def test_render_psd_image_concurrent_calls_are_safe(tmp_path: Path) -> None:
             nonlocal call_count
             try:
                 barrier.wait()
-                result = render_psd_image(tmp_path / f"concurrent_{idx}.psd")
+                result = render_psd_image(tmp_path / f"concurrent_{idx}.psd", 20.0, 2, 2)
                 results[idx] = result
                 with call_lock:
                     call_count += 1
@@ -1152,7 +1152,7 @@ def test_render_psd_image_worker_returns_valid_bytes(tmp_path: Path) -> None:
         mock_future.result.return_value = png_bytes
         mock_exec.submit.return_value = mock_future
 
-        result = render_psd_image(tmp_path / "success.psd")
+        result = render_psd_image(tmp_path / "success.psd", 20.0, 2, 2)
 
         assert result is not None
         assert isinstance(result, PILImage.Image)
@@ -1175,7 +1175,7 @@ def test_render_psd_image_with_tiny_psd_file(tmp_path: Path) -> None:
     psd = PSDImage.new(mode="RGBA", size=(10, 10))
     psd.save(str(psd_path))
 
-    result = render_psd_image(psd_path)
+    result = render_psd_image(psd_path, 20.0, 2, 2)
 
     assert result is not None, "render_psd_image returned None for a valid tiny PSD"
     assert result.size == (10, 10), f"Expected (10,10) got {result.size}"
@@ -1197,7 +1197,7 @@ def test_render_psd_image_resizes_large_composite(tmp_path: Path) -> None:
     psd = PSDImage.new(mode="RGBA", size=(4000, 3000))
     psd.save(str(psd_path))
 
-    result = render_psd_image(psd_path)
+    result = render_psd_image(psd_path, 20.0, 2, 2)
 
     assert result is not None, "render_psd_image returned None for a large PSD"
     assert max(result.size) <= MASTER_LONG_EDGE, f"Result too large: {result.size} > {MASTER_LONG_EDGE}"
@@ -1217,7 +1217,7 @@ def test_render_psd_image_invalid_path_in_subprocess(tmp_path: Path) -> None:
     from tarragon.thumbnail import render_psd_image
 
     # Non-existent file — the worker (in subprocess) will try to open it and fail
-    result = render_psd_image(tmp_path / "i_do_not_exist_at_all.psd")
+    result = render_psd_image(tmp_path / "i_do_not_exist_at_all.psd", 20.0, 2, 2)
     assert result is None
 
     from tarragon.thumbnail import _shutdown_executor

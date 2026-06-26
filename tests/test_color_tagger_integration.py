@@ -49,6 +49,7 @@ def settings_mock() -> MagicMock:
     def _get_side_effect(key: str):
         defaults = {
             "cache_format": "png",
+            "max_psd_workers": 3,
             "color_tag_enabled": True,
             "color_tag_palette_size": 8,
             "color_tag_min_share": 0.10,
@@ -63,7 +64,8 @@ def settings_mock() -> MagicMock:
 @pytest.fixture()
 def service(db: Database, settings_mock: MagicMock) -> ThumbnailService:
     """Create a ThumbnailService with real DB, mock settings, and mock threadpool."""
-    svc = ThumbnailService(db=db, settings=settings_mock)
+    with patch("tarragon.services.thumbnail_service._get_executor"):
+        svc = ThumbnailService(db=db, settings=settings_mock)
     svc._threadpool = MagicMock()
     return svc
 
@@ -275,12 +277,14 @@ class TestColorTaggingDisabled:
         def _get_side_effect(key: str):
             defaults = {
                 "cache_format": "png",
+                "max_psd_workers": 3,
                 "color_tag_enabled": False,
             }
             return defaults.get(key)
 
         settings_mock.get.side_effect = _get_side_effect
-        svc = ThumbnailService(db=db, settings=settings_mock)
+        with patch("tarragon.services.thumbnail_service._get_executor"):
+            svc = ThumbnailService(db=db, settings=settings_mock)
         svc._threadpool = MagicMock()
 
         file_info = _make_file_info(tmp_path)
@@ -409,6 +413,7 @@ class TestSettingsParametersUsed:
         def _get_side_effect(key: str):
             defaults = {
                 "cache_format": "png",
+                "max_psd_workers": 3,
                 "color_tag_enabled": True,
                 "color_tag_palette_size": 4,
                 "color_tag_min_share": 0.25,
@@ -417,7 +422,8 @@ class TestSettingsParametersUsed:
             return defaults.get(key)
 
         settings_mock.get.side_effect = _get_side_effect
-        svc = ThumbnailService(db=db, settings=settings_mock)
+        with patch("tarragon.services.thumbnail_service._get_executor"):
+            svc = ThumbnailService(db=db, settings=settings_mock)
         svc._threadpool = MagicMock()
 
         file_info = _make_file_info(tmp_path)

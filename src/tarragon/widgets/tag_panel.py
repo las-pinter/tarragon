@@ -200,6 +200,10 @@ class TagPanel(QWidget):
             row.setToolTip("Auto color tag")
 
         label = QLabel(f"{tag_name} ({tag['usage_count']})")
+        label.setProperty(
+            "tagRole",
+            "primary" if tag["usage_count"] > 0 else "secondary",
+        )
 
         checkbox.stateChanged.connect(
             lambda state, tid=tag["id"]: self._on_checkbox_state_changed(tid, state),

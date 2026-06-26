@@ -3,6 +3,9 @@
 Provides a ``FavoritesModel`` (``QAbstractListModel``) backed by the database
 favorites repository, and a ``SidebarWidget`` that renders it with add/remove
 controls and emits a signal when a favorite is double-clicked.
+
+The sidebar also includes a navigable folder tree (``QTreeView`` backed by
+``QFileSystemModel``) for browsing the local filesystem.
 """
 
 from __future__ import annotations
@@ -10,12 +13,14 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, override
 
-from PySide6.QtCore import QAbstractListModel, QModelIndex, Qt, Signal
+from PySide6.QtCore import QAbstractListModel, QDir, QModelIndex, Qt, Signal
 from PySide6.QtWidgets import (
+    QFileSystemModel,
     QHBoxLayout,
     QLabel,
     QListView,
     QPushButton,
+    QTreeView,
     QVBoxLayout,
     QWidget,
 )
@@ -90,15 +95,17 @@ class FavoritesModel(QAbstractListModel):
 
 
 class SidebarWidget(QWidget):
-    """A sidebar panel that shows a list of favorite folders.
+    """A sidebar panel that shows a folder tree and a list of favorite folders.
 
-    Emits ``favorite_clicked(str)`` when the user double-clicks a row.
+    Emits ``favorite_clicked(str)`` when the user double-clicks a favorite row.
+    Emits ``folder_navigated(str)`` when the user double-clicks a folder in the tree.
     """
 
     favorite_clicked = Signal(str)  # path string
+    folder_navigated = Signal(str)  # path string
 
     def __init__(self, db: Database, parent: QWidget | None = None) -> None:
-        """Build the sidebar layout with model, list view, and action buttons."""
+        """Build the sidebar layout with folder tree, model, list view, and action buttons."""
         super().__init__(parent)
         self._db = db
         self._current_folder: str | None = None
@@ -109,7 +116,24 @@ class SidebarWidget(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
 
-        # Header
+        # ── Folder tree ─────────────────────────────────────────
+        tree_header = QLabel("Folders")
+        layout.addWidget(tree_header)
+
+        self._folder_model = QFileSystemModel()
+        self._folder_model.setFilter(QDir.Filter.Dirs | QDir.Filter.NoDotAndDotDot)
+        self._folder_model.setRootPath("")
+
+        self._folder_tree = QTreeView()
+        self._folder_tree.setModel(self._folder_model)
+        self._folder_tree.setHeaderHidden(True)
+        # Hide all columns except the name column (column 0)
+        for col in range(1, self._folder_model.columnCount()):
+            self._folder_tree.hideColumn(col)
+        self._folder_tree.doubleClicked.connect(self._on_folder_double_clicked)
+        layout.addWidget(self._folder_tree, stretch=1)
+
+        # ── Favorites ───────────────────────────────────────────
         header = QLabel("Favorites")
         layout.addWidget(header)
 
@@ -159,3 +183,10 @@ class SidebarWidget(QWidget):
             path = index.data(Qt.UserRole)
             if path:
                 self.favorite_clicked.emit(path)
+
+    def _on_folder_double_clicked(self, index: QModelIndex) -> None:
+        """Emit ``folder_navigated`` with the path of the double-clicked folder."""
+        if index.isValid():
+            path = self._folder_model.filePath(index)
+            if path:
+                self.folder_navigated.emit(path)

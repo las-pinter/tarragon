@@ -113,11 +113,19 @@ def _compute_worker_count(manual_override: int | None = None) -> int:
     return max(1, min(available // 200_000_000, 8))
 
 
-def _composite_psd_in_process(file_path_str: str) -> bytes | None:
+def _composite_psd_in_process(
+    file_path_str: str,
+    large_canvas_threshold_mp: float,
+    tile_grid_x: int,
+    tile_grid_y: int,
+) -> bytes | None:
     """Composite a PSD/PSB file inside a sub-process worker.
 
     This is a **module-level** function so that it can be pickled across
     process boundaries via ``ProcessPoolExecutor``.
+
+    *large_canvas_threshold_mp* and tile grid dimensions (*tile_grid_x*,
+    *tile_grid_y*) are passed as plain scalars so they survive pickling.
 
     Returns raw PNG bytes on success, or ``None`` on any failure (failure
     isolation — never crash the worker).
@@ -129,17 +137,17 @@ def _composite_psd_in_process(file_path_str: str) -> bytes | None:
         psd = PSDImage.open(file_path)
         canvas_mp = (psd.width * psd.height) / 1_000_000
 
-        if canvas_mp <= 20.0:
+        if canvas_mp <= large_canvas_threshold_mp:
             # Direct composite for small canvases
             image = psd.composite(force=True)
         else:
-            # Tiled composite for large canvases (2x2 grid)
+            # Tiled composite for large canvases
             w, h = psd.width, psd.height
-            tw = max(1, w // 2)
-            th = max(1, h // 2)
+            tw = max(1, w // tile_grid_x)
+            th = max(1, h // tile_grid_y)
             target = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-            for tile_y in range(2):
-                for tile_x in range(2):
+            for tile_y in range(tile_grid_y):
+                for tile_x in range(tile_grid_x):
                     x1 = tile_x * tw
                     y1 = tile_y * th
                     x2 = min((tile_x + 1) * tw, w)
@@ -171,13 +179,19 @@ _shared_executor: ProcessPoolExecutor | None = None
 _executor_lock = threading.Lock()
 
 
-def _get_executor() -> ProcessPoolExecutor:
-    """Get or create the shared ``ProcessPoolExecutor`` singleton."""
+def _get_executor(max_workers: int | None = None) -> ProcessPoolExecutor:
+    """Get or create the shared ``ProcessPoolExecutor`` singleton.
+
+    On first creation, *max_workers* is forwarded to ``_compute_worker_count``
+    so that user-configured overrides (e.g. from the settings table) take
+    effect.  Subsequent calls ignore *max_workers* because the singleton
+    already exists.
+    """
     global _shared_executor
     if _shared_executor is None:
         with _executor_lock:
             if _shared_executor is None:  # double-checked locking
-                worker_count = _compute_worker_count()
+                worker_count = _compute_worker_count(max_workers)
                 _shared_executor = ProcessPoolExecutor(max_workers=worker_count)
                 atexit.register(_shutdown_executor)
     return _shared_executor
@@ -192,13 +206,27 @@ def _shutdown_executor() -> None:
             _shared_executor = None
 
 
-def render_psd_image(file_path: Path) -> Image.Image | None:
+def render_psd_image(
+    file_path: Path,
+    large_canvas_threshold_mp: float,
+    tile_grid_x: int,
+    tile_grid_y: int,
+) -> Image.Image | None:
     """Dispatch PSD compositing via ``ProcessPoolExecutor``.
 
     Returns a PIL ``Image`` or ``None`` on failure (2-minute timeout).
+
+    *large_canvas_threshold_mp* and tile grid dimensions are forwarded to
+    the subprocess worker as plain scalars.
     """
     executor = _get_executor()
-    future = executor.submit(_composite_psd_in_process, str(file_path.resolve()))
+    future = executor.submit(
+        _composite_psd_in_process,
+        str(file_path.resolve()),
+        large_canvas_threshold_mp,
+        tile_grid_x,
+        tile_grid_y,
+    )
     try:
         result_bytes = future.result(timeout=120)  # 2 minute timeout
         if result_bytes is not None:

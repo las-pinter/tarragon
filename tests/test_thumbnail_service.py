@@ -51,16 +51,27 @@ def db_mock() -> MagicMock:
 
 @pytest.fixture
 def settings_mock() -> MagicMock:
-    """Mock Settings with a default cache_format of 'png'."""
+    """Mock Settings with typed return values matching DEFAULTS."""
     mock = MagicMock()
-    mock.get.return_value = "png"
+    _defaults = {
+        "cache_format": "png",
+        "max_psd_workers": 3,
+        "large_canvas_threshold_mp": 20.0,
+        "tile_grid_size": "2x2",
+        "color_tag_enabled": True,
+        "color_tag_palette_size": 8,
+        "color_tag_min_share": 0.10,
+        "color_tag_neutral_s_threshold": 0.15,
+    }
+    mock.get.side_effect = lambda key: _defaults.get(key, "png")
     return mock
 
 
 @pytest.fixture
 def service(db_mock: MagicMock, settings_mock: MagicMock) -> ThumbnailService:
     """Create a ThumbnailService with mocked DB, settings, and QThreadPool."""
-    svc = ThumbnailService(db=db_mock, settings=settings_mock)
+    with patch("tarragon.services.thumbnail_service._get_executor"):
+        svc = ThumbnailService(db=db_mock, settings=settings_mock)
     # Replace the real QThreadPool with a mock so no real threads are started
     svc._threadpool = MagicMock()
     return svc
@@ -75,12 +86,15 @@ class TestInstantiation:
     """ThumbnailService creation and basic structure."""
 
     def test_service_instantiation(self, db_mock: MagicMock, settings_mock: MagicMock) -> None:
-        """Creating a ThumbnailService stores dependencies and reads cache_format."""
-        svc = ThumbnailService(db=db_mock, settings=settings_mock)
+        """Creating a ThumbnailService stores dependencies, reads cache_format, and initializes PSD pool."""
+        with patch("tarragon.services.thumbnail_service._get_executor") as mock_get_executor:
+            svc = ThumbnailService(db=db_mock, settings=settings_mock)
         assert svc._db is db_mock
         assert svc._settings is settings_mock
         assert svc._cache_format == "png"
-        settings_mock.get.assert_called_once_with("cache_format")
+        settings_mock.get.assert_any_call("cache_format")
+        settings_mock.get.assert_any_call("max_psd_workers")
+        mock_get_executor.assert_called_once_with(max_workers=3)
 
     def test_signals_exist(self, service: ThumbnailService) -> None:
         """ThumbnailService exposes the three required signals."""
@@ -458,6 +472,9 @@ class TestRenderPSDTask:
             cache_format="png",
             on_done=on_done,
             on_error=on_error,
+            large_canvas_threshold_mp=20.0,
+            tile_grid_x=2,
+            tile_grid_y=2,
         )
 
         mock_img = MagicMock(spec=Image.Image)
@@ -471,7 +488,7 @@ class TestRenderPSDTask:
 
             task.run()
 
-        mock_render.assert_called_once_with(file_info.path)
+        mock_render.assert_called_once_with(file_info.path, 20.0, 2, 2)
         mock_cache_path.assert_called_once_with(file_info.path, "png")
         mock_save.assert_called_once_with(mock_img, tmp_path / "cache" / "hash.png", "png")
         on_done.assert_called_once_with(file_info, mock_img, tmp_path / "cache" / "hash.png")
@@ -493,6 +510,9 @@ class TestRenderPSDTask:
             cache_format="png",
             on_done=on_done,
             on_error=on_error,
+            large_canvas_threshold_mp=20.0,
+            tile_grid_x=2,
+            tile_grid_y=2,
         )
 
         with (
@@ -501,7 +521,7 @@ class TestRenderPSDTask:
         ):
             task.run()
 
-        mock_render.assert_called_once_with(file_info.path)
+        mock_render.assert_called_once_with(file_info.path, 20.0, 2, 2)
         mock_save.assert_not_called()
         on_done.assert_called_once_with(file_info, None, None)
         on_error.assert_not_called()
@@ -522,6 +542,9 @@ class TestRenderPSDTask:
             cache_format="png",
             on_done=on_done,
             on_error=on_error,
+            large_canvas_threshold_mp=20.0,
+            tile_grid_x=2,
+            tile_grid_y=2,
         )
 
         with patch("tarragon.services.thumbnail_service.render_psd_image") as mock_render:
@@ -1129,6 +1152,9 @@ class TestRenderPSDTaskEdgeCases:
             cache_format="bogus",
             on_done=on_done,
             on_error=on_error,
+            large_canvas_threshold_mp=20.0,
+            tile_grid_x=2,
+            tile_grid_y=2,
         )
 
         mock_img = MagicMock(spec=Image.Image)
@@ -1166,6 +1192,9 @@ class TestRenderPSDTaskEdgeCases:
             cache_format="png",
             on_done=on_done,
             on_error=on_error,
+            large_canvas_threshold_mp=20.0,
+            tile_grid_x=2,
+            tile_grid_y=2,
         )
 
         with (

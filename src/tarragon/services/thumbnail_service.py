@@ -12,6 +12,7 @@ from tarragon.scanner import FileInfo
 from tarragon.settings import Settings
 from tarragon.thumbnail import (
     _cache_file_path,
+    _get_executor,
     render_plain_image,
     render_psd_image,
     save_to_cache,
@@ -56,18 +57,29 @@ class _RenderPSDTask(QRunnable):
         cache_format: str,
         on_done: callable,
         on_error: callable,
+        large_canvas_threshold_mp: float,
+        tile_grid_x: int,
+        tile_grid_y: int,
     ) -> None:
         super().__init__()
         self._file_info = file_info
         self._cache_format = cache_format
         self._on_done = on_done
         self._on_error = on_error
+        self._large_canvas_threshold_mp = large_canvas_threshold_mp
+        self._tile_grid_x = tile_grid_x
+        self._tile_grid_y = tile_grid_y
         self._cache_path: Path | None = None
 
     def run(self) -> None:
         """Execute PSD render in worker thread."""
         try:
-            img = render_psd_image(self._file_info.path)
+            img = render_psd_image(
+                self._file_info.path,
+                self._large_canvas_threshold_mp,
+                self._tile_grid_x,
+                self._tile_grid_y,
+            )
             if img is not None:
                 self._cache_path, _ = _cache_file_path(self._file_info.path, self._cache_format)
                 save_to_cache(img, self._cache_path, self._cache_format)
@@ -93,6 +105,12 @@ class ThumbnailService(QObject):
         self._settings = settings
         self._threadpool = QThreadPool()
         self._cache_format: str = self._settings.get("cache_format")  # "png" or "jpeg"
+
+        # Pre-initialize the shared PSD ProcessPoolExecutor with the
+        # user-configured worker count (falls back to RAM-adaptive default
+        # when the setting is absent / None).
+        max_psd_workers = int(self._settings.get("max_psd_workers"))
+        _get_executor(max_workers=max_psd_workers)
 
     def set_cache_format(self, fmt: str) -> None:
         """Update the cache format setting."""
@@ -143,11 +161,17 @@ class ThumbnailService(QObject):
         already off the main thread, we run it in the QThreadPool to keep
         the main thread free.
         """
+        threshold = self._settings.get("large_canvas_threshold_mp")
+        grid_str = self._settings.get("tile_grid_size")  # e.g. "2x2"
+        grid_x, grid_y = (int(d) for d in grid_str.split("x"))
         task = _RenderPSDTask(
             file_info=file_info,
             cache_format=self._cache_format,
             on_done=self._on_done,
             on_error=self._on_error,
+            large_canvas_threshold_mp=threshold,
+            tile_grid_x=grid_x,
+            tile_grid_y=grid_y,
         )
         if not self._threadpool.start(task):
             self._on_error(file_info, "Render queue full — thumbnail skipped")

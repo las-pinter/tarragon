@@ -24,5 +24,10 @@ class MigrationRunner:
         Returns:
             The current schema version after all migrations have been applied.
         """
-        # No migrations to run yet — just return the existing version.
+        self._db.init_schema()
+
+        # After init_schema, bootstrap version if needed
+        if self._db.get_schema_version() == 0:
+            self._db.set_schema_version(1)
+
         return self._db.get_schema_version()

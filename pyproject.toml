@@ -19,7 +19,6 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
     "Operating System :: POSIX :: Linux",
-    "Operating System :: MacOS",
     "Operating System :: Microsoft :: Windows",
     "Topic :: Multimedia :: Graphics :: Viewers",
 ]

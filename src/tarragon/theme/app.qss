@@ -8,15 +8,15 @@ QMainWindow {
 
 /* ── Dock widgets (Library, Gallery, Preview) ───────────────────── */
 QDockWidget {
-    background-color: #242329;
-    color: #EAE8EB;
+    background-color: #1c1b22;
+    color: #ece9f2;
     font-family: "Inter", system-ui, sans-serif;
     font-size: 12px;
 }
 
 QDockWidget::title {
-    background-color: #323038;
-    color: #F4A261;
+    background-color: #211f29;
+    color: #FAC775;
     font-weight: 600;
     font-size: 12px;
     padding-left: 8px;
@@ -34,57 +34,10 @@ QDockWidget::float-button:hover {
     background-color: #3D3B44;
 }
 
-/* ── Menu bar and menus ─────────────────────────────────────────── */
-QMenuBar {
-    background-color: #242329;
-    color: #EAE8EB;
-    font-family: "Inter", system-ui, sans-serif;
-    font-size: 12px;
-    border-bottom: 1px solid #323038;
-}
-
-QMenuBar::item {
-    padding-left: 8px;
-    padding-right: 8px;
-    background-color: transparent;
-}
-
-QMenuBar::item:selected {
-    background-color: #3D3B44;
-}
-
-QMenu {
-    background-color: #242329;
-    color: #EAE8EB;
-    font-family: "Inter", system-ui, sans-serif;
-    font-size: 12px;
-    border: 1px solid #323038;
-    padding: 4px;
-}
-
-QMenu::item {
-    padding-left: 24px;
-    padding-right: 24px;
-    padding-top: 4px;
-    padding-bottom: 4px;
-}
-
-QMenu::item:selected {
-    background-color: #3D3B44;
-    color: #F4A261;
-}
-
-QMenu::separator {
-    height: 1px;
-    background-color: #323038;
-    margin-left: 8px;
-    margin-right: 8px;
-}
-
 /* ── Buttons (toolbar, action buttons) ──────────────────────────── */
 QPushButton {
-    background-color: #323038;
-    color: #EAE8EB;
+    background-color: #211f29;
+    color: #ece9f2;
     font-family: "Inter", system-ui, sans-serif;
     font-size: 12px;
     border: none;
@@ -97,26 +50,41 @@ QPushButton {
 
 QPushButton:hover {
     background-color: #3D3B44;
-    color: #F4A261;
+    color: #FAC775;
 }
 
 QPushButton:pressed {
-    background-color: #C95A42;
-    color: #EAE8EB;
+    background-color: #D85A30;
+    color: #ece9f2;
 }
 
 /* ── Labels (static text) ───────────────────────────────────────── */
 QLabel {
     background-color: transparent;
-    color: #EAE8EB;
+    color: #ece9f2;
     font-family: "Inter", system-ui, sans-serif;
     font-size: 12px;
 }
 
+/* ── Tag pills ──────────────────────────────────────────────────── */
+QLabel[tagRole="primary"] {
+    background-color: #F0997B;  /* coral from tokens */
+    color: #16151A;  /* dark text on light bg */
+    padding: 2px 8px;
+    border-radius: 6px;
+}
+
+QLabel[tagRole="secondary"] {
+    background-color: #FAC775;  /* amber from tokens */
+    color: #16151A;  /* dark text on light bg */
+    padding: 2px 8px;
+    border-radius: 6px;
+}
+
 /* ── Line edits (search boxes, text input) ──────────────────────── */
 QLineEdit {
-    background-color: #323038;
-    color: #EAE8EB;
+    background-color: #211f29;
+    color: #ece9f2;
     font-family: "Inter", system-ui, sans-serif;
     font-size: 12px;
     border: none;
@@ -132,24 +100,24 @@ QLineEdit:hover {
 }
 
 QLineEdit:focus {
-    border: 1px solid #E76F51;
+    border: 1px solid #F0997B;
 }
 
 /* ── Scroll bars (gallery thumbnails) ───────────────────────────── */
 QScrollBar:vertical {
-    background-color: #242329;
+    background-color: #1c1b22;
     width: 8px;
     margin: 0px;
 }
 
 QScrollBar::handle:vertical {
-    background-color: #323038;
+    background-color: #211f29;
     border-radius: 4px;
     min-height: 20px;
 }
 
 QScrollBar::handle:vertical:hover {
-    background-color: #C95A42;
+    background-color: #D85A30;
 }
 
 QScrollBar::add-line:vertical,
@@ -158,19 +126,19 @@ QScrollBar::sub-line:vertical {
 }
 
 QScrollBar:horizontal {
-    background-color: #242329;
+    background-color: #1c1b22;
     height: 8px;
     margin: 0px;
 }
 
 QScrollBar::handle:horizontal {
-    background-color: #323038;
+    background-color: #211f29;
     border-radius: 4px;
     min-width: 20px;
 }
 
 QScrollBar::handle:horizontal:hover {
-    background-color: #C95A42;
+    background-color: #D85A30;
 }
 
 QScrollBar::add-line:horizontal,
@@ -180,26 +148,26 @@ QScrollBar::sub-line:horizontal {
 
 /* ── Tool bars ──────────────────────────────────────────────────── */
 QToolBar {
-    background-color: #242329;
-    border-bottom: 1px solid #323038;
+    background-color: #1c1b22;
+    border-bottom: 1px solid #211f29;
     spacing: 4px;
     padding: 4px;
 }
 
 /* ── Status bar ─────────────────────────────────────────────────── */
 QStatusBar {
-    background-color: #242329;
+    background-color: #1c1b22;
     color: #A09CA3;
     font-family: "Inter", system-ui, sans-serif;
     font-size: 10px;
-    border-top: 1px solid #323038;
+    border-top: 1px solid #211f29;
 }
 
 /* ── List / Tree views (library panel) ──────────────────────────── */
 QListView,
 QTreeView {
-    background-color: #242329;
-    color: #EAE8EB;
+    background-color: #1c1b22;
+    color: #ece9f2;
     font-family: "Inter", system-ui, sans-serif;
     font-size: 12px;
     border: none;
@@ -209,45 +177,45 @@ QTreeView {
 QListView::item:hover,
 QTreeView::item:hover {
     background-color: #3D3B44;
-    color: #F4A261;
+    color: #FAC775;
 }
 
 QListView::item:selected,
 QTreeView::item:selected {
-    background-color: #C95A42;
-    color: #EAE8EB;
+    background-color: #D85A30;
+    color: #ece9f2;
 }
 
 /* ── Group boxes (if used in panels) ────────────────────────────── */
 QGroupBox {
     background-color: transparent;
-    border: 1px solid #323038;
+    border: 1px solid #211f29;
     border-radius: 5px;
     margin-top: 12px;
     padding-top: 16px;
-    color: #EAE8EB;
+    color: #ece9f2;
 }
 
 QGroupBox::title {
     subcontrol-origin: margin;
     left: 8px;
     top: -4px;
-    color: #F4A261;
+    color: #FAC775;
 }
 
 /* ── Checkboxes and radio buttons ───────────────────────────────── */
 QCheckBox,
 QRadioButton {
     background-color: transparent;
-    color: #EAE8EB;
+    color: #ece9f2;
     font-family: "Inter", system-ui, sans-serif;
     font-size: 12px;
 }
 
 /* ── Combo boxes ─────────────────────────────────────────────────── */
 QComboBox {
-    background-color: #323038;
-    color: #EAE8EB;
+    background-color: #211f29;
+    color: #ece9f2;
     font-family: "Inter", system-ui, sans-serif;
     font-size: 12px;
     border: none;
@@ -268,10 +236,5 @@ QComboBox::drop-down {
 /* ── Scroll area backgrounds ────────────────────────────────────── */
 QScrollArea {
     border: none;
-    background-color: transparent;
-}
-
-QWidget#central-widget,
-QWidget {
     background-color: transparent;
 }

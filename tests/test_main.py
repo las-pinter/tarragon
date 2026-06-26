@@ -43,7 +43,9 @@ def test_main_window_has_title(qapp, tmp_path):  # noqa: ARG001
     from tarragon.main import MainWindow
     from tarragon.settings import Settings
 
-    settings = Settings(tmp_path / "test_settings.db")
+    settings_db = Database(tmp_path / "test_settings.db")
+    settings_db.init_schema()
+    settings = Settings(settings_db)
     database = Database(tmp_path / "test_main.db")
     window = MainWindow(settings=settings, database=database)
     try:
@@ -59,7 +61,9 @@ def test_main_window_has_docks(qapp, tmp_path):  # noqa: ARG001
     from tarragon.main import MainWindow
     from tarragon.settings import Settings
 
-    settings = Settings(tmp_path / "test_settings_docks.db")
+    settings_db = Database(tmp_path / "test_settings_docks.db")
+    settings_db.init_schema()
+    settings = Settings(settings_db)
     database = Database(tmp_path / "test_main_docks.db")
     window = MainWindow(settings=settings, database=database)
     try:
@@ -77,7 +81,9 @@ def test_main_window_has_database(qapp, tmp_path):  # noqa: ARG001
     from tarragon.main import MainWindow
     from tarragon.settings import Settings
 
-    settings = Settings(tmp_path / "test_settings2.db")
+    settings_db = Database(tmp_path / "test_settings2.db")
+    settings_db.init_schema()
+    settings = Settings(settings_db)
     database = Database(tmp_path / "test_main_dbref.db")
     window = MainWindow(settings=settings, database=database)
     try:
@@ -94,7 +100,9 @@ def test_main_window_default_size(qapp, tmp_path):  # noqa: ARG001
     from tarragon.main import MainWindow
     from tarragon.settings import Settings
 
-    settings = Settings(tmp_path / "test_settings3.db")
+    settings_db = Database(tmp_path / "test_settings3.db")
+    settings_db.init_schema()
+    settings = Settings(settings_db)
     database = Database(tmp_path / "test_main_size.db")
     window = MainWindow(settings=settings, database=database)
     try:

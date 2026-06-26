@@ -181,7 +181,7 @@ class PreviewPanel(QWidget):
         cell_h = canvas_size // rows
 
         # Create the mosaic canvas (dark background)
-        mosaic = Image.new("RGB", (cols * cell_w, rows * cell_h), color="#242329")
+        mosaic = Image.new("RGB", (cols * cell_w, rows * cell_h), color="#1c1b22")
 
         for idx, img in enumerate(display_images):
             row_i = idx // cols

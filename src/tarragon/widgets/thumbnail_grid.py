@@ -16,13 +16,13 @@ from PySide6.QtWidgets import (
 from tarragon.models.thumbnail_model import ThumbnailModel
 
 # Theme tokens (coral-amber dark palette)
-CORAL_STRONG = QColor("#E76F51")
-AMBER_ACCENT = QColor("#F4A261")
+CORAL_STRONG = QColor("#F0997B")
+AMBER_ACCENT = QColor("#FAC775")
 BG_PRIMARY = QColor("#16151A")
-BG_SECONDARY = QColor("#242329")
-TEXT_PRIMARY = QColor("#EAE8EB")
+BG_SECONDARY = QColor("#1c1b22")
+TEXT_PRIMARY = QColor("#ece9f2")
 TEXT_SECONDARY = QColor("#A09CA3")
-PSD_BADGE_COLOR = QColor("#E76F51")
+PSD_BADGE_COLOR = QColor("#F0997B")
 THUMBNAIL_SIZE = 160
 GRID_GAP = 8
 

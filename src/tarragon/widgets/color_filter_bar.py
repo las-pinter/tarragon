@@ -13,7 +13,7 @@ from PySide6.QtWidgets import QHBoxLayout, QPushButton, QScrollArea, QWidget
 # -- Style constants ----------------------------------------------------------
 
 _SWATCH_SIZE = 36
-_ACTIVE_BORDER_COLOR = "#F4A261"
+_ACTIVE_BORDER_COLOR = "#FAC775"
 _ACTIVE_BORDER_WIDTH = 2
 _INACTIVE_BORDER_COLOR = "#555555"
 _INACTIVE_BORDER_WIDTH = 1

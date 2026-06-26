@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 from PySide6.QtCore import QModelIndex, Qt
 from PySide6.QtWidgets import QApplication, QLabel, QListView, QPushButton
+
 from tarragon.db import Database
 from tarragon.widgets.sidebar import FavoritesModel, SidebarWidget
 
@@ -173,9 +174,9 @@ class TestSidebarWidgetStructure:
 
     def test_has_header_label(self, sidebar: SidebarWidget) -> None:
         """SidebarWidget has a QLabel header with 'Favorites' text."""
-        label = sidebar.findChild(QLabel)
-        assert label is not None
-        assert label.text() == "Favorites"
+        labels = sidebar.findChildren(QLabel)
+        texts = [lbl.text() for lbl in labels]
+        assert "Favorites" in texts
 
     def test_has_add_button(self, sidebar: SidebarWidget) -> None:
         """SidebarWidget has an 'Add Current Folder' button."""

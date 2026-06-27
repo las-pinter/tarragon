@@ -35,10 +35,10 @@ class MainWindow(QMainWindow):
     """Main application window with five dockable panels.
 
     Docks:
-        - sidebar_dock : "Library"  — left panel for library/navigation
+        - sidebar_dock : "Library"  — left panel (top) for library/navigation
         - grid_dock    : "Gallery"  — central panel for thumbnail gallery
-        - preview_dock : "Preview"  — bottom panel for image preview
-        - tags_dock    : "Tags"     — right panel for tag management
+        - preview_dock : "Preview"  — right panel for image preview
+        - tags_dock    : "Tags"     — left panel (bottom, below Library) for tag management
         - log_dock     : "Log"      — bottom panel for application log output
 
     Menu actions (current milestone):
@@ -80,23 +80,28 @@ class MainWindow(QMainWindow):
     # ── Dock Widget Creation ───────────────────────────────────────────
 
     def _create_docks(self) -> None:
-        """Create the dock panels and attach them to this window.
+        """Create and arrange dock widgets.
 
-        Docks:
-            - sidebar_dock : "Library"  — left panel for library/navigation
-            - grid_dock    : "Gallery"  — central panel for thumbnail gallery
-            - preview_dock : "Preview"  — bottom panel for image preview
-            - tags_dock    : "Tags"     — right panel for tag management
-            - log_dock     : "Log"      — bottom panel for application log output
+        Layout::
 
-        Each dock is given a meaningful title and allowed to float/move
-        freely using Qt's built-in docking behavior (no custom drag logic needed).
+            +----------+-------------------+----------+
+            | Library  |                   | Preview  |
+            |          |     Gallery       |          |
+            +----------+                   |          |
+            | Tags     |                   |          |
+            |          |                   |          |
+            +----------+-------------------+----------+
+
+        The Log dock is added to the bottom area but hidden by default.
         """
+        # Enable dock nesting - required for split layouts
+        self.setDockNestingEnabled(True)
+
+        # Create docks
         self.sidebar_dock = QDockWidget("Library", self)
         self.sidebar_dock.setAllowedAreas(Qt.DockWidgetArea.LeftDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea)
 
         self.grid_dock = QDockWidget("Gallery", self)
-        # Qt6 has no CenterDockWidgetArea — docks can only go at edges.
         self.grid_dock.setAllowedAreas(
             Qt.DockWidgetArea.LeftDockWidgetArea
             | Qt.DockWidgetArea.RightDockWidgetArea
@@ -117,11 +122,20 @@ class MainWindow(QMainWindow):
             | Qt.DockWidgetArea.BottomDockWidgetArea
         )
 
-        # Add docks in default positions (Qt6: no center area — use Top for gallery).
+        # Add docks in the correct order for the desired layout:
+        # 1. Gallery as the CENTRAL widget — fills the middle of the window
+        self.setCentralWidget(self.grid_dock)
+
+        # 2. Library on the left
         self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.sidebar_dock)
-        self.addDockWidget(Qt.DockWidgetArea.TopDockWidgetArea, self.grid_dock)
-        self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self.preview_dock)
-        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.tags_dock)
+
+        # 3. Split Library vertically - Tags goes below Library
+        self.splitDockWidget(self.sidebar_dock, self.tags_dock, Qt.Orientation.Vertical)
+
+        # 4. Preview on the right
+        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.preview_dock)
+
+        # 5. Log at the bottom (hidden by default)
         self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self.log_dock)
 
     # ── Widget Setup ─────────────────────────────────────────────────

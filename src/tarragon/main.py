@@ -46,7 +46,19 @@ class MainWindow(_MainWindow):
             owned_settings = Settings(self._database)
             owned_settings.init_defaults()
 
-        super().__init__(settings=owned_settings or settings)
+        resolved_settings = owned_settings or settings
+
+        # Configure custom cache directory if set
+        if resolved_settings is not None:
+            custom_cache = resolved_settings.get("cache_dir")
+            if custom_cache:
+                from pathlib import Path
+
+                from tarragon.app_paths import set_cache_dir
+
+                set_cache_dir(Path(custom_cache))
+
+        super().__init__(settings=resolved_settings)
 
         # Wire up content widgets (thumbnail grid, sidebar, preview, tags).
         tag_service = TagService(self._database)

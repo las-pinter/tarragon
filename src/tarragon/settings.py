@@ -17,6 +17,7 @@ DEFAULTS: dict[str, Any] = {
     "color_tag_palette_size": 8,
     "color_tag_min_share": 0.10,
     "color_tag_neutral_s_threshold": 0.15,
+    "cache_dir": None,
     "cache_format": "png",
     "debug_mode": False,
 }

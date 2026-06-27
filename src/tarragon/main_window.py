@@ -365,6 +365,28 @@ class MainWindow(QMainWindow):
             action = dock.toggleViewAction()
             view_menu.addAction(action)
 
+        # ── Settings menu ─────────────────────────────────────────────
+        settings_menu: QMenu = menubar.addMenu("&Settings")
+        preferences_action: QAction = settings_menu.addAction("&Preferences...")
+        preferences_action.triggered.connect(self._show_preferences)
+
+    def _show_preferences(self) -> None:
+        """Open the preferences dialog."""
+        from tarragon.app_paths import set_cache_dir
+        from tarragon.widgets.settings_dialog import SettingsDialog
+
+        if self._settings is None:
+            return
+        dialog = SettingsDialog(self._settings, parent=self)
+        if dialog.exec():
+            # Settings were saved, apply changes
+            # Update debug logging level
+            debug_mode = self._settings.get("debug_mode")
+            logging.getLogger().setLevel(logging.DEBUG if debug_mode else logging.INFO)
+            # Apply cache dir change immediately
+            new_cache = self._settings.get("cache_dir")
+            set_cache_dir(Path(new_cache) if new_cache else None)
+
     def _apply_theme(self) -> None:
         """Load and apply the QSS stylesheet from theme/app.qss."""
         from tarragon.theme.loader import ThemeLoader

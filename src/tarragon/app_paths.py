@@ -4,6 +4,14 @@ from pathlib import Path
 
 import platformdirs
 
+_custom_cache_dir: Path | None = None
+
+
+def set_cache_dir(custom_path: Path | None) -> None:
+    """Set a custom cache directory. Pass None to use the default platform path."""
+    global _custom_cache_dir
+    _custom_cache_dir = custom_path
+
 
 def data_dir() -> Path:
     """Return the user-data directory for Tarragon.
@@ -33,6 +41,8 @@ def db_path() -> Path:
 
 def cache_dir() -> Path:
     """Return the path to the thumbnail preview cache directory."""
+    if _custom_cache_dir is not None:
+        return _custom_cache_dir
     return data_dir() / "cache" / "previews"
 
 

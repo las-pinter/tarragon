@@ -21,7 +21,7 @@ CORAL_STRONG: str = get_token("colors", "coral_strong")
 
 
 class PreviewPanel(QWidget):
-    """Widget dat displays a single image preview wiv metadata.
+    """Widget that displays a single image preview with metadata.
 
     Shows:
     - Scaled image (maintains aspect ratio, fits panel)
@@ -39,7 +39,7 @@ class PreviewPanel(QWidget):
         self._cached_pixmap: QPixmap | None = None
 
     def _setup_ui(self) -> None:
-        """Build da UI layout."""
+        """Build the UI layout."""
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 8, 8, 8)
         layout.setSpacing(8)
@@ -83,7 +83,7 @@ class PreviewPanel(QWidget):
         self.setStyleSheet(f"background-color: {BG_PRIMARY};")
 
     def set_image(self, image: Image.Image, path: Path | None = None) -> None:
-        """Set da image to display.
+        """Set the image to display.
 
         Args:
             image: PIL Image to display
@@ -98,7 +98,7 @@ class PreviewPanel(QWidget):
         # Apply EXIF orientation so phone-camera images display upright
         original_format = image.format
         image = ImageOps.exif_transpose(image) or image
-        # exif_transpose returns a fresh copy dat loses da .format attribute
+        # exif_transpose returns a fresh copy that loses the .format attribute
         if image.format is None and original_format is not None:
             image.format = original_format
         self._current_image = image
@@ -126,7 +126,7 @@ class PreviewPanel(QWidget):
             self._image_label.setPixmap(scaled_pixmap)
 
     def clear(self) -> None:
-        """Clear da preview an' metadata."""
+        """Clear the preview and metadata."""
         self._current_image = None
         self._current_path = None
         self._cached_pixmap = None
@@ -225,7 +225,7 @@ class PreviewPanel(QWidget):
             self._format_label.setText(f"Showing {cap} of {total_selected} selected")
 
     def _update_metadata(self, image: Image.Image, path: Path | None) -> None:
-        """Update metadata labels wiv image info."""
+        """Update metadata labels with image info."""
         if path:
             self._filename_label.setText(path.name)
             # File size

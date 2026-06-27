@@ -21,6 +21,8 @@ from PySide6.QtWidgets import (
 from tarragon.db import Database
 from tarragon.services.query_service import QueryService
 from tarragon.services.tag_service import TagService
+from tarragon.services.thumbnail_service import ThumbnailService
+from tarragon.thumbnail import _cache_file_path
 from tarragon.widgets.color_filter_bar import ColorFilterBar
 from tarragon.widgets.log_panel import LogPanel, QtLogHandler
 from tarragon.widgets.preview_panel import PreviewPanel
@@ -155,6 +157,12 @@ class MainWindow(QMainWindow):
         self.thumbnail_grid = ThumbnailGrid(parent=self)
         self.thumbnail_grid.set_model(self.thumbnail_model)
 
+        # Create thumbnail service (skip if settings is None, e.g. in tests)
+        if self._settings is not None:
+            self._thumbnail_service = ThumbnailService(db, self._settings, parent=self)
+            self._thumbnail_service.thumbnailReady.connect(self._on_thumbnail_ready)
+            self._thumbnail_service.errorOccurred.connect(self._on_thumbnail_error)
+
         # ── Search box (Deviation 4.5) ─────────────────────────────────
         self._search_edit = QLineEdit()
         self._search_edit.setPlaceholderText("Search filenames…")
@@ -206,6 +214,20 @@ class MainWindow(QMainWindow):
 
         # Wire double-click signal for editor launch
         self.thumbnail_grid.file_double_clicked.connect(self._on_file_double_clicked)
+
+    def _on_thumbnail_ready(self, source_path: str, img: object) -> None:
+        """Handle thumbnail render complete — update model with cache path."""
+        if img is None:
+            return
+        # Compute cache path (deterministic SHA-1 hash)
+        cache_format = self._settings.get("cache_format") if self._settings else "png"
+        cache_path, _ = _cache_file_path(Path(source_path), cache_format)
+        # Update model
+        self.thumbnail_model.set_thumbnail(source_path, cache_path)
+
+    def _on_thumbnail_error(self, source_path: str, error_message: str) -> None:
+        """Handle thumbnail render error."""
+        logger.warning(f"Thumbnail render failed for {source_path}: {error_message}")
 
     def _on_selection_changed(self, paths: list[str]) -> None:
         """Handle thumbnail grid selection changes.
@@ -382,6 +404,11 @@ class MainWindow(QMainWindow):
         else:
             paths = [fi.path for fi in file_infos]
             self.thumbnail_model.set_paths(paths)
+
+        # Dispatch thumbnail renders
+        if hasattr(self, "_thumbnail_service"):
+            for fi in file_infos:
+                self._thumbnail_service.check_and_render(fi)
 
         # Update sidebar with current folder
         if hasattr(self, "sidebar_widget"):

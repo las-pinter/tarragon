@@ -19,11 +19,13 @@ class ThumbnailModel(QAbstractListModel):
     """
 
     PathRole = Qt.UserRole + 1
+    ThumbnailRole = Qt.UserRole + 2
 
     def __init__(self, parent: QObject | None = None) -> None:
         """Initialise the model with an empty path list."""
         super().__init__(parent)
         self._paths: list[Path] = []
+        self._thumbnails: dict[str, Path] = {}
 
     @override
     def rowCount(self, parent: QModelIndex = QModelIndex()) -> int:  # noqa: N802
@@ -45,6 +47,9 @@ class ThumbnailModel(QAbstractListModel):
             return path.name
         if role == ThumbnailModel.PathRole:
             return str(path)
+        if role == ThumbnailModel.ThumbnailRole:
+            cache_path = self._thumbnails.get(str(path))
+            return str(cache_path) if cache_path else ""
 
         return None
 
@@ -54,4 +59,14 @@ class ThumbnailModel(QAbstractListModel):
             raise TypeError("set_paths() expected a list of Path objects, got None")
         self.beginResetModel()
         self._paths = list(paths)
+        self._thumbnails.clear()
         self.endResetModel()
+
+    def set_thumbnail(self, source_path: str, cache_path: Path) -> None:
+        """Update the cached thumbnail path for a source file."""
+        self._thumbnails[source_path] = cache_path
+        for row, path in enumerate(self._paths):
+            if str(path) == source_path:
+                index = self.index(row)
+                self.dataChanged.emit(index, index, [ThumbnailModel.ThumbnailRole])
+                break

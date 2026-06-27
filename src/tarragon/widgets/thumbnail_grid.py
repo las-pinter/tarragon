@@ -261,20 +261,26 @@ class ThumbnailDelegate(QStyledItemDelegate):
         )
 
         # ── Draw thumbnail image ─────────────────────────────────────
-        thumbnail_data = index.data(ThumbnailModel.PathRole)
-        if thumbnail_data:
-            pixmap = QPixmap(thumbnail_data)
-            if not pixmap.isNull():
-                scaled = pixmap.scaled(
-                    image_size,
-                    image_size,
-                    Qt.AspectRatioMode.KeepAspectRatio,
-                    Qt.TransformationMode.SmoothTransformation,
-                )
-                # Center the scaled image in the image rect
-                x_offset = image_rect.x() + (image_size - scaled.width()) // 2
-                y_offset = image_rect.y() + (image_size - scaled.height()) // 2
-                painter.drawPixmap(x_offset, y_offset, scaled)
+        # Try cached thumbnail first (works for all formats including PSD)
+        cache_path = index.data(ThumbnailModel.ThumbnailRole)
+        if cache_path:
+            pixmap = QPixmap(cache_path)
+        else:
+            # Fallback: load source file directly (works for JPEG/PNG/WebP, blank for PSD)
+            source_path = index.data(ThumbnailModel.PathRole)
+            pixmap = QPixmap(source_path) if source_path else QPixmap()
+
+        if not pixmap.isNull():
+            scaled = pixmap.scaled(
+                image_size,
+                image_size,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+            # Center the scaled image in the image rect
+            x_offset = image_rect.x() + (image_size - scaled.width()) // 2
+            y_offset = image_rect.y() + (image_size - scaled.height()) // 2
+            painter.drawPixmap(x_offset, y_offset, scaled)
 
         # ── File basename text ───────────────────────────────────────
         name = index.data(Qt.ItemDataRole.DisplayRole) or ""

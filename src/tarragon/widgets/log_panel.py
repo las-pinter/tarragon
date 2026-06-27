@@ -135,6 +135,9 @@ class QtLogHandler(logging.Handler):
 
     def emit(self, record: logging.LogRecord) -> None:
         """Format *record* and deliver it to the panel thread-safely."""
+        # Filter out noisy third-party debug messages
+        if record.name.startswith("PIL") and record.levelno < logging.WARNING:
+            return
         try:
             msg = self.format(record)
             self._log_panel._log_signal.emit(msg, record.levelno)

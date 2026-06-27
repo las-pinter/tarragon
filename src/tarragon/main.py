@@ -71,6 +71,9 @@ def main() -> None:
         datefmt="%H:%M:%S",
     )
 
+    # Suppress noisy third-party debug logging
+    logging.getLogger("PIL").setLevel(logging.WARNING)
+
     app = QApplication(sys.argv)
     app.setOrganizationName("tarragon")
     app.setApplicationName("tarragon")

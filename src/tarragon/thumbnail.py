@@ -155,6 +155,7 @@ def _composite_psd_in_process(
                     try:
                         tile_img = psd.composite(viewport=(x1, y1, x2, y2), force=True)
                         target.paste(tile_img, (x1, y1))
+                        del tile_img
                     except Exception:
                         # Skip problematic tiles — partial render is better than crash
                         pass

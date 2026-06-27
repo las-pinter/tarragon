@@ -240,3 +240,16 @@ QScrollArea {
     border: none;
     background-color: transparent;
 }
+
+/* ── Log Panel ─────────────────────────────────────────────────── */
+QPlainTextEdit#logText {
+    background-color: #1a1a2e;
+    color: #ece9f2;
+    font-family: "Consolas", "Courier New", monospace;
+    font-size: 11px;
+    border: 1px solid #3D3B44;
+    border-radius: 4px;
+    padding: 4px;
+    selection-background-color: #D85A30;
+    selection-color: #ece9f2;
+}

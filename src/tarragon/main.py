@@ -65,6 +65,12 @@ def main() -> None:
     """Application entry point."""
     ensure_dirs()  # Create data directories before opening database
 
+    logging.basicConfig(
+        level=logging.INFO,
+        format="[%(asctime)s] %(levelname)-8s %(name)s: %(message)s",
+        datefmt="%H:%M:%S",
+    )
+
     app = QApplication(sys.argv)
     app.setOrganizationName("tarragon")
     app.setApplicationName("tarragon")

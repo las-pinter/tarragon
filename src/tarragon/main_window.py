@@ -1,4 +1,4 @@
-"""Main application window with three dock panels (Library, Gallery, Preview)."""
+"""Main application window with dock panels (Library, Gallery, Preview, Tags, Log)."""
 
 from __future__ import annotations
 
@@ -22,6 +22,7 @@ from tarragon.db import Database
 from tarragon.services.query_service import QueryService
 from tarragon.services.tag_service import TagService
 from tarragon.widgets.color_filter_bar import ColorFilterBar
+from tarragon.widgets.log_panel import LogPanel, QtLogHandler
 from tarragon.widgets.preview_panel import PreviewPanel
 from tarragon.widgets.thumbnail_grid import ThumbnailGrid
 
@@ -29,16 +30,18 @@ logger = logging.getLogger(__name__)
 
 
 class MainWindow(QMainWindow):
-    """Main application window with four dockable panels.
+    """Main application window with five dockable panels.
 
     Docks:
         - sidebar_dock : "Library"  — left panel for library/navigation
         - grid_dock    : "Gallery"  — central panel for thumbnail gallery
         - preview_dock : "Preview"  — bottom panel for image preview
         - tags_dock    : "Tags"     — right panel for tag management
+        - log_dock     : "Log"      — bottom panel for application log output
 
     Menu actions (current milestone):
         - File → Open Folder (wired in M3, placeholder in M2)
+        - View → Toggle visibility of each dock panel
     """
 
     DEFAULT_WIDTH = 1200
@@ -60,6 +63,8 @@ class MainWindow(QMainWindow):
         self.sidebar_dock: QDockWidget
         self.grid_dock: QDockWidget
         self.preview_dock: QDockWidget
+        self.tags_dock: QDockWidget
+        self.log_dock: QDockWidget
         self._create_docks()
 
         # ── Menu bar and actions ────────────────────────────────────────
@@ -80,6 +85,7 @@ class MainWindow(QMainWindow):
             - grid_dock    : "Gallery"  — central panel for thumbnail gallery
             - preview_dock : "Preview"  — bottom panel for image preview
             - tags_dock    : "Tags"     — right panel for tag management
+            - log_dock     : "Log"      — bottom panel for application log output
 
         Each dock is given a meaningful title and allowed to float/move
         freely using Qt's built-in docking behavior (no custom drag logic needed).
@@ -102,11 +108,19 @@ class MainWindow(QMainWindow):
         self.tags_dock = QDockWidget("Tags", self)
         self.tags_dock.setAllowedAreas(Qt.DockWidgetArea.LeftDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea)
 
+        self.log_dock = QDockWidget("Log", self)
+        self.log_dock.setAllowedAreas(
+            Qt.DockWidgetArea.LeftDockWidgetArea
+            | Qt.DockWidgetArea.RightDockWidgetArea
+            | Qt.DockWidgetArea.BottomDockWidgetArea
+        )
+
         # Add docks in default positions (Qt6: no center area — use Top for gallery).
         self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.sidebar_dock)
         self.addDockWidget(Qt.DockWidgetArea.TopDockWidgetArea, self.grid_dock)
         self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self.preview_dock)
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.tags_dock)
+        self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self.log_dock)
 
     # ── Widget Setup ─────────────────────────────────────────────────
 
@@ -163,6 +177,20 @@ class MainWindow(QMainWindow):
         # Tag panel — added to dedicated Tags dock (Deviation 4.4)
         self.tag_panel = TagPanel(tag_service, parent=self)
         self.tags_dock.setWidget(self.tag_panel)
+
+        # Log panel — application log output in dedicated dock
+        self.log_panel = LogPanel(parent=self)
+        self.log_dock.setWidget(self.log_panel)
+        self.log_dock.hide()
+
+        # Set up logging handler to route Python logs into the log panel
+        self._log_handler = QtLogHandler(self.log_panel)
+        self._log_handler.setFormatter(
+            logging.Formatter("[%(asctime)s] %(levelname)-8s %(name)s: %(message)s", datefmt="%H:%M:%S")
+        )
+        root_logger = logging.getLogger()
+        root_logger.addHandler(self._log_handler)
+        root_logger.setLevel(logging.DEBUG if self._settings and self._settings.get("debug_mode") else logging.INFO)
 
         # Wire tag panel filter to re-run query
         self.tag_panel.tag_filter_changed.connect(self._on_tag_filter_changed)
@@ -292,10 +320,11 @@ class MainWindow(QMainWindow):
     # ── Menu Actions ───────────────────────────────────────────────────
 
     def _setup_actions(self) -> None:
-        """Build the menu bar with File → Open Folder action.
+        """Build the menu bar with File and View menus.
 
         The Open Folder action is wired into the menu system here but does
         nothing yet (full folder-scanning implementation lands in M3).
+        The View menu provides toggle actions for all dock panels.
         """
         menubar = self.menuBar()
 
@@ -305,6 +334,14 @@ class MainWindow(QMainWindow):
         open_folder_action: QAction = file_menu.addAction("Open &Folder…")
         open_folder_action.setStatusTip("Open a folder to browse images")
         open_folder_action.triggered.connect(self._on_open_folder)
+
+        # ── View menu ──────────────────────────────────────────────────
+        view_menu: QMenu = menubar.addMenu("&View")
+
+        # Add toggle actions for each dock widget
+        for dock in (self.sidebar_dock, self.grid_dock, self.preview_dock, self.tags_dock, self.log_dock):
+            action = dock.toggleViewAction()
+            view_menu.addAction(action)
 
     def _apply_theme(self) -> None:
         """Load and apply the QSS stylesheet from theme/app.qss."""

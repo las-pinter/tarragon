@@ -8,7 +8,7 @@ from pathlib import Path
 from PIL import Image, ImageOps
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QImage, QPixmap, QResizeEvent
-from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QLabel, QSizePolicy, QVBoxLayout, QWidget
 
 from tarragon.theme.tokens import get_token
 
@@ -48,6 +48,7 @@ class PreviewPanel(QWidget):
         self._image_label = QLabel()
         self._image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._image_label.setMinimumSize(200, 200)
+        self._image_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored)
         self._image_label.setText("No preview")
         self._image_label.setStyleSheet(
             f"QLabel {{"

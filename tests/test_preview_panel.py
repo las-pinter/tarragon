@@ -10,7 +10,7 @@ import pytest
 from PIL import Image
 from PySide6.QtCore import QSize
 from PySide6.QtGui import QResizeEvent
-from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QLabel, QSizePolicy, QVBoxLayout, QWidget
 from tarragon.widgets.preview_panel import PreviewPanel
 
 
@@ -71,6 +71,26 @@ def test_preview_panel_has_image_label(qapp):  # noqa: ARG001
     try:
         assert hasattr(panel, "_image_label")
         assert isinstance(panel._image_label, QLabel)
+    finally:
+        panel.close()
+
+
+def test_image_label_size_policy_is_ignored(qapp):  # noqa: ARG001
+    """Image label size policy is Ignored/Ignored to prevent resize loop.
+
+    When setPixmap() is called, QLabel's default sizeHint() returns the
+    pixmap's size, causing the layout to expand the label. That triggers
+    resizeEvent → _update_display → setPixmap(larger) → sizeHint grows →
+    layout expands → infinite loop until native image size is reached.
+
+    Setting Ignored/Ignored tells the layout to ignore sizeHint() and
+    size the label based on available space instead.
+    """
+    panel = PreviewPanel()
+    try:
+        policy = panel._image_label.sizePolicy()
+        assert policy.horizontalPolicy() == QSizePolicy.Policy.Ignored
+        assert policy.verticalPolicy() == QSizePolicy.Policy.Ignored
     finally:
         panel.close()
 

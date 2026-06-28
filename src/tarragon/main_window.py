@@ -162,6 +162,10 @@ class MainWindow(QMainWindow):
         self.sidebar_widget = SidebarWidget(db, parent=self)
         self.sidebar_dock.setWidget(self.sidebar_widget)
 
+        # Connect sidebar signals
+        self.sidebar_widget.folder_navigated.connect(self._on_folder_navigated)
+        self.sidebar_widget.favorite_clicked.connect(self._on_favorite_clicked)
+
         # Preview panel
         self.preview_panel = PreviewPanel(parent=self)
         self.preview_dock.setWidget(self.preview_panel)
@@ -451,3 +455,35 @@ class MainWindow(QMainWindow):
             self.sidebar_widget.set_current_folder(str(folder_path))
 
         logger.info(f"Found {len(file_infos)} images in {folder_path}")
+
+    def _on_folder_navigated(self, folder_path: str) -> None:
+        """Handle folder selection from sidebar tree."""
+        from tarragon.scanner import scan_folder
+
+        folder = Path(folder_path)
+        if not folder.exists() or not folder.is_dir():
+            return
+
+        self._current_folder = str(folder)
+        file_infos = scan_folder(folder)
+
+        if not file_infos:
+            self.thumbnail_model.set_paths([])
+            return
+
+        # Update thumbnail model
+        paths = [fi.path for fi in file_infos]
+        self.thumbnail_model.set_paths(paths)
+
+        # Dispatch thumbnail renders
+        if hasattr(self, "_thumbnail_service"):
+            for fi in file_infos:
+                self._thumbnail_service.check_and_render(fi)
+
+        # Update sidebar
+        if hasattr(self, "sidebar_widget"):
+            self.sidebar_widget.set_current_folder(str(folder))
+
+    def _on_favorite_clicked(self, folder_path: str) -> None:
+        """Handle favorite folder selection."""
+        self._on_folder_navigated(folder_path)

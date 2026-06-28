@@ -175,3 +175,76 @@ def test_default_size_constants_defined():
     """MainWindow has DEFAULT_WIDTH and DEFAULT_HEIGHT class attributes."""
     assert MainWindow.DEFAULT_WIDTH == 1200
     assert MainWindow.DEFAULT_HEIGHT == 800
+
+
+# ── Bug 1 Regression: Filtered query must not clear gallery ────────────
+
+
+def test_run_filtered_query_does_not_clear_gallery_when_no_folder(qapp):  # noqa: ARG001
+    """_run_filtered_query() must NOT clear the model when _current_folder is empty.
+
+    Regression test for Bug 1: clicking a tag or thumbnail should not cause
+    all thumbnails to disappear when no folder scope is set.
+    """
+    from pathlib import Path
+
+    from tarragon.db import Database
+    from tarragon.services.tag_service import TagService
+
+    window = MainWindow()
+    try:
+        db = Database(Path(":memory:"))
+        db.init_schema()
+        tag_service = TagService(db=db)
+        window.setup_widgets(db, tag_service)
+
+        # Pre-load some paths into the model (simulating a folder open)
+        from pathlib import Path as P
+
+        window.thumbnail_model.set_paths([P("/fake/img1.png"), P("/fake/img2.png")])
+        assert window.thumbnail_model.rowCount() == 2
+
+        # _current_folder is "" (default) — calling _run_filtered_query should NOT clear
+        window._run_filtered_query()
+
+        # Model should still have 2 paths
+        assert window.thumbnail_model.rowCount() == 2, (
+            "_run_filtered_query() cleared the gallery when _current_folder was empty"
+        )
+    finally:
+        window.close()
+
+
+def test_run_filtered_query_works_when_folder_is_set(qapp):  # noqa: ARG001
+    """_run_filtered_query() queries the DB and updates the model when folder is set."""
+    from pathlib import Path
+
+    from tarragon.db import Database
+    from tarragon.services.tag_service import TagService
+
+    window = MainWindow()
+    try:
+        db = Database(Path(":memory:"))
+        db.init_schema()
+
+        # Populate thumbnails table
+        db.upsert_thumbnail("/test/photos/a.png", mtime=1, size=100, width=800, height=600, cache_uuid="u1")
+        db.upsert_thumbnail("/test/photos/b.png", mtime=2, size=200, width=1024, height=768, cache_uuid="u2")
+
+        tag_service = TagService(db=db)
+        window.setup_widgets(db, tag_service)
+
+        # Set the current folder
+        window._current_folder = "/test/photos/"
+
+        # Pre-load different paths (simulating stale state)
+        window.thumbnail_model.set_paths([Path("/stale/old.png")])
+        assert window.thumbnail_model.rowCount() == 1
+
+        # Run filtered query — should update model with DB results
+        window._run_filtered_query()
+
+        # Model should now have 2 paths from the DB
+        assert window.thumbnail_model.rowCount() == 2
+    finally:
+        window.close()

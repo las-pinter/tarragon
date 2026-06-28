@@ -355,8 +355,16 @@ class MainWindow(QMainWindow):
         Combines the current folder scope, filename search text, active
         colour-bucket set, and checked tag IDs into a single query, then
         updates the ThumbnailModel with the results.
+
+        If no folder is currently selected (``_current_folder`` is empty),
+        the method returns without modifying the model to avoid clearing
+        the gallery.
         """
         if not hasattr(self, "_query_service"):
+            return
+
+        # Don't clear the gallery if no folder is selected
+        if not self._current_folder:
             return
 
         filename_filter = self._search_edit.text() if hasattr(self, "_search_edit") else ""

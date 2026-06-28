@@ -650,6 +650,11 @@ def test_thumbnail_grid_uniform_item_sizes(grid):
     assert grid.uniformItemSizes()
 
 
+def test_thumbnail_grid_spacing_uses_grid_gap(grid):
+    """Grid spacing is GRID_GAP (8px) for proper visual separation between cells."""
+    assert grid.spacing() == GRID_GAP
+
+
 # ── Edge Case: Delegate Initial State ────────────────────────────────
 
 

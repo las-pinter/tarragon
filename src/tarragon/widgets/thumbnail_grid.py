@@ -375,7 +375,7 @@ class ThumbnailGrid(QListView):
         self.setSelectionMode(QListView.SelectionMode.ExtendedSelection)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.setSpacing(0)
+        self.setSpacing(GRID_GAP)
         self.setUniformItemSizes(True)
 
         # Animation controller — drives hover-scale and fade-in effects

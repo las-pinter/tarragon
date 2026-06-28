@@ -180,6 +180,8 @@ class MainWindow(QMainWindow):
             self._thumbnail_service = ThumbnailService(db, self._settings, parent=self)
             self._thumbnail_service.thumbnailReady.connect(self._on_thumbnail_ready)
             self._thumbnail_service.errorOccurred.connect(self._on_thumbnail_error)
+            # Auto-color tags from thumbnail rendering should refresh the tag panel
+            self._thumbnail_service.tagsUpdated.connect(tag_service.tagsChanged.emit)
 
         # ── Search box (Deviation 4.5) ─────────────────────────────────
         self._search_edit = QLineEdit()

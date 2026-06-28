@@ -126,6 +126,7 @@ class ThumbnailService(QObject):
     thumbnailReady = Signal(str, object, object, object)  # noqa: N815 — (path, image, resolution_size, cache_path)
     thumbnailsUpdated = Signal(list)  # noqa: N815 — Qt signal follows camelCase convention
     errorOccurred = Signal(str, str)  # noqa: N815 — Qt signal follows camelCase convention
+    tagsUpdated = Signal()  # noqa: N815 — emitted after auto-color tags are persisted
 
     def __init__(self, db: Database, settings: Settings, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -363,6 +364,7 @@ class ThumbnailService(QObject):
                     neutral_s_threshold=self._settings.get("color_tag_neutral_s_threshold"),
                 )
                 self._db.replace_auto_color_tags(str(file_info.path), tags)
+                self.tagsUpdated.emit()
             except Exception:
                 pass  # Color tagging failure shouldn't break the pipeline
 

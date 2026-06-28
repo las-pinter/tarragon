@@ -286,14 +286,17 @@ class TagPanel(QWidget):
         Uses ``tag_service.resolve_tri_state`` per tag.
         While updating, ``_setting_checkboxes`` is ``True`` so that the
         ``stateChanged`` handler does not treat these as user actions.
+
+        Note: This method does NOT emit ``tag_filter_changed``.  The filter
+        should only change when a user explicitly clicks a checkbox (via
+        ``_on_checkbox_state_changed``), not when checkbox states are
+        updated programmatically due to a selection change.
         """
         self._setting_checkboxes = True
         for tag_id, checkbox in self._tag_checkboxes.items():
             state = self._tag_service.resolve_tri_state(self._selected_paths, tag_id)
             checkbox.setCheckState(state)
         self._setting_checkboxes = False
-
-        self._emit_filter_changed()
 
     def _on_add_tag_clicked(self) -> None:
         """Create a new tag from the input text, then clear the input."""

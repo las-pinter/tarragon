@@ -301,7 +301,7 @@ class TestTagPanelToggle:
         service: TagService,
         panel: TagPanel,
     ) -> None:
-        """Toggling a tag via the panel emits tag_filter_changed."""
+        """User clicking a checkbox emits tag_filter_changed with the tag_id."""
         tag_id = service.get_or_create_tag("signal-tag")
         panel._refresh_tags()
         panel.set_selection(["/img/a.png"])
@@ -309,7 +309,9 @@ class TestTagPanelToggle:
         captured: list[set[int]] = []
         panel.tag_filter_changed.connect(captured.append)
 
-        panel.toggle_tag(tag_id, True)
+        # Simulate a user clicking the checkbox (not calling toggle_tag directly)
+        checkbox = panel._tag_checkboxes[tag_id]
+        checkbox.setCheckState(Qt.CheckState.Checked)
 
         # At least one emission should contain the tag_id
         assert any(tag_id in s for s in captured), f"tag_filter_changed should contain tag_id {tag_id}, got {captured}"
@@ -350,16 +352,17 @@ class TestTagFilterChangedSignal:
         service: TagService,
         panel: TagPanel,
     ) -> None:
-        """Setting a checkbox to checked emits the signal with correct IDs."""
+        """User checking a checkbox emits the signal with correct IDs."""
         tag_id = service.get_or_create_tag("filter-tag")
         panel._refresh_tags()
 
         captured: list[set[int]] = []
         panel.tag_filter_changed.connect(captured.append)
 
-        # Simulate a user toggle by calling toggle_tag
+        # Simulate a user checking the checkbox
         panel.set_selection(["/img/a.png"])
-        panel.toggle_tag(tag_id, True)
+        checkbox = panel._tag_checkboxes[tag_id]
+        checkbox.setCheckState(Qt.CheckState.Checked)
 
         assert len(captured) >= 1, "tag_filter_changed should have been emitted"
         assert any(tag_id in s for s in captured), f"tag_filter_changed should contain tag_id {tag_id}, got {captured}"
@@ -459,3 +462,74 @@ class TestCheckboxInteraction:
         # Tag should NOT have been added (handler skipped)
         tags = service.get_tags_for_file("/img/a.png")
         assert not any(t["name"] == "guarded" for t in tags)
+
+
+# =========================================================================
+# TestSelectionDoesNotEmitFilter — Bug 2 regression test
+# =========================================================================
+
+
+class TestSelectionDoesNotEmitFilter:
+    """set_selection must NOT emit tag_filter_changed (Bug 2 fix)."""
+
+    def test_set_selection_does_not_emit_filter_changed(  # noqa: ARG002
+        self,
+        service: TagService,
+        panel: TagPanel,
+    ) -> None:
+        """Changing selection updates checkbox states but does NOT re-filter the gallery."""
+        tag_id = service.get_or_create_tag("landscape")
+        service.add_tags_to_files(["/img/a.png"], ["landscape"])
+        panel._refresh_tags()
+
+        captured: list[set[int]] = []
+        panel.tag_filter_changed.connect(captured.append)
+
+        # Simulate clicking a thumbnail — this calls set_selection
+        panel.set_selection(["/img/a.png"])
+
+        # tag_filter_changed must NOT have been emitted
+        assert len(captured) == 0, (
+            f"set_selection should NOT emit tag_filter_changed, but got {len(captured)} emission(s)"
+        )
+
+    def test_set_selection_multiple_times_no_filter(  # noqa: ARG002
+        self,
+        service: TagService,
+        panel: TagPanel,
+    ) -> None:
+        """Repeated selection changes never emit tag_filter_changed."""
+        service.get_or_create_tag("portrait")
+        panel._refresh_tags()
+
+        captured: list[set[int]] = []
+        panel.tag_filter_changed.connect(captured.append)
+
+        panel.set_selection(["/img/a.png"])
+        panel.set_selection(["/img/b.png"])
+        panel.set_selection(["/img/a.png", "/img/b.png"])
+        panel.set_selection([])
+
+        assert len(captured) == 0, (
+            f"Multiple set_selection calls should NOT emit tag_filter_changed, got {len(captured)}"
+        )
+
+    def test_checkbox_click_still_emits_filter(  # noqa: ARG002
+        self,
+        service: TagService,
+        panel: TagPanel,
+    ) -> None:
+        """User clicking a checkbox DOES emit tag_filter_changed (regression guard)."""
+        tag_id = service.get_or_create_tag("clickable")
+        panel._refresh_tags()
+        panel.set_selection(["/img/a.png"])
+
+        captured: list[set[int]] = []
+        panel.tag_filter_changed.connect(captured.append)
+
+        # Simulate user clicking the checkbox
+        checkbox = panel._tag_checkboxes[tag_id]
+        checkbox.setCheckState(Qt.CheckState.Checked)
+
+        assert len(captured) >= 1, "User checkbox click MUST emit tag_filter_changed"
+        assert any(tag_id in s for s in captured)

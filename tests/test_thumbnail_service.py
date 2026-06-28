@@ -1096,6 +1096,155 @@ class TestRenderTaskEdgeCases:
 
 
 # =========================================================================
+# Auto-color tag signal — Bug 1 regression test
+# =========================================================================
+
+
+class TestAutoColorTagSignal:
+    """Verify that auto-color tagging emits tagsUpdated signal."""
+
+    def test_tags_updated_signal_exists(self, service: ThumbnailService) -> None:
+        """ThumbnailService exposes a tagsUpdated signal."""
+        assert hasattr(service, "tagsUpdated")
+
+    def test_render_all_emits_tags_updated_when_color_tagging_enabled(
+        self,
+        tmp_path: Path,
+        service: ThumbnailService,
+        db_mock: MagicMock,
+        settings_mock: MagicMock,
+    ) -> None:
+        """_render_all_resolutions emits tagsUpdated after persisting auto-color tags."""
+        file_info = FileInfo(
+            path=tmp_path / "source.png",
+            mtime=1000.0,
+            size=500,
+            extension=".png",
+        )
+
+        emitted = []
+        service.tagsUpdated.connect(lambda: emitted.append(True))
+
+        mock_img = MagicMock(spec=Image.Image)
+        mock_img.width = 64
+        mock_img.height = 64
+
+        with (
+            patch("tarragon.services.thumbnail_service.render_plain_image", return_value=mock_img),
+            patch("tarragon.services.thumbnail_service.generate_cache_uuid", return_value="test-uuid"),
+            patch("tarragon.services.thumbnail_service.generate_cache_paths") as mock_paths,
+            patch("tarragon.services.thumbnail_service.save_to_cache"),
+            patch("tarragon.services.thumbnail_service.derive_smaller_sizes", return_value={}),
+            patch("tarragon.color_tagger.extract_dominant_color_tags", return_value=["red", "blue"]),
+        ):
+            mock_paths.return_value = {
+                "256": tmp_path / "cache" / "256.png",
+                "1024": tmp_path / "cache" / "1024.png",
+                "full": tmp_path / "cache" / "full.png",
+            }
+            service._render_all_resolutions(file_info)
+
+        # tagsUpdated should have been emitted exactly once
+        assert len(emitted) == 1, f"tagsUpdated should be emitted once after auto-tagging, got {len(emitted)}"
+        # DB method should have been called
+        db_mock.replace_auto_color_tags.assert_called_once_with(str(file_info.path), ["red", "blue"])
+
+    def test_render_all_no_tags_updated_when_color_tagging_disabled(
+        self,
+        tmp_path: Path,
+        db_mock: MagicMock,
+    ) -> None:
+        """When color_tag_enabled is False, tagsUpdated is NOT emitted."""
+        disabled_settings = MagicMock()
+        _defaults = {
+            "cache_format": "png",
+            "max_psd_workers": 3,
+            "large_canvas_threshold_mp": 20.0,
+            "tile_grid_size": "2x2",
+            "color_tag_enabled": False,  # Disabled!
+        }
+        disabled_settings.get.side_effect = lambda key: _defaults.get(key, "png")
+
+        with patch("tarragon.services.thumbnail_service._get_executor"):
+            svc = ThumbnailService(db=db_mock, settings=disabled_settings)
+
+        file_info = FileInfo(
+            path=tmp_path / "source.png",
+            mtime=1000.0,
+            size=500,
+            extension=".png",
+        )
+
+        emitted = []
+        svc.tagsUpdated.connect(lambda: emitted.append(True))
+
+        mock_img = MagicMock(spec=Image.Image)
+        mock_img.width = 64
+        mock_img.height = 64
+
+        with (
+            patch("tarragon.services.thumbnail_service.render_plain_image", return_value=mock_img),
+            patch("tarragon.services.thumbnail_service.generate_cache_uuid", return_value="test-uuid"),
+            patch("tarragon.services.thumbnail_service.generate_cache_paths") as mock_paths,
+            patch("tarragon.services.thumbnail_service.save_to_cache"),
+            patch("tarragon.services.thumbnail_service.derive_smaller_sizes", return_value={}),
+        ):
+            mock_paths.return_value = {
+                "256": tmp_path / "cache" / "256.png",
+                "1024": tmp_path / "cache" / "1024.png",
+                "full": tmp_path / "cache" / "full.png",
+            }
+            svc._render_all_resolutions(file_info)
+
+        # tagsUpdated should NOT have been emitted
+        assert len(emitted) == 0, "tagsUpdated should NOT be emitted when color tagging is disabled"
+        db_mock.replace_auto_color_tags.assert_not_called()
+
+    def test_render_all_no_tags_updated_on_color_extraction_failure(
+        self,
+        tmp_path: Path,
+        service: ThumbnailService,
+        db_mock: MagicMock,
+    ) -> None:
+        """When color extraction raises, tagsUpdated is NOT emitted (failure is swallowed)."""
+        file_info = FileInfo(
+            path=tmp_path / "source.png",
+            mtime=1000.0,
+            size=500,
+            extension=".png",
+        )
+
+        emitted = []
+        service.tagsUpdated.connect(lambda: emitted.append(True))
+
+        mock_img = MagicMock(spec=Image.Image)
+        mock_img.width = 64
+        mock_img.height = 64
+
+        with (
+            patch("tarragon.services.thumbnail_service.render_plain_image", return_value=mock_img),
+            patch("tarragon.services.thumbnail_service.generate_cache_uuid", return_value="test-uuid"),
+            patch("tarragon.services.thumbnail_service.generate_cache_paths") as mock_paths,
+            patch("tarragon.services.thumbnail_service.save_to_cache"),
+            patch("tarragon.services.thumbnail_service.derive_smaller_sizes", return_value={}),
+            patch(
+                "tarragon.color_tagger.extract_dominant_color_tags",
+                side_effect=RuntimeError("Color extraction failed"),
+            ),
+        ):
+            mock_paths.return_value = {
+                "256": tmp_path / "cache" / "256.png",
+                "1024": tmp_path / "cache" / "1024.png",
+                "full": tmp_path / "cache" / "full.png",
+            }
+            # Should not raise — color tagging failure is swallowed
+            service._render_all_resolutions(file_info)
+
+        # tagsUpdated should NOT have been emitted since extraction failed
+        assert len(emitted) == 0, "tagsUpdated should NOT be emitted when color extraction fails"
+
+
+# =========================================================================
 # Per-folder UUID — images from same folder share a cache UUID
 # =========================================================================
 

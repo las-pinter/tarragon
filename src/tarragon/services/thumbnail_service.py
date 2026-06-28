@@ -226,8 +226,15 @@ class ThumbnailService(QObject):
                 pass
 
         if source_image is None:
-            # No cached image available — render from source
-            self._render_all_resolutions(file_info)
+            # No cached image available — render from source (async)
+            task = _RenderAllTask(
+                file_info=file_info,
+                on_done=self._on_render_all_done,
+                on_error=self._on_error,
+                render_func=self._render_all_resolutions,
+            )
+            if not self._threadpool.start(task):
+                self._on_error(file_info, "Render queue full — thumbnail skipped")
             return
 
         # Derive missing sizes

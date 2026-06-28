@@ -847,7 +847,8 @@ class TestCheckAndRenderEdgeCases:
         # Should be a cache hit since mtime/size match
         assert len(emitted) == 1
         assert emitted[0][0] == str(file_info.path)
-        service._threadpool.start.assert_not_called()
+        # Fallback path now dispatches render via threadpool (async)
+        service._threadpool.start.assert_called_once()
 
     def test_check_and_render_db_returns_none_for_empty_path(
         self,

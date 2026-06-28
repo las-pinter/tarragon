@@ -24,10 +24,12 @@ TEXT_PRIMARY = QColor("#ece9f2")
 TEXT_SECONDARY = QColor("#A09CA3")
 PSD_BADGE_COLOR = QColor("#F0997B")
 THUMBNAIL_SIZE = 160
-GRID_GAP = 8
+GRID_GAP = 14
 
 # Animation tokens (from tokens.json motion values)
 HOVER_SCALE_TARGET = 1.02
+# Extra pixels per cell to accommodate hover-scale growth without overlapping neighbors
+HOVER_MARGIN = 4
 HOVER_DURATION_MS = 150  # duration_fast
 FADE_DURATION_MS = 200  # fade_in_ms
 ANIMATOR_INTERVAL_MS = 16  # ~60fps
@@ -335,8 +337,14 @@ class ThumbnailDelegate(QStyledItemDelegate):
         option: QStyleOptionViewItem,
         index: QModelIndex,
     ) -> QSize:
-        """Return the size of each grid cell."""
-        return QSize(THUMBNAIL_SIZE + GRID_GAP * 2, THUMBNAIL_SIZE + GRID_GAP * 2 + 24)
+        """Return the size of each grid cell.
+
+        Includes HOVER_MARGIN so scaled-up hover painting stays within cell bounds.
+        """
+        return QSize(
+            THUMBNAIL_SIZE + GRID_GAP * 2 + HOVER_MARGIN * 2,
+            THUMBNAIL_SIZE + GRID_GAP * 2 + 24 + HOVER_MARGIN * 2,
+        )
 
     def helpEvent(  # noqa: N802
         self,
@@ -369,7 +377,7 @@ class ThumbnailGrid(QListView):
         super().__init__(parent)
         self.setViewMode(QListView.ViewMode.IconMode)
         self.setIconSize(QSize(THUMBNAIL_SIZE, THUMBNAIL_SIZE))
-        self.setGridSize(QSize(THUMBNAIL_SIZE + GRID_GAP * 2, THUMBNAIL_SIZE + GRID_GAP * 2 + 24))
+        self.setGridSize(QSize(THUMBNAIL_SIZE + GRID_GAP * 2 + HOVER_MARGIN * 2, THUMBNAIL_SIZE + GRID_GAP * 2 + 24 + HOVER_MARGIN * 2))
         self.setWrapping(True)
         self.setResizeMode(QListView.ResizeMode.Adjust)
         self.setSelectionMode(QListView.SelectionMode.ExtendedSelection)

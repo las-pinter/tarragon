@@ -176,31 +176,45 @@ class PreviewPanel(QWidget):
         cols = math.ceil(math.sqrt(n))
         rows = math.ceil(n / cols)
 
-        # Canvas size — use a fixed reasonable size for the mosaic
+        # Layout constants — padding around canvas edge, gap between cells
         canvas_size = 800
-        cell_w = canvas_size // cols
-        cell_h = canvas_size // rows
+        canvas_padding = 8
+        cell_gap = 6
+
+        # Cell size accounts for padding on both sides and gaps between cells
+        total_gap_w = cell_gap * (cols - 1)
+        total_gap_h = cell_gap * (rows - 1)
+        available_w = canvas_size - 2 * canvas_padding - total_gap_w
+        available_h = canvas_size - 2 * canvas_padding - total_gap_h
+        cell_w = available_w // cols
+        cell_h = available_h // rows
 
         # Create the mosaic canvas (dark background)
-        mosaic = Image.new("RGB", (cols * cell_w, rows * cell_h), color="#1c1b22")
+        mosaic = Image.new("RGB", (canvas_size, canvas_size), color="#1c1b22")
 
         for idx, img in enumerate(display_images):
             row_i = idx // cols
             col_i = idx % cols
 
-            # Resize image to fit cell while maintaining aspect ratio
-            cell_img = img.copy()
-            cell_img.thumbnail((cell_w, cell_h), Image.Resampling.LANCZOS)
+            # Apply EXIF orientation so phone-camera images display upright
+            cell_img = ImageOps.exif_transpose(img) or img.copy()
 
-            # Center in cell
-            x_offset = col_i * cell_w + (cell_w - cell_img.width) // 2
-            y_offset = row_i * cell_h + (cell_h - cell_img.height) // 2
+            # Fill cell evenly using fit (no empty space around images)
+            cell_img = ImageOps.fit(cell_img, (cell_w, cell_h), Image.Resampling.LANCZOS)
 
-            # Paste (handle RGBA images)
+            # Convert non-RGB/RGBA modes to RGB to avoid color corruption
             if cell_img.mode == "RGBA":
-                mosaic.paste(cell_img, (x_offset, y_offset), cell_img)
+                paste_mask = cell_img
             else:
-                mosaic.paste(cell_img, (x_offset, y_offset))
+                if cell_img.mode != "RGB":
+                    cell_img = cell_img.convert("RGB")
+                paste_mask = None
+
+            # Position cell with padding and gap offsets
+            x_offset = canvas_padding + col_i * (cell_w + cell_gap)
+            y_offset = canvas_padding + row_i * (cell_h + cell_gap)
+
+            mosaic.paste(cell_img, (x_offset, y_offset), paste_mask)
 
         # Convert mosaic PIL Image to QPixmap and display
         qimage = self._pil_to_qimage(mosaic)

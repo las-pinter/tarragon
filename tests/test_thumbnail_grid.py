@@ -28,6 +28,7 @@ from tarragon.widgets.thumbnail_grid import (
     BG_PRIMARY,
     BG_SECONDARY,
     GRID_GAP,
+    HOVER_MARGIN,
     THUMBNAIL_SIZE,
     ThumbnailDelegate,
     ThumbnailGrid,
@@ -88,7 +89,9 @@ def mock_painter():
 def style_option():
     """Provide a QStyleOptionViewItem with a realistic rect and no special state."""
     opt = QStyleOptionViewItem()
-    opt.rect = QRect(0, 0, THUMBNAIL_SIZE + GRID_GAP * 2, THUMBNAIL_SIZE + GRID_GAP * 2 + 24)
+    cell_w = THUMBNAIL_SIZE + GRID_GAP * 2 + HOVER_MARGIN * 2
+    cell_h = THUMBNAIL_SIZE + GRID_GAP * 2 + 24 + HOVER_MARGIN * 2
+    opt.rect = QRect(0, 0, cell_w, cell_h)
     opt.state = QStyle.StateFlag.State_None
     return opt
 
@@ -154,11 +157,14 @@ def test_thumbnail_delegate_is_qstyleditemdelegate():
 
 
 def test_thumbnail_delegate_size_hint():
-    """sizeHint returns correct dimensions for a grid cell."""
+    """sizeHint returns correct dimensions for a grid cell.
+
+    Includes HOVER_MARGIN on each side to accommodate hover-scale growth.
+    """
     delegate = ThumbnailDelegate()
     hint = delegate.sizeHint(None, None)  # type: ignore[arg-type]
-    expected_width = THUMBNAIL_SIZE + GRID_GAP * 2
-    expected_height = THUMBNAIL_SIZE + GRID_GAP * 2 + 24
+    expected_width = THUMBNAIL_SIZE + GRID_GAP * 2 + HOVER_MARGIN * 2
+    expected_height = THUMBNAIL_SIZE + GRID_GAP * 2 + 24 + HOVER_MARGIN * 2
     assert hint == QSize(expected_width, expected_height)
 
 
@@ -651,8 +657,34 @@ def test_thumbnail_grid_uniform_item_sizes(grid):
 
 
 def test_thumbnail_grid_spacing_uses_grid_gap(grid):
-    """Grid spacing is GRID_GAP (8px) for proper visual separation between cells."""
+    """Grid spacing is GRID_GAP for proper visual separation between cells."""
     assert grid.spacing() == GRID_GAP
+
+
+def test_grid_size_accounts_for_hover_margin(grid):
+    """Grid size includes HOVER_MARGIN so hovered thumbnails don't overlap neighbors."""
+    grid_size = grid.gridSize()
+    expected_w = THUMBNAIL_SIZE + GRID_GAP * 2 + HOVER_MARGIN * 2
+    expected_h = THUMBNAIL_SIZE + GRID_GAP * 2 + 24 + HOVER_MARGIN * 2
+    assert grid_size == QSize(expected_w, expected_h)
+
+
+def test_grid_gap_provides_adequate_spacing():
+    """GRID_GAP is at least 12px for comfortable visual breathing room."""
+    assert GRID_GAP >= 12
+
+
+def test_hover_margin_covers_scale_growth():
+    """HOVER_MARGIN is large enough to cover the hover-scale overshoot.
+
+    At HOVER_SCALE_TARGET=1.02, a THUMBNAIL_SIZE image grows by
+    THUMBNAIL_SIZE * (HOVER_SCALE_TARGET - 1) / 2 pixels per side.
+    HOVER_MARGIN must be >= that value (ceiling).
+    """
+    import math
+
+    overshoot = THUMBNAIL_SIZE * (1.02 - 1.0) / 2.0
+    assert HOVER_MARGIN >= math.ceil(overshoot)
 
 
 # ── Edge Case: Delegate Initial State ────────────────────────────────

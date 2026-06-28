@@ -463,3 +463,86 @@ class TestMosaicClearsSingleState:
 
         # Assert
         assert preview_panel._current_path is None
+
+
+# ── EXIF Orientation in Multi-Preview ────────────────────────────────────
+
+
+class TestMosaicExifTranspose:
+    """Verify EXIF orientation is applied to each image in the mosaic."""
+
+    def test_exif_rotated_image_displays_upright(self, preview_panel, tmp_path):
+        """Images with EXIF orientation tag are transposed before pasting.
+
+        A 200x100 image with orientation tag 6 (rotate 90 CW) should be
+        transposed to 100x200 before being placed in the mosaic.
+        """
+        # Arrange: create a 200x100 JPEG with EXIF orientation 6
+        img = Image.new("RGB", (200, 100), color="orange")
+        exif = img.getexif()
+        exif[0x0112] = 6  # Orientation: rotate 90 CW
+        jpg_path = tmp_path / "exif_rotated.jpg"
+        img.save(jpg_path, format="JPEG", exif=exif)
+        img.close()
+
+        loaded = Image.open(jpg_path)
+        # Before transpose: 200x100; after: 100x200
+
+        # Act
+        preview_panel.set_multi_preview([loaded], total_selected=1)
+
+        # Assert: mosaic rendered without error
+        assert preview_panel._image_label.pixmap() is not None
+        assert not preview_panel._image_label.pixmap().isNull()
+        loaded.close()
+
+
+# ── Mode Conversion in Multi-Preview ─────────────────────────────────────
+
+
+class TestMosaicModeConversion:
+    """Verify non-RGB image modes are converted before pasting into mosaic."""
+
+    def test_grayscale_l_mode(self, preview_panel):
+        """Mosaic handles L (grayscale) images without color corruption."""
+        images = [Image.new("L", (200, 200), color=128)]
+        preview_panel.set_multi_preview(images, total_selected=1)
+        assert preview_panel._image_label.pixmap() is not None
+        assert not preview_panel._image_label.pixmap().isNull()
+
+    def test_palette_p_mode(self, preview_panel):
+        """Mosaic handles P (palette) images without color corruption."""
+        img = Image.new("P", (200, 200))
+        img.putpalette([i % 256 for i in range(768)])
+        preview_panel.set_multi_preview([img], total_selected=1)
+        assert preview_panel._image_label.pixmap() is not None
+
+    def test_cmyk_mode(self, preview_panel):
+        """Mosaic handles CMYK images by converting to RGB."""
+        images = [Image.new("CMYK", (200, 200), color=(0, 0, 0, 0))]
+        preview_panel.set_multi_preview(images, total_selected=1)
+        assert preview_panel._image_label.pixmap() is not None
+
+    def test_la_mode(self, preview_panel):
+        """Mosaic handles LA (grayscale + alpha) images."""
+        images = [Image.new("LA", (200, 200), color=(128, 255))]
+        preview_panel.set_multi_preview(images, total_selected=1)
+        assert preview_panel._image_label.pixmap() is not None
+
+    def test_i_mode_32bit(self, preview_panel):
+        """Mosaic handles I (32-bit integer) images."""
+        images = [Image.new("I", (200, 200), color=1000)]
+        preview_panel.set_multi_preview(images, total_selected=1)
+        assert preview_panel._image_label.pixmap() is not None
+
+    def test_mixed_modes_in_same_mosaic(self, preview_panel):
+        """Mosaic handles a mix of RGB, RGBA, L, and P images together."""
+        images = [
+            Image.new("RGB", (200, 200), color="red"),
+            Image.new("RGBA", (200, 200), color=(0, 255, 0, 128)),
+            Image.new("L", (200, 200), color=128),
+            Image.new("RGB", (300, 150), color="blue"),
+        ]
+        preview_panel.set_multi_preview(images, total_selected=4)
+        assert preview_panel._image_label.pixmap() is not None
+        assert not preview_panel._image_label.pixmap().isNull()

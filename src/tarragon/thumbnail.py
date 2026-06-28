@@ -182,9 +182,9 @@ def derive_smaller_sizes(source_image: Image.Image, target_sizes: list[int]) -> 
     """Derive smaller image sizes from a source image.
 
     For each size in *target_sizes*, if the source image's longest side
-    exceeds *size*, a copy is shrunk via Lanczos resampling and included
-    in the result.  Sizes that are >= the source's longest side are skipped
-    (no upscaling).
+    exceeds *size*, a copy is shrunk via Lanczos resampling.  When the
+    source is already smaller than or equal to *size*, a copy is included
+    as-is (no upscaling) so that all cache tiers are populated.
 
     Parameters
     ----------
@@ -196,8 +196,8 @@ def derive_smaller_sizes(source_image: Image.Image, target_sizes: list[int]) -> 
     Returns
     -------
     dict[int, Image.Image]
-        Mapping of target_size -> derived Image.  Only sizes smaller than
-        the source are included.
+        Mapping of target_size -> derived Image.  All requested sizes
+        are included — either resized down or copied as-is.
     """
     results: dict[int, Image.Image] = {}
     for size in target_sizes:
@@ -205,6 +205,9 @@ def derive_smaller_sizes(source_image: Image.Image, target_sizes: list[int]) -> 
             derived = source_image.copy()
             derived.thumbnail((size, size), Image.LANCZOS)
             results[size] = derived
+        else:
+            # Image is smaller than or equal to target — include as-is
+            results[size] = source_image.copy()
     return results
 
 

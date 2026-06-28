@@ -265,9 +265,12 @@ class ThumbnailService(QObject):
             if max(source_image.size) > 256:
                 thumb_img = source_image.copy()
                 thumb_img.thumbnail((256, 256), Image.LANCZOS)
-                save_to_cache(thumb_img, cache_paths["256"], "png")
-                final_thumb_path = str(cache_paths["256"])
-                self.thumbnailReady.emit(str(file_info.path), thumb_img, 256, final_thumb_path)
+            else:
+                # Source is smaller than 256 — include as-is
+                thumb_img = source_image.copy()
+            save_to_cache(thumb_img, cache_paths["256"], "png")
+            final_thumb_path = str(cache_paths["256"])
+            self.thumbnailReady.emit(str(file_info.path), thumb_img, 256, final_thumb_path)
 
         # Save missing preview (1024) — only if source is full resolution
         if source_resolution is None and (
@@ -276,9 +279,12 @@ class ThumbnailService(QObject):
             if max(source_image.size) > 1024:
                 preview_img = source_image.copy()
                 preview_img.thumbnail((1024, 1024), Image.LANCZOS)
-                save_to_cache(preview_img, cache_paths["1024"], "png")
-                final_preview_path = str(cache_paths["1024"])
-                self.thumbnailReady.emit(str(file_info.path), preview_img, 1024, final_preview_path)
+            else:
+                # Source is smaller than 1024 — include as-is
+                preview_img = source_image.copy()
+            save_to_cache(preview_img, cache_paths["1024"], "png")
+            final_preview_path = str(cache_paths["1024"])
+            self.thumbnailReady.emit(str(file_info.path), preview_img, 1024, final_preview_path)
 
         # Emit signals for already-cached resolutions (BUG #3 fix)
         if cached.get("thumbnail_cache_path") and Path(cached["thumbnail_cache_path"]).exists():

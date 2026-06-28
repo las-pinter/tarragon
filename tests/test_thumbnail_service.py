@@ -1097,6 +1097,156 @@ class TestRenderTaskEdgeCases:
 
 
 # =========================================================================
+# _derive_missing_resolutions — small image caching
+# =========================================================================
+
+
+class TestDeriveMissingResolutionsSmallImages:
+    """Verify that small images are cached as-is in ALL resolution tiers."""
+
+    def test_small_image_cached_in_all_tiers(
+        self,
+        tmp_path: Path,
+        service: ThumbnailService,
+        db_mock: MagicMock,
+    ) -> None:
+        """Source image smaller than 256px is saved as-is to 256, 1024, and full caches."""
+        # Create a small full-resolution cached image (100x100)
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir(parents=True)
+        full_path = cache_dir / "full.png"
+        small_img = Image.new("RGB", (100, 100), color="red")
+        small_img.save(full_path)
+
+        file_info = FileInfo(
+            path=tmp_path / "source.png",
+            mtime=1000.0,
+            size=500,
+            extension=".png",
+        )
+
+        # Cached dict: full exists, but 256 and 1024 are missing
+        cached = {
+            "path": str(file_info.path),
+            "mtime": 1000,
+            "size": 500,
+            "width": 100,
+            "height": 100,
+            "cache_uuid": "test-uuid",
+            "thumbnail_cache_path": None,
+            "preview_cache_path": None,
+            "full_cache_path": str(full_path),
+        }
+
+        emitted: list[tuple] = []
+        service.thumbnailReady.connect(lambda *args: emitted.append(args))
+
+        result = service._derive_missing_resolutions(file_info, cached)
+
+        assert result == "derived"
+        # Both 256 and 1024 should have been saved
+        resolution_sizes = [e[2] for e in emitted]
+        assert 256 in resolution_sizes, "256 tier should be populated for small images"
+        assert 1024 in resolution_sizes, "1024 tier should be populated for small images"
+        # DB should have been updated with all paths
+        db_mock.upsert_thumbnail.assert_called_once()
+        call_kwargs = db_mock.upsert_thumbnail.call_args.kwargs
+        assert call_kwargs["thumbnail_cache_path"] is not None
+        assert call_kwargs["preview_cache_path"] is not None
+
+    def test_medium_image_cached_in_1024_tier(
+        self,
+        tmp_path: Path,
+        service: ThumbnailService,
+        db_mock: MagicMock,
+    ) -> None:
+        """Source image between 256 and 1024px is saved as-is to 1024 cache."""
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir(parents=True)
+        full_path = cache_dir / "full.png"
+        medium_img = Image.new("RGB", (500, 400), color="blue")
+        medium_img.save(full_path)
+
+        file_info = FileInfo(
+            path=tmp_path / "source.png",
+            mtime=1000.0,
+            size=500,
+            extension=".png",
+        )
+
+        cached = {
+            "path": str(file_info.path),
+            "mtime": 1000,
+            "size": 500,
+            "width": 500,
+            "height": 400,
+            "cache_uuid": "test-uuid",
+            "thumbnail_cache_path": None,
+            "preview_cache_path": None,
+            "full_cache_path": str(full_path),
+        }
+
+        emitted: list[tuple] = []
+        service.thumbnailReady.connect(lambda *args: emitted.append(args))
+
+        result = service._derive_missing_resolutions(file_info, cached)
+
+        assert result == "derived"
+        resolution_sizes = [e[2] for e in emitted]
+        # 256 should be derived (500 > 256 → resized), 1024 should be included as-is
+        assert 256 in resolution_sizes
+        assert 1024 in resolution_sizes, "1024 tier should be populated for medium images"
+
+    def test_small_image_not_upscaled_in_cache(
+        self,
+        tmp_path: Path,
+        service: ThumbnailService,
+        db_mock: MagicMock,
+    ) -> None:
+        """Small image saved to 1024 cache retains original dimensions (no upscaling)."""
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir(parents=True)
+        full_path = cache_dir / "full.png"
+        small_img = Image.new("RGB", (200, 150), color="green")
+        small_img.save(full_path)
+
+        file_info = FileInfo(
+            path=tmp_path / "source.png",
+            mtime=1000.0,
+            size=500,
+            extension=".png",
+        )
+
+        cached = {
+            "path": str(file_info.path),
+            "mtime": 1000,
+            "size": 500,
+            "width": 200,
+            "height": 150,
+            "cache_uuid": "test-uuid",
+            "thumbnail_cache_path": None,
+            "preview_cache_path": None,
+            "full_cache_path": str(full_path),
+        }
+
+        emitted: list[tuple] = []
+        service.thumbnailReady.connect(lambda *args: emitted.append(args))
+
+        service._derive_missing_resolutions(file_info, cached)
+
+        # Find the 1024 emission and verify the image was NOT upscaled
+        for emission in emitted:
+            if emission[2] == 1024:
+                cached_preview_img = emission[1]
+                assert cached_preview_img.size == (200, 150), (
+                    f"Small image should NOT be upscaled to 1024, got size {cached_preview_img.size}"
+                )
+                break
+        else:
+            pytest.fail("No emission found for 1024 resolution tier")
+
+
+# =========================================================================
 # Auto-color tag signal — Bug 1 regression test
 # =========================================================================
 

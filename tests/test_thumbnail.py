@@ -1296,12 +1296,18 @@ def test_generate_cache_paths_structure(tmp_path: Path) -> None:
 
 
 def test_derive_smaller_sizes_no_upscaling() -> None:
-    """derive_smaller_sizes returns empty dict when source is smaller than all targets."""
+    """derive_smaller_sizes includes small images as-is (no upscaling) for all target sizes."""
     from tarragon.thumbnail import derive_smaller_sizes
 
     small_img = Image.new("RGB", (100, 100))
     result = derive_smaller_sizes(small_img, [256, 1024])
-    assert result == {}  # No upscaling
+    # All target sizes are included — image is copied as-is, not upscaled
+    assert set(result.keys()) == {256, 1024}
+    assert result[256].size == (100, 100)  # Original size preserved
+    assert result[1024].size == (100, 100)  # Original size preserved
+    # Verify they are copies, not the same object
+    assert result[256] is not small_img
+    assert result[1024] is not small_img
 
 
 def test_derive_smaller_sizes_correct_sizes() -> None:

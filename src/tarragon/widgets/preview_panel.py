@@ -12,12 +12,70 @@ from PySide6.QtWidgets import QLabel, QSizePolicy, QVBoxLayout, QWidget
 
 from tarragon.theme.tokens import get_token
 
+# EXIF orientation tag ID
+_EXIF_ORIENTATION_TAG = 0x0112
+
 # Theme tokens (coral-amber dark palette) — sourced from centralized theme system
 BG_PRIMARY: str = get_token("colors", "bg_primary")
 BG_SECONDARY: str = get_token("colors", "bg_secondary")
 TEXT_PRIMARY: str = get_token("colors", "text_primary")
 TEXT_SECONDARY: str = get_token("colors", "text_secondary")
 CORAL_STRONG: str = get_token("colors", "coral_strong")
+
+
+def _apply_exif_from_original(image: Image.Image, original_path: Path) -> Image.Image:
+    """Apply EXIF orientation from the original file to a cached image.
+
+    Cached PNG thumbnails strip EXIF metadata, so ``ImageOps.exif_transpose()``
+    is a no-op on them.  This helper reads the orientation tag from the
+    *original* source file and applies the corresponding geometric
+    transformation to *image* so that old caches still display correctly.
+
+    Parameters
+    ----------
+    image:
+        The (cached) PIL Image to transform in-place (a copy is returned).
+    original_path:
+        Path to the original source file whose EXIF orientation to read.
+
+    Returns
+    -------
+    Image.Image
+        The orientation-corrected image (may be the same object if no
+        correction was needed).
+    """
+    try:
+        with Image.open(original_path) as orig:
+            exif = orig.getexif()
+            orientation = exif.get(_EXIF_ORIENTATION_TAG)
+            if orientation and orientation != 1:
+                image = _transpose_for_orientation(image, orientation)
+    except Exception:  # noqa: BLE001 — best-effort; never block preview
+        pass
+    return image
+
+
+def _transpose_for_orientation(image: Image.Image, orientation: int) -> Image.Image:
+    """Apply the EXIF orientation transformation to *image*.
+
+    Mirrors the logic of :func:`PIL.ImageOps.exif_transpose` for orientation
+    values 2–8.  Orientation 1 (normal) is handled by the caller.
+    """
+    if orientation == 2:
+        return image.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
+    if orientation == 3:
+        return image.transpose(Image.Transpose.ROTATE_180)
+    if orientation == 4:
+        return image.transpose(Image.Transpose.FLIP_TOP_BOTTOM)
+    if orientation == 5:
+        return image.transpose(Image.Transpose.TRANSPOSE)
+    if orientation == 6:
+        return image.transpose(Image.Transpose.ROTATE_270)
+    if orientation == 7:
+        return image.transpose(Image.Transpose.TRANSVERSE)
+    if orientation == 8:
+        return image.transpose(Image.Transpose.ROTATE_90)
+    return image
 
 
 class PreviewPanel(QWidget):
@@ -88,7 +146,7 @@ class PreviewPanel(QWidget):
 
         Args:
             image: PIL Image to display
-            path: Optional file path for metadata display
+            path: Optional file path for metadata display and EXIF recovery
 
         Raises:
             TypeError: If ``image`` is None.
@@ -96,9 +154,36 @@ class PreviewPanel(QWidget):
         if image is None:
             raise TypeError("image must be a PIL Image, not None")
 
-        # Apply EXIF orientation so phone-camera images display upright
+        # Apply EXIF orientation so phone-camera images display upright.
         original_format = image.format
+
+        # Detect whether the image carries its own EXIF orientation tag.
+        # Cached PNG thumbnails strip EXIF, so we fall back to reading the
+        # original file's orientation when the image itself has none.
+        has_own_orientation = False
+        try:
+            if image.getexif().get(_EXIF_ORIENTATION_TAG):
+                has_own_orientation = True
+        except Exception:  # noqa: BLE001
+            pass
+
         image = ImageOps.exif_transpose(image) or image
+
+        # If the image had no EXIF of its own (likely loaded from cache),
+        # recover orientation from the original source file.
+        if not has_own_orientation and path is not None:
+            image = _apply_exif_from_original(image, path)
+
+        # Convert RGBA to RGB for display — alpha channel causes washed-out /
+        # gray rendering in Qt's RGBA8888 format.  Composite onto the preview
+        # background colour so transparency is visually preserved.
+        if image.mode == "RGBA":
+            background = Image.new("RGB", image.size, BG_SECONDARY)
+            background.paste(image, mask=image.split()[3])  # alpha as mask
+            image = background
+        elif image.mode != "RGB":
+            image = image.convert("RGB")
+
         # exif_transpose returns a fresh copy that loses the .format attribute
         if image.format is None and original_format is not None:
             image.format = original_format

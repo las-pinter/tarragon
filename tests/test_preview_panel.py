@@ -754,3 +754,326 @@ def test_set_image_shows_only_filename_not_full_path(qapp, sample_image, tmp_pat
         assert "/" not in panel._filename_label.text()
     finally:
         panel.close()
+
+
+# ── Regression: RGBA → RGB conversion (Bug A — gray preview) ─────────
+
+
+def test_set_image_rgba_converted_to_rgb(qapp):  # noqa: ARG001
+    """set_image converts RGBA images to RGB so they don't appear gray.
+
+    Cached thumbnails are saved as RGBA.  When displayed via Qt's
+    Format_RGBA8888 the alpha channel causes a washed-out / gray look.
+    After set_image(), the internal image must be RGB.
+    """
+    panel = PreviewPanel()
+    try:
+        rgba = Image.new("RGBA", (200, 100), color=(255, 0, 0, 128))
+        panel.set_image(rgba)
+        assert panel._current_image is not None
+        assert panel._current_image.mode == "RGB", (
+            f"Expected RGB after set_image, got {panel._current_image.mode}"
+        )
+    finally:
+        panel.close()
+
+
+def test_set_image_rgba_fully_transparent_becomes_dark_bg(qapp):  # noqa: ARG001
+    """RGBA image wiv full transparency composites onto da dark preview bg."""
+    from tarragon.widgets.preview_panel import BG_SECONDARY
+
+    panel = PreviewPanel()
+    try:
+        # Fully transparent RGBA image
+        rgba = Image.new("RGBA", (10, 10), color=(255, 0, 0, 0))
+        panel.set_image(rgba)
+        assert panel._current_image is not None
+        assert panel._current_image.mode == "RGB"
+        # All pixels should be the background colour (alpha=0 → only bg shows)
+        pixel = panel._current_image.getpixel((0, 0))
+        # BG_SECONDARY is "#1c1b22" → (28, 27, 34)
+        assert pixel == (28, 27, 34), f"Expected bg colour (28, 27, 34), got {pixel}"
+    finally:
+        panel.close()
+
+
+def test_set_image_rgba_semi_transparent_blends(qapp):  # noqa: ARG001
+    """RGBA semi-transparent pixels blend wiv da dark background."""
+    panel = PreviewPanel()
+    try:
+        # 50% transparent white on dark bg
+        rgba = Image.new("RGBA", (10, 10), color=(255, 255, 255, 128))
+        panel.set_image(rgba)
+        assert panel._current_image.mode == "RGB"
+        pixel = panel._current_image.getpixel((0, 0))
+        # Blended value should be between bg (28,27,34) and white (255,255,255)
+        for ch in pixel:
+            assert 28 <= ch <= 255, f"Channel value {ch} outside expected blend range"
+    finally:
+        panel.close()
+
+
+def test_set_image_rgb_stays_rgb(qapp):  # noqa: ARG001
+    """RGB images are not modified by da RGBA→RGB conversion."""
+    panel = PreviewPanel()
+    try:
+        rgb = Image.new("RGB", (100, 100), color=(50, 100, 150))
+        panel.set_image(rgb)
+        assert panel._current_image.mode == "RGB"
+        # Pixel values should be unchanged
+        pixel = panel._current_image.getpixel((0, 0))
+        assert pixel == (50, 100, 150)
+    finally:
+        panel.close()
+
+
+# ── Regression: EXIF from original file (Bug B — slanted preview) ─────
+
+
+def test_set_image_applies_exif_from_original_for_cached_image(qapp, tmp_path):  # noqa: ARG001
+    """Cached image (no EXIF) gets orientation from da original file.
+
+    Simulates da bug: a cached PNG has no EXIF data, but da original JPEG
+    has orientation=6 (rotate 90° CW).  The preview should display da
+    image rotated.
+    """
+    panel = PreviewPanel()
+    try:
+        # Create an original JPEG wiv EXIF orientation 6 (rotate 90° CW)
+        orig = Image.new("RGB", (200, 100), color="orange")
+        exif = orig.getexif()
+        exif[0x0112] = 6  # Orientation: rotate 90° CW
+        orig_path = tmp_path / "original.jpg"
+        orig.save(orig_path, format="JPEG", exif=exif)
+        orig.close()
+
+        # Simulate a cached image: 200×100 PNG wiv NO EXIF
+        # (as if it was saved before EXIF correction was added)
+        cached = Image.new("RGB", (200, 100), color="orange")
+        assert not cached.getexif().get(0x0112), "Cached image should have no EXIF orientation"
+
+        # Display da cached image wiv path pointing to da original
+        panel.set_image(cached, path=orig_path)
+
+        # After EXIF recovery, 200×100 should become 100×200
+        assert panel._dimensions_label.text() == "Dimensions: 100 × 200", (
+            f"Expected 100 × 200 after EXIF recovery, got: {panel._dimensions_label.text()}"
+        )
+    finally:
+        panel.close()
+
+
+def test_set_image_no_double_rotation_when_image_has_exif(qapp, tmp_path):  # noqa: ARG001
+    """Image wiv its own EXIF is not double-rotated via da original file."""
+    panel = PreviewPanel()
+    try:
+        # Create a JPEG wiv EXIF orientation 6
+        img = Image.new("RGB", (200, 100), color="blue")
+        exif = img.getexif()
+        exif[0x0112] = 6
+        jpg_path = tmp_path / "oriented.jpg"
+        img.save(jpg_path, format="JPEG", exif=exif)
+        img.close()
+
+        # Re-open — dis image HAS its own EXIF
+        loaded = Image.open(jpg_path)
+        assert loaded.getexif().get(0x0112) == 6
+
+        panel.set_image(loaded, path=jpg_path)
+
+        # Should be rotated exactly once: 200×100 → 100×200
+        assert panel._dimensions_label.text() == "Dimensions: 100 × 200"
+        loaded.close()
+    finally:
+        panel.close()
+
+
+def test_set_image_exif_recovery_noop_when_original_has_no_exif(qapp, tmp_path):  # noqa: ARG001
+    """EXIF recovery is a no-op when da original file has no orientation tag."""
+    panel = PreviewPanel()
+    try:
+        # Original JPEG wiv no EXIF
+        orig = Image.new("RGB", (200, 100), color="green")
+        orig_path = tmp_path / "plain.jpg"
+        orig.save(orig_path, format="JPEG")
+        orig.close()
+
+        # Cached image (no EXIF)
+        cached = Image.new("RGB", (200, 100), color="green")
+        panel.set_image(cached, path=orig_path)
+
+        # Dimensions should be unchanged
+        assert panel._dimensions_label.text() == "Dimensions: 200 × 100"
+    finally:
+        panel.close()
+
+
+def test_set_image_exif_recovery_handles_missing_original(qapp, tmp_path):  # noqa: ARG001
+    """EXIF recovery gracefully handles a nonexistent original file."""
+    panel = PreviewPanel()
+    try:
+        cached = Image.new("RGB", (200, 100), color="red")
+        fake_path = tmp_path / "does_not_exist.jpg"
+        # Should not raise
+        panel.set_image(cached, path=fake_path)
+        assert panel._current_image is not None
+        assert panel._dimensions_label.text() == "Dimensions: 200 × 100"
+    finally:
+        panel.close()
+
+
+# ── Unit tests for helper functions ────────────────────────────────────
+
+
+def test_apply_exif_from_original_orientation_6(tmp_path):
+    """_apply_exif_from_original rotates 90° CW for orientation 6."""
+    from tarragon.widgets.preview_panel import _apply_exif_from_original
+
+    # Create original wiv orientation 6
+    orig = Image.new("RGB", (200, 100), color="red")
+    exif = orig.getexif()
+    exif[0x0112] = 6
+    orig_path = tmp_path / "test.jpg"
+    orig.save(orig_path, format="JPEG", exif=exif)
+    orig.close()
+
+    # Apply to a different image (simulating cached image)
+    cached = Image.new("RGB", (200, 100), color="red")
+    result = _apply_exif_from_original(cached, orig_path)
+    assert result.size == (100, 200), f"Expected (100, 200), got {result.size}"
+
+
+def test_apply_exif_from_original_orientation_3(tmp_path):
+    """_apply_exif_from_original rotates 180° for orientation 3."""
+    from tarragon.widgets.preview_panel import _apply_exif_from_original
+
+    orig = Image.new("RGB", (200, 100), color="blue")
+    exif = orig.getexif()
+    exif[0x0112] = 3
+    orig_path = tmp_path / "test.jpg"
+    orig.save(orig_path, format="JPEG", exif=exif)
+    orig.close()
+
+    cached = Image.new("RGB", (200, 100), color="blue")
+    result = _apply_exif_from_original(cached, orig_path)
+    # 180° rotation preserves dimensions
+    assert result.size == (200, 100)
+
+
+def test_apply_exif_from_original_orientation_8(tmp_path):
+    """_apply_exif_from_original rotates 90° CCW for orientation 8."""
+    from tarragon.widgets.preview_panel import _apply_exif_from_original
+
+    orig = Image.new("RGB", (200, 100), color="green")
+    exif = orig.getexif()
+    exif[0x0112] = 8
+    orig_path = tmp_path / "test.jpg"
+    orig.save(orig_path, format="JPEG", exif=exif)
+    orig.close()
+
+    cached = Image.new("RGB", (200, 100), color="green")
+    result = _apply_exif_from_original(cached, orig_path)
+    assert result.size == (100, 200)
+
+
+def test_apply_exif_from_original_no_orientation_tag(tmp_path):
+    """_apply_exif_from_original is a no-op when no orientation tag exists."""
+    from tarragon.widgets.preview_panel import _apply_exif_from_original
+
+    orig = Image.new("RGB", (200, 100), color="white")
+    orig_path = tmp_path / "test.jpg"
+    orig.save(orig_path, format="JPEG")
+    orig.close()
+
+    cached = Image.new("RGB", (200, 100), color="white")
+    result = _apply_exif_from_original(cached, orig_path)
+    assert result.size == (200, 100)
+
+
+def test_apply_exif_from_original_missing_file(tmp_path):
+    """_apply_exif_from_original returns image unchanged for missing file."""
+    from tarragon.widgets.preview_panel import _apply_exif_from_original
+
+    cached = Image.new("RGB", (200, 100), color="red")
+    fake_path = tmp_path / "nonexistent.jpg"
+    result = _apply_exif_from_original(cached, fake_path)
+    assert result.size == (200, 100)
+    assert result is cached  # same object returned
+
+
+def test_transpose_for_orientation_all_values():
+    """_transpose_for_orientation handles all EXIF orientation values 2-8."""
+    from tarragon.widgets.preview_panel import _transpose_for_orientation
+
+    # Use an asymmetric image so rotations are detectable
+    base = Image.new("RGB", (200, 100), color="red")
+
+    # Orientation 2: flip horizontal
+    result = _transpose_for_orientation(base.copy(), 2)
+    assert result.size == (200, 100)
+
+    # Orientation 3: rotate 180
+    result = _transpose_for_orientation(base.copy(), 3)
+    assert result.size == (200, 100)
+
+    # Orientation 4: flip vertical
+    result = _transpose_for_orientation(base.copy(), 4)
+    assert result.size == (200, 100)
+
+    # Orientation 5: transpose (rotate 90 + flip horizontal)
+    result = _transpose_for_orientation(base.copy(), 5)
+    assert result.size == (100, 200)
+
+    # Orientation 6: rotate 270 (= 90 CW)
+    result = _transpose_for_orientation(base.copy(), 6)
+    assert result.size == (100, 200)
+
+    # Orientation 7: transverse (rotate 90 + flip vertical)
+    result = _transpose_for_orientation(base.copy(), 7)
+    assert result.size == (100, 200)
+
+    # Orientation 8: rotate 90 CCW
+    result = _transpose_for_orientation(base.copy(), 8)
+    assert result.size == (100, 200)
+
+    # Orientation 1 (or unknown): no-op
+    result = _transpose_for_orientation(base.copy(), 1)
+    assert result.size == (200, 100)
+    result = _transpose_for_orientation(base.copy(), 99)
+    assert result.size == (200, 100)
+
+
+def test_transpose_for_orientation_pixel_content_5_and_7():
+    """_transpose_for_orientation produces correct pixels for orientations 5 and 7.
+
+    Dimensions alone are insufficient — orientations 5 and 7 both swap
+    dimensions the same way, but produce mirror-image pixel layouts.
+    Uses an asymmetric pixel pattern so any mismatch is detectable.
+    """
+    from tarragon.widgets.preview_panel import _transpose_for_orientation
+
+    # Create asymmetric test image — each pixel has a unique-ish value
+    base = Image.new("RGB", (6, 4))
+    for x in range(6):
+        for y in range(4):
+            base.putpixel((x, y), (x * 40, y * 60, 0))
+
+    # Orientation 5: must match PIL's TRANSPOSE exactly
+    expected_5 = base.transpose(Image.Transpose.TRANSPOSE)
+    result_5 = _transpose_for_orientation(base.copy(), 5)
+    assert result_5.size == expected_5.size, (
+        f"Orientation 5 size mismatch: {result_5.size} != {expected_5.size}"
+    )
+    assert list(result_5.getdata()) == list(expected_5.getdata()), (
+        "Orientation 5 pixels do not match PIL TRANSPOSE"
+    )
+
+    # Orientation 7: must match PIL's TRANSVERSE exactly
+    expected_7 = base.transpose(Image.Transpose.TRANSVERSE)
+    result_7 = _transpose_for_orientation(base.copy(), 7)
+    assert result_7.size == expected_7.size, (
+        f"Orientation 7 size mismatch: {result_7.size} != {expected_7.size}"
+    )
+    assert list(result_7.getdata()) == list(expected_7.getdata()), (
+        "Orientation 7 pixels do not match PIL TRANSVERSE"
+    )

@@ -14,9 +14,21 @@ from PIL import Image, ImageOps
 
 from tarragon.app_paths import cache_dir
 
-__all__ = ["render_plain_image", "render_psd_image", "save_to_cache"]
+__all__ = [
+    "derive_smaller_sizes",
+    "generate_cache_paths",
+    "generate_cache_uuid",
+    "render_plain_image",
+    "render_psd_image",
+    "save_to_cache",
+]
 
 MASTER_LONG_EDGE = 2048
+
+# Resolution tiers for organized cache structure
+RESOLUTION_THUMBNAIL = 256
+RESOLUTION_PREVIEW = 1024
+RESOLUTION_FULL = None  # Original resolution
 
 
 _FORMAT_MAP: dict[str, tuple[str, str]] = {
@@ -25,8 +37,14 @@ _FORMAT_MAP: dict[str, tuple[str, str]] = {
 }
 
 
+# DEPRECATED: Use generate_cache_paths() for the new organized cache structure.
+# Kept for backward compatibility until all callers are migrated.
 def _cache_file_path(file_abs_path: Path, cache_format: str = "png") -> tuple[Path, str]:
     """Return (cache_filepath, mime_type_string) for a given source file path.
+
+    .. deprecated::
+        Use :func:`generate_cache_paths` for the new organized cache structure
+        (``cache/{resolution}/{folder_name}_{uuid}/{filename}``).
 
     The cache filename is derived from a SHA-1 hash of the source file's
     absolute path, making it deterministic and unique per path.  The file
@@ -43,26 +61,90 @@ def _cache_file_path(file_abs_path: Path, cache_format: str = "png") -> tuple[Pa
     return cache_dir() / f"{sha}{ext}", mime
 
 
-def render_plain_image(file_path: Path) -> Image.Image | None:
-    """Open a plain image, make it display-safe, and resize to the master long edge.
+def generate_cache_uuid() -> str:
+    """Generate a short UUID for cache organization.
+
+    Returns an 8-character hex string derived from a UUID4, providing
+    sufficient uniqueness for cache folder naming while keeping paths
+    short and human-readable.
+    """
+    import uuid
+
+    return uuid.uuid4().hex[:8]  # 8 character hex string
+
+
+def generate_cache_paths(source_path: Path, cache_uuid: str) -> dict[str, Path]:
+    """Generate cache paths for all resolutions.
+
+    Structure: ``cache/{resolution}/{folder_name}_{uuid}/{filename}``
+
+    Parameters
+    ----------
+    source_path:
+        The original source image path.  The parent folder name and file
+        stem are extracted to build human-readable cache filenames.
+    cache_uuid:
+        A short UUID string (see :func:`generate_cache_uuid`) used to
+        uniquely identify this cache entry.
+
+    Returns
+    -------
+    dict[str, Path]
+        Mapping of resolution tier names to their cache file paths.
+        Keys: ``'256'``, ``'1024'``, ``'full'``.
+
+    Notes
+    -----
+    Directories are created on demand (``mkdir(parents=True, exist_ok=True)``).
+    Uses :func:`tarragon.app_paths.cache_dir` as the cache root.
+    """
+    # Extract folder name and filename
+    folder_name = source_path.parent.name
+    filename = source_path.stem
+
+    # Create base directory: cache/{folder_name}_{uuid}
+    base_name = f"{folder_name}_{cache_uuid}"
+
+    # Generate paths for each resolution
+    paths: dict[str, Path] = {}
+    for resolution in ("256", "1024", "full"):
+        resolution_dir = cache_dir() / resolution / base_name
+        resolution_dir.mkdir(parents=True, exist_ok=True)
+        paths[resolution] = resolution_dir / f"{filename}.png"
+
+    return paths
+
+
+def render_plain_image(file_path: Path, target_size: int | None = None) -> Image.Image | None:
+    """Open a plain image and make it display-safe.
+
+    Parameters
+    ----------
+    file_path:
+        Path to the source image file.
+    target_size:
+        If specified, shrink the image so the longest side is at most
+        *target_size* pixels.  If ``None``, render at full resolution
+        (no resizing beyond EXIF correction and mode conversion).
 
     Steps
     -----
     1. Open the file with Pillow (supports JPEG, PNG, WebP, TIFF, …).
     2. Convert non-RGB/RGBA modes to RGBA so the rest of the pipeline sees
        a consistent pixel format.
-    3. Shrink the image in-place so the longest side is at most
-       *MASTER_LONG_EDGE* (2048 px), preserving aspect ratio.
+    3. Apply EXIF orientation correction.
+    4. If *target_size* is given, shrink in-place preserving aspect ratio.
 
     Returns *None* (instead of raising) when the file cannot be opened or
-    decoded — the caller should treat ``None`` as “skip / use placeholder”.
+    decoded — the caller should treat ``None`` as "skip / use placeholder".
     """
     try:
         img = Image.open(file_path)
         img = ImageOps.exif_transpose(img) or img  # Apply EXIF rotation
         if img.mode not in ("RGBA", "RGB"):
             img = img.convert("RGBA")
-        img.thumbnail((MASTER_LONG_EDGE, MASTER_LONG_EDGE), Image.LANCZOS)
+        if target_size is not None:
+            img.thumbnail((target_size, target_size), Image.LANCZOS)
         return img
     except (OSError, ValueError):
         return None
@@ -96,6 +178,36 @@ def save_to_cache(img: Image.Image, cache_path: Path, format_setting: str = "png
         img.save(cache_path, "PNG")
 
 
+def derive_smaller_sizes(source_image: Image.Image, target_sizes: list[int]) -> dict[int, Image.Image]:
+    """Derive smaller image sizes from a source image.
+
+    For each size in *target_sizes*, if the source image's longest side
+    exceeds *size*, a copy is shrunk via Lanczos resampling and included
+    in the result.  Sizes that are >= the source's longest side are skipped
+    (no upscaling).
+
+    Parameters
+    ----------
+    source_image:
+        The full-resolution source PIL Image.
+    target_sizes:
+        List of target long-edge pixel sizes (e.g. ``[256, 1024]``).
+
+    Returns
+    -------
+    dict[int, Image.Image]
+        Mapping of target_size -> derived Image.  Only sizes smaller than
+        the source are included.
+    """
+    results: dict[int, Image.Image] = {}
+    for size in target_sizes:
+        if max(source_image.size) > size:
+            derived = source_image.copy()
+            derived.thumbnail((size, size), Image.LANCZOS)
+            results[size] = derived
+    return results
+
+
 # =========================================================================
 # PSD / PSB compositing pipeline
 # =========================================================================
@@ -118,6 +230,7 @@ def _composite_psd_in_process(
     large_canvas_threshold_mp: float,
     tile_grid_x: int,
     tile_grid_y: int,
+    target_size: int | None = None,
 ) -> bytes | None:
     """Composite a PSD/PSB file inside a sub-process worker.
 
@@ -126,6 +239,13 @@ def _composite_psd_in_process(
 
     *large_canvas_threshold_mp* and tile grid dimensions (*tile_grid_x*,
     *tile_grid_y*) are passed as plain scalars so they survive pickling.
+
+    Parameters
+    ----------
+    target_size:
+        If specified, shrink the composited image so the longest side is
+        at most *target_size* pixels.  If ``None``, no resizing is performed
+        (full resolution output).
 
     Returns raw PNG bytes on success, or ``None`` on any failure (failure
     isolation — never crash the worker).
@@ -161,9 +281,9 @@ def _composite_psd_in_process(
                         pass
             image = target
 
-        # Resize to master long edge if needed
-        if max(image.size) > MASTER_LONG_EDGE:
-            image.thumbnail((MASTER_LONG_EDGE, MASTER_LONG_EDGE), Image.LANCZOS)
+        # Resize to target_size if specified
+        if target_size is not None and max(image.size) > target_size:
+            image.thumbnail((target_size, target_size), Image.LANCZOS)
 
         # Return as PNG bytes (PIL Image is not picklable)
         import io
@@ -212,6 +332,7 @@ def render_psd_image(
     large_canvas_threshold_mp: float,
     tile_grid_x: int,
     tile_grid_y: int,
+    target_size: int | None = None,
 ) -> Image.Image | None:
     """Dispatch PSD compositing via ``ProcessPoolExecutor``.
 
@@ -219,6 +340,13 @@ def render_psd_image(
 
     *large_canvas_threshold_mp* and tile grid dimensions are forwarded to
     the subprocess worker as plain scalars.
+
+    Parameters
+    ----------
+    target_size:
+        If specified, the composited image is shrunk so the longest side
+        is at most *target_size* pixels.  If ``None``, no resizing is
+        performed (full resolution output).
     """
     executor = _get_executor()
     future = executor.submit(
@@ -227,6 +355,7 @@ def render_psd_image(
         large_canvas_threshold_mp,
         tile_grid_x,
         tile_grid_y,
+        target_size,
     )
     try:
         result_bytes = future.result(timeout=120)  # 2 minute timeout

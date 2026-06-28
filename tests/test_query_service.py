@@ -18,15 +18,15 @@ def _populate_test_data(db: Database) -> dict[str, int]:
     """
     # ── Thumbnails ────────────────────────────────────────────────────
     # Folder: /test/photos/
-    db.upsert_thumbnail("/test/photos/sunset_beach.png", mtime=1, size=100, width=800, height=600)
-    db.upsert_thumbnail("/test/photos/forest_path.jpg", mtime=2, size=200, width=1024, height=768)
-    db.upsert_thumbnail("/test/photos/blue_ocean.jpg", mtime=3, size=300, width=1920, height=1080)
-    db.upsert_thumbnail("/test/photos/green_valley.png", mtime=4, size=150, width=640, height=480)
-    db.upsert_thumbnail("/test/photos/mountain_top.jpg", mtime=5, size=250, width=1280, height=720)
-    db.upsert_thumbnail("/test/photos/doc.txt", mtime=6, size=10, width=100, height=100)
+    db.upsert_thumbnail("/test/photos/sunset_beach.png", mtime=1, size=100, width=800, height=600, cache_uuid="u1")
+    db.upsert_thumbnail("/test/photos/forest_path.jpg", mtime=2, size=200, width=1024, height=768, cache_uuid="u2")
+    db.upsert_thumbnail("/test/photos/blue_ocean.jpg", mtime=3, size=300, width=1920, height=1080, cache_uuid="u3")
+    db.upsert_thumbnail("/test/photos/green_valley.png", mtime=4, size=150, width=640, height=480, cache_uuid="u4")
+    db.upsert_thumbnail("/test/photos/mountain_top.jpg", mtime=5, size=250, width=1280, height=720, cache_uuid="u5")
+    db.upsert_thumbnail("/test/photos/doc.txt", mtime=6, size=10, width=100, height=100, cache_uuid="u6")
 
     # Folder: /test/other/
-    db.upsert_thumbnail("/test/other/beach.png", mtime=7, size=120, width=800, height=600)
+    db.upsert_thumbnail("/test/other/beach.png", mtime=7, size=120, width=800, height=600, cache_uuid="u7")
 
     # ── Tags (manual = 'user' source, colour = 'auto_color' source) ───
     tag_ids: dict[str, int] = {}

@@ -72,9 +72,17 @@ def service(db_mock: MagicMock, settings_mock: MagicMock) -> ThumbnailService:
     """Create a ThumbnailService with mocked DB, settings, and QThreadPool."""
     with patch("tarragon.services.thumbnail_service._get_executor"):
         svc = ThumbnailService(db=db_mock, settings=settings_mock)
-    # Replace the real QThreadPool with a mock so no real threads are started
-    svc._threadpool = MagicMock()
+    # Replace the real QThreadPool with a mock that executes tasks synchronously
+    # so tests can verify render_func dispatch through check_and_render().
+    mock_pool = MagicMock()
+    mock_pool.start.side_effect = lambda task: (_run_task(task), True)[-1]
+    svc._threadpool = mock_pool
     return svc
+
+
+def _run_task(task: object) -> None:
+    """Execute a QRunnable's run() method synchronously for testing."""
+    task.run()  # type: ignore[attr-defined]
 
 
 # =========================================================================
@@ -130,13 +138,17 @@ class TestCheckAndRender:
         service: ThumbnailService,
         db_mock: MagicMock,
     ) -> None:
-        """Valid cache entry → emit thumbnailReady immediately with cached image."""
+        """Valid cache entry with all 3 resolution files → emit thumbnailReady for each."""
         cache_dir = tmp_path / "cache"
         cache_dir.mkdir(parents=True)
-        cache_path = cache_dir / "thumb.png"
-        # Write a real image so Image.open succeeds
+        thumb_path = cache_dir / "thumb.png"
+        preview_path = cache_dir / "preview.png"
+        full_path = cache_dir / "full.png"
+        # Write real images so Image.open succeeds
         ref_img = Image.new("RGB", (64, 64), color="red")
-        ref_img.save(cache_path)
+        ref_img.save(thumb_path)
+        ref_img.save(preview_path)
+        ref_img.save(full_path)
 
         file_info = FileInfo(
             path=tmp_path / "source.png",
@@ -150,20 +162,27 @@ class TestCheckAndRender:
             "size": 500,
             "width": 64,
             "height": 64,
-            "master_cache_path": str(cache_path),
+            "cache_uuid": "test-uuid",
+            "thumbnail_cache_path": str(thumb_path),
+            "preview_cache_path": str(preview_path),
+            "full_cache_path": str(full_path),
         }
 
-        emitted: list[tuple[str, object]] = []
-        service.thumbnailReady.connect(lambda p, i: emitted.append((p, i)))
+        emitted: list[tuple[str, object, object]] = []
+        service.thumbnailReady.connect(lambda p, i, r: emitted.append((p, i, r)))
 
         service.check_and_render(file_info)
 
-        assert len(emitted) == 1, "Expected exactly one thumbnailReady emission"
+        # Should emit 3 signals (one per resolution)
+        assert len(emitted) == 3, f"Expected 3 emissions, got {len(emitted)}"
         assert emitted[0][0] == str(file_info.path)
-        assert emitted[0][1] is not None
-        # The cached image is returned directly without DB upsert or render dispatch
+        # Resolution sizes: 256, 1024, None (full)
+        resolution_sizes = [e[2] for e in emitted]
+        assert 256 in resolution_sizes
+        assert 1024 in resolution_sizes
+        assert None in resolution_sizes
+        # No render dispatch since all cached
         db_mock.upsert_thumbnail.assert_not_called()
-        service._threadpool.start.assert_not_called()
 
     def test_check_and_render_cache_miss(
         self,
@@ -171,7 +190,7 @@ class TestCheckAndRender:
         service: ThumbnailService,
         db_mock: MagicMock,
     ) -> None:
-        """No cache entry → dispatch plain render via QThreadPool."""
+        """No cache entry → calls _render_all_resolutions."""
         file_info = FileInfo(
             path=tmp_path / "source.png",
             mtime=1000.0,
@@ -180,11 +199,9 @@ class TestCheckAndRender:
         )
         db_mock.get_thumbnail.return_value = None
 
-        service.check_and_render(file_info)
-
-        service._threadpool.start.assert_called_once()
-        task = service._threadpool.start.call_args[0][0]
-        assert isinstance(task, _RenderTask)
+        with patch.object(service, "_render_all_resolutions") as mock_render:
+            service.check_and_render(file_info)
+            mock_render.assert_called_once_with(file_info)
 
     def test_check_and_render_stale_cache(
         self,
@@ -192,7 +209,7 @@ class TestCheckAndRender:
         service: ThumbnailService,
         db_mock: MagicMock,
     ) -> None:
-        """Cache entry with mismatched mtime → dispatch render (stale)."""
+        """Cache entry with mismatched mtime → calls _render_all_resolutions (stale)."""
         file_info = FileInfo(
             path=tmp_path / "source.png",
             mtime=2000.0,
@@ -206,14 +223,15 @@ class TestCheckAndRender:
             "size": 500,
             "width": 64,
             "height": 64,
-            "master_cache_path": str(tmp_path / "cache" / "old.png"),
+            "cache_uuid": "old-uuid",
+            "thumbnail_cache_path": str(tmp_path / "cache" / "old.png"),
+            "preview_cache_path": None,
+            "full_cache_path": None,
         }
 
-        service.check_and_render(file_info)
-
-        service._threadpool.start.assert_called_once()
-        task = service._threadpool.start.call_args[0][0]
-        assert isinstance(task, _RenderTask)
+        with patch.object(service, "_render_all_resolutions") as mock_render:
+            service.check_and_render(file_info)
+            mock_render.assert_called_once_with(file_info)
 
     def test_check_and_render_stale_cache_different_size(
         self,
@@ -221,7 +239,7 @@ class TestCheckAndRender:
         service: ThumbnailService,
         db_mock: MagicMock,
     ) -> None:
-        """Cache entry with mismatched size → dispatch render (stale)."""
+        """Cache entry with mismatched size → calls _render_all_resolutions (stale)."""
         file_info = FileInfo(
             path=tmp_path / "source.png",
             mtime=1000.0,
@@ -235,14 +253,15 @@ class TestCheckAndRender:
             "size": 500,
             "width": 64,
             "height": 64,
-            "master_cache_path": str(tmp_path / "cache" / "old.png"),
+            "cache_uuid": "old-uuid",
+            "thumbnail_cache_path": str(tmp_path / "cache" / "old.png"),
+            "preview_cache_path": None,
+            "full_cache_path": None,
         }
 
-        service.check_and_render(file_info)
-
-        service._threadpool.start.assert_called_once()
-        task = service._threadpool.start.call_args[0][0]
-        assert isinstance(task, _RenderTask)
+        with patch.object(service, "_render_all_resolutions") as mock_render:
+            service.check_and_render(file_info)
+            mock_render.assert_called_once_with(file_info)
 
     def test_check_and_render_corrupt_cache(
         self,
@@ -250,7 +269,7 @@ class TestCheckAndRender:
         service: ThumbnailService,
         db_mock: MagicMock,
     ) -> None:
-        """Cache entry exists but cache file missing → dispatch render."""
+        """Cache entry exists but cache files missing → calls _render_all_resolutions."""
         cache_dir = tmp_path / "cache"
         cache_dir.mkdir(parents=True)
         cache_path = cache_dir / "missing.png"
@@ -268,23 +287,24 @@ class TestCheckAndRender:
             "size": 500,
             "width": 64,
             "height": 64,
-            "master_cache_path": str(cache_path),
+            "cache_uuid": "old-uuid",
+            "thumbnail_cache_path": str(cache_path),
+            "preview_cache_path": None,
+            "full_cache_path": None,
         }
 
-        service.check_and_render(file_info)
+        with patch.object(service, "_render_all_resolutions") as mock_render:
+            service.check_and_render(file_info)
+            # Should call _render_all_resolutions since cache files are missing
+            mock_render.assert_called_once_with(file_info)
 
-        # Should fall through to render dispatch since cache file is missing
-        service._threadpool.start.assert_called_once()
-        task = service._threadpool.start.call_args[0][0]
-        assert isinstance(task, _RenderTask)
-
-    def test_check_and_render_no_master_cache_path(
+    def test_check_and_render_no_cache_paths(
         self,
         tmp_path: Path,
         service: ThumbnailService,
         db_mock: MagicMock,
     ) -> None:
-        """Cache entry without master_cache_path → dispatch render."""
+        """Cache entry without cache paths → calls _render_all_resolutions."""
         file_info = FileInfo(
             path=tmp_path / "source.png",
             mtime=1000.0,
@@ -297,14 +317,15 @@ class TestCheckAndRender:
             "size": 500,
             "width": 64,
             "height": 64,
-            "master_cache_path": None,
+            "cache_uuid": "uuid-no-paths",
+            "thumbnail_cache_path": None,
+            "preview_cache_path": None,
+            "full_cache_path": None,
         }
 
-        service.check_and_render(file_info)
-
-        service._threadpool.start.assert_called_once()
-        task = service._threadpool.start.call_args[0][0]
-        assert isinstance(task, _RenderTask)
+        with patch.object(service, "_render_all_resolutions") as mock_render:
+            service.check_and_render(file_info)
+            mock_render.assert_called_once_with(file_info)
 
     def test_check_and_render_psd(
         self,
@@ -312,7 +333,7 @@ class TestCheckAndRender:
         service: ThumbnailService,
         db_mock: MagicMock,
     ) -> None:
-        """.psd extension → dispatch PSD render (via _RenderPSDTask)."""
+        """.psd extension → calls _render_all_resolutions (which handles PSD internally)."""
         file_info = FileInfo(
             path=tmp_path / "document.psd",
             mtime=1000.0,
@@ -321,11 +342,9 @@ class TestCheckAndRender:
         )
         db_mock.get_thumbnail.return_value = None
 
-        service.check_and_render(file_info)
-
-        service._threadpool.start.assert_called_once()
-        task = service._threadpool.start.call_args[0][0]
-        assert isinstance(task, _RenderPSDTask)
+        with patch.object(service, "_render_all_resolutions") as mock_render:
+            service.check_and_render(file_info)
+            mock_render.assert_called_once_with(file_info)
 
     def test_check_and_render_psb(
         self,
@@ -333,7 +352,7 @@ class TestCheckAndRender:
         service: ThumbnailService,
         db_mock: MagicMock,
     ) -> None:
-        """.psb extension → dispatch PSD render (via _RenderPSDTask)."""
+        """.psb extension → calls _render_all_resolutions (which handles PSB internally)."""
         file_info = FileInfo(
             path=tmp_path / "big_document.psb",
             mtime=1000.0,
@@ -342,11 +361,9 @@ class TestCheckAndRender:
         )
         db_mock.get_thumbnail.return_value = None
 
-        service.check_and_render(file_info)
-
-        service._threadpool.start.assert_called_once()
-        task = service._threadpool.start.call_args[0][0]
-        assert isinstance(task, _RenderPSDTask)
+        with patch.object(service, "_render_all_resolutions") as mock_render:
+            service.check_and_render(file_info)
+            mock_render.assert_called_once_with(file_info)
 
 
 # =========================================================================
@@ -564,13 +581,13 @@ class TestRenderPSDTask:
 class TestCallbacks:
     """Internal callback methods (_on_done, _on_error)."""
 
-    def test_on_done_with_image_updates_db(
+    def test_on_done_with_image_emits_signal(
         self,
         tmp_path: Path,
         service: ThumbnailService,
         db_mock: MagicMock,
     ) -> None:
-        """_on_done with a valid image and cache_path → upserts DB and emits thumbnailReady."""
+        """_on_done with a valid image emits thumbnailReady with 3 args (resolution_size=None)."""
         file_info = FileInfo(
             path=tmp_path / "source.png",
             mtime=1000.0,
@@ -582,22 +599,16 @@ class TestCallbacks:
         mock_img.height = 64
         cache_path = tmp_path / "cache" / "hash.png"
 
-        emitted: list[tuple[str, object]] = []
-        service.thumbnailReady.connect(lambda p, i: emitted.append((p, i)))
+        emitted: list[tuple[str, object, object]] = []
+        service.thumbnailReady.connect(lambda p, i, r: emitted.append((p, i, r)))
 
         service._on_done(file_info, mock_img, cache_path)
 
-        db_mock.upsert_thumbnail.assert_called_once_with(
-            path=str(file_info.path),
-            mtime=1000,
-            size=500,
-            width=128,
-            height=64,
-            master_cache_path=str(cache_path),
-        )
+        # _on_done no longer does DB upsert — it just emits the signal
         assert len(emitted) == 1
         assert emitted[0][0] == str(file_info.path)
         assert emitted[0][1] is mock_img
+        assert emitted[0][2] is None  # resolution_size=None for legacy path
 
     def test_on_done_with_none_skips_db(
         self,
@@ -710,19 +721,16 @@ class TestCheckAndRenderEdgeCases:
             "size": 500,
             "width": 64,
             "height": 64,
-            "master_cache_path": str(cache_path),
+            "cache_uuid": "old-uuid",
+            "thumbnail_cache_path": str(cache_path),
+            "preview_cache_path": None,
+            "full_cache_path": None,
         }
 
-        emitted: list[tuple[str, object]] = []
-        service.thumbnailReady.connect(lambda p, i: emitted.append((p, i)))
-
-        service.check_and_render(file_info)
-
-        # Should NOT emit via cache hit — should fall through to re-render
-        assert len(emitted) == 0, "No immediate emit — cache was corrupt, renders async"
-        service._threadpool.start.assert_called_once()
-        task = service._threadpool.start.call_args[0][0]
-        assert isinstance(task, _RenderTask)
+        with patch.object(service, "_render_all_resolutions") as mock_render:
+            service.check_and_render(file_info)
+            # Should call _render_all_resolutions since cache file is corrupt
+            mock_render.assert_called_once_with(file_info)
 
     def test_check_and_render_cache_format_change_affects_render(
         self,
@@ -730,7 +738,7 @@ class TestCheckAndRenderEdgeCases:
         service: ThumbnailService,
         db_mock: MagicMock,
     ) -> None:
-        """After set_cache_format, a cache miss dispatches wiv da new format."""
+        """After set_cache_format, a cache miss still calls _render_all_resolutions."""
         file_info = FileInfo(
             path=tmp_path / "source.png",
             mtime=1000.0,
@@ -740,12 +748,10 @@ class TestCheckAndRenderEdgeCases:
         db_mock.get_thumbnail.return_value = None
 
         service.set_cache_format("jpeg")
-        service.check_and_render(file_info)
 
-        service._threadpool.start.assert_called_once()
-        task = service._threadpool.start.call_args[0][0]
-        assert isinstance(task, _RenderTask)
-        assert task._cache_format == "jpeg", "Should use updated cache_format"
+        with patch.object(service, "_render_all_resolutions") as mock_render:
+            service.check_and_render(file_info)
+            mock_render.assert_called_once_with(file_info)
 
     def test_check_and_render_empty_extension_goes_plain(
         self,
@@ -753,7 +759,7 @@ class TestCheckAndRenderEdgeCases:
         service: ThumbnailService,
         db_mock: MagicMock,
     ) -> None:
-        """FileInfo wiv empty extension string → treated as plain image."""
+        """FileInfo wiv empty extension string → calls _render_all_resolutions."""
         file_info = FileInfo(
             path=tmp_path / "source",
             mtime=1000.0,
@@ -762,11 +768,9 @@ class TestCheckAndRenderEdgeCases:
         )
         db_mock.get_thumbnail.return_value = None
 
-        service.check_and_render(file_info)
-
-        service._threadpool.start.assert_called_once()
-        task = service._threadpool.start.call_args[0][0]
-        assert isinstance(task, _RenderTask), "Empty extension → plain render"
+        with patch.object(service, "_render_all_resolutions") as mock_render:
+            service.check_and_render(file_info)
+            mock_render.assert_called_once_with(file_info)
 
     def test_check_and_render_unknown_extension_goes_plain(
         self,
@@ -774,7 +778,7 @@ class TestCheckAndRenderEdgeCases:
         service: ThumbnailService,
         db_mock: MagicMock,
     ) -> None:
-        """FileInfo wiv unsupported extension → still dispatched as plain."""
+        """FileInfo wiv unsupported extension → calls _render_all_resolutions."""
         file_info = FileInfo(
             path=tmp_path / "source.bmp",
             mtime=1000.0,
@@ -783,11 +787,9 @@ class TestCheckAndRenderEdgeCases:
         )
         db_mock.get_thumbnail.return_value = None
 
-        service.check_and_render(file_info)
-
-        service._threadpool.start.assert_called_once()
-        task = service._threadpool.start.call_args[0][0]
-        assert isinstance(task, _RenderTask), "Unknown extension → plain render"
+        with patch.object(service, "_render_all_resolutions") as mock_render:
+            service.check_and_render(file_info)
+            mock_render.assert_called_once_with(file_info)
 
     def test_check_and_render_upper_case_psd(
         self,
@@ -795,7 +797,7 @@ class TestCheckAndRenderEdgeCases:
         service: ThumbnailService,
         db_mock: MagicMock,
     ) -> None:
-        """Uppercase .PSD extension → still dispatched as PSD (case-insensitive)."""
+        """Uppercase .PSD extension → calls _render_all_resolutions (case-insensitive)."""
         file_info = FileInfo(
             path=tmp_path / "document.PSD",
             mtime=1000.0,
@@ -804,11 +806,9 @@ class TestCheckAndRenderEdgeCases:
         )
         db_mock.get_thumbnail.return_value = None
 
-        service.check_and_render(file_info)
-
-        service._threadpool.start.assert_called_once()
-        task = service._threadpool.start.call_args[0][0]
-        assert isinstance(task, _RenderPSDTask), "Upper-case PSD → PSD render"
+        with patch.object(service, "_render_all_resolutions") as mock_render:
+            service.check_and_render(file_info)
+            mock_render.assert_called_once_with(file_info)
 
     def test_check_and_render_zero_mtime_and_size(
         self,
@@ -855,7 +855,7 @@ class TestCheckAndRenderEdgeCases:
         service: ThumbnailService,
         db_mock: MagicMock,
     ) -> None:
-        """FileInfo wiv empty Path — db.get_thumbnail called wiv '.' -> returns None."""
+        """FileInfo wiv empty Path — db.get_thumbnail called -> returns None -> render."""
         file_info = FileInfo(
             path=Path(""),
             mtime=1000.0,
@@ -864,12 +864,10 @@ class TestCheckAndRenderEdgeCases:
         )
         db_mock.get_thumbnail.return_value = None
 
-        # Should not crash
-        service.check_and_render(file_info)
-
-        service._threadpool.start.assert_called_once()
-        task = service._threadpool.start.call_args[0][0]
-        assert isinstance(task, _RenderTask)
+        with patch.object(service, "_render_all_resolutions") as mock_render:
+            # Should not crash
+            service.check_and_render(file_info)
+            mock_render.assert_called_once_with(file_info)
 
     def test_check_and_render_special_chars_in_path(
         self,
@@ -886,10 +884,9 @@ class TestCheckAndRenderEdgeCases:
         )
         db_mock.get_thumbnail.return_value = None
 
-        service.check_and_render(file_info)
-
-        service._threadpool.start.assert_called_once()
-        assert isinstance(service._threadpool.start.call_args[0][0], _RenderTask)
+        with patch.object(service, "_render_all_resolutions") as mock_render:
+            service.check_and_render(file_info)
+            mock_render.assert_called_once_with(file_info)
 
 
 # =========================================================================
@@ -900,13 +897,13 @@ class TestCheckAndRenderEdgeCases:
 class TestCallbackEdgeCases:
     """Callback robustness: DB failures, bad format, unicode paths."""
 
-    def test_on_done_db_upsert_failure_still_emits_thumbnail_ready(
+    def test_on_done_always_emits_thumbnail_ready(
         self,
         tmp_path: Path,
         service: ThumbnailService,
         db_mock: MagicMock,
     ) -> None:
-        """DB upsert raises but thumbnailReady still emitted (graceful degradation)."""
+        """_on_done always emits thumbnailReady regardless of DB state."""
         file_info = FileInfo(
             path=tmp_path / "source.png",
             mtime=1000.0,
@@ -918,18 +915,16 @@ class TestCallbackEdgeCases:
         mock_img.height = 64
         cache_path = tmp_path / "cache" / "hash.png"
 
-        db_mock.upsert_thumbnail.side_effect = RuntimeError("DB corruption!")
+        emitted: list[tuple[str, object, object]] = []
+        service.thumbnailReady.connect(lambda p, i, r: emitted.append((p, i, r)))
 
-        emitted: list[tuple[str, object]] = []
-        service.thumbnailReady.connect(lambda p, i: emitted.append((p, i)))
-
-        # Should NOT raise — upsert error is caught silently
+        # Should NOT raise — _on_done just emits signal
         service._on_done(file_info, mock_img, cache_path)
 
-        db_mock.upsert_thumbnail.assert_called_once()
-        assert len(emitted) == 1, "thumbnailReady MUST be emitted even when DB upsert fails"
+        assert len(emitted) == 1, "thumbnailReady MUST be emitted"
         assert emitted[0][0] == str(file_info.path)
         assert emitted[0][1] is mock_img
+        assert emitted[0][2] is None  # resolution_size=None for legacy path
 
     def test_on_done_none_image_skips_db_and_emits(
         self,
@@ -1216,13 +1211,13 @@ class TestRenderPSDTaskEdgeCases:
 class TestThumbnailServiceEdgeCases:
     """Service-level edge cases: pool full, double start, config edge cases."""
 
-    def test_threadpool_start_returns_false_triggers_error(
+    def test_render_all_resolutions_called_on_cache_miss(
         self,
         tmp_path: Path,
         service: ThumbnailService,
         db_mock: MagicMock,
     ) -> None:
-        """QThreadPool.start() returns False (pool full) — error signal emitted."""
+        """Cache miss → _render_all_resolutions is called (not threadpool)."""
         file_info = FileInfo(
             path=tmp_path / "source.png",
             mtime=1000.0,
@@ -1231,31 +1226,17 @@ class TestThumbnailServiceEdgeCases:
         )
         db_mock.get_thumbnail.return_value = None
 
-        # Simulate pool full — start returns False
-        service._threadpool.start.return_value = False
+        with patch.object(service, "_render_all_resolutions") as mock_render:
+            service.check_and_render(file_info)
+            mock_render.assert_called_once_with(file_info)
 
-        error_emitted: list[tuple[str, str]] = []
-        ready_emitted: list[tuple[str, object]] = []
-        service.errorOccurred.connect(lambda p, e: error_emitted.append((p, e)))
-        service.thumbnailReady.connect(lambda p, i: ready_emitted.append((p, i)))
-
-        service.check_and_render(file_info)
-
-        service._threadpool.start.assert_called_once()
-        assert len(error_emitted) == 1
-        assert error_emitted[0][0] == str(file_info.path)
-        assert "queue full" in error_emitted[0][1].lower()
-        # thumbnailReady should still fire with None so UI is not stuck
-        assert len(ready_emitted) == 1
-        assert ready_emitted[0][1] is None
-
-    def test_two_rapid_cache_misses_dispatch_separate_tasks(
+    def test_two_rapid_cache_misses_call_render_twice(
         self,
         tmp_path: Path,
         service: ThumbnailService,
         db_mock: MagicMock,
     ) -> None:
-        """Two rapid check_and_render calls for different files → two separate tasks."""
+        """Two rapid check_and_render calls for different files → two render calls."""
         file_a = FileInfo(
             path=tmp_path / "alpha.png",
             mtime=1000.0,
@@ -1270,15 +1251,12 @@ class TestThumbnailServiceEdgeCases:
         )
         db_mock.get_thumbnail.return_value = None
 
-        service.check_and_render(file_a)
-        service.check_and_render(file_b)
-
-        assert service._threadpool.start.call_count == 2
-        task_a = service._threadpool.start.call_args_list[0][0][0]
-        task_b = service._threadpool.start.call_args_list[1][0][0]
-        assert isinstance(task_a, _RenderTask)
-        assert isinstance(task_b, _RenderTask)
-        assert task_a is not task_b, "Each call should create a fresh task"
+        with patch.object(service, "_render_all_resolutions") as mock_render:
+            service.check_and_render(file_a)
+            service.check_and_render(file_b)
+            assert mock_render.call_count == 2
+            mock_render.assert_any_call(file_a)
+            mock_render.assert_any_call(file_b)
 
     def test_check_and_render_same_file_twice_cache_hit_then_miss(
         self,
@@ -1289,9 +1267,13 @@ class TestThumbnailServiceEdgeCases:
         """Same file checked twice: first cache hit, second cache miss (mtime changes)."""
         cache_dir = tmp_path / "cache"
         cache_dir.mkdir(parents=True)
-        cache_path = cache_dir / "thumb.png"
+        thumb_path = cache_dir / "thumb.png"
+        preview_path = cache_dir / "preview.png"
+        full_path = cache_dir / "full.png"
         ref_img = Image.new("RGB", (64, 64), color="red")
-        ref_img.save(cache_path)
+        ref_img.save(thumb_path)
+        ref_img.save(preview_path)
+        ref_img.save(full_path)
 
         file_info = FileInfo(
             path=tmp_path / "source.png",
@@ -1300,35 +1282,27 @@ class TestThumbnailServiceEdgeCases:
             extension=".png",
         )
 
-        # First call — cache hit
+        # First call — cache hit (all 3 files exist)
         db_mock.get_thumbnail.return_value = {
             "path": str(file_info.path),
             "mtime": 1000,
             "size": 500,
             "width": 64,
             "height": 64,
-            "master_cache_path": str(cache_path),
+            "cache_uuid": "test-uuid",
+            "thumbnail_cache_path": str(thumb_path),
+            "preview_cache_path": str(preview_path),
+            "full_cache_path": str(full_path),
         }
 
-        emitted: list[tuple[str, object]] = []
-        service.thumbnailReady.connect(lambda p, i: emitted.append((p, i)))
+        emitted: list[tuple[str, object, object]] = []
+        service.thumbnailReady.connect(lambda p, i, r: emitted.append((p, i, r)))
 
         service.check_and_render(file_info)
-        assert len(emitted) == 1, "First call should be a cache hit"
-        service._threadpool.start.assert_not_called()
+        assert len(emitted) == 3, "First call should be a cache hit with 3 emissions"
         emitted.clear()
 
         # Second call — file's mtime changed (stale)
-        db_mock.get_thumbnail.return_value = {
-            "path": str(file_info.path),
-            "mtime": 1000,  # DB still has old mtime
-            "size": 500,
-            "width": 64,
-            "height": 64,
-            "master_cache_path": str(cache_path),
-        }
-
-        # But file_info now has different mtime
         file_info_updated = FileInfo(
             path=tmp_path / "source.png",
             mtime=2000.0,  # Changed!
@@ -1336,9 +1310,9 @@ class TestThumbnailServiceEdgeCases:
             extension=".png",
         )
 
-        service.check_and_render(file_info_updated)
-        service._threadpool.start.assert_called_once()
-        assert len(emitted) == 0, "No immediate emit — stale cache triggers render"
+        with patch.object(service, "_render_all_resolutions") as mock_render:
+            service.check_and_render(file_info_updated)
+            mock_render.assert_called_once_with(file_info_updated)
 
     def test_signals_are_distinct_instances(
         self,

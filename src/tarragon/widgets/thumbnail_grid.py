@@ -261,8 +261,8 @@ class ThumbnailDelegate(QStyledItemDelegate):
         )
 
         # ── Draw thumbnail image ─────────────────────────────────────
-        # Try cached thumbnail first (works for all formats including PSD)
-        cache_path = index.data(ThumbnailModel.ThumbnailRole)
+        # Try cached 256px thumbnail first (fast for grid scrolling)
+        cache_path = index.data(ThumbnailModel.ThumbnailRole256)
         if cache_path:
             pixmap = QPixmap(cache_path)
         else:

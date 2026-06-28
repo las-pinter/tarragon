@@ -13,7 +13,10 @@ CREATE TABLE IF NOT EXISTS thumbnails (
     path TEXT PRIMARY KEY, mtime INTEGER NOT NULL, size INTEGER NOT NULL,
     thumb_hash TEXT, width INTEGER NOT NULL, height INTEGER NOT NULL,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    master_cache_path TEXT
+    cache_uuid TEXT,
+    thumbnail_cache_path TEXT,
+    preview_cache_path TEXT,
+    full_cache_path TEXT
 );
 CREATE TABLE IF NOT EXISTS tags (
     id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE NOT NULL
@@ -114,21 +117,33 @@ class Database:
         size: int,
         width: int,
         height: int,
-        master_cache_path: str | None = None,
+        cache_uuid: str,
+        thumbnail_cache_path: str | None = None,
+        preview_cache_path: str | None = None,
+        full_cache_path: str | None = None,
     ) -> None:
         """Insert or update a thumbnail record."""
         self._execute(
             """
-            INSERT INTO thumbnails (path, mtime, size, width, height, master_cache_path)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO thumbnails (
+                path, mtime, size, width, height,
+                cache_uuid, thumbnail_cache_path, preview_cache_path, full_cache_path
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(path) DO UPDATE SET
                 mtime=excluded.mtime,
                 size=excluded.size,
                 width=excluded.width,
                 height=excluded.height,
-                master_cache_path=excluded.master_cache_path
+                cache_uuid=excluded.cache_uuid,
+                thumbnail_cache_path=excluded.thumbnail_cache_path,
+                preview_cache_path=excluded.preview_cache_path,
+                full_cache_path=excluded.full_cache_path
             """,
-            (path, mtime, size, width, height, master_cache_path),
+            (
+                path, mtime, size, width, height,
+                cache_uuid, thumbnail_cache_path, preview_cache_path, full_cache_path,
+            ),
         )
         self._commit()
 

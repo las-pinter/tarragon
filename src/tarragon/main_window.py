@@ -233,15 +233,26 @@ class MainWindow(QMainWindow):
         # Wire double-click signal for editor launch
         self.thumbnail_grid.file_double_clicked.connect(self._on_file_double_clicked)
 
-    def _on_thumbnail_ready(self, source_path: str, img: object) -> None:
-        """Handle thumbnail render complete — update model with cache path."""
-        if img is None:
+    def _on_thumbnail_ready(
+        self, source_path: str, img: object, resolution_size: int | None, cache_path: str | None
+    ) -> None:
+        """Handle thumbnail render complete — update model with cache path.
+
+        Parameters
+        ----------
+        source_path:
+            The original source file path.
+        img:
+            The rendered PIL Image (or None on failure).
+        resolution_size:
+            The resolution tier (256, 1024, or None for full resolution).
+        cache_path:
+            The cache file path (str or None).
+        """
+        if img is None or cache_path is None:
             return
-        # Compute cache path (deterministic SHA-1 hash)
-        cache_format = self._settings.get("cache_format") if self._settings else "png"
-        cache_path, _ = _cache_file_path(Path(source_path), cache_format)
-        # Update model
-        self.thumbnail_model.set_thumbnail(source_path, cache_path)
+        # Update model with the emitted cache path
+        self.thumbnail_model.set_thumbnail(source_path, Path(cache_path), resolution=resolution_size)
 
     def _on_thumbnail_error(self, source_path: str, error_message: str) -> None:
         """Handle thumbnail render error."""
@@ -291,19 +302,25 @@ class MainWindow(QMainWindow):
             self.tag_panel.set_selection(paths)
 
     def _load_preview_image(self, path: Path) -> "Image.Image":
-        """Load a preview image, preferring the cached master when available.
+        """Load a preview image, preferring the 1024px cached preview when available.
 
-        Checks ``db.get_thumbnail(path)`` for a ``master_cache_path``.  If the
-        cached file exists on disk it is opened directly (avoiding expensive
-        re-compositing for PSDs).  Falls back to the original file otherwise.
+        Checks ``db.get_thumbnail(path)`` for a ``preview_cache_path`` (1024px).
+        If the cached file exists on disk it is opened directly (good quality,
+        fast).  Falls back to ``full_cache_path``, then to the original file.
         """
         from PIL import Image
 
         thumb_record = self._db.get_thumbnail(str(path))
         if thumb_record:
-            cache_path = thumb_record.get("master_cache_path")
-            if cache_path and Path(cache_path).is_file():
-                return Image.open(cache_path)
+            # Try 1024px preview first (good quality, fast)
+            preview_path = thumb_record.get("preview_cache_path")
+            if preview_path and Path(preview_path).is_file():
+                return Image.open(preview_path)
+
+            # Fallback: full resolution cache
+            full_path = thumb_record.get("full_cache_path")
+            if full_path and Path(full_path).is_file():
+                return Image.open(full_path)
 
         # Fallback: open the original file directly
         return Image.open(path)

@@ -189,3 +189,34 @@ class TestThumbnailModel:
         index = model.index(0, 0)
         assert model.data(index, Qt.DisplayRole) == "file_49.jpg"
         assert model.data(index, ThumbnailModel.PathRole) == "/path/file_49.jpg"
+
+    # ------------------------------------------------------------------
+    # Multi-resolution thumbnail role tests
+    # ------------------------------------------------------------------
+
+    def test_set_thumbnail_with_resolution_256(self) -> None:
+        """set_thumbnail with resolution=256 stores path in ThumbnailRole256 only."""
+        model = ThumbnailModel()
+        model.set_paths([Path("/test/image.jpg")])
+
+        cache_path = Path("/cache/256/test_abc/image.png")
+        model.set_thumbnail("/test/image.jpg", cache_path, resolution=256)
+
+        index = model.index(0, 0)
+        assert model.data(index, ThumbnailModel.ThumbnailRole256) == str(cache_path)
+        assert model.data(index, ThumbnailModel.ThumbnailRole1024) == ""
+        assert model.data(index, ThumbnailModel.ThumbnailRoleFull) == ""
+
+    def test_set_thumbnail_multiple_resolutions(self) -> None:
+        """set_thumbnail stores paths independently for each resolution tier."""
+        model = ThumbnailModel()
+        model.set_paths([Path("/test/image.jpg")])
+
+        model.set_thumbnail("/test/image.jpg", Path("/cache/256/test/image.png"), resolution=256)
+        model.set_thumbnail("/test/image.jpg", Path("/cache/1024/test/image.png"), resolution=1024)
+        model.set_thumbnail("/test/image.jpg", Path("/cache/full/test/image.png"), resolution=None)
+
+        index = model.index(0, 0)
+        assert model.data(index, ThumbnailModel.ThumbnailRole256) == "/cache/256/test/image.png"
+        assert model.data(index, ThumbnailModel.ThumbnailRole1024) == "/cache/1024/test/image.png"
+        assert model.data(index, ThumbnailModel.ThumbnailRoleFull) == "/cache/full/test/image.png"

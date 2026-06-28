@@ -13,10 +13,38 @@ from tarragon.settings import Settings
 from tarragon.thumbnail import (
     _cache_file_path,
     _get_executor,
+    derive_smaller_sizes,
+    generate_cache_paths,
+    generate_cache_uuid,
     render_plain_image,
     render_psd_image,
     save_to_cache,
 )
+
+
+class _RenderAllTask(QRunnable):
+    """Runs multi-resolution rendering in a QThreadPool worker thread."""
+
+    def __init__(
+        self,
+        file_info: FileInfo,
+        on_done: callable,
+        on_error: callable,
+        render_func: callable,
+    ) -> None:
+        super().__init__()
+        self._file_info = file_info
+        self._on_done = on_done
+        self._on_error = on_error
+        self._render_func = render_func
+
+    def run(self) -> None:
+        """Execute render in worker thread."""
+        try:
+            self._render_func(self._file_info)
+            self._on_done(self._file_info)
+        except Exception as exc:
+            self._on_error(self._file_info, str(exc))
 
 
 class _RenderTask(QRunnable):
@@ -95,7 +123,7 @@ class ThumbnailService(QObject):
     compositing to the module-level ProcessPoolExecutor shared singleton.
     """
 
-    thumbnailReady = Signal(str, object)  # noqa: N815 — Qt signal follows camelCase convention
+    thumbnailReady = Signal(str, object, object, object)  # noqa: N815 — (path, image, resolution_size, cache_path)
     thumbnailsUpdated = Signal(list)  # noqa: N815 — Qt signal follows camelCase convention
     errorOccurred = Signal(str, str)  # noqa: N815 — Qt signal follows camelCase convention
 
@@ -120,28 +148,224 @@ class ThumbnailService(QObject):
 
     @Slot(FileInfo)
     def check_and_render(self, file_info: FileInfo) -> None:
-        """Check cache; if stale or missing, dispatch render.
+        """Check cache; if stale or missing, render all resolutions.
 
         Called from the main thread for each file discovered during a scan.
+        Handles three resolution tiers: thumbnail (256), preview (1024),
+        and full (original resolution).
         """
         cached = self._db.get_thumbnail(str(file_info.path))
-        if cached is not None:
-            # Check if cache is still valid
-            if cached["mtime"] == int(file_info.mtime) and cached["size"] == file_info.size:
-                cache_path = Path(cached["master_cache_path"]) if cached.get("master_cache_path") else None
-                if cache_path is not None and cache_path.exists():
-                    try:
-                        img = Image.open(cache_path)
-                        self.thumbnailReady.emit(str(file_info.path), img)
-                        return
-                    except (OSError, ValueError):
-                        pass  # Corrupt cache file — fall through to re-render
 
-        # Cache miss or invalid — dispatch render
+        # Check if cache is valid (mtime + size match)
+        if cached and cached["mtime"] == int(file_info.mtime) and cached["size"] == file_info.size:
+            # Check if we have all three resolutions
+            has_thumbnail = cached.get("thumbnail_cache_path") and Path(cached["thumbnail_cache_path"]).exists()
+            has_preview = cached.get("preview_cache_path") and Path(cached["preview_cache_path"]).exists()
+            has_full = cached.get("full_cache_path") and Path(cached["full_cache_path"]).exists()
+
+            if has_thumbnail and has_preview and has_full:
+                # All resolutions cached — emit signals for each
+                self._emit_cached_thumbnails(file_info, cached)
+                return
+
+            # Some resolutions missing — derive from largest available
+            self._derive_missing_resolutions(file_info, cached)
+            return
+
+        # Cache miss or invalid — render all resolutions from source (async)
+        task = _RenderAllTask(
+            file_info=file_info,
+            on_done=self._on_render_all_done,
+            on_error=self._on_error,
+            render_func=self._render_all_resolutions,
+        )
+        if not self._threadpool.start(task):
+            self._on_error(file_info, "Render queue full — thumbnail skipped")
+
+    def _on_render_all_done(self, file_info: FileInfo) -> None:
+        """Handle completion of multi-resolution render (called from main thread)."""
+        # Signal emission and DB upsert are handled inside _render_all_resolutions
+        pass
+
+    def _emit_cached_thumbnails(self, file_info: FileInfo, cached: dict) -> None:
+        """Emit thumbnailReady signals for all cached resolutions."""
+        for resolution_key, resolution_size in [
+            ("thumbnail_cache_path", 256),
+            ("preview_cache_path", 1024),
+            ("full_cache_path", None),
+        ]:
+            cache_path = cached.get(resolution_key)
+            if cache_path and Path(cache_path).exists():
+                try:
+                    img = Image.open(cache_path)
+                    self.thumbnailReady.emit(str(file_info.path), img, resolution_size, cache_path)
+                except Exception:
+                    pass  # Corrupt cache file — skip this resolution
+
+    def _derive_missing_resolutions(self, file_info: FileInfo, cached: dict) -> None:
+        """Derive missing smaller resolutions from the largest available cached image."""
+        # Find largest available resolution
+        full_path = cached.get("full_cache_path")
+        preview_path = cached.get("preview_cache_path")
+
+        source_image: Image.Image | None = None
+        source_resolution: int | None = None
+
+        if full_path and Path(full_path).exists():
+            try:
+                source_image = Image.open(full_path)
+                source_resolution = None  # Full resolution
+            except Exception:
+                pass
+
+        if source_image is None and preview_path and Path(preview_path).exists():
+            try:
+                source_image = Image.open(preview_path)
+                source_resolution = 1024
+            except Exception:
+                pass
+
+        if source_image is None:
+            # No cached image available — render from source
+            self._render_all_resolutions(file_info)
+            return
+
+        # Derive missing sizes
+        cache_uuid = cached.get("cache_uuid") or generate_cache_uuid()
+        cache_paths = generate_cache_paths(file_info.path, cache_uuid)
+
+        # Track which paths to write to DB (preserve existing, add new)
+        final_thumb_path = cached.get("thumbnail_cache_path")
+        final_preview_path = cached.get("preview_cache_path")
+        final_full_path = cached.get("full_cache_path")
+
+        # Save missing thumbnail (256)
+        if not cached.get("thumbnail_cache_path") or not Path(cached["thumbnail_cache_path"]).exists():
+            if max(source_image.size) > 256:
+                thumb_img = source_image.copy()
+                thumb_img.thumbnail((256, 256), Image.LANCZOS)
+                save_to_cache(thumb_img, cache_paths["256"], "png")
+                final_thumb_path = str(cache_paths["256"])
+                self.thumbnailReady.emit(str(file_info.path), thumb_img, 256, final_thumb_path)
+
+        # Save missing preview (1024) — only if source is full resolution
+        if source_resolution is None and (
+            not cached.get("preview_cache_path") or not Path(cached["preview_cache_path"]).exists()
+        ):
+            if max(source_image.size) > 1024:
+                preview_img = source_image.copy()
+                preview_img.thumbnail((1024, 1024), Image.LANCZOS)
+                save_to_cache(preview_img, cache_paths["1024"], "png")
+                final_preview_path = str(cache_paths["1024"])
+                self.thumbnailReady.emit(str(file_info.path), preview_img, 1024, final_preview_path)
+
+        # Emit signals for already-cached resolutions (BUG #3 fix)
+        if cached.get("thumbnail_cache_path") and Path(cached["thumbnail_cache_path"]).exists():
+            try:
+                img = Image.open(cached["thumbnail_cache_path"])
+                self.thumbnailReady.emit(str(file_info.path), img, 256, cached["thumbnail_cache_path"])
+            except Exception:
+                pass
+        if cached.get("preview_cache_path") and Path(cached["preview_cache_path"]).exists():
+            try:
+                img = Image.open(cached["preview_cache_path"])
+                self.thumbnailReady.emit(str(file_info.path), img, 1024, cached["preview_cache_path"])
+            except Exception:
+                pass
+        if cached.get("full_cache_path") and Path(cached["full_cache_path"]).exists():
+            try:
+                img = Image.open(cached["full_cache_path"])
+                self.thumbnailReady.emit(str(file_info.path), img, None, cached["full_cache_path"])
+            except Exception:
+                pass
+
+        # Update database with all paths (BUG #5 fix: preserve existing paths)
+        self._db.upsert_thumbnail(
+            path=str(file_info.path),
+            mtime=int(file_info.mtime),
+            size=file_info.size,
+            width=source_image.width,
+            height=source_image.height,
+            cache_uuid=cache_uuid,
+            thumbnail_cache_path=final_thumb_path,
+            preview_cache_path=final_preview_path,
+            full_cache_path=final_full_path,
+        )
+
+    def _render_all_resolutions(self, file_info: FileInfo) -> None:
+        """Render all three resolutions from the source file."""
+        # Generate UUID and cache paths
+        cache_uuid = generate_cache_uuid()
+        cache_paths = generate_cache_paths(file_info.path, cache_uuid)
+
+        # Render full resolution first
         if file_info.extension.lower() in {".psd", ".psb"}:
-            self._render_psd(file_info)
+            threshold = self._settings.get("large_canvas_threshold_mp")
+            grid_str = self._settings.get("tile_grid_size")  # e.g. "2x2"
+            grid_x, grid_y = (int(d) for d in grid_str.split("x"))
+            full_img = render_psd_image(
+                file_info.path,
+                threshold,
+                grid_x,
+                grid_y,
+                target_size=None,
+            )
         else:
-            self._render_plain(file_info)
+            full_img = render_plain_image(file_info.path, target_size=None)
+
+        if full_img is None:
+            self.errorOccurred.emit(str(file_info.path), "Failed to render image")
+            self.thumbnailReady.emit(str(file_info.path), None, None, None)
+            return
+
+        # Save full resolution
+        save_to_cache(full_img, cache_paths["full"], "png")
+        self.thumbnailReady.emit(str(file_info.path), full_img, None, str(cache_paths["full"]))
+
+        # Derive and save smaller resolutions
+        smaller_sizes = derive_smaller_sizes(full_img, [256, 1024])
+
+        # Track which paths were actually saved (BUG #4 fix)
+        thumb_path = None
+        preview_path = None
+
+        for size, img in smaller_sizes.items():
+            resolution_key = "256" if size == 256 else "1024"
+            save_to_cache(img, cache_paths[resolution_key], "png")
+            cache_path_str = str(cache_paths[resolution_key])
+            if size == 256:
+                thumb_path = cache_path_str
+            elif size == 1024:
+                preview_path = cache_path_str
+            self.thumbnailReady.emit(str(file_info.path), img, size, cache_path_str)
+
+        # Extract and persist dominant color tags (from full resolution)
+        if self._settings.get("color_tag_enabled"):
+            try:
+                from tarragon.color_tagger import extract_dominant_color_tags
+
+                tags = extract_dominant_color_tags(
+                    full_img,
+                    palette_size=self._settings.get("color_tag_palette_size"),
+                    min_share=self._settings.get("color_tag_min_share"),
+                    neutral_s_threshold=self._settings.get("color_tag_neutral_s_threshold"),
+                )
+                self._db.replace_auto_color_tags(str(file_info.path), tags)
+            except Exception:
+                pass  # Color tagging failure shouldn't break the pipeline
+
+        # Update database with only the paths that were actually saved (BUG #4 fix)
+        self._db.upsert_thumbnail(
+            path=str(file_info.path),
+            mtime=int(file_info.mtime),
+            size=file_info.size,
+            width=full_img.width,
+            height=full_img.height,
+            cache_uuid=cache_uuid,
+            thumbnail_cache_path=thumb_path,
+            preview_cache_path=preview_path,
+            full_cache_path=str(cache_paths["full"]),
+        )
 
     def _render_plain(self, file_info: FileInfo) -> None:
         """Dispatch plain image render to QThreadPool."""
@@ -177,38 +401,17 @@ class ThumbnailService(QObject):
             self._on_error(file_info, "Render queue full — thumbnail skipped")
 
     def _on_done(self, file_info: FileInfo, img: Image.Image | None, cache_path: Path | None) -> None:
-        """Handle completion of a render — persist to DB and emit thumbnailReady."""
-        if img is not None and cache_path is not None:
-            try:
-                self._db.upsert_thumbnail(
-                    path=str(file_info.path),
-                    mtime=int(file_info.mtime),
-                    size=file_info.size,
-                    width=img.width,
-                    height=img.height,
-                    master_cache_path=str(cache_path),
-                )
-            except Exception:
-                pass  # Render succeeded — don't lose the thumbnail
+        """Handle completion of a legacy render task — emit thumbnailReady.
 
-            # Extract and persist dominant color tags
-            if self._settings.get("color_tag_enabled"):
-                try:
-                    from tarragon.color_tagger import extract_dominant_color_tags
-
-                    tags = extract_dominant_color_tags(
-                        img,
-                        palette_size=self._settings.get("color_tag_palette_size"),
-                        min_share=self._settings.get("color_tag_min_share"),
-                        neutral_s_threshold=self._settings.get("color_tag_neutral_s_threshold"),
-                    )
-                    self._db.replace_auto_color_tags(str(file_info.path), tags)
-                except Exception:
-                    pass  # Color tagging failure shouldn't break the pipeline
-
-        self.thumbnailReady.emit(str(file_info.path), img)
+        Note: The legacy _RenderTask/_RenderPSDTask path emits at full
+        resolution (resolution_size=None).  The new multi-resolution path
+        (_render_all_resolutions) handles its own signal emission.
+        """
+        # Emit with resolution_size=None (full resolution) for legacy tasks
+        cache_path_str = str(cache_path) if cache_path else None
+        self.thumbnailReady.emit(str(file_info.path), img, None, cache_path_str)
 
     def _on_error(self, file_info: FileInfo, error_message: str) -> None:
         """Handle render error."""
         self.errorOccurred.emit(str(file_info.path), error_message)
-        self.thumbnailReady.emit(str(file_info.path), None)
+        self.thumbnailReady.emit(str(file_info.path), None, None, None)

@@ -73,7 +73,7 @@ class TestThumbnailUpsert:
     def test_insert_new_thumbnail(self, db: Database) -> None:
         """upsert_thumbnail inserts a new record and get_thumbnail returns it."""
         path = "/images/cat.png"
-        db.upsert_thumbnail(path, mtime=1700000000, size=204800, width=800, height=600)
+        db.upsert_thumbnail(path, mtime=1700000000, size=204800, width=800, height=600, cache_uuid="abc123")
 
         result = db.get_thumbnail(path)
         assert result is not None
@@ -82,32 +82,36 @@ class TestThumbnailUpsert:
         assert result["size"] == 204800
         assert result["width"] == 800
         assert result["height"] == 600
+        assert result["cache_uuid"] == "abc123"
 
     def test_update_existing_thumbnail(self, db: Database) -> None:
         """upsert_thumbnail updates mtime/size on conflict."""
         path = "/images/dog.png"
-        db.upsert_thumbnail(path, mtime=1700000000, size=1000, width=640, height=480)
-        db.upsert_thumbnail(path, mtime=1700000999, size=2000, width=1024, height=768)
+        db.upsert_thumbnail(path, mtime=1700000000, size=1000, width=640, height=480, cache_uuid="uuid1")
+        db.upsert_thumbnail(path, mtime=1700000999, size=2000, width=1024, height=768, cache_uuid="uuid2")
 
         result = db.get_thumbnail(path)
         assert result["mtime"] == 1700000999
         assert result["size"] == 2000
         assert result["width"] == 1024
         assert result["height"] == 768
+        assert result["cache_uuid"] == "uuid2"
 
-    def test_master_cache_path_none(self, db: Database) -> None:
-        """master_cache_path can be omitted (None)."""
+    def test_cache_paths_none_by_default(self, db: Database) -> None:
+        """Cache path columns can be omitted (None)."""
         path = "/images/empty.png"
-        db.upsert_thumbnail(path, mtime=1, size=0, width=1, height=1)
+        db.upsert_thumbnail(path, mtime=1, size=0, width=1, height=1, cache_uuid="uuid-none")
         result = db.get_thumbnail(path)
-        assert result["master_cache_path"] is None
+        assert result["thumbnail_cache_path"] is None
+        assert result["preview_cache_path"] is None
+        assert result["full_cache_path"] is None
 
 
 class TestThumbnailDelete:
     def test_delete_existing(self, db: Database) -> None:
         """delete_thumbnail removes the record; get returns None."""
         path = "/images/delete_me.png"
-        db.upsert_thumbnail(path, mtime=1, size=100, width=50, height=50)
+        db.upsert_thumbnail(path, mtime=1, size=100, width=50, height=50, cache_uuid="del-uuid")
         db.delete_thumbnail(path)
 
         assert db.get_thumbnail(path) is None
@@ -124,7 +128,7 @@ class TestThumbnailGet:
     def test_created_at_default_is_set(self, db: Database) -> None:
         """created_at gets a default datetime value."""
         path = "/images/timestamp.png"
-        db.upsert_thumbnail(path, mtime=1, size=50, width=10, height=10)
+        db.upsert_thumbnail(path, mtime=1, size=50, width=10, height=10, cache_uuid="ts-uuid")
         result = db.get_thumbnail(path)
         assert result["created_at"] is not None
 
@@ -132,9 +136,9 @@ class TestThumbnailGet:
 class TestThumbnailListForFolder:
     def test_returns_matching_paths(self, db: Database) -> None:
         """list_thumbnails_for_folder returns only paths under the given folder."""
-        db.upsert_thumbnail("/photos/2024/cat.png", mtime=1, size=100, width=10, height=10)
-        db.upsert_thumbnail("/photos/2024/dog.png", mtime=2, size=200, width=10, height=10)
-        db.upsert_thumbnail("/other/rabbit.png", mtime=3, size=300, width=10, height=10)
+        db.upsert_thumbnail("/photos/2024/cat.png", mtime=1, size=100, width=10, height=10, cache_uuid="u1")
+        db.upsert_thumbnail("/photos/2024/dog.png", mtime=2, size=200, width=10, height=10, cache_uuid="u2")
+        db.upsert_thumbnail("/other/rabbit.png", mtime=3, size=300, width=10, height=10, cache_uuid="u3")
 
         results = db.list_thumbnails_for_folder("/photos/2024/")
         assert len(results) == 2

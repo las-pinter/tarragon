@@ -100,14 +100,14 @@ def test_cache_file_path_hash_is_sha1_of_resolved_path(tmp_path: Path) -> None:
 
 
 def test_render_plain_image_opens_and_resizes(tmp_path: Path) -> None:
-    """render_plain_image opens an image and shrinks it to fit MASTER_LONG_EDGE."""
+    """render_plain_image opens an image and shrinks it to fit target_size when specified."""
     from tarragon.thumbnail import MASTER_LONG_EDGE, render_plain_image
 
     img_path = tmp_path / "large.jpg"
     img = Image.new("RGB", (4000, 3000), color="red")
     img.save(img_path)
 
-    result = render_plain_image(img_path)
+    result = render_plain_image(img_path, target_size=MASTER_LONG_EDGE)
 
     assert result is not None
     # Longest side must be <= MASTER_LONG_EDGE
@@ -446,7 +446,7 @@ def test_render_plain_image_smaller_than_master_long_edge_is_not_upscaled(tmp_pa
 
 
 def test_render_plain_image_very_large_image_still_resizes(tmp_path: Path) -> None:
-    """render_plain_image resizes a very large image (e.g. 6000x4000) successfully."""
+    """render_plain_image resizes a very large image (e.g. 6000x4000) when target_size is given."""
     from tarragon.thumbnail import MASTER_LONG_EDGE, render_plain_image
 
     img_path = tmp_path / "very_large.jpg"
@@ -454,7 +454,7 @@ def test_render_plain_image_very_large_image_still_resizes(tmp_path: Path) -> No
     img = Image.new("RGB", (6000, 4000), color="green")
     img.save(img_path, format="JPEG", quality=85)
 
-    result = render_plain_image(img_path)
+    result = render_plain_image(img_path, target_size=MASTER_LONG_EDGE)
 
     assert result is not None
     assert max(result.size) <= MASTER_LONG_EDGE
@@ -1188,7 +1188,7 @@ def test_render_psd_image_with_tiny_psd_file(tmp_path: Path) -> None:
 
 
 def test_render_psd_image_resizes_large_composite(tmp_path: Path) -> None:
-    """render_psd_image resizes composited output when it exceeds MASTER_LONG_EDGE."""
+    """render_psd_image resizes composited output when target_size is specified."""
     from psd_tools import PSDImage
     from tarragon.thumbnail import MASTER_LONG_EDGE, render_psd_image
 
@@ -1197,7 +1197,7 @@ def test_render_psd_image_resizes_large_composite(tmp_path: Path) -> None:
     psd = PSDImage.new(mode="RGBA", size=(4000, 3000))
     psd.save(str(psd_path))
 
-    result = render_psd_image(psd_path, 20.0, 2, 2)
+    result = render_psd_image(psd_path, 20.0, 2, 2, target_size=MASTER_LONG_EDGE)
 
     assert result is not None, "render_psd_image returned None for a large PSD"
     assert max(result.size) <= MASTER_LONG_EDGE, f"Result too large: {result.size} > {MASTER_LONG_EDGE}"
@@ -1237,3 +1237,81 @@ def test_atexit_handler_not_crashing_when_executor_was_never_created() -> None:
         assert _tmod._shared_executor is None
     finally:
         _tmod._shared_executor = saved
+
+
+# =========================================================================
+# generate_cache_uuid tests
+# =========================================================================
+
+
+def test_generate_cache_uuid_returns_8_char_hex() -> None:
+    """generate_cache_uuid returns an 8-character lowercase hex string."""
+    from tarragon.thumbnail import generate_cache_uuid
+
+    uuid = generate_cache_uuid()
+    assert len(uuid) == 8
+    assert all(c in "0123456789abcdef" for c in uuid)
+
+
+def test_generate_cache_uuid_unique() -> None:
+    """generate_cache_uuid returns unique values across 100 calls."""
+    from tarragon.thumbnail import generate_cache_uuid
+
+    uuids = [generate_cache_uuid() for _ in range(100)]
+    assert len(set(uuids)) == 100  # All unique
+
+
+# =========================================================================
+# generate_cache_paths tests
+# =========================================================================
+
+
+def test_generate_cache_paths_structure(tmp_path: Path) -> None:
+    """generate_cache_paths returns correct paths and creates directories."""
+    from tarragon.thumbnail import generate_cache_paths
+
+    source = Path("/photos/vacation/sunset.jpg")
+
+    with patch("tarragon.thumbnail.cache_dir", return_value=tmp_path):
+        paths = generate_cache_paths(source, "abc12345")
+
+    assert "256" in paths
+    assert "1024" in paths
+    assert "full" in paths
+
+    # Check structure: cache/{resolution}/{folder}_{uuid}/{filename}.png
+    assert paths["256"] == tmp_path / "256" / "vacation_abc12345" / "sunset.png"
+    assert paths["1024"] == tmp_path / "1024" / "vacation_abc12345" / "sunset.png"
+    assert paths["full"] == tmp_path / "full" / "vacation_abc12345" / "sunset.png"
+
+    # Directories created
+    assert (tmp_path / "256" / "vacation_abc12345").exists()
+    assert (tmp_path / "1024" / "vacation_abc12345").exists()
+    assert (tmp_path / "full" / "vacation_abc12345").exists()
+
+
+# =========================================================================
+# derive_smaller_sizes tests
+# =========================================================================
+
+
+def test_derive_smaller_sizes_no_upscaling() -> None:
+    """derive_smaller_sizes returns empty dict when source is smaller than all targets."""
+    from tarragon.thumbnail import derive_smaller_sizes
+
+    small_img = Image.new("RGB", (100, 100))
+    result = derive_smaller_sizes(small_img, [256, 1024])
+    assert result == {}  # No upscaling
+
+
+def test_derive_smaller_sizes_correct_sizes() -> None:
+    """derive_smaller_sizes produces correctly sized images preserving aspect ratio."""
+    from tarragon.thumbnail import derive_smaller_sizes
+
+    large_img = Image.new("RGB", (2000, 1500))
+    result = derive_smaller_sizes(large_img, [256, 1024])
+
+    assert 256 in result
+    assert 1024 in result
+    assert result[256].size == (256, 192)  # Aspect ratio preserved
+    assert result[1024].size == (1024, 768)

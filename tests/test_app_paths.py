@@ -29,23 +29,23 @@ def test_db_path_under_data_dir():
 
 
 def test_cache_dir_under_data_dir():
-    """cache_dir() resolves to <data_dir>/cache/previews."""
+    """cache_dir() resolves to <data_dir>/cache."""
     from tarragon.app_paths import cache_dir
 
     with patch("tarragon.app_paths.platformdirs.user_data_dir", return_value=MOCK_DATA):
         result = cache_dir()
 
-    assert result == Path(MOCK_DATA) / "cache" / "previews"
+    assert result == Path(MOCK_DATA) / "cache"
 
 
 def test_ensure_dirs_creates_directory_tree(tmp_path: Path) -> None:
-    """ensure_dirs() creates the cache/previews hierarchy on disk."""
+    """ensure_dirs() creates the cache hierarchy on disk."""
     from tarragon.app_paths import ensure_dirs
 
     with patch("tarragon.app_paths.platformdirs.user_data_dir", return_value=str(tmp_path)):
         ensure_dirs()
 
-    assert (tmp_path / "cache" / "previews").is_dir()
+    assert (tmp_path / "cache").is_dir()
 
 
 def test_ensure_dirs_is_idempotent(tmp_path: Path) -> None:
@@ -55,11 +55,11 @@ def test_ensure_dirs_is_idempotent(tmp_path: Path) -> None:
     with patch("tarragon.app_paths.platformdirs.user_data_dir", return_value=str(tmp_path)):
         # First call creates the directories
         ensure_dirs()
-        assert (tmp_path / "cache" / "previews").is_dir()
+        assert (tmp_path / "cache").is_dir()
 
         # Second call should succeed silently — no error, no corruption
         ensure_dirs()
-        assert (tmp_path / "cache" / "previews").is_dir()
+        assert (tmp_path / "cache").is_dir()
 
 
 def test_data_dir_raises_runtimeerror_when_platformdirs_returns_none():
@@ -99,12 +99,12 @@ def test_ensure_dirs_wraps_oserror_with_context(tmp_path: Path) -> None:
         (
             "/home/user/.local/share/tarragon",
             "/home/user/.local/share/tarragon/tarragon.db",
-            "/home/user/.local/share/tarragon/cache/previews",
+            "/home/user/.local/share/tarragon/cache",
         ),
         (
             "/tmp/custom-data",
             "/tmp/custom-data/tarragon.db",
-            "/tmp/custom-data/cache/previews",
+            "/tmp/custom-data/cache",
         ),
     ],
 )

@@ -46,6 +46,8 @@ def qapp():
 def db_mock() -> MagicMock:
     """Mock Database with all CRUD methods as MagicMock."""
     mock = MagicMock()
+    mock.get_folder_uuid.return_value = None
+    mock.get_or_create_folder_uuid.return_value = "mock-uuid"
     return mock
 
 
@@ -1091,6 +1093,120 @@ class TestRenderTaskEdgeCases:
         assert args[0] is file_info
         assert "Disk full" in args[1]
         on_done.assert_not_called()
+
+
+# =========================================================================
+# Per-folder UUID — images from same folder share a cache UUID
+# =========================================================================
+
+
+class TestPerFolderUuid:
+    """Verify that images from the same source folder share a cache UUID."""
+
+    def test_render_all_uses_atomic_get_or_create(
+        self,
+        tmp_path: Path,
+        service: ThumbnailService,
+        db_mock: MagicMock,
+    ) -> None:
+        """_render_all_resolutions uses get_or_create_folder_uuid atomically."""
+        db_mock.get_or_create_folder_uuid.return_value = "existing-uuid"
+
+        file_info = FileInfo(
+            path=tmp_path / "source.png",
+            mtime=1000.0,
+            size=500,
+            extension=".png",
+        )
+
+        with (
+            patch("tarragon.services.thumbnail_service.render_plain_image", return_value=MagicMock(spec=Image.Image)),
+            patch("tarragon.services.thumbnail_service.generate_cache_uuid", return_value="candidate-uuid"),
+            patch("tarragon.services.thumbnail_service.generate_cache_paths") as mock_paths,
+            patch("tarragon.services.thumbnail_service.save_to_cache"),
+            patch("tarragon.services.thumbnail_service.derive_smaller_sizes", return_value={}),
+        ):
+            mock_paths.return_value = {
+                "256": tmp_path / "cache" / "256.png",
+                "1024": tmp_path / "cache" / "1024.png",
+                "full": tmp_path / "cache" / "full.png",
+            }
+            service._render_all_resolutions(file_info)
+
+        # Should have called the atomic get_or_create with folder path and a candidate UUID
+        db_mock.get_or_create_folder_uuid.assert_called_once_with(str(tmp_path), "candidate-uuid")
+        # generate_cache_paths should have been called with the returned UUID
+        mock_paths.assert_called_once_with(file_info.path, "existing-uuid")
+
+    def test_render_all_generates_candidate_uuid_for_atomic_call(
+        self,
+        tmp_path: Path,
+        service: ThumbnailService,
+        db_mock: MagicMock,
+    ) -> None:
+        """_render_all_resolutions generates a candidate UUID and passes it to the atomic call."""
+        db_mock.get_or_create_folder_uuid.return_value = "new-uuid-1"
+
+        file_info = FileInfo(
+            path=tmp_path / "source.png",
+            mtime=1000.0,
+            size=500,
+            extension=".png",
+        )
+
+        with (
+            patch("tarragon.services.thumbnail_service.render_plain_image", return_value=MagicMock(spec=Image.Image)),
+            patch("tarragon.services.thumbnail_service.generate_cache_uuid", return_value="new-uuid-1"),
+            patch("tarragon.services.thumbnail_service.generate_cache_paths") as mock_paths,
+            patch("tarragon.services.thumbnail_service.save_to_cache"),
+            patch("tarragon.services.thumbnail_service.derive_smaller_sizes", return_value={}),
+        ):
+            mock_paths.return_value = {
+                "256": tmp_path / "cache" / "256.png",
+                "1024": tmp_path / "cache" / "1024.png",
+                "full": tmp_path / "cache" / "full.png",
+            }
+            service._render_all_resolutions(file_info)
+
+        # Should have called the atomic method with the generated candidate UUID
+        db_mock.get_or_create_folder_uuid.assert_called_once_with(str(tmp_path), "new-uuid-1")
+        # generate_cache_paths should have been called with the UUID returned by the atomic call
+        mock_paths.assert_called_once_with(file_info.path, "new-uuid-1")
+
+    def test_two_images_same_folder_share_uuid(
+        self,
+        tmp_path: Path,
+        service: ThumbnailService,
+        db_mock: MagicMock,
+    ) -> None:
+        """Two images from the same folder use the same cache UUID via atomic call."""
+        # The atomic method always returns the same UUID for the same folder
+        db_mock.get_or_create_folder_uuid.return_value = "shared-uuid"
+
+        file_a = FileInfo(path=tmp_path / "image_a.png", mtime=1000.0, size=500, extension=".png")
+        file_b = FileInfo(path=tmp_path / "image_b.png", mtime=1000.0, size=600, extension=".png")
+
+        with (
+            patch("tarragon.services.thumbnail_service.render_plain_image", return_value=MagicMock(spec=Image.Image)),
+            patch("tarragon.services.thumbnail_service.generate_cache_uuid", return_value="shared-uuid"),
+            patch("tarragon.services.thumbnail_service.generate_cache_paths") as mock_paths,
+            patch("tarragon.services.thumbnail_service.save_to_cache"),
+            patch("tarragon.services.thumbnail_service.derive_smaller_sizes", return_value={}),
+        ):
+            mock_paths.return_value = {
+                "256": tmp_path / "cache" / "256.png",
+                "1024": tmp_path / "cache" / "1024.png",
+                "full": tmp_path / "cache" / "full.png",
+            }
+            service._render_all_resolutions(file_a)
+            service._render_all_resolutions(file_b)
+
+        # Both calls to generate_cache_paths should use the same UUID
+        assert mock_paths.call_count == 2
+        assert mock_paths.call_args_list[0].args[1] == "shared-uuid"
+        assert mock_paths.call_args_list[1].args[1] == "shared-uuid"
+        # get_or_create_folder_uuid should have been called for both images
+        assert db_mock.get_or_create_folder_uuid.call_count == 2
 
     def test_render_task_with_empty_path(
         self,

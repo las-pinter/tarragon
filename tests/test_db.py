@@ -24,8 +24,8 @@ def db() -> Database:
 
 
 class TestInitSchema:
-    def test_creates_all_7_tables(self, db: Database) -> None:
-        """init_schema() creates all 7 expected tables (excluding internal sqlite_sequence)."""
+    def test_creates_all_8_tables(self, db: Database) -> None:
+        """init_schema() creates all 8 expected tables (excluding internal sqlite_sequence)."""
         cursor = db._conn.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
         table_names = {row["name"] for row in cursor.fetchall()}
         # Exclude SQLite's internal autoincrement bookkeeping table
@@ -38,6 +38,7 @@ class TestInitSchema:
             "favorites",
             "settings",
             "editor_associations",
+            "folder_cache_uuids",
         }
         assert user_tables == expected, f"Missing tables: {expected - user_tables}"
 
@@ -341,6 +342,112 @@ class TestEditorAssociations:
         db.upsert_editor_association(".svg", "inkscape {file}")
         db.remove_editor_association(".svg")
         assert db.get_editor_command(".svg") is None
+
+
+# ── Folder Cache UUIDs ─────────────────────────────────────────
+
+
+class TestFolderCacheUuids:
+    def test_get_folder_uuid_returns_none_when_absent(self, db: Database) -> None:
+        """get_folder_uuid returns None for an unmapped folder."""
+        assert db.get_folder_uuid("/photos/vacation") is None
+
+    def test_upsert_and_get_folder_uuid(self, db: Database) -> None:
+        """upsert_folder_uuid stores a mapping that get_folder_uuid retrieves."""
+        db.upsert_folder_uuid("/photos/vacation", "abc12345")
+        assert db.get_folder_uuid("/photos/vacation") == "abc12345"
+
+    def test_upsert_folder_uuid_overwrites(self, db: Database) -> None:
+        """upsert_folder_uuid replaces an existing mapping."""
+        db.upsert_folder_uuid("/photos/vacation", "abc12345")
+        db.upsert_folder_uuid("/photos/vacation", "def67890")
+        assert db.get_folder_uuid("/photos/vacation") == "def67890"
+
+    def test_different_folders_have_independent_uuids(self, db: Database) -> None:
+        """Different folder paths maintain separate UUID mappings."""
+        db.upsert_folder_uuid("/photos/vacation", "aaa11111")
+        db.upsert_folder_uuid("/photos/work", "bbb22222")
+        assert db.get_folder_uuid("/photos/vacation") == "aaa11111"
+        assert db.get_folder_uuid("/photos/work") == "bbb22222"
+
+
+class TestGetOrCreateFolderUuid:
+    def test_creates_new_entry_when_absent(self, db: Database) -> None:
+        """get_or_create_folder_uuid inserts and returns the candidate UUID for a new folder."""
+        result = db.get_or_create_folder_uuid("/photos/new", "candidate-uuid")
+        assert result == "candidate-uuid"
+        # Verify it's persisted
+        assert db.get_folder_uuid("/photos/new") == "candidate-uuid"
+
+    def test_returns_existing_uuid_ignoring_candidate(self, db: Database) -> None:
+        """When a UUID already exists, the candidate is ignored and the existing UUID is returned."""
+        db.upsert_folder_uuid("/photos/existing", "original-uuid")
+        result = db.get_or_create_folder_uuid("/photos/existing", "different-candidate")
+        assert result == "original-uuid"
+
+    def test_two_calls_same_folder_return_same_uuid(self, db: Database) -> None:
+        """Two concurrent-style calls with different candidates converge on the same UUID."""
+        first = db.get_or_create_folder_uuid("/photos/shared", "uuid-a")
+        second = db.get_or_create_folder_uuid("/photos/shared", "uuid-b")
+        assert first == second == "uuid-a"
+
+    def test_different_folders_get_different_uuids(self, db: Database) -> None:
+        """Different folders maintain independent UUIDs through the atomic method."""
+        uuid_a = db.get_or_create_folder_uuid("/photos/alpha", "uuid-alpha")
+        uuid_b = db.get_or_create_folder_uuid("/photos/beta", "uuid-beta")
+        assert uuid_a == "uuid-alpha"
+        assert uuid_b == "uuid-beta"
+        assert uuid_a != uuid_b
+
+
+class TestCleanupStaleFolderUuids:
+    def test_removes_entries_where_folder_missing(self, db: Database, tmp_path: Path) -> None:
+        """Entries pointing to non-existent folders are deleted."""
+        existing_dir = str(tmp_path / "exists")
+        Path(existing_dir).mkdir()
+        missing_dir = "/no/such/folder/ever"
+
+        db.upsert_folder_uuid(existing_dir, "uuid-keep")
+        db.upsert_folder_uuid(missing_dir, "uuid-remove")
+
+        removed = db.cleanup_stale_folder_uuids()
+
+        assert removed == 1
+        assert db.get_folder_uuid(existing_dir) == "uuid-keep"
+        assert db.get_folder_uuid(missing_dir) is None
+
+    def test_keeps_entries_where_folder_exists(self, db: Database, tmp_path: Path) -> None:
+        """Entries pointing to existing folders are preserved."""
+        dir_a = str(tmp_path / "a")
+        dir_b = str(tmp_path / "b")
+        Path(dir_a).mkdir()
+        Path(dir_b).mkdir()
+
+        db.upsert_folder_uuid(dir_a, "uuid-a")
+        db.upsert_folder_uuid(dir_b, "uuid-b")
+
+        removed = db.cleanup_stale_folder_uuids()
+
+        assert removed == 0
+        assert db.get_folder_uuid(dir_a) == "uuid-a"
+        assert db.get_folder_uuid(dir_b) == "uuid-b"
+
+    def test_returns_zero_when_table_empty(self, db: Database) -> None:
+        """No entries → returns 0, no error."""
+        assert db.cleanup_stale_folder_uuids() == 0
+
+    def test_removes_multiple_stale_entries(self, db: Database) -> None:
+        """Multiple stale entries are all removed in one call."""
+        db.upsert_folder_uuid("/gone/one", "uuid-1")
+        db.upsert_folder_uuid("/gone/two", "uuid-2")
+        db.upsert_folder_uuid("/gone/three", "uuid-3")
+
+        removed = db.cleanup_stale_folder_uuids()
+
+        assert removed == 3
+        assert db.get_folder_uuid("/gone/one") is None
+        assert db.get_folder_uuid("/gone/two") is None
+        assert db.get_folder_uuid("/gone/three") is None
 
 
 # ── Context Manager ────────────────────────────────────────────

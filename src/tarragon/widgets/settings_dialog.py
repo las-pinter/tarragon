@@ -127,7 +127,7 @@ class SettingsDialog(QDialog):
         # Compare against the platform default, not the currently active path
         # (which may include a custom override). This prevents wiping a custom
         # cache_dir when the user opens Preferences and clicks OK unchanged.
-        platform_default = str(data_dir() / "cache" / "previews")
+        platform_default = str(data_dir() / "cache")
         cache_text = self._cache_dir_edit.text().strip()
 
         if cache_text == platform_default:

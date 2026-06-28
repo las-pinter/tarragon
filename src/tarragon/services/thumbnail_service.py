@@ -237,8 +237,10 @@ class ThumbnailService(QObject):
                 self._on_error(file_info, "Render queue full — thumbnail skipped")
             return
 
-        # Derive missing sizes
-        cache_uuid = cached.get("cache_uuid") or generate_cache_uuid()
+        # Derive missing sizes — use per-folder UUID from DB (atomic)
+        folder_path = str(file_info.path.parent)
+        candidate_uuid = cached.get("cache_uuid") or generate_cache_uuid()
+        cache_uuid = self._db.get_or_create_folder_uuid(folder_path, candidate_uuid)
         cache_paths = generate_cache_paths(file_info.path, cache_uuid)
 
         # Track which paths to write to DB (preserve existing, add new)
@@ -301,8 +303,11 @@ class ThumbnailService(QObject):
 
     def _render_all_resolutions(self, file_info: FileInfo) -> None:
         """Render all three resolutions from the source file."""
-        # Generate UUID and cache paths
-        cache_uuid = generate_cache_uuid()
+        # Get or create a per-folder UUID so all images in the same folder
+        # share a cache directory.  Atomic insert prevents race conditions
+        # when two threads process images from the same folder simultaneously.
+        folder_path = str(file_info.path.parent)
+        cache_uuid = self._db.get_or_create_folder_uuid(folder_path, generate_cache_uuid())
         cache_paths = generate_cache_paths(file_info.path, cache_uuid)
 
         # Render full resolution first

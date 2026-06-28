@@ -43,13 +43,13 @@ def cache_dir() -> Path:
     """Return the path to the thumbnail preview cache directory."""
     if _custom_cache_dir is not None:
         return _custom_cache_dir
-    return data_dir() / "cache" / "previews"
+    return data_dir() / "cache"
 
 
 def ensure_dirs() -> None:
     """Create all required directories if they do not already exist.
 
-    Ensures the full cache/previews hierarchy is present so that no
+    Ensures the cache directory hierarchy is present so that no
     FileNotFoundError strikes later when writing thumbnails.
 
     Raises OSError with context about which path failed, wrapping any

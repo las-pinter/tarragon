@@ -41,6 +41,11 @@ class MainWindow(_MainWindow):
         # Ensure schema exists — idempotent; safe for caller-provided databases too.
         self._database.init_schema()
 
+        # Clean up folder_cache_uuids entries whose source folders no longer exist.
+        stale_count = self._database.cleanup_stale_folder_uuids()
+        if stale_count:
+            logger.info("Cleaned up %d stale folder cache UUID entries", stale_count)
+
         owned_settings: Settings | None = None
         if settings is None:
             owned_settings = Settings(self._database)

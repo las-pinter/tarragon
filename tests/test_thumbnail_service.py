@@ -76,8 +76,9 @@ def service(db_mock: MagicMock, settings_mock: MagicMock) -> ThumbnailService:
         svc = ThumbnailService(db=db_mock, settings=settings_mock)
     # Replace the real QThreadPool with a mock that executes tasks synchronously
     # so tests can verify render_func dispatch through check_and_render().
+    # QThreadPool.start() returns None (void) in real Qt — mock matches that.
     mock_pool = MagicMock()
-    mock_pool.start.side_effect = lambda task: (_run_task(task), True)[-1]
+    mock_pool.start.side_effect = lambda task: _run_task(task)
     svc._threadpool = mock_pool
     return svc
 

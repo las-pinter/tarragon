@@ -258,7 +258,7 @@ class MainWindow(QMainWindow):
 
     def _on_thumbnail_error(self, source_path: str, error_message: str) -> None:
         """Handle thumbnail render error."""
-        logger.warning(f"Thumbnail render failed for {source_path}: {error_message}")
+        logger.error("Thumbnail render failed for %s: %s", source_path, error_message)
 
     def _on_selection_changed(self, paths: list[str]) -> None:
         """Handle thumbnail grid selection changes.
@@ -466,14 +466,22 @@ class MainWindow(QMainWindow):
 
         # Dispatch thumbnail renders
         if hasattr(self, "_thumbnail_service"):
+            statuses: dict[str, int] = {"cached": 0, "queued": 0, "derived": 0}
             for fi in file_infos:
-                self._thumbnail_service.check_and_render(fi)
+                status = self._thumbnail_service.check_and_render(fi)
+                statuses[status] = statuses.get(status, 0) + 1
+            logger.info(
+                "Processed %d images in %s: %d queued for render, %d already cached, %d derived from existing",
+                len(file_infos),
+                folder_path,
+                statuses["queued"],
+                statuses["cached"],
+                statuses["derived"],
+            )
 
         # Update sidebar with current folder
         if hasattr(self, "sidebar_widget"):
             self.sidebar_widget.set_current_folder(str(folder_path))
-
-        logger.info(f"Found {len(file_infos)} images in {folder_path}")
 
     def _on_folder_navigated(self, folder_path: str) -> None:
         """Handle folder selection from sidebar tree."""
@@ -496,8 +504,18 @@ class MainWindow(QMainWindow):
 
         # Dispatch thumbnail renders
         if hasattr(self, "_thumbnail_service"):
+            statuses: dict[str, int] = {"cached": 0, "queued": 0, "derived": 0}
             for fi in file_infos:
-                self._thumbnail_service.check_and_render(fi)
+                status = self._thumbnail_service.check_and_render(fi)
+                statuses[status] = statuses.get(status, 0) + 1
+            logger.info(
+                "Processed %d images in %s: %d queued for render, %d already cached, %d derived from existing",
+                len(file_infos),
+                folder,
+                statuses["queued"],
+                statuses["cached"],
+                statuses["derived"],
+            )
 
         # Update sidebar
         if hasattr(self, "sidebar_widget"):

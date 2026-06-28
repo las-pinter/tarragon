@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 from PIL import Image
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal, Slot
+
+logger = logging.getLogger(__name__)
 
 from tarragon.db import Database
 from tarragon.scanner import FileInfo
@@ -148,12 +151,17 @@ class ThumbnailService(QObject):
         self._cache_format = fmt
 
     @Slot(FileInfo)
-    def check_and_render(self, file_info: FileInfo) -> None:
+    def check_and_render(self, file_info: FileInfo) -> str:
         """Check cache; if stale or missing, render all resolutions.
 
         Called from the main thread for each file discovered during a scan.
         Handles three resolution tiers: thumbnail (256), preview (1024),
         and full (original resolution).
+
+        Returns a status string for batch summary logging:
+            "cached"  — all resolutions served from cache
+            "derived" — missing resolutions derived from existing cached image
+            "queued"  — async render dispatched to thread pool
         """
         cached = self._db.get_thumbnail(str(file_info.path))
 
@@ -167,11 +175,10 @@ class ThumbnailService(QObject):
             if has_thumbnail and has_preview and has_full:
                 # All resolutions cached — emit signals for each
                 self._emit_cached_thumbnails(file_info, cached)
-                return
+                return "cached"
 
             # Some resolutions missing — derive from largest available
-            self._derive_missing_resolutions(file_info, cached)
-            return
+            return self._derive_missing_resolutions(file_info, cached)
 
         # Cache miss or invalid — render all resolutions from source (async)
         task = _RenderAllTask(
@@ -180,8 +187,9 @@ class ThumbnailService(QObject):
             on_error=self._on_error,
             render_func=self._render_all_resolutions,
         )
-        if not self._threadpool.start(task):
-            self._on_error(file_info, "Render queue full — thumbnail skipped")
+        self._threadpool.start(task)
+        logger.debug("Queued render for %s", file_info.path)
+        return "queued"
 
     def _on_render_all_done(self, file_info: FileInfo) -> None:
         """Handle completion of multi-resolution render (called from main thread)."""
@@ -203,8 +211,11 @@ class ThumbnailService(QObject):
                 except Exception:
                     pass  # Corrupt cache file — skip this resolution
 
-    def _derive_missing_resolutions(self, file_info: FileInfo, cached: dict) -> None:
-        """Derive missing smaller resolutions from the largest available cached image."""
+    def _derive_missing_resolutions(self, file_info: FileInfo, cached: dict) -> str:
+        """Derive missing smaller resolutions from the largest available cached image.
+
+        Returns a status string: "derived" or "queued".
+        """
         # Find largest available resolution
         full_path = cached.get("full_cache_path")
         preview_path = cached.get("preview_cache_path")
@@ -234,9 +245,9 @@ class ThumbnailService(QObject):
                 on_error=self._on_error,
                 render_func=self._render_all_resolutions,
             )
-            if not self._threadpool.start(task):
-                self._on_error(file_info, "Render queue full — thumbnail skipped")
-            return
+            self._threadpool.start(task)
+            logger.debug("Queued render for %s", file_info.path)
+            return "queued"
 
         # Derive missing sizes — use per-folder UUID from DB (atomic)
         folder_path = str(file_info.path.parent)
@@ -301,6 +312,8 @@ class ThumbnailService(QObject):
             preview_cache_path=final_preview_path,
             full_cache_path=final_full_path,
         )
+        logger.debug("Derived missing resolutions for %s", file_info.path)
+        return "derived"
 
     def _render_all_resolutions(self, file_info: FileInfo) -> None:
         """Render all three resolutions from the source file."""
@@ -389,8 +402,8 @@ class ThumbnailService(QObject):
             on_done=self._on_done,
             on_error=self._on_error,
         )
-        if not self._threadpool.start(task):
-            self._on_error(file_info, "Render queue full — thumbnail skipped")
+        self._threadpool.start(task)
+        logger.debug("Queued plain render for %s", file_info.path)
 
     def _render_psd(self, file_info: FileInfo) -> None:
         """Dispatch PSD/PSB render via ProcessPoolExecutor (blocking in worker thread).
@@ -411,8 +424,8 @@ class ThumbnailService(QObject):
             tile_grid_x=grid_x,
             tile_grid_y=grid_y,
         )
-        if not self._threadpool.start(task):
-            self._on_error(file_info, "Render queue full — thumbnail skipped")
+        self._threadpool.start(task)
+        logger.debug("Queued PSD render for %s", file_info.path)
 
     def _on_done(self, file_info: FileInfo, img: Image.Image | None, cache_path: Path | None) -> None:
         """Handle completion of a legacy render task — emit thumbnailReady.

@@ -5,7 +5,6 @@ checkbox.  The panel also exposes a text field to create new tags on the
 fly.
 
 Design patterns (from python-design-patterns skill):
-    - Observer pattern  — ``tag_filter_changed`` signal for filter changes
   - Service Layer     — ``TagPanel`` uses ``TagService``, never touches DB
   - Strategy pattern  — Tri-state resolution delegated to ``TagService``
 """
@@ -38,11 +37,9 @@ class TagPanel(QWidget):
         selected files.
       * Type a new tag name and press *Add Tag* to create it.
 
-    Emits ``tag_filter_changed`` whenever the set of *fully checked* tag
-    IDs changes (partial checks do **not** count toward the filter).
+    Emits ``scope_changed`` when the Global/Local toggle changes.
     """
 
-    tag_filter_changed = Signal(set)  # set of int — active filter tag IDs
     scope_changed = Signal(bool)  # True = global, False = local
 
     def __init__(self, tag_service: TagService, parent: QWidget | None = None) -> None:
@@ -108,16 +105,6 @@ class TagPanel(QWidget):
         """
         self._selected_paths = paths
         self._update_checkbox_states()
-
-    def has_active_filters(self) -> bool:
-        """Return True if any tag checkbox is fully Checked (acting as a filter).
-
-        PartiallyChecked and Unchecked states do NOT count as active filters.
-        """
-        return any(
-            cb.checkState() == Qt.CheckState.Checked
-            for cb in self._tag_checkboxes.values()
-        )
 
     def is_global_scope(self) -> bool:
         """Return True if the panel is in global scope mode."""
@@ -289,8 +276,6 @@ class TagPanel(QWidget):
         * Overrides ``PartiallyChecked`` → ``Checked`` so that clicking
           a partial checkbox always *adds* the tag.
         * Calls ``toggle_tag`` to apply/remove the tag.
-        * Emits ``tag_filter_changed`` with the current set of fully-checked
-          tag ids.
 
         Note: The ``stateChanged`` signal passes an ``int`` (not a
         ``Qt.CheckState`` enum), so we convert via ``Qt.CheckState()``
@@ -314,28 +299,12 @@ class TagPanel(QWidget):
         elif check_state == Qt.CheckState.Unchecked:
             self.toggle_tag(tag_id, False)
 
-        self._emit_filter_changed()
-
-    def _emit_filter_changed(self) -> None:
-        """Emit ``tag_filter_changed`` with the set of fully-checked tag ids.
-
-        Only tags whose checkbox is **Checked** (not PartiallyChecked
-        and not Unchecked) are included in the filter set.
-        """
-        checked_ids = {tid for tid, cb in self._tag_checkboxes.items() if cb.checkState() == Qt.CheckState.Checked}
-        self.tag_filter_changed.emit(checked_ids)
-
     def _update_checkbox_states(self) -> None:
         """Sync every checkbox's state with the current file selection.
 
         Uses ``tag_service.resolve_tri_state`` per tag.
         While updating, ``_setting_checkboxes`` is ``True`` so that the
         ``stateChanged`` handler does not treat these as user actions.
-
-        Note: This method does NOT emit ``tag_filter_changed``.  The filter
-        should only change when a user explicitly clicks a checkbox (via
-        ``_on_checkbox_state_changed``), not when checkbox states are
-        updated programmatically due to a selection change.
         """
         self._setting_checkboxes = True
         for tag_id, checkbox in self._tag_checkboxes.items():

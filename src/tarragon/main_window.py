@@ -26,6 +26,7 @@ from tarragon.thumbnail import _cache_file_path
 from tarragon.widgets.color_filter_bar import ColorFilterBar
 from tarragon.widgets.log_panel import LogPanel, QtLogHandler
 from tarragon.widgets.preview_panel import PreviewPanel
+from tarragon.widgets.tag_filter_bar import TagFilterBar
 from tarragon.widgets.thumbnail_grid import ThumbnailGrid
 
 logger = logging.getLogger(__name__)
@@ -193,12 +194,17 @@ class MainWindow(QMainWindow):
         self.color_filter_bar = ColorFilterBar(parent=self)
         self.color_filter_bar.color_filter_changed.connect(self._on_color_filter_changed)
 
-        # Gallery container: search + color filter + grid stacked vertically
+        # ── Tag filter bar ─────────────────────────────────────────────
+        self.tag_filter_bar = TagFilterBar(tag_service, parent=self)
+        self.tag_filter_bar.tag_filter_changed.connect(self._on_tag_filter_changed)
+
+        # Gallery container: search + color filter + tag filter + grid stacked vertically
         gallery_container = QWidget()
         gallery_layout = QVBoxLayout(gallery_container)
         gallery_layout.setContentsMargins(0, 0, 0, 0)
         gallery_layout.addWidget(self._search_edit)
         gallery_layout.addWidget(self.color_filter_bar)
+        gallery_layout.addWidget(self.tag_filter_bar)
         gallery_layout.addWidget(self.thumbnail_grid, stretch=1)
         self.grid_dock.setWidget(gallery_container)
 
@@ -220,8 +226,7 @@ class MainWindow(QMainWindow):
         root_logger.addHandler(self._log_handler)
         root_logger.setLevel(logging.DEBUG if self._settings and self._settings.get("debug_mode") else logging.INFO)
 
-        # Wire tag panel filter to re-run query
-        self.tag_panel.tag_filter_changed.connect(self._on_tag_filter_changed)
+        # Wire tag panel scope to re-run query (tag filtering is now via tag_filter_bar)
         self.tag_panel.scope_changed.connect(self._on_scope_changed)
 
         # Debounce timer for filename search (Deviation 4.5)
@@ -395,11 +400,8 @@ class MainWindow(QMainWindow):
         filename_filter = self._search_edit.text() if hasattr(self, "_search_edit") else ""
         color_tags = self.color_filter_bar.get_active_colors() if hasattr(self, "color_filter_bar") else set()
         tag_ids: set[int] = set()
-        if hasattr(self, "tag_panel"):
-            # Collect fully-checked tag IDs from the tag panel
-            tag_ids = {
-                tid for tid, cb in self.tag_panel._tag_checkboxes.items() if cb.checkState() == Qt.CheckState.Checked
-            }
+        if hasattr(self, "tag_filter_bar"):
+            tag_ids = self.tag_filter_bar.get_active_tag_ids()
 
         results = self._query_service.query(
             folder_path=folder_path,
@@ -510,7 +512,7 @@ class MainWindow(QMainWindow):
         has_filters = (
             (hasattr(self, "_search_edit") and self._search_edit.text())
             or (hasattr(self, "color_filter_bar") and self.color_filter_bar.get_active_colors())
-            or (hasattr(self, "tag_panel") and self.tag_panel.has_active_filters())
+            or (hasattr(self, "tag_filter_bar") and self.tag_filter_bar.has_active_filters())
         )
         if has_filters and hasattr(self, "_query_service"):
             self._run_filtered_query()
@@ -561,7 +563,7 @@ class MainWindow(QMainWindow):
         has_filters = (
             (hasattr(self, "_search_edit") and self._search_edit.text())
             or (hasattr(self, "color_filter_bar") and self.color_filter_bar.get_active_colors())
-            or (hasattr(self, "tag_panel") and self.tag_panel.has_active_filters())
+            or (hasattr(self, "tag_filter_bar") and self.tag_filter_bar.has_active_filters())
         )
         if has_filters and hasattr(self, "_query_service"):
             self._run_filtered_query()

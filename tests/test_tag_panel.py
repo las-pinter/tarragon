@@ -5,7 +5,6 @@ WAAAGH! Wrenchbasha's torture chamber for da TagPanel widget!
 Testing patterns applied (from python-testing-patterns skill):
   - Arrange-Act-Assert (AAA)
   - pytest fixtures for service and widget setup
-  - Signal capture for verifying emissions
   - In-memory SQLite for full isolation
 """
 
@@ -302,26 +301,6 @@ class TestTagPanelToggle:
         # This should be a safe no-op
         panel.toggle_tag(99999, True)
 
-    def test_toggle_tag_triggers_signal(  # noqa: ARG002
-        self,
-        service: TagService,
-        panel: TagPanel,
-    ) -> None:
-        """User clicking a checkbox emits tag_filter_changed with the tag_id."""
-        tag_id = service.get_or_create_tag("signal-tag")
-        panel._refresh_tags()
-        panel.set_selection(["/img/a.png"])
-
-        captured: list[set[int]] = []
-        panel.tag_filter_changed.connect(captured.append)
-
-        # Simulate a user clicking the checkbox (not calling toggle_tag directly)
-        checkbox = panel._tag_checkboxes[tag_id]
-        checkbox.setCheckState(Qt.CheckState.Checked)
-
-        # At least one emission should contain the tag_id
-        assert any(tag_id in s for s in captured), f"tag_filter_changed should contain tag_id {tag_id}, got {captured}"
-
     def test_toggle_tag_checkbox_state_reflects_change(  # noqa: ARG002
         self,
         service: TagService,
@@ -343,61 +322,6 @@ class TestTagPanelToggle:
         # Toggle OFF
         panel.toggle_tag(tag_id, False)
         assert panel._tag_checkboxes[tag_id].checkState() == Qt.CheckState.Unchecked
-
-
-# =========================================================================
-# TestTagFilterChangedSignal
-# =========================================================================
-
-
-class TestTagFilterChangedSignal:
-    """tag_filter_changed is emitted correctly when checkboxes change."""
-
-    def test_tag_filter_changed_signal(  # noqa: ARG002
-        self,
-        service: TagService,
-        panel: TagPanel,
-    ) -> None:
-        """User checking a checkbox emits the signal with correct IDs."""
-        tag_id = service.get_or_create_tag("filter-tag")
-        panel._refresh_tags()
-
-        captured: list[set[int]] = []
-        panel.tag_filter_changed.connect(captured.append)
-
-        # Simulate a user checking the checkbox
-        panel.set_selection(["/img/a.png"])
-        checkbox = panel._tag_checkboxes[tag_id]
-        checkbox.setCheckState(Qt.CheckState.Checked)
-
-        assert len(captured) >= 1, "tag_filter_changed should have been emitted"
-        assert any(tag_id in s for s in captured), f"tag_filter_changed should contain tag_id {tag_id}, got {captured}"
-
-    def test_tag_filter_changed_removes_on_uncheck(  # noqa: ARG002
-        self,
-        service: TagService,
-        panel: TagPanel,
-    ) -> None:
-        """Unchecking a tag removes its ID from the filter set."""
-        tag_id = service.get_or_create_tag("temp-tag")
-        panel._refresh_tags()
-        panel.set_selection(["/img/a.png"])
-
-        panel.toggle_tag(tag_id, True)
-        panel.toggle_tag(tag_id, False)
-
-        captured: list[set[int]] = []
-        panel.tag_filter_changed.connect(captured.append)
-
-        # The last emission from toggle_tag(False) should have empty set
-        # But we need to check the most recent emission
-        # The signal fires after the toggle, so check the current filter
-        panel._emit_filter_changed()
-        assert len(captured) >= 1
-        # The last captured set should not contain tag_id
-        assert (
-            tag_id not in captured[-1]
-        ), f"tag_filter_changed should NOT contain tag_id {tag_id} after uncheck, got {captured[-1]}"
 
 
 # =========================================================================
@@ -471,77 +395,6 @@ class TestCheckboxInteraction:
 
 
 # =========================================================================
-# TestSelectionDoesNotEmitFilter — Bug 2 regression test
-# =========================================================================
-
-
-class TestSelectionDoesNotEmitFilter:
-    """set_selection must NOT emit tag_filter_changed (Bug 2 fix)."""
-
-    def test_set_selection_does_not_emit_filter_changed(  # noqa: ARG002
-        self,
-        service: TagService,
-        panel: TagPanel,
-    ) -> None:
-        """Changing selection updates checkbox states but does NOT re-filter the gallery."""
-        tag_id = service.get_or_create_tag("landscape")
-        service.add_tags_to_files(["/img/a.png"], ["landscape"])
-        panel._refresh_tags()
-
-        captured: list[set[int]] = []
-        panel.tag_filter_changed.connect(captured.append)
-
-        # Simulate clicking a thumbnail — this calls set_selection
-        panel.set_selection(["/img/a.png"])
-
-        # tag_filter_changed must NOT have been emitted
-        assert len(captured) == 0, (
-            f"set_selection should NOT emit tag_filter_changed, but got {len(captured)} emission(s)"
-        )
-
-    def test_set_selection_multiple_times_no_filter(  # noqa: ARG002
-        self,
-        service: TagService,
-        panel: TagPanel,
-    ) -> None:
-        """Repeated selection changes never emit tag_filter_changed."""
-        service.get_or_create_tag("portrait")
-        panel._refresh_tags()
-
-        captured: list[set[int]] = []
-        panel.tag_filter_changed.connect(captured.append)
-
-        panel.set_selection(["/img/a.png"])
-        panel.set_selection(["/img/b.png"])
-        panel.set_selection(["/img/a.png", "/img/b.png"])
-        panel.set_selection([])
-
-        assert len(captured) == 0, (
-            f"Multiple set_selection calls should NOT emit tag_filter_changed, got {len(captured)}"
-        )
-
-    def test_checkbox_click_still_emits_filter(  # noqa: ARG002
-        self,
-        service: TagService,
-        panel: TagPanel,
-    ) -> None:
-        """User clicking a checkbox DOES emit tag_filter_changed (regression guard)."""
-        tag_id = service.get_or_create_tag("clickable")
-        panel._refresh_tags()
-        panel.set_selection(["/img/a.png"])
-
-        captured: list[set[int]] = []
-        panel.tag_filter_changed.connect(captured.append)
-
-        # Simulate user clicking the checkbox
-        checkbox = panel._tag_checkboxes[tag_id]
-        checkbox.setCheckState(Qt.CheckState.Checked)
-
-        assert len(captured) >= 1, "User checkbox click MUST emit tag_filter_changed"
-        assert any(tag_id in s for s in captured)
-
-
-# =========================================================================
 # Bug 1: Global/Local scope toggle
 # =========================================================================
 
@@ -605,42 +458,3 @@ class TestScopeToggle:
         labels = panel.findChildren(QLabel)
         label_texts = [label.text() for label in labels]
         assert any("beach (2)" in t for t in label_texts)
-
-
-# =========================================================================
-# Bug 2: has_active_filters
-# =========================================================================
-
-
-class TestHasActiveFilters:
-    """has_active_filters() reports whether any tag filter is active."""
-
-    def test_no_filters_returns_false(self, service: TagService, panel: TagPanel) -> None:  # noqa: ARG002
-        """No checked checkboxes → has_active_filters() is False."""
-        service.get_or_create_tag("test")
-        panel._refresh_tags()
-        assert panel.has_active_filters() is False
-
-    def test_checked_tag_returns_true(self, service: TagService, panel: TagPanel) -> None:  # noqa: ARG002
-        """A fully-checked tag checkbox → has_active_filters() is True."""
-        tag_id = service.get_or_create_tag("active")
-        panel._refresh_tags()
-        panel._tag_checkboxes[tag_id].setCheckState(Qt.CheckState.Checked)
-        assert panel.has_active_filters() is True
-
-    def test_partial_check_returns_false(self, service: TagService, panel: TagPanel) -> None:  # noqa: ARG002
-        """PartiallyChecked does NOT count as an active filter."""
-        tag_id = service.get_or_create_tag("partial")
-        panel._refresh_tags()
-        # Use guard flag to prevent tri-state handler from converting to Checked
-        panel._setting_checkboxes = True
-        panel._tag_checkboxes[tag_id].setCheckState(Qt.CheckState.PartiallyChecked)
-        panel._setting_checkboxes = False
-        assert panel.has_active_filters() is False
-
-    def test_unchecked_returns_false(self, service: TagService, panel: TagPanel) -> None:  # noqa: ARG002
-        """Unchecked does NOT count as an active filter."""
-        service.get_or_create_tag("unchecked")
-        panel._refresh_tags()
-        # Default state is Unchecked
-        assert panel.has_active_filters() is False

@@ -375,18 +375,24 @@ class PreviewPanel(QWidget):
 
         Returns a self-owned copy so the pixel data survives garbage collection.
         """
-        # Ensure image is in a compatible mode
+        # Ensure image is in a compatible mode and compute explicit bytesPerLine.
+        # PIL's tobytes() produces tightly packed rows; Qt's 4-arg constructor
+        # assumes 4-byte aligned scanlines, causing progressive shearing when
+        # width × bpp is not divisible by 4.
         if pil_image.mode == "RGBA":
             mode = QImage.Format.Format_RGBA8888
+            bytes_per_line = pil_image.width * 4
         elif pil_image.mode == "RGB":
             mode = QImage.Format.Format_RGB888
+            bytes_per_line = pil_image.width * 3
         else:
             # Convert to RGB for compatibility
             pil_image = pil_image.convert("RGB")
             mode = QImage.Format.Format_RGB888
+            bytes_per_line = pil_image.width * 3
 
         data = pil_image.tobytes()
-        qimage = QImage(data, pil_image.width, pil_image.height, mode)
+        qimage = QImage(data, pil_image.width, pil_image.height, bytes_per_line, mode)
         # .copy() creates a deep copy so pixel data outlives the local ``data`` bytes
         return qimage.copy()
 

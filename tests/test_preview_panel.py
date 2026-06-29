@@ -1146,3 +1146,65 @@ def test_set_image_applies_exif_from_original_when_not_from_cache(qapp, tmp_path
         assert panel._dimensions_label.text() == "Dimensions: 100 × 200"
     finally:
         panel.close()
+
+
+# ── Regression: QImage stride mismatch (Bug — sheared preview) ────────
+
+
+@pytest.mark.parametrize(
+    "width",
+    [1, 3, 5, 7, 9, 11, 13, 15, 17, 21, 63, 101],
+)
+def test_pil_to_qimage_rgb_pixel_values_non_aligned_widths(qapp, width):  # noqa: ARG001
+    """_pil_to_qimage preserves pixel values for RGB widths not divisible by 4.
+
+    Regression test for stride mismatch: the 4-arg QImage constructor assumes
+    4-byte aligned scanlines, but PIL's tobytes() produces tightly packed rows.
+    When width × 3 is not divisible by 4, Qt reads past each row boundary,
+    causing progressive shearing (the '/_/' glitch pattern).
+
+    Uses widths where (width * 3) % 4 != 0 to trigger the bug.
+    """
+    height = 4
+    # Create an image wiv unique pixel values per row so shearing is detectable
+    pil_img = Image.new("RGB", (width, height))
+    for y in range(height):
+        for x in range(width):
+            # Each pixel gets a unique color based on position
+            pil_img.putpixel((x, y), ((x * 37 + y * 13) % 256, (x * 53 + y * 7) % 256, (x * 11 + y * 97) % 256))
+
+    qimage = PreviewPanel._pil_to_qimage(pil_img)
+
+    assert qimage.width() == width
+    assert qimage.height() == height
+
+    # Verify EVERY pixel — if stride is wrong, lower rows will be sheared
+    for y in range(height):
+        for x in range(width):
+            expected = pil_img.getpixel((x, y))
+            qcolor = qimage.pixelColor(x, y)
+            actual = (qcolor.red(), qcolor.green(), qcolor.blue())
+            assert actual == expected, (
+                f"Pixel mismatch at ({x}, {y}) for width={width}: "
+                f"expected {expected}, got {actual} — stride shearing detected!"
+            )
+
+
+def test_pil_to_qimage_rgba_pixel_values(qapp):  # noqa: ARG001
+    """_pil_to_qimage preserves RGBA pixel values including alpha channel."""
+    width, height = 7, 3
+    pil_img = Image.new("RGBA", (width, height))
+    for y in range(height):
+        for x in range(width):
+            pil_img.putpixel((x, y), ((x * 41) % 256, (y * 67) % 256, ((x + y) * 23) % 256, (x * y * 17) % 256))
+
+    qimage = PreviewPanel._pil_to_qimage(pil_img)
+
+    for y in range(height):
+        for x in range(width):
+            expected = pil_img.getpixel((x, y))
+            qcolor = qimage.pixelColor(x, y)
+            actual = (qcolor.red(), qcolor.green(), qcolor.blue(), qcolor.alpha())
+            assert actual == expected, (
+                f"RGBA pixel mismatch at ({x}, {y}): expected {expected}, got {actual}"
+            )

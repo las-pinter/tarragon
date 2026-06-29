@@ -291,8 +291,25 @@ class PreviewPanel(QWidget):
             # Apply EXIF orientation so phone-camera images display upright
             cell_img = ImageOps.exif_transpose(img) or img.copy()
 
-            # Fill cell evenly using fit (no empty space around images)
-            cell_img = ImageOps.fit(cell_img, (cell_w, cell_h), Image.Resampling.LANCZOS)
+            # Preserve aspect ratio — contain fits within cell without cropping
+            cell_img = ImageOps.contain(cell_img, (cell_w, cell_h), Image.Resampling.LANCZOS)
+
+            # Center the contained image on a cell-sized background
+            cell_bg = Image.new("RGB", (cell_w, cell_h), color="#1c1b22")
+            if cell_img.mode == "RGBA":
+                cell_bg.paste(
+                    cell_img,
+                    ((cell_w - cell_img.width) // 2, (cell_h - cell_img.height) // 2),
+                    cell_img,
+                )
+            else:
+                if cell_img.mode != "RGB":
+                    cell_img = cell_img.convert("RGB")
+                cell_bg.paste(
+                    cell_img,
+                    ((cell_w - cell_img.width) // 2, (cell_h - cell_img.height) // 2),
+                )
+            cell_img = cell_bg
 
             # Convert non-RGB/RGBA modes to RGB to avoid color corruption
             if cell_img.mode == "RGBA":

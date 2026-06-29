@@ -1208,3 +1208,188 @@ def test_pil_to_qimage_rgba_pixel_values(qapp):  # noqa: ARG001
             assert actual == expected, (
                 f"RGBA pixel mismatch at ({x}, {y}): expected {expected}, got {actual}"
             )
+
+
+# ── Multi-preview: aspect ratio preservation ──────────────────────────
+
+
+def test_set_multi_preview_preserves_wide_aspect_ratio(qapp):  # noqa: ARG001
+    """set_multi_preview does NOT crop wide images — aspect ratio is preserved.
+
+    A wide panorama image (800×200, 4:1 ratio) placed in a single-cell mosaic
+    should appear letterboxed (with background-colored bars top and bottom),
+    not cropped to fill the square cell.
+    """
+    panel = PreviewPanel()
+    try:
+        wide = Image.new("RGB", (800, 200), color="red")
+        captured: list[Image.Image] = []
+
+        _real_pil_to_qimage = PreviewPanel._pil_to_qimage
+
+        def _capture_qimage(pil_image: Image.Image):
+            captured.append(pil_image.copy())
+            return _real_pil_to_qimage(pil_image)
+
+        with patch.object(PreviewPanel, "_pil_to_qimage", side_effect=_capture_qimage):
+            panel.set_multi_preview([wide], total_selected=1)
+
+        assert len(captured) == 1
+        mosaic = captured[0]
+
+        # For 1 image: cols=1, rows=1, cell_w=cell_h=784 (800 - 2*8 padding)
+        # The wide image (4:1) should be contained, not cropped.
+        # Check that the top-center pixel is background color (letterbox bar),
+        # not red (which would mean the image was cropped/stretched to fill).
+        bg_color = (28, 27, 34)  # #1c1b22
+        top_center = mosaic.getpixel((mosaic.width // 2, 10))
+        assert top_center == bg_color, (
+            f"Expected background color {bg_color} at top center (letterbox bar), "
+            f"got {top_center} — image may have been cropped to fill cell"
+        )
+
+        # Center pixel should be red (the actual image content)
+        center = mosaic.getpixel((mosaic.width // 2, mosaic.height // 2))
+        assert center == (255, 0, 0), f"Expected red at center, got {center}"
+    finally:
+        panel.close()
+
+
+def test_set_multi_preview_preserves_tall_aspect_ratio(qapp):  # noqa: ARG001
+    """set_multi_preview does NOT crop tall images — aspect ratio is preserved.
+
+    A tall narrow image (200×800, 1:4 ratio) should appear pillarboxed
+    (with background-colored bars on left and right).
+    """
+    panel = PreviewPanel()
+    try:
+        tall = Image.new("RGB", (200, 800), color="blue")
+        captured: list[Image.Image] = []
+
+        _real_pil_to_qimage = PreviewPanel._pil_to_qimage
+
+        def _capture_qimage(pil_image: Image.Image):
+            captured.append(pil_image.copy())
+            return _real_pil_to_qimage(pil_image)
+
+        with patch.object(PreviewPanel, "_pil_to_qimage", side_effect=_capture_qimage):
+            panel.set_multi_preview([tall], total_selected=1)
+
+        assert len(captured) == 1
+        mosaic = captured[0]
+
+        bg_color = (28, 27, 34)  # #1c1b22
+        # Left-center pixel should be background (pillarbox bar)
+        left_center = mosaic.getpixel((10, mosaic.height // 2))
+        assert left_center == bg_color, (
+            f"Expected background color {bg_color} at left center (pillarbox bar), "
+            f"got {left_center} — image may have been cropped to fill cell"
+        )
+
+        # Center pixel should be blue (the actual image content)
+        center = mosaic.getpixel((mosaic.width // 2, mosaic.height // 2))
+        assert center == (0, 0, 255), f"Expected blue at center, got {center}"
+    finally:
+        panel.close()
+
+
+def test_set_multi_preview_square_image_fills_cell(qapp):  # noqa: ARG001
+    """set_multi_preview with a square image fills the cell completely."""
+    panel = PreviewPanel()
+    try:
+        square = Image.new("RGB", (500, 500), color="green")
+        captured: list[Image.Image] = []
+
+        _real_pil_to_qimage = PreviewPanel._pil_to_qimage
+
+        def _capture_qimage(pil_image: Image.Image):
+            captured.append(pil_image.copy())
+            return _real_pil_to_qimage(pil_image)
+
+        with patch.object(PreviewPanel, "_pil_to_qimage", side_effect=_capture_qimage):
+            panel.set_multi_preview([square], total_selected=1)
+
+        assert len(captured) == 1
+        mosaic = captured[0]
+
+        # Square image in square cell — should fill entirely, no letterboxing
+        center = mosaic.getpixel((mosaic.width // 2, mosaic.height // 2))
+        assert center == (0, 128, 0), f"Expected green at center, got {center}"
+
+        # Corner of the cell area should also be green (no background bars)
+        # Cell starts at (8, 8) — check just inside
+        corner = mosaic.getpixel((10, 10))
+        assert corner == (0, 128, 0), f"Expected green at cell corner, got {corner}"
+    finally:
+        panel.close()
+
+
+def test_set_multi_preview_rgba_preserves_aspect_ratio(qapp):  # noqa: ARG001
+    """set_multi_preview handles RGBA images wiv aspect ratio preserved."""
+    panel = PreviewPanel()
+    try:
+        rgba_wide = Image.new("RGBA", (600, 150), color=(255, 0, 0, 128))
+        captured: list[Image.Image] = []
+
+        _real_pil_to_qimage = PreviewPanel._pil_to_qimage
+
+        def _capture_qimage(pil_image: Image.Image):
+            captured.append(pil_image.copy())
+            return _real_pil_to_qimage(pil_image)
+
+        with patch.object(PreviewPanel, "_pil_to_qimage", side_effect=_capture_qimage):
+            panel.set_multi_preview([rgba_wide], total_selected=1)
+
+        assert len(captured) == 1
+        mosaic = captured[0]
+
+        bg_color = (28, 27, 34)
+        # Top area should be background (letterbox) since image is 4:1
+        top_center = mosaic.getpixel((mosaic.width // 2, 10))
+        assert top_center == bg_color, (
+            f"Expected background at top, got {top_center}"
+        )
+    finally:
+        panel.close()
+
+
+def test_set_multi_preview_multiple_images_all_preserve_ratio(qapp):  # noqa: ARG001
+    """set_multi_preview wiv 4 images preserves each image's aspect ratio."""
+    panel = PreviewPanel()
+    try:
+        images = [
+            Image.new("RGB", (800, 200), color="red"),    # wide 4:1
+            Image.new("RGB", (200, 800), color="blue"),   # tall 1:4
+            Image.new("RGB", (400, 400), color="green"),  # square 1:1
+            Image.new("RGB", (600, 300), color="yellow"), # wide 2:1
+        ]
+        captured: list[Image.Image] = []
+
+        _real_pil_to_qimage = PreviewPanel._pil_to_qimage
+
+        def _capture_qimage(pil_image: Image.Image):
+            captured.append(pil_image.copy())
+            return _real_pil_to_qimage(pil_image)
+
+        with patch.object(PreviewPanel, "_pil_to_qimage", side_effect=_capture_qimage):
+            panel.set_multi_preview(images, total_selected=4)
+
+        assert len(captured) == 1
+        mosaic = captured[0]
+        # Mosaic should be 800x800
+        assert mosaic.size == (800, 800)
+
+        # Verify the mosaic has non-uniform content (not all one color),
+        # meaning images were placed with their aspect ratios preserved
+        # and background fills the gaps
+        bg_color = (28, 27, 34)
+        # There should be some background pixels visible (from letterboxing/pillarboxing)
+        bg_pixel_count = 0
+        for y in range(0, 800, 20):
+            for x in range(0, 800, 20):
+                if mosaic.getpixel((x, y)) == bg_color:
+                    bg_pixel_count += 1
+        # With mixed aspect ratios, we expect significant background visibility
+        assert bg_pixel_count > 0, "Expected some background pixels from aspect-ratio preservation"
+    finally:
+        panel.close()

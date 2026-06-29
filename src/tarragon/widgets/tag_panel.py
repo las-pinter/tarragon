@@ -43,6 +43,7 @@ class TagPanel(QWidget):
     """
 
     tag_filter_changed = Signal(set)  # set of int — active filter tag IDs
+    scope_changed = Signal(bool)  # True = global, False = local
 
     def __init__(self, tag_service: TagService, parent: QWidget | None = None) -> None:
         """Build the tag panel with header, scrollable list, and new-tag input."""
@@ -51,6 +52,8 @@ class TagPanel(QWidget):
         self._selected_paths: list[str] = []
         self._tag_checkboxes: dict[int, QCheckBox] = {}
         self._setting_checkboxes = False
+        self._global_scope: bool = False  # False = local (default), True = global
+        self._folder_path: str = ""  # current folder for local-scoped counts
 
         # ── Layout ──────────────────────────────────────────────────────
         layout = QVBoxLayout(self)
@@ -59,6 +62,14 @@ class TagPanel(QWidget):
         # Header
         header = QLabel("Tags")
         layout.addWidget(header)
+
+        # Global/Local scope toggle
+        scope_layout = QHBoxLayout()
+        self._scope_checkbox = QCheckBox("Global")
+        self._scope_checkbox.stateChanged.connect(self._on_scope_changed)
+        scope_layout.addWidget(self._scope_checkbox)
+        scope_layout.addStretch()
+        layout.addLayout(scope_layout)
 
         # Scroll area for tag checkboxes
         self._scroll_area = QScrollArea()
@@ -97,6 +108,28 @@ class TagPanel(QWidget):
         """
         self._selected_paths = paths
         self._update_checkbox_states()
+
+    def has_active_filters(self) -> bool:
+        """Return True if any tag checkbox is fully Checked (acting as a filter).
+
+        PartiallyChecked and Unchecked states do NOT count as active filters.
+        """
+        return any(
+            cb.checkState() == Qt.CheckState.Checked
+            for cb in self._tag_checkboxes.values()
+        )
+
+    def is_global_scope(self) -> bool:
+        """Return True if the panel is in global scope mode."""
+        return self._global_scope
+
+    def set_folder_path(self, folder_path: str) -> None:
+        """Set the current folder path for local-scoped tag counts.
+
+        Also refreshes the tag list to update usage counts.
+        """
+        self._folder_path = folder_path
+        self._refresh_tags()
 
     def create_new_tag(self, name: str) -> int:
         """Create a new tag via *tag_service* and refresh the UI.
@@ -137,11 +170,22 @@ class TagPanel(QWidget):
 
     # ── Internal helpers ───────────────────────────────────────────────
 
+    def _on_scope_changed(self, state: int) -> None:
+        """Handle the Global/Local toggle change.
+
+        Updates internal state, emits ``scope_changed``, and refreshes tag
+        counts to reflect the new scope.
+        """
+        self._global_scope = Qt.CheckState(state) == Qt.CheckState.Checked
+        self.scope_changed.emit(self._global_scope)
+        self._refresh_tags()
+
     def _refresh_tags(self) -> None:
         """Rebuild the entire tag list from the service.
 
         Destroys any existing tag rows and creates fresh ones from
-        ``tag_service.get_all_tags()``.
+        ``tag_service.get_all_tags()``.  In local mode, usage counts are
+        scoped to the current folder; in global mode, counts span the DB.
         """
         self._tag_checkboxes.clear()
         while self._scroll_layout.count():
@@ -149,7 +193,8 @@ class TagPanel(QWidget):
             if item.widget():
                 item.widget().deleteLater()
 
-        tags = self._tag_service.get_all_tags()
+        folder_scope = None if self._global_scope else (self._folder_path or None)
+        tags = self._tag_service.get_all_tags(folder_path=folder_scope)
         for tag in tags:
             row = self._build_tag_row(tag)
             self._scroll_layout.addWidget(row)

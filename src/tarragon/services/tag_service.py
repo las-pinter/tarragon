@@ -89,17 +89,35 @@ class TagService(QObject):
             return Qt.CheckState.PartiallyChecked
         return Qt.CheckState.Unchecked
 
-    def get_all_tags(self) -> list[dict[str, Any]]:
+    def get_all_tags(self, folder_path: str | None = None) -> list[dict[str, Any]]:
         """Return every tag with its usage count.
 
         Each entry: ``{"id": int, "name": str, "usage_count": int}``.
         Ordered alphabetically by name.
+
+        Parameters
+        ----------
+        folder_path:
+            When provided and non-empty, usage counts are scoped to files
+            whose path starts with *folder_path* (local mode).  When ``None``
+            or empty, counts span the entire database (global mode).
         """
-        rows = self._db._execute(
-            """SELECT t.id, t.name, COUNT(ft.path) AS usage_count
-               FROM tags t
-               LEFT JOIN file_tags ft ON ft.tag_id = t.id
-               GROUP BY t.id, t.name
-               ORDER BY t.name""",
-        ).fetchall()
+        if folder_path:
+            rows = self._db._execute(
+                """SELECT t.id, t.name, COUNT(ft.path) AS usage_count
+                   FROM tags t
+                   LEFT JOIN file_tags ft ON ft.tag_id = t.id
+                     AND ft.path LIKE ?
+                   GROUP BY t.id, t.name
+                   ORDER BY t.name""",
+                (f"{folder_path}%",),
+            ).fetchall()
+        else:
+            rows = self._db._execute(
+                """SELECT t.id, t.name, COUNT(ft.path) AS usage_count
+                   FROM tags t
+                   LEFT JOIN file_tags ft ON ft.tag_id = t.id
+                   GROUP BY t.id, t.name
+                   ORDER BY t.name""",
+            ).fetchall()
         return [{"id": row["id"], "name": row["name"], "usage_count": row["usage_count"]} for row in rows]

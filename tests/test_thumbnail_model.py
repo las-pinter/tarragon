@@ -220,3 +220,69 @@ class TestThumbnailModel:
         assert model.data(index, ThumbnailModel.ThumbnailRole256) == "/cache/256/test/image.png"
         assert model.data(index, ThumbnailModel.ThumbnailRole1024) == "/cache/1024/test/image.png"
         assert model.data(index, ThumbnailModel.ThumbnailRoleFull) == "/cache/full/test/image.png"
+
+    # ------------------------------------------------------------------
+    # Bug 3 regression: set_paths preserves cached thumbnails
+    # ------------------------------------------------------------------
+
+    def test_set_paths_preserves_thumbnails_for_remaining_paths(self) -> None:
+        """set_paths() keeps cached thumbnails for paths still in the list."""
+        model = ThumbnailModel()
+        model.set_paths([Path("/a/one.jpg"), Path("/b/two.jpg"), Path("/c/three.jpg")])
+
+        # Set thumbnails for all three
+        model.set_thumbnail("/a/one.jpg", Path("/cache/256/one.png"), resolution=256)
+        model.set_thumbnail("/b/two.jpg", Path("/cache/256/two.png"), resolution=256)
+        model.set_thumbnail("/c/three.jpg", Path("/cache/256/three.png"), resolution=256)
+
+        # Now filter to just two paths (removing /c/three.jpg)
+        model.set_paths([Path("/a/one.jpg"), Path("/b/two.jpg")])
+
+        # Thumbnails for remaining paths should be preserved
+        idx_a = model.index(0, 0)
+        idx_b = model.index(1, 0)
+        assert model.data(idx_a, ThumbnailModel.ThumbnailRole256) == "/cache/256/one.png"
+        assert model.data(idx_b, ThumbnailModel.ThumbnailRole256) == "/cache/256/two.png"
+
+    def test_set_paths_discards_thumbnails_for_removed_paths(self) -> None:
+        """set_paths() removes cached thumbnails for paths no longer in the list."""
+        model = ThumbnailModel()
+        model.set_paths([Path("/a/one.jpg"), Path("/b/two.jpg")])
+        model.set_thumbnail("/a/one.jpg", Path("/cache/256/one.png"), resolution=256)
+        model.set_thumbnail("/b/two.jpg", Path("/cache/256/two.png"), resolution=256)
+
+        # Replace with completely different paths
+        model.set_paths([Path("/c/three.jpg")])
+
+        # Internal dict should not contain old entries
+        assert "/a/one.jpg" not in model._thumbnails
+        assert "/b/two.jpg" not in model._thumbnails
+        assert model.rowCount() == 1
+
+    def test_set_paths_with_same_paths_preserves_all_thumbnails(self) -> None:
+        """Calling set_paths with the same paths preserves all cached thumbnails."""
+        model = ThumbnailModel()
+        paths = [Path("/a/one.jpg"), Path("/b/two.jpg")]
+        model.set_paths(paths)
+
+        model.set_thumbnail("/a/one.jpg", Path("/cache/256/one.png"), resolution=256)
+        model.set_thumbnail("/b/two.jpg", Path("/cache/1024/two.png"), resolution=1024)
+
+        # Re-set the same paths (e.g. after a no-op filter)
+        model.set_paths(paths)
+
+        idx_a = model.index(0, 0)
+        idx_b = model.index(1, 0)
+        assert model.data(idx_a, ThumbnailModel.ThumbnailRole256) == "/cache/256/one.png"
+        assert model.data(idx_b, ThumbnailModel.ThumbnailRole1024) == "/cache/1024/two.png"
+
+    def test_set_paths_empty_list_clears_all_thumbnails(self) -> None:
+        """set_paths([]) removes all paths and all cached thumbnails."""
+        model = ThumbnailModel()
+        model.set_paths([Path("/a/one.jpg")])
+        model.set_thumbnail("/a/one.jpg", Path("/cache/256/one.png"), resolution=256)
+
+        model.set_paths([])
+
+        assert model.rowCount() == 0
+        assert len(model._thumbnails) == 0

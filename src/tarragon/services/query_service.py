@@ -31,13 +31,14 @@ class QueryService:
         tag_ids: set[int] | None = None,
         color_tags: set[str] | None = None,
     ) -> list[Path]:
-        """Query thumbnails in *folder_path* with optional filters.
+        """Query thumbnails with optional filters.
 
         Parameters
         ----------
         folder_path:
             Root folder to scope the query.  Only thumbnails whose path
-            starts with this string are considered.
+            starts with this string are considered.  When empty or ``None``,
+            the query spans the **entire database** (global mode).
         filename_filter:
             If non-empty, only paths whose **filename** (basename) contains
             this string (case-insensitive) are returned.  The special LIKE
@@ -54,14 +55,16 @@ class QueryService:
         list[Path]
             Matching paths ordered alphabetically.
         """
-        if not folder_path:
-            return []
-
         tag_ids = tag_ids or set()
         color_tags = color_tags or set()
 
-        conditions: list[str] = ["path LIKE ?"]
-        params: list[Any] = [f"{folder_path}%"]
+        conditions: list[str] = []
+        params: list[Any] = []
+
+        # ── Folder scope (empty = global / entire DB) ──────────────
+        if folder_path:
+            conditions.append("path LIKE ?")
+            params.append(f"{folder_path}%")
 
         # ── Filename filter (applied to basename via %/%) ──────────
         if filename_filter:
@@ -95,7 +98,10 @@ class QueryService:
             )
             params.extend(sorted(color_tags))
 
-        sql = "SELECT path FROM thumbnails" f" WHERE {' AND '.join(conditions)}" " ORDER BY path"
+        if conditions:
+            sql = f"SELECT path FROM thumbnails WHERE {' AND '.join(conditions)} ORDER BY path"
+        else:
+            sql = "SELECT path FROM thumbnails ORDER BY path"
 
         rows = self._db._execute(sql, tuple(params)).fetchall()
         return [Path(row["path"]) for row in rows]

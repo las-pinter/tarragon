@@ -245,14 +245,15 @@ class TestQueryService:
             "/test/photos/green_valley.png",
         }
 
-    def test_empty_folder_path_returns_empty(
+    def test_empty_folder_path_returns_all(
         self,
         service: QueryService,
         tag_ids: dict[str, int],  # noqa: ARG002
     ) -> None:
-        """Empty folder_path returns an empty list."""
+        """Empty folder_path queries the entire database (global mode)."""
         result = service.query("")
-        assert result == []
+        # Should return all 7 thumbnails across both folders
+        assert len(result) == 7
 
     def test_no_matching_folder_returns_empty(
         self,
@@ -280,3 +281,57 @@ class TestQueryService:
         """Empty color_tags set is treated as no color filter (returns all)."""
         result = service.query("/test/photos/", color_tags=set())
         assert len(result) == 6
+
+    # ── Bug 1: Global query (empty folder_path) ────────────────────────
+
+    def test_global_query_returns_all_thumbnails(
+        self,
+        service: QueryService,
+        tag_ids: dict[str, int],  # noqa: ARG002
+    ) -> None:
+        """Empty folder_path queries the entire database (global mode)."""
+        result = service.query("")
+        # 6 in /test/photos/ + 1 in /test/other/ = 7 total
+        assert len(result) == 7
+
+    def test_global_query_with_tag_filter(
+        self,
+        service: QueryService,
+        tag_ids: dict[str, int],
+    ) -> None:
+        """Global query with tag filter returns matches from all folders."""
+        result = service.query("", tag_ids={tag_ids["beach"]})
+        paths = {str(p) for p in result}
+        # beach tag: sunset_beach.png, blue_ocean.jpg (photos) + beach.png (other)
+        assert paths == {
+            "/test/photos/sunset_beach.png",
+            "/test/photos/blue_ocean.jpg",
+            "/test/other/beach.png",
+        }
+
+    def test_global_query_with_color_filter(
+        self,
+        service: QueryService,
+        tag_ids: dict[str, int],  # noqa: ARG002
+    ) -> None:
+        """Global query with color filter returns matches from all folders."""
+        result = service.query("", color_tags={"warm"})
+        paths = {str(p) for p in result}
+        # warm: sunset_beach.png (photos) + beach.png (other)
+        assert paths == {
+            "/test/photos/sunset_beach.png",
+            "/test/other/beach.png",
+        }
+
+    def test_global_query_with_filename_filter(
+        self,
+        service: QueryService,
+        tag_ids: dict[str, int],  # noqa: ARG002
+    ) -> None:
+        """Global query with filename filter works across all folders."""
+        result = service.query("", filename_filter="beach")
+        paths = {str(p) for p in result}
+        assert paths == {
+            "/test/photos/sunset_beach.png",
+            "/test/other/beach.png",
+        }

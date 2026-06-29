@@ -286,3 +286,53 @@ class TestGetAllTags:
         all_tags = service.get_all_tags()
         names = [t["name"] for t in all_tags]
         assert names == ["alpha", "beta", "zebra"]
+
+
+# =========================================================================
+# get_all_tags with folder_path (Bug 1 — local scoped counts)
+# =========================================================================
+
+
+class TestGetAllTagsScoped:
+    """get_all_tags with folder_path — local vs global usage counts."""
+
+    def test_global_counts_all_files(self, service: TagService) -> None:
+        """Without folder_path, usage_count spans the entire database."""
+        tag_id = service.get_or_create_tag("beach")
+        service._db.add_file_tags(["/folder_a/img1.png", "/folder_b/img2.png"], tag_id)
+
+        tags = service.get_all_tags()
+        assert tags[0]["usage_count"] == 2
+
+    def test_local_counts_scope_to_folder(self, service: TagService) -> None:
+        """With folder_path, usage_count only includes files in that folder."""
+        tag_id = service.get_or_create_tag("beach")
+        service._db.add_file_tags(["/folder_a/img1.png", "/folder_b/img2.png"], tag_id)
+
+        tags = service.get_all_tags(folder_path="/folder_a/")
+        assert tags[0]["usage_count"] == 1
+
+    def test_local_counts_zero_for_other_folder(self, service: TagService) -> None:
+        """Folder with no matching files returns usage_count=0."""
+        tag_id = service.get_or_create_tag("beach")
+        service._db.add_file_tags(["/folder_a/img1.png"], tag_id)
+
+        tags = service.get_all_tags(folder_path="/folder_c/")
+        assert tags[0]["usage_count"] == 0
+
+    def test_none_folder_path_same_as_global(self, service: TagService) -> None:
+        """folder_path=None returns global counts (same as no argument)."""
+        tag_id = service.get_or_create_tag("test")
+        service._db.add_file_tags(["/a/1.png", "/b/2.png"], tag_id)
+
+        global_tags = service.get_all_tags()
+        none_tags = service.get_all_tags(folder_path=None)
+        assert global_tags[0]["usage_count"] == none_tags[0]["usage_count"] == 2
+
+    def test_empty_folder_path_same_as_global(self, service: TagService) -> None:
+        """folder_path='' returns global counts (same as no argument)."""
+        tag_id = service.get_or_create_tag("test")
+        service._db.add_file_tags(["/a/1.png"], tag_id)
+
+        tags = service.get_all_tags(folder_path="")
+        assert tags[0]["usage_count"] == 1

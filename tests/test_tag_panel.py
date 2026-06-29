@@ -98,8 +98,9 @@ class TestTagPanelDisplay:
         service.get_or_create_tag("character")
         panel._refresh_tags()
 
-        checkboxes = panel.findChildren(QCheckBox)
-        assert len(checkboxes) == 3
+        # Only count checkboxes that have a tag_id property (exclude scope toggle)
+        tag_checkboxes = [cb for cb in panel.findChildren(QCheckBox) if cb.property("tag_id") is not None]
+        assert len(tag_checkboxes) == 3
 
         # Labels should include tag names
         labels = panel.findChildren(QLabel)
@@ -116,9 +117,9 @@ class TestTagPanelDisplay:
         assert isinstance(tag_id, int)
         assert tag_id > 0
 
-        # Verify it appears in the panel
-        checkboxes = panel.findChildren(QCheckBox)
-        assert len(checkboxes) == 1
+        # Verify it appears in the panel (only count tag checkboxes, not scope toggle)
+        tag_checkboxes = [cb for cb in panel.findChildren(QCheckBox) if cb.property("tag_id") is not None]
+        assert len(tag_checkboxes) == 1
 
         # Verify via service
         tags = service.get_all_tags()
@@ -172,7 +173,12 @@ class TestTagPanelSelection:
         # Both files selected; one has "landscape", none has "portrait"
         panel.set_selection(["/img/a.png", "/img/b.png"])
 
-        checkboxes = {int(cb.property("tag_id")): cb for cb in panel.findChildren(QCheckBox)}
+        # Only include checkboxes with a tag_id property (exclude scope toggle)
+        checkboxes = {
+            int(cb.property("tag_id")): cb
+            for cb in panel.findChildren(QCheckBox)
+            if cb.property("tag_id") is not None
+        }
 
         # Landscape should be PartiallyChecked (1 of 2 files)
         assert checkboxes[landscape_id].checkState() == Qt.CheckState.PartiallyChecked
@@ -533,3 +539,108 @@ class TestSelectionDoesNotEmitFilter:
 
         assert len(captured) >= 1, "User checkbox click MUST emit tag_filter_changed"
         assert any(tag_id in s for s in captured)
+
+
+# =========================================================================
+# Bug 1: Global/Local scope toggle
+# =========================================================================
+
+
+class TestScopeToggle:
+    """Global/Local toggle in the tag panel."""
+
+    def test_default_scope_is_local(self, panel: TagPanel) -> None:  # noqa: ARG002
+        """Panel starts in local scope mode by default."""
+        assert panel.is_global_scope() is False
+
+    def test_toggle_to_global(self, panel: TagPanel) -> None:  # noqa: ARG002
+        """Checking the scope checkbox switches to global mode."""
+        panel._scope_checkbox.setCheckState(Qt.CheckState.Checked)
+        assert panel.is_global_scope() is True
+
+    def test_toggle_back_to_local(self, panel: TagPanel) -> None:  # noqa: ARG002
+        """Unchecking the scope checkbox returns to local mode."""
+        panel._scope_checkbox.setCheckState(Qt.CheckState.Checked)
+        assert panel.is_global_scope() is True
+        panel._scope_checkbox.setCheckState(Qt.CheckState.Unchecked)
+        assert panel.is_global_scope() is False
+
+    def test_scope_changed_signal_emitted(self, panel: TagPanel) -> None:  # noqa: ARG002
+        """Toggling the scope checkbox emits scope_changed signal."""
+        captured: list[bool] = []
+        panel.scope_changed.connect(captured.append)
+
+        panel._scope_checkbox.setCheckState(Qt.CheckState.Checked)
+        assert captured == [True]
+
+        panel._scope_checkbox.setCheckState(Qt.CheckState.Unchecked)
+        assert captured == [True, False]
+
+    def test_set_folder_path_refreshes_tags(
+        self, service: TagService, panel: TagPanel
+    ) -> None:
+        """set_folder_path triggers a tag refresh with scoped counts."""
+        tag_id = service.get_or_create_tag("beach")
+        service._db.add_file_tags(["/folder_a/img1.png"], tag_id)
+        service._db.add_file_tags(["/folder_b/img2.png"], tag_id)
+
+        # Set folder to /folder_a/ — local count should be 1
+        panel.set_folder_path("/folder_a/")
+
+        labels = panel.findChildren(QLabel)
+        label_texts = [label.text() for label in labels]
+        assert any("beach (1)" in t for t in label_texts)
+
+    def test_global_scope_shows_global_counts(
+        self, service: TagService, panel: TagPanel
+    ) -> None:
+        """In global mode, usage counts span the entire database."""
+        tag_id = service.get_or_create_tag("beach")
+        service._db.add_file_tags(["/folder_a/img1.png", "/folder_b/img2.png"], tag_id)
+
+        panel.set_folder_path("/folder_a/")
+        # Switch to global — count should now be 2
+        panel._scope_checkbox.setCheckState(Qt.CheckState.Checked)
+
+        labels = panel.findChildren(QLabel)
+        label_texts = [label.text() for label in labels]
+        assert any("beach (2)" in t for t in label_texts)
+
+
+# =========================================================================
+# Bug 2: has_active_filters
+# =========================================================================
+
+
+class TestHasActiveFilters:
+    """has_active_filters() reports whether any tag filter is active."""
+
+    def test_no_filters_returns_false(self, service: TagService, panel: TagPanel) -> None:  # noqa: ARG002
+        """No checked checkboxes → has_active_filters() is False."""
+        service.get_or_create_tag("test")
+        panel._refresh_tags()
+        assert panel.has_active_filters() is False
+
+    def test_checked_tag_returns_true(self, service: TagService, panel: TagPanel) -> None:  # noqa: ARG002
+        """A fully-checked tag checkbox → has_active_filters() is True."""
+        tag_id = service.get_or_create_tag("active")
+        panel._refresh_tags()
+        panel._tag_checkboxes[tag_id].setCheckState(Qt.CheckState.Checked)
+        assert panel.has_active_filters() is True
+
+    def test_partial_check_returns_false(self, service: TagService, panel: TagPanel) -> None:  # noqa: ARG002
+        """PartiallyChecked does NOT count as an active filter."""
+        tag_id = service.get_or_create_tag("partial")
+        panel._refresh_tags()
+        # Use guard flag to prevent tri-state handler from converting to Checked
+        panel._setting_checkboxes = True
+        panel._tag_checkboxes[tag_id].setCheckState(Qt.CheckState.PartiallyChecked)
+        panel._setting_checkboxes = False
+        assert panel.has_active_filters() is False
+
+    def test_unchecked_returns_false(self, service: TagService, panel: TagPanel) -> None:  # noqa: ARG002
+        """Unchecked does NOT count as an active filter."""
+        service.get_or_create_tag("unchecked")
+        panel._refresh_tags()
+        # Default state is Unchecked
+        assert panel.has_active_filters() is False

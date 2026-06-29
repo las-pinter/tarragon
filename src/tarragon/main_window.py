@@ -222,6 +222,7 @@ class MainWindow(QMainWindow):
 
         # Wire tag panel filter to re-run query
         self.tag_panel.tag_filter_changed.connect(self._on_tag_filter_changed)
+        self.tag_panel.scope_changed.connect(self._on_scope_changed)
 
         # Debounce timer for filename search (Deviation 4.5)
         self._search_timer = QTimer()
@@ -349,6 +350,10 @@ class MainWindow(QMainWindow):
         """Re-run the filtered query when tag filter checkboxes change."""
         self._run_filtered_query()
 
+    def _on_scope_changed(self, is_global: bool) -> None:  # noqa: FBT001
+        """Re-run the filtered query when the Global/Local toggle changes."""
+        self._run_filtered_query()
+
     def _run_filtered_query(self) -> None:
         """Execute a QueryService query combining all active filters.
 
@@ -356,16 +361,28 @@ class MainWindow(QMainWindow):
         colour-bucket set, and checked tag IDs into a single query, then
         updates the ThumbnailModel with the results.
 
-        If no folder is currently selected (``_current_folder`` is empty),
-        the method returns without modifying the model to avoid clearing
-        the gallery.
+        In global scope mode (tag panel toggle), the folder constraint is
+        removed so results span the entire database.
+
+        If no folder is currently selected (``_current_folder`` is empty)
+        and we are NOT in global mode, the method returns without modifying
+        the model to avoid clearing the gallery.
+
+        Race-condition guard: if the filtered query returns empty but the
+        folder contains files, we fall back to showing unfiltered results
+        and log a warning.
         """
         if not hasattr(self, "_query_service"):
             return
 
-        # Don't clear the gallery if no folder is selected
-        if not self._current_folder:
+        # Determine folder scope based on global/local toggle
+        is_global = hasattr(self, "tag_panel") and self.tag_panel.is_global_scope()
+
+        # Don't clear the gallery if no folder is selected and not in global mode
+        if not self._current_folder and not is_global:
             return
+
+        folder_path = "" if is_global else self._current_folder
 
         filename_filter = self._search_edit.text() if hasattr(self, "_search_edit") else ""
         color_tags = self.color_filter_bar.get_active_colors() if hasattr(self, "color_filter_bar") else set()
@@ -377,11 +394,26 @@ class MainWindow(QMainWindow):
             }
 
         results = self._query_service.query(
-            folder_path=self._current_folder,
+            folder_path=folder_path,
             filename_filter=filename_filter,
             tag_ids=tag_ids,
             color_tags=color_tags,
         )
+
+        # Race-condition guard: if filters are active but query returned empty,
+        # and we know files exist in the folder, fall back to unfiltered results
+        has_filters = bool(filename_filter or color_tags or tag_ids)
+        if has_filters and not results and self._current_folder:
+            thumbnails_in_folder = self._db.list_thumbnails_for_folder(self._current_folder)
+            if thumbnails_in_folder:
+                logger.warning(
+                    "Filtered query returned 0 results but %d thumbnails exist in %s — "
+                    "falling back to unfiltered results (possible race condition)",
+                    len(thumbnails_in_folder),
+                    self._current_folder,
+                )
+                results = [Path(t["path"]) for t in thumbnails_in_folder]
+
         self.thumbnail_model.set_paths(results)
 
     # ── Menu Actions ───────────────────────────────────────────────────
@@ -455,6 +487,10 @@ class MainWindow(QMainWindow):
         # Store current folder for filtered queries
         self._current_folder = str(folder_path)
 
+        # Update tag panel folder scope for local counts
+        if hasattr(self, "tag_panel"):
+            self.tag_panel.set_folder_path(str(folder_path))
+
         # Scan folder for images
         file_infos = scan_folder(folder_path)
         if not file_infos:
@@ -463,8 +499,10 @@ class MainWindow(QMainWindow):
 
         # Update thumbnail model — use query service if any filters are active,
         # otherwise load all paths directly.
-        has_filters = (hasattr(self, "_search_edit") and self._search_edit.text()) or (
-            hasattr(self, "color_filter_bar") and self.color_filter_bar.get_active_colors()
+        has_filters = (
+            (hasattr(self, "_search_edit") and self._search_edit.text())
+            or (hasattr(self, "color_filter_bar") and self.color_filter_bar.get_active_colors())
+            or (hasattr(self, "tag_panel") and self.tag_panel.has_active_filters())
         )
         if has_filters and hasattr(self, "_query_service"):
             self._run_filtered_query()
@@ -500,15 +538,29 @@ class MainWindow(QMainWindow):
             return
 
         self._current_folder = str(folder)
+
+        # Update tag panel folder scope for local counts
+        if hasattr(self, "tag_panel"):
+            self.tag_panel.set_folder_path(str(folder))
+
         file_infos = scan_folder(folder)
 
         if not file_infos:
             self.thumbnail_model.set_paths([])
             return
 
-        # Update thumbnail model
-        paths = [fi.path for fi in file_infos]
-        self.thumbnail_model.set_paths(paths)
+        # Check if any filters are active — if so, apply them instead of showing all
+        has_filters = (
+            (hasattr(self, "_search_edit") and self._search_edit.text())
+            or (hasattr(self, "color_filter_bar") and self.color_filter_bar.get_active_colors())
+            or (hasattr(self, "tag_panel") and self.tag_panel.has_active_filters())
+        )
+        if has_filters and hasattr(self, "_query_service"):
+            self._run_filtered_query()
+        else:
+            # Update thumbnail model with all paths
+            paths = [fi.path for fi in file_infos]
+            self.thumbnail_model.set_paths(paths)
 
         # Dispatch thumbnail renders
         if hasattr(self, "_thumbnail_service"):

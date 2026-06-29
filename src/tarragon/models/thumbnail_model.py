@@ -68,12 +68,19 @@ class ThumbnailModel(QAbstractListModel):
         return None
 
     def set_paths(self, paths: list[Path]) -> None:
-        """Replace the entire path list, resetting the model."""
+        """Replace the entire path list, resetting the model.
+
+        Preserves cached thumbnail entries for paths that remain in the new
+        list — only entries for paths no longer present are discarded.  This
+        prevents cached 256px/1024px thumbnails from disappearing after a
+        filter operation that re-uses a subset of the previous paths.
+        """
         if paths is None:
             raise TypeError("set_paths() expected a list of Path objects, got None")
         self.beginResetModel()
         self._paths = list(paths)
-        self._thumbnails.clear()
+        path_strings = {str(p) for p in self._paths}
+        self._thumbnails = {k: v for k, v in self._thumbnails.items() if k in path_strings}
         self.endResetModel()
 
     def set_thumbnail(

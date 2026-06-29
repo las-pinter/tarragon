@@ -157,6 +157,10 @@ class PreviewPanel(QWidget):
         # Apply EXIF orientation so phone-camera images display upright.
         original_format = image.format
 
+        # Check if image came from cache BEFORE exif_transpose (which may
+        # return a new image object, losing custom attributes).
+        from_cache = getattr(image, "_from_cache", False)
+
         # Detect whether the image carries its own EXIF orientation tag.
         # Cached PNG thumbnails strip EXIF, so we fall back to reading the
         # original file's orientation when the image itself has none.
@@ -170,8 +174,11 @@ class PreviewPanel(QWidget):
         image = ImageOps.exif_transpose(image) or image
 
         # If the image had no EXIF of its own (likely loaded from cache),
-        # recover orientation from the original source file.
-        if not has_own_orientation and path is not None:
+        # recover orientation from the original source file — but ONLY if
+        # the image was not loaded from cache.  Cached images already have
+        # correct orientation (exif_transpose was applied during cache
+        # generation), so applying it again would double-rotate.
+        if not from_cache and not has_own_orientation and path is not None:
             image = _apply_exif_from_original(image, path)
 
         # Convert RGBA to RGB for display — alpha channel causes washed-out /
@@ -342,11 +349,13 @@ class PreviewPanel(QWidget):
         width, height = image.size
         self._dimensions_label.setText(f"Dimensions: {width} × {height}")
 
-        # Format — use PIL format if available, else derive from path extension
-        if image.format:
-            format_name = image.format
-        elif path:
+        # Format — always derive from original file path, not cached image.
+        # Cached PNG thumbnails report format="PNG" regardless of the original
+        # file type, so we prefer the path extension when available.
+        if path:
             format_name = path.suffix.lstrip(".").upper()
+        elif image.format:
+            format_name = image.format
         else:
             format_name = "Unknown"
         self._format_label.setText(f"Format: {format_name}")

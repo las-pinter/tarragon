@@ -310,6 +310,10 @@ class MainWindow(QMainWindow):
         Checks ``db.get_thumbnail(path)`` for a ``preview_cache_path`` (1024px).
         If the cached file exists on disk it is opened directly (good quality,
         fast).  Falls back to ``full_cache_path``, then to the original file.
+
+        Images loaded from cache are marked with ``_from_cache = True`` so that
+        ``PreviewPanel.set_image()`` can skip EXIF recovery from the original
+        file (the cache already has correct orientation).
         """
         from PIL import Image
 
@@ -318,12 +322,16 @@ class MainWindow(QMainWindow):
             # Try 1024px preview first (good quality, fast)
             preview_path = thumb_record.get("preview_cache_path")
             if preview_path and Path(preview_path).is_file():
-                return Image.open(preview_path)
+                img = Image.open(preview_path)
+                img._from_cache = True  # type: ignore[attr-defined]
+                return img
 
             # Fallback: full resolution cache
             full_path = thumb_record.get("full_cache_path")
             if full_path and Path(full_path).is_file():
-                return Image.open(full_path)
+                img = Image.open(full_path)
+                img._from_cache = True  # type: ignore[attr-defined]
+                return img
 
         # Fallback: open the original file directly
         return Image.open(path)

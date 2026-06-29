@@ -626,16 +626,21 @@ def test_format_shows_unknown_when_no_format_and_no_path(qapp):  # noqa: ARG001
         panel.close()
 
 
-def test_format_uses_pil_format_when_available(qapp, tmp_path):  # noqa: ARG001
-    """Format uses PIL's format attribute when available."""
+def test_format_prefers_path_extension_over_pil_format(qapp, tmp_path):  # noqa: ARG001
+    """Format derives from path extension, not PIL format (which may be PNG from cache).
+
+    Regression test for Bug 3: cached PNG thumbnails report image.format="PNG"
+    regardless of the original file type.  The format label should show the
+    original file's extension, not the cache format.
+    """
     panel = PreviewPanel()
     try:
-        test_file = tmp_path / "photo.png"
+        test_file = tmp_path / "photo.jpeg"
         test_file.write_bytes(b"fake data")
         img = Image.new("RGB", (100, 100))
-        img.format = "JPEG"  # simulate loaded JPEG
+        img.format = "PNG"  # simulate cached PNG thumbnail
         panel.set_image(img, path=test_file)
-        # Should use PIL format (JPEG), not path extension (png)
+        # Should use path extension (JPEG), not PIL format (PNG)
         assert panel._format_label.text() == "Format: JPEG"
     finally:
         panel.close()
@@ -1077,3 +1082,67 @@ def test_transpose_for_orientation_pixel_content_5_and_7():
     assert list(result_7.getdata()) == list(expected_7.getdata()), (
         "Orientation 7 pixels do not match PIL TRANSVERSE"
     )
+
+
+# ── Regression: Double EXIF from cache (Bug 2) ────────────────────────
+
+
+def test_set_image_skips_exif_recovery_when_from_cache(qapp, tmp_path):  # noqa: ARG001
+    """Cached image (_from_cache=True) does NOT get EXIF applied from original.
+
+    Regression test for Bug 2: when a cached PNG (already correctly oriented)
+    was loaded, set_image() would read EXIF from the original JPEG and apply
+    rotation AGAIN, double-rotating the image.
+    """
+    panel = PreviewPanel()
+    try:
+        # Create an original JPEG wiv EXIF orientation 6 (rotate 90° CW)
+        orig = Image.new("RGB", (200, 100), color="orange")
+        exif = orig.getexif()
+        exif[0x0112] = 6  # Orientation: rotate 90° CW
+        orig_path = tmp_path / "original.jpg"
+        orig.save(orig_path, format="JPEG", exif=exif)
+        orig.close()
+
+        # Simulate a cached image: 200×100 PNG wiv NO EXIF, marked as from cache
+        cached = Image.new("RGB", (200, 100), color="orange")
+        cached._from_cache = True  # type: ignore[attr-defined]
+        assert not cached.getexif().get(0x0112), "Cached image should have no EXIF orientation"
+
+        # Display da cached image wiv path pointing to da original
+        panel.set_image(cached, path=orig_path)
+
+        # Should NOT be rotated — cache already has correct orientation
+        assert panel._dimensions_label.text() == "Dimensions: 200 × 100", (
+            f"Expected 200 × 100 (no double rotation), got: {panel._dimensions_label.text()}"
+        )
+    finally:
+        panel.close()
+
+
+def test_set_image_applies_exif_from_original_when_not_from_cache(qapp, tmp_path):  # noqa: ARG001
+    """Non-cached image wiv no EXIF still gets orientation from da original file.
+
+    Ensures da _from_cache flag doesn't break da legitimate EXIF recovery path
+    for images loaded directly from disk (not from cache).
+    """
+    panel = PreviewPanel()
+    try:
+        # Create an original JPEG wiv EXIF orientation 6
+        orig = Image.new("RGB", (200, 100), color="orange")
+        exif = orig.getexif()
+        exif[0x0112] = 6
+        orig_path = tmp_path / "original.jpg"
+        orig.save(orig_path, format="JPEG", exif=exif)
+        orig.close()
+
+        # Image wiv NO EXIF and NO _from_cache flag (loaded from original)
+        fresh = Image.new("RGB", (200, 100), color="orange")
+        assert not getattr(fresh, "_from_cache", False)
+
+        panel.set_image(fresh, path=orig_path)
+
+        # Should be rotated once: 200×100 → 100×200
+        assert panel._dimensions_label.text() == "Dimensions: 100 × 200"
+    finally:
+        panel.close()

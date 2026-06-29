@@ -244,8 +244,13 @@ class TestThumbnailModel:
         assert model.data(idx_a, ThumbnailModel.ThumbnailRole256) == "/cache/256/one.png"
         assert model.data(idx_b, ThumbnailModel.ThumbnailRole256) == "/cache/256/two.png"
 
-    def test_set_paths_discards_thumbnails_for_removed_paths(self) -> None:
-        """set_paths() removes cached thumbnails for paths no longer in the list."""
+    def test_set_paths_preserves_thumbnails_for_removed_paths(self) -> None:
+        """set_paths() keeps cached thumbnails even for paths no longer in the list.
+
+        Regression test: previously set_paths() pruned _thumbnails for paths
+        not in the new list, causing thumbnails to disappear when a color
+        filter was removed and the full path list restored.
+        """
         model = ThumbnailModel()
         model.set_paths([Path("/a/one.jpg"), Path("/b/two.jpg")])
         model.set_thumbnail("/a/one.jpg", Path("/cache/256/one.png"), resolution=256)
@@ -254,9 +259,9 @@ class TestThumbnailModel:
         # Replace with completely different paths
         model.set_paths([Path("/c/three.jpg")])
 
-        # Internal dict should not contain old entries
-        assert "/a/one.jpg" not in model._thumbnails
-        assert "/b/two.jpg" not in model._thumbnails
+        # Internal dict should still contain old entries (not pruned)
+        assert "/a/one.jpg" in model._thumbnails
+        assert "/b/two.jpg" in model._thumbnails
         assert model.rowCount() == 1
 
     def test_set_paths_with_same_paths_preserves_all_thumbnails(self) -> None:
@@ -276,8 +281,12 @@ class TestThumbnailModel:
         assert model.data(idx_a, ThumbnailModel.ThumbnailRole256) == "/cache/256/one.png"
         assert model.data(idx_b, ThumbnailModel.ThumbnailRole1024) == "/cache/1024/two.png"
 
-    def test_set_paths_empty_list_clears_all_thumbnails(self) -> None:
-        """set_paths([]) removes all paths and all cached thumbnails."""
+    def test_set_paths_empty_list_preserves_cached_thumbnails(self) -> None:
+        """set_paths([]) removes all paths but preserves cached thumbnails.
+
+        Cached thumbnails are retained so that re-populating the model with
+        the same paths (e.g. removing a filter) doesn't lose thumbnails.
+        """
         model = ThumbnailModel()
         model.set_paths([Path("/a/one.jpg")])
         model.set_thumbnail("/a/one.jpg", Path("/cache/256/one.png"), resolution=256)
@@ -285,4 +294,37 @@ class TestThumbnailModel:
         model.set_paths([])
 
         assert model.rowCount() == 0
-        assert len(model._thumbnails) == 0
+        # Thumbnails are preserved (not pruned)
+        assert "/a/one.jpg" in model._thumbnails
+
+    def test_set_paths_filter_unfilter_preserves_all_thumbnails(self) -> None:
+        """Simulates color filter: filter to subset, then restore — all thumbnails survive.
+
+        Regression test for Bug 1: filtering to 10 files pruned cache for the
+        other 90, so removing the filter showed files without thumbnails.
+        """
+        model = ThumbnailModel()
+        all_paths = [Path(f"/img/file_{i:03d}.jpg") for i in range(100)]
+        model.set_paths(all_paths)
+
+        # Set thumbnails for all 100 files
+        for i in range(100):
+            path_str = f"/img/file_{i:03d}.jpg"
+            model.set_thumbnail(path_str, Path(f"/cache/256/file_{i:03d}.png"), resolution=256)
+
+        # Filter to 10 files
+        filtered_paths = all_paths[:10]
+        model.set_paths(filtered_paths)
+        assert model.rowCount() == 10
+
+        # Remove filter — restore all 100 paths
+        model.set_paths(all_paths)
+        assert model.rowCount() == 100
+
+        # ALL 100 thumbnails should still be present
+        for i in range(100):
+            idx = model.index(i, 0)
+            thumb = model.data(idx, ThumbnailModel.ThumbnailRole256)
+            assert thumb == f"/cache/256/file_{i:03d}.png", (
+                f"Thumbnail for file_{i:03d}.jpg lost after unfilter"
+            )

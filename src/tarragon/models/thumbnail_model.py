@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import logging
+import time
 from pathlib import Path
 from typing import override
 
 from PySide6.QtCore import QAbstractListModel, QModelIndex, QObject, Qt
+
+logger = logging.getLogger(__name__)
 
 
 class ThumbnailModel(QAbstractListModel):
@@ -75,6 +79,8 @@ class ThumbnailModel(QAbstractListModel):
         entries for paths no longer present are harmless; they'll be
         overwritten when new thumbnails are generated.
         """
+        start = time.perf_counter()
+        logger.debug("set_paths: %d items", len(paths))
         if paths is None:
             raise TypeError("set_paths() expected a list of Path objects, got None")
         self.beginResetModel()
@@ -82,6 +88,8 @@ class ThumbnailModel(QAbstractListModel):
         # Don't prune _thumbnails — preserve cached entries for all paths
         # so filtering/unfiltering doesn't lose thumbnail images
         self.endResetModel()
+        elapsed = time.perf_counter() - start
+        logger.debug("set_paths completed in %.3fs", elapsed)
 
     def set_thumbnail(
         self,
@@ -99,6 +107,7 @@ class ThumbnailModel(QAbstractListModel):
         if source_path not in self._thumbnails:
             self._thumbnails[source_path] = {}
         self._thumbnails[source_path][resolution] = cache_path
+        logger.debug("set_thumbnail: path=%s, resolution=%s, cache=%s", source_path, resolution, cache_path)
 
         # Find row and emit dataChanged for the specific role
         for row, path in enumerate(self._paths):

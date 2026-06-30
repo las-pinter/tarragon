@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import logging
+import time
 from dataclasses import dataclass
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 SUPPORTED_EXTENSIONS = {
     ".jpg",
@@ -51,8 +55,11 @@ def scan_folder(folder_path: Path, recursive: bool = False) -> list[FileInfo]:
       treated like any other file.
     """
     folder_path = Path(folder_path)
+    start = time.perf_counter()
+    logger.debug("scan_folder: %s (recursive=%s)", folder_path, recursive)
     try:
         if not folder_path.is_dir():
+            logger.debug("scan_folder: path does not exist or is not a directory: %s", folder_path)
             return []
 
         iterable: list[Path]
@@ -70,6 +77,7 @@ def scan_folder(folder_path: Path, recursive: bool = False) -> list[FileInfo]:
             try:
                 stat = path.stat()
             except OSError:
+                logger.debug("Could not stat file, skipping: %s", path, exc_info=True)
                 continue
             results.append(
                 FileInfo(
@@ -80,6 +88,10 @@ def scan_folder(folder_path: Path, recursive: bool = False) -> list[FileInfo]:
                 )
             )
 
+        elapsed = time.perf_counter() - start
+        logger.debug("scan_folder found %d files in %.3fs", len(results), elapsed)
         return results
-    except OSError:
+    except OSError as e:
+        elapsed = time.perf_counter() - start
+        logger.error("scan_folder failed after %.3fs: %s | error: %s", elapsed, folder_path, e)
         return []

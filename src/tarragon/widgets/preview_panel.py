@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import math
 from pathlib import Path
 
@@ -11,6 +12,8 @@ from PySide6.QtGui import QImage, QPixmap, QResizeEvent
 from PySide6.QtWidgets import QLabel, QSizePolicy, QVBoxLayout, QWidget
 
 from tarragon.theme.tokens import get_token
+
+logger = logging.getLogger(__name__)
 
 # EXIF orientation tag ID
 _EXIF_ORIENTATION_TAG = 0x0112
@@ -51,7 +54,7 @@ def _apply_exif_from_original(image: Image.Image, original_path: Path) -> Image.
             if orientation and orientation != 1:
                 image = _transpose_for_orientation(image, orientation)
     except Exception:  # noqa: BLE001 — best-effort; never block preview
-        pass
+        logger.warning("Failed to read EXIF orientation from %s", original_path, exc_info=True)
     return image
 
 
@@ -154,6 +157,11 @@ class PreviewPanel(QWidget):
         if image is None:
             raise TypeError("image must be a PIL Image, not None")
 
+        logger.debug(
+            "set_image: path=%s, size=%s, from_cache=%s",
+            path, image.size, getattr(image, "_from_cache", False),
+        )
+
         # Apply EXIF orientation so phone-camera images display upright.
         original_format = image.format
 
@@ -168,8 +176,8 @@ class PreviewPanel(QWidget):
         try:
             if image.getexif().get(_EXIF_ORIENTATION_TAG):
                 has_own_orientation = True
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception:  # noqa: BLE001 — best-effort; never block preview
+            logger.debug("Could not read EXIF orientation", exc_info=True)
 
         image = ImageOps.exif_transpose(image) or image
 
@@ -350,6 +358,7 @@ class PreviewPanel(QWidget):
 
     def _update_metadata(self, image: Image.Image, path: Path | None) -> None:
         """Update metadata labels with image info."""
+        logger.debug("_update_metadata: path=%s, dimensions=%s", path, image.size)
         if path:
             self._filename_label.setText(path.name)
             # File size
@@ -357,6 +366,7 @@ class PreviewPanel(QWidget):
                 size_bytes = path.stat().st_size
                 self._size_label.setText(f"Size: {self._format_size(size_bytes)}")
             except OSError:
+                logger.warning("Could not read file size for %s", path, exc_info=True)
                 self._size_label.setText("Size: Unknown")
         else:
             self._filename_label.setText("Unknown file")

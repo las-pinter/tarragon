@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer
@@ -286,6 +287,7 @@ class MainWindow(QMainWindow):
                 img = self._load_preview_image(path)
                 self.preview_panel.set_image(img, path)
             except Exception:
+                logger.warning("Failed to load preview for %s", path, exc_info=True)
                 self.preview_panel.clear()
         else:
             # Multi-select — load multiple images for mosaic
@@ -302,7 +304,7 @@ class MainWindow(QMainWindow):
                     img = self._load_preview_image(Path(p))
                     images.append(img)
                 except Exception:
-                    pass
+                    logger.debug("Failed to load preview for multi-select: %s", p, exc_info=True)
             self.preview_panel.set_multi_preview(images, len(paths), cap)
 
         # Update tag panel
@@ -353,18 +355,22 @@ class MainWindow(QMainWindow):
 
     def _on_search_text_changed(self, text: str) -> None:
         """Restart the debounce timer when the search text changes."""
+        logger.debug("Search text changed: %r", text)
         self._search_timer.start()
 
     def _on_color_filter_changed(self, color_tags: set[str]) -> None:
         """Re-run the filtered query when color filter swatches change."""
+        logger.debug("Color filter changed: %s", color_tags)
         self._run_filtered_query()
 
     def _on_tag_filter_changed(self, tag_ids: set[int]) -> None:
         """Re-run the filtered query when tag filter checkboxes change."""
+        logger.debug("Tag filter changed: %s", tag_ids)
         self._run_filtered_query()
 
     def _on_scope_changed(self, is_global: bool) -> None:  # noqa: FBT001
         """Re-run the filtered query when the Global/Local toggle changes."""
+        logger.debug("Scope changed: %s", "global" if is_global else "local")
         self._run_filtered_query()
 
     def _run_filtered_query(self) -> None:
@@ -388,6 +394,8 @@ class MainWindow(QMainWindow):
         if not hasattr(self, "_query_service"):
             return
 
+        start = time.perf_counter()
+
         # Determine folder scope based on global/local toggle
         is_global = hasattr(self, "tag_panel") and self.tag_panel.is_global_scope()
 
@@ -408,6 +416,11 @@ class MainWindow(QMainWindow):
             filename_filter=filename_filter,
             tag_ids=tag_ids,
             color_tags=color_tags,
+        )
+        elapsed = time.perf_counter() - start
+        logger.debug(
+            "Filtered query: folder=%s, filename=%r, colors=%s, tags=%s → %d results in %.3fs",
+            folder_path, filename_filter, color_tags, tag_ids, len(results), elapsed,
         )
 
         # Race-condition guard: if filters are active but query returned empty,
@@ -492,7 +505,7 @@ class MainWindow(QMainWindow):
             return
 
         folder_path = Path(folder)
-        logger.info(f"Scanning folder: {folder_path}")
+        logger.info("Scanning folder: %s", folder_path)
 
         # Store current folder for filtered queries
         self._current_folder = str(folder_path)
@@ -504,7 +517,7 @@ class MainWindow(QMainWindow):
         # Scan folder for images
         file_infos = scan_folder(folder_path)
         if not file_infos:
-            logger.warning(f"No images found in {folder_path}")
+            logger.warning("No images found in %s", folder_path)
             return
 
         # Update thumbnail model — use query service if any filters are active,

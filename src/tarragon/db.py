@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 import sqlite3
 import threading
+import time
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 INITIAL_SCHEMA = """
 CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);
@@ -66,18 +70,46 @@ class Database:
 
     def _execute(self, sql: str, params: tuple = ()) -> sqlite3.Cursor:
         """Execute SQL with lock for thread safety."""
-        with self._lock:
-            return self._conn.execute(sql, params)
+        start = time.perf_counter()
+        logger.debug("SQL: %s | params: %s", sql, params)
+        try:
+            with self._lock:
+                cursor = self._conn.execute(sql, params)
+            elapsed = time.perf_counter() - start
+            logger.debug("SQL completed in %.3fs", elapsed)
+            return cursor
+        except Exception as e:
+            elapsed = time.perf_counter() - start
+            logger.error("SQL failed after %.3fs: %s | params: %s | error: %s", elapsed, sql, params, e)
+            raise
 
     def _executemany(self, sql: str, seq: list[tuple]) -> None:
         """Execute executemany with lock for thread safety."""
-        with self._lock:
-            self._conn.executemany(sql, seq)
+        start = time.perf_counter()
+        logger.debug("SQL (many): %s | rows: %d", sql, len(seq))
+        try:
+            with self._lock:
+                self._conn.executemany(sql, seq)
+            elapsed = time.perf_counter() - start
+            logger.debug("SQL (many) completed in %.3fs", elapsed)
+        except Exception as e:
+            elapsed = time.perf_counter() - start
+            logger.error("SQL (many) failed after %.3fs: %s | rows: %d | error: %s", elapsed, sql, len(seq), e)
+            raise
 
     def _executescript(self, sql: str) -> None:
         """Execute executescript with lock for thread safety."""
-        with self._lock:
-            self._conn.executescript(sql)
+        start = time.perf_counter()
+        logger.debug("SQL (script): executing schema script")
+        try:
+            with self._lock:
+                self._conn.executescript(sql)
+            elapsed = time.perf_counter() - start
+            logger.debug("SQL (script) completed in %.3fs", elapsed)
+        except Exception as e:
+            elapsed = time.perf_counter() - start
+            logger.error("SQL (script) failed after %.3fs: error: %s", elapsed, e)
+            raise
 
     def _commit(self) -> None:
         """Commit transaction with lock for thread safety."""
@@ -88,17 +120,21 @@ class Database:
 
     def init_schema(self) -> None:
         """Execute INITIAL_SCHEMA; creates all tables if absent. Idempotent."""
+        logger.info("Initializing database schema at %s", self._db_path)
         self._executescript(INITIAL_SCHEMA)
         self._commit()
+        logger.info("Database schema initialized successfully")
 
     def close(self) -> None:
         """Close the underlying SQLite connection."""
+        logger.debug("Closing database connection: %s", self._db_path)
         self._conn.close()
 
     # ── Schema version ───────────────────────────────────────────
 
     def set_schema_version(self, version: int) -> None:
         """Set the current schema version. Replaces any existing rows."""
+        logger.debug("set_schema_version: version=%d", version)
         self._execute("DELETE FROM schema_version")
         self._execute(
             "INSERT INTO schema_version (version) VALUES (?)",
@@ -108,6 +144,7 @@ class Database:
 
     def get_schema_version(self) -> int:
         """Return the stored schema version, or 0 if absent."""
+        logger.debug("get_schema_version")
         row = self._execute("SELECT version FROM schema_version LIMIT 1").fetchone()
         return row["version"] if row else 0
 
@@ -126,6 +163,7 @@ class Database:
         full_cache_path: str | None = None,
     ) -> None:
         """Insert or update a thumbnail record."""
+        logger.debug("upsert_thumbnail: path=%s, mtime=%d, size=%d", path, mtime, size)
         self._execute(
             """
             INSERT INTO thumbnails (
@@ -152,16 +190,19 @@ class Database:
 
     def delete_thumbnail(self, path: str) -> None:
         """Remove a thumbnail record by path."""
+        logger.debug("delete_thumbnail: path=%s", path)
         self._execute("DELETE FROM thumbnails WHERE path = ?", (path,))
         self._commit()
 
     def get_thumbnail(self, path: str) -> dict | None:
         """Fetch a single thumbnail record as a dict, or None if absent."""
+        logger.debug("get_thumbnail: path=%s", path)
         row = self._execute("SELECT * FROM thumbnails WHERE path = ?", (path,)).fetchone()
         return _row_to_dict(row) if row else None
 
     def list_thumbnails_for_folder(self, folder_path: str) -> list[dict]:
         """List all thumbnail records whose path starts with folder_path."""
+        logger.debug("list_thumbnails_for_folder: folder_path=%s", folder_path)
         cursor = self._execute("SELECT * FROM thumbnails WHERE path LIKE ?", (f"{folder_path}%",))
         return [_row_to_dict(row) for row in cursor.fetchall()]
 
@@ -169,6 +210,7 @@ class Database:
 
     def ensure_tag(self, name: str) -> int:
         """Insert a tag if it doesn't exist; always returns the tag id."""
+        logger.debug("ensure_tag: name=%s", name)
         cursor = self._execute(
             "INSERT INTO tags (name) VALUES (?) ON CONFLICT(name) DO UPDATE SET name=name RETURNING id",
             (name,),
@@ -177,6 +219,7 @@ class Database:
 
     def add_file_tags(self, paths: list[str], tag_id: int, source: str = "user") -> None:
         """Associate one or more file paths with a given tag."""
+        logger.debug("add_file_tags: %d paths, tag_id=%d, source=%s", len(paths), tag_id, source)
         self._executemany(
             "INSERT OR IGNORE INTO file_tags (path, tag_id, source) VALUES (?, ?, ?)",
             [(p, tag_id, source) for p in paths],
@@ -185,6 +228,7 @@ class Database:
 
     def remove_file_tags(self, paths: list[str], tag_id: int) -> None:
         """Remove file-tag associations for the given paths and tag."""
+        logger.debug("remove_file_tags: %d paths, tag_id=%d", len(paths), tag_id)
         placeholders = ",".join("?" * len(paths))
         self._execute(
             f"DELETE FROM file_tags WHERE path IN ({placeholders}) AND tag_id = ?",
@@ -194,11 +238,13 @@ class Database:
 
     def get_file_tag_ids(self, path: str) -> set[int]:
         """Return the set of tag ids associated with a given path."""
+        logger.debug("get_file_tag_ids: path=%s", path)
         cursor = self._execute("SELECT tag_id FROM file_tags WHERE path = ?", (path,))
         return {row["tag_id"] for row in cursor.fetchall()}
 
     def replace_auto_color_tags(self, path: str, tags: list[str]) -> None:
         """Delete old auto_color tags for a path and insert new ones."""
+        logger.debug("replace_auto_color_tags: path=%s, tags=%d", path, len(tags))
         self._execute(
             "DELETE FROM file_tags WHERE path = ? AND source = 'auto_color'",
             (path,),
@@ -227,6 +273,7 @@ class Database:
         sort_order: int = 0,
     ) -> None:
         """Add a file to favorites."""
+        logger.debug("add_favorite: path=%s, label=%s", path, label)
         self._execute(
             "INSERT OR IGNORE INTO favorites (path, label, sort_order) VALUES (?, ?, ?)",
             (path, label, sort_order),
@@ -235,11 +282,13 @@ class Database:
 
     def remove_favorite(self, path: str) -> None:
         """Remove a file from favorites."""
+        logger.debug("remove_favorite: path=%s", path)
         self._execute("DELETE FROM favorites WHERE path = ?", (path,))
         self._commit()
 
     def list_favorites(self) -> list[dict]:
         """Return all favorite records ordered by sort_order then path."""
+        logger.debug("list_favorites")
         cursor = self._execute("SELECT * FROM favorites ORDER BY sort_order, path")
         return [_row_to_dict(row) for row in cursor.fetchall()]
 
@@ -247,11 +296,13 @@ class Database:
 
     def get_setting(self, key: str) -> str | None:
         """Read a raw string setting value; None if absent."""
+        logger.debug("get_setting: key=%s", key)
         row = self._execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
         return row["value"] if row else None
 
     def set_setting(self, key: str, value: str) -> None:
         """Persist a raw string setting."""
+        logger.debug("set_setting: key=%s", key)
         self._execute(
             "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
             (key, value),
@@ -262,6 +313,7 @@ class Database:
 
     def get_editor_command(self, extension: str) -> str | None:
         """Return the editor command template for an extension; None if absent."""
+        logger.debug("get_editor_command: extension=%s", extension)
         row = self._execute(
             "SELECT command_template FROM editor_associations WHERE extension = ?",
             (extension,),
@@ -270,6 +322,7 @@ class Database:
 
     def upsert_editor_association(self, extension: str, command_template: str) -> None:
         """Insert or update an editor association."""
+        logger.debug("upsert_editor_association: extension=%s", extension)
         self._execute(
             "INSERT OR REPLACE INTO editor_associations (extension, command_template) VALUES (?, ?)",
             (extension, command_template),
@@ -278,6 +331,7 @@ class Database:
 
     def remove_editor_association(self, extension: str) -> None:
         """Remove an editor association by extension."""
+        logger.debug("remove_editor_association: extension=%s", extension)
         self._execute("DELETE FROM editor_associations WHERE extension = ?", (extension,))
         self._commit()
 
@@ -285,6 +339,7 @@ class Database:
 
     def get_folder_uuid(self, folder_path: str) -> str | None:
         """Return the cache UUID for a source folder, or None if not mapped."""
+        logger.debug("get_folder_uuid: folder_path=%s", folder_path)
         row = self._execute(
             "SELECT cache_uuid FROM folder_cache_uuids WHERE folder_path = ?",
             (folder_path,),
@@ -293,6 +348,7 @@ class Database:
 
     def upsert_folder_uuid(self, folder_path: str, cache_uuid: str) -> None:
         """Insert or update the cache UUID for a source folder."""
+        logger.debug("upsert_folder_uuid: folder_path=%s", folder_path)
         self._execute(
             "INSERT INTO folder_cache_uuids (folder_path, cache_uuid) VALUES (?, ?) "
             "ON CONFLICT(folder_path) DO UPDATE SET cache_uuid=excluded.cache_uuid",
@@ -308,6 +364,7 @@ class Database:
         read-then-write race.  The actual stored UUID is always read back
         to guarantee consistency.
         """
+        logger.debug("get_or_create_folder_uuid: folder_path=%s", folder_path)
         with self._lock:
             self._conn.execute(
                 "INSERT INTO folder_cache_uuids (folder_path, cache_uuid) "
@@ -326,6 +383,7 @@ class Database:
 
         Returns the number of stale entries removed.
         """
+        logger.debug("cleanup_stale_folder_uuids: checking for stale entries")
         cursor = self._execute("SELECT folder_path FROM folder_cache_uuids")
         folder_paths = [row["folder_path"] for row in cursor.fetchall()]
 

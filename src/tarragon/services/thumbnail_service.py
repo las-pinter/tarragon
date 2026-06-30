@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from pathlib import Path
 
 from PIL import Image
@@ -163,6 +164,8 @@ class ThumbnailService(QObject):
             "derived" — missing resolutions derived from existing cached image
             "queued"  — async render dispatched to thread pool
         """
+        start = time.perf_counter()
+        logger.debug("check_and_render: %s", file_info.path)
         cached = self._db.get_thumbnail(str(file_info.path))
 
         # Check if cache is valid (mtime + size match)
@@ -175,10 +178,15 @@ class ThumbnailService(QObject):
             if has_thumbnail and has_preview and has_full:
                 # All resolutions cached — emit signals for each
                 self._emit_cached_thumbnails(file_info, cached)
+                elapsed = time.perf_counter() - start
+                logger.debug("check_and_render completed in %.3fs: status=cached", elapsed)
                 return "cached"
 
             # Some resolutions missing — derive from largest available
-            return self._derive_missing_resolutions(file_info, cached)
+            result = self._derive_missing_resolutions(file_info, cached)
+            elapsed = time.perf_counter() - start
+            logger.debug("check_and_render completed in %.3fs: status=%s", elapsed, result)
+            return result
 
         # Cache miss or invalid — render all resolutions from source (async)
         task = _RenderAllTask(
@@ -189,6 +197,8 @@ class ThumbnailService(QObject):
         )
         self._threadpool.start(task)
         logger.debug("Queued render for %s", file_info.path)
+        elapsed = time.perf_counter() - start
+        logger.debug("check_and_render completed in %.3fs: status=queued", elapsed)
         return "queued"
 
     def _on_render_all_done(self, file_info: FileInfo) -> None:
@@ -209,7 +219,7 @@ class ThumbnailService(QObject):
                     img = Image.open(cache_path)
                     self.thumbnailReady.emit(str(file_info.path), img, resolution_size, cache_path)
                 except Exception:
-                    pass  # Corrupt cache file — skip this resolution
+                    logger.warning("Corrupt cache file, skipping resolution %s: %s", resolution_size, cache_path, exc_info=True)
 
     def _derive_missing_resolutions(self, file_info: FileInfo, cached: dict) -> str:
         """Derive missing smaller resolutions from the largest available cached image.
@@ -228,14 +238,14 @@ class ThumbnailService(QObject):
                 source_image = Image.open(full_path)
                 source_resolution = None  # Full resolution
             except Exception:
-                pass
+                logger.warning("Failed to open cached full resolution: %s", full_path, exc_info=True)
 
         if source_image is None and preview_path and Path(preview_path).exists():
             try:
                 source_image = Image.open(preview_path)
                 source_resolution = 1024
             except Exception:
-                pass
+                logger.warning("Failed to open cached preview resolution: %s", preview_path, exc_info=True)
 
         if source_image is None:
             # No cached image available — render from source (async)
@@ -292,19 +302,19 @@ class ThumbnailService(QObject):
                 img = Image.open(cached["thumbnail_cache_path"])
                 self.thumbnailReady.emit(str(file_info.path), img, 256, cached["thumbnail_cache_path"])
             except Exception:
-                pass
+                logger.warning("Failed to emit cached thumbnail (256): %s", cached["thumbnail_cache_path"], exc_info=True)
         if cached.get("preview_cache_path") and Path(cached["preview_cache_path"]).exists():
             try:
                 img = Image.open(cached["preview_cache_path"])
                 self.thumbnailReady.emit(str(file_info.path), img, 1024, cached["preview_cache_path"])
             except Exception:
-                pass
+                logger.warning("Failed to emit cached preview (1024): %s", cached["preview_cache_path"], exc_info=True)
         if cached.get("full_cache_path") and Path(cached["full_cache_path"]).exists():
             try:
                 img = Image.open(cached["full_cache_path"])
                 self.thumbnailReady.emit(str(file_info.path), img, None, cached["full_cache_path"])
             except Exception:
-                pass
+                logger.warning("Failed to emit cached full resolution: %s", cached["full_cache_path"], exc_info=True)
 
         # Update database with all paths (BUG #5 fix: preserve existing paths)
         self._db.upsert_thumbnail(
@@ -323,6 +333,8 @@ class ThumbnailService(QObject):
 
     def _render_all_resolutions(self, file_info: FileInfo) -> None:
         """Render all three resolutions from the source file."""
+        start = time.perf_counter()
+        logger.debug("_render_all_resolutions: %s", file_info.path)
         # Get or create a per-folder UUID so all images in the same folder
         # share a cache directory.  Atomic insert prevents race conditions
         # when two threads process images from the same folder simultaneously.
@@ -385,7 +397,7 @@ class ThumbnailService(QObject):
                 self._db.replace_auto_color_tags(str(file_info.path), tags)
                 self.tagsUpdated.emit()
             except Exception:
-                pass  # Color tagging failure shouldn't break the pipeline
+                logger.warning("Color tagging failed for %s", file_info.path, exc_info=True)
 
         # Update database with only the paths that were actually saved (BUG #4 fix)
         self._db.upsert_thumbnail(
@@ -399,6 +411,8 @@ class ThumbnailService(QObject):
             preview_cache_path=preview_path,
             full_cache_path=str(cache_paths["full"]),
         )
+        elapsed = time.perf_counter() - start
+        logger.debug("_render_all_resolutions completed in %.3fs: %s", elapsed, file_info.path)
 
     def _render_plain(self, file_info: FileInfo) -> None:
         """Dispatch plain image render to QThreadPool."""

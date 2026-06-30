@@ -6,10 +6,14 @@ color tag filters (OR semantics) into a single parameterized query.
 
 from __future__ import annotations
 
+import logging
+import time
 from pathlib import Path
 from typing import Any
 
 from tarragon.db import Database
+
+logger = logging.getLogger(__name__)
 
 
 class QueryService:
@@ -55,6 +59,11 @@ class QueryService:
         list[Path]
             Matching paths ordered alphabetically.
         """
+        start = time.perf_counter()
+        logger.debug(
+            "Query start: folder=%s, filename_filter=%s, color_tags=%s, tag_ids=%s",
+            folder_path, filename_filter, color_tags, tag_ids,
+        )
         tag_ids = tag_ids or set()
         color_tags = color_tags or set()
 
@@ -104,4 +113,7 @@ class QueryService:
             sql = "SELECT path FROM thumbnails ORDER BY path"
 
         rows = self._db._execute(sql, tuple(params)).fetchall()
-        return [Path(row["path"]) for row in rows]
+        elapsed = time.perf_counter() - start
+        results = [Path(row["path"]) for row in rows]
+        logger.debug("Query returned %d results in %.3fs", len(results), elapsed)
+        return results

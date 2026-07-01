@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
 
 from tarragon.db import Database
 from tarragon.services.query_service import QueryService
+from tarragon.services.settings_service import SettingsService
 from tarragon.services.tag_service import TagService
 from tarragon.services.thumbnail_service import ThumbnailService
 from tarragon.settings import Settings
@@ -58,10 +59,11 @@ class MainWindow(QMainWindow):
 
         Args:
             settings: Optional Settings instance for configuration access.
-                      Stored as an attribute; not used until later milestones.
+                       Stored as an attribute; not used until later milestones.
         """
         super().__init__()
         self._settings = settings
+        self._settings_service = SettingsService(settings) if settings else None
         self.setWindowTitle("Tarragon")
         self.resize(self.DEFAULT_WIDTH, self.DEFAULT_HEIGHT)
 
@@ -477,16 +479,16 @@ class MainWindow(QMainWindow):
         from tarragon.app_paths import set_cache_dir
         from tarragon.widgets.settings_dialog import SettingsDialog
 
-        if self._settings is None:
+        if self._settings_service is None:
             return
-        dialog = SettingsDialog(self._settings, parent=self)
+        dialog = SettingsDialog(self._settings_service, parent=self)
         if dialog.exec():
             # Settings were saved, apply changes
             # Update debug logging level
-            debug_mode = self._settings.get("debug_mode")
+            debug_mode = self._settings_service.get_debug_mode()
             logging.getLogger().setLevel(logging.DEBUG if debug_mode else logging.INFO)
             # Apply cache dir change immediately
-            new_cache = self._settings.get("cache_dir")
+            new_cache = self._settings_service.get_cache_dir()
             set_cache_dir(Path(new_cache) if new_cache else None)
 
     def _apply_theme(self) -> None:

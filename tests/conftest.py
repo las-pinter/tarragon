@@ -1,6 +1,7 @@
 """Pytest configuration — ensures headless operation for Qt tests."""
 
 import os
+from typing import Any, Generator
 
 import pytest
 
@@ -9,7 +10,7 @@ os.environ["QT_QPA_PLATFORM"] = "offscreen"
 
 
 @pytest.fixture(scope="session", autouse=True)
-def qapp():
+def qapp() -> Generator[Any, None, None]:
     """Shared QApplication for entire test session."""
     from PySide6.QtWidgets import QApplication
 

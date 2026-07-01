@@ -1,8 +1,9 @@
-"""SettingsDialog — preferences dialog for cache, logging, and format settings.
+"""SettingsDialog — preferences dialog for all application settings.
 
-Provides a modal dialog where users can configure the thumbnail cache directory,
-toggle debug logging, and select the cache image format.  Changes are persisted
-to the ``Settings`` store only when the user clicks OK.
+Provides a modal dialog where users can configure performance, grid layout,
+color tagging, cache, and debug settings. Changes are persisted through
+SettingsService (which handles validation/clamping) only when the user
+clicks OK.
 """
 
 from __future__ import annotations
@@ -11,86 +12,173 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
+    QDoubleSpinBox,
     QFileDialog,
+    QFormLayout,
+    QGroupBox,
     QHBoxLayout,
-    QLabel,
     QLineEdit,
     QPushButton,
+    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
 
 from tarragon.app_paths import cache_dir, data_dir
-from tarragon.settings import Settings
+from tarragon.services.settings_service import SettingsService
 
 
 class SettingsDialog(QDialog):
     """Modal preferences dialog for application settings.
 
-    Exposes three configurable settings:
+    Exposes all 11 configurable settings organized into sections:
 
-    - **Cache directory** — user-selectable path (falls back to the default
-      ``app_paths.cache_dir()`` when unset).
-    - **Debug logging** — boolean toggle for verbose log output.
-    - **Cache format** — image format used for cached thumbnails (PNG or JPEG).
+    - **Performance** — PSD workers, multi-preview cap, large canvas threshold.
+    - **Grid & Layout** — tile grid size preset.
+    - **Color Tagging** — enable toggle, palette size, min share, neutral S threshold.
+    - **Cache** — directory path and image format.
+    - **Debug** — debug logging toggle.
 
-    Settings are read from the ``Settings`` store on construction and written
+    Settings are read from the SettingsService on construction and written
     back only when the user accepts the dialog via the OK button.
     """
 
-    def __init__(self, settings: Settings, parent: QWidget | None = None) -> None:
+    def __init__(self, settings_service: SettingsService, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self._settings = settings
+        self._settings_service = settings_service
 
         self.setWindowTitle("Preferences")
-        self.setMinimumWidth(400)
+        self.setMinimumWidth(450)
 
         # ── Main layout ─────────────────────────────────────────────────
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(10)
 
-        # ── Cache directory section ─────────────────────────────────────
-        cache_label = QLabel("Cache Directory:")
-        layout.addWidget(cache_label)
+        # ── Performance Section ─────────────────────────────────────────
+        perf_group = QGroupBox("Performance")
+        perf_layout = QFormLayout()
+        perf_layout.setSpacing(8)
 
-        cache_row = QHBoxLayout()
-        cache_row.setSpacing(6)
+        self._psd_workers_spin = QSpinBox()
+        self._psd_workers_spin.setRange(1, 8)
+        self._psd_workers_spin.setValue(self._settings_service.get_max_psd_workers())
+        perf_layout.addRow("Max PSD Workers:", self._psd_workers_spin)
 
-        current_cache = self._settings.get("cache_dir")
+        self._multi_preview_spin = QSpinBox()
+        self._multi_preview_spin.setRange(1, 100)
+        self._multi_preview_spin.setValue(self._settings_service.get_max_multi_preview())
+        perf_layout.addRow("Max Multi-Preview:", self._multi_preview_spin)
+
+        self._canvas_threshold_spin = QDoubleSpinBox()
+        self._canvas_threshold_spin.setRange(0.1, 1000.0)
+        self._canvas_threshold_spin.setDecimals(1)
+        self._canvas_threshold_spin.setValue(self._settings_service.get_large_canvas_threshold_mp())
+        perf_layout.addRow("Large Canvas Threshold (MP):", self._canvas_threshold_spin)
+
+        perf_group.setLayout(perf_layout)
+        layout.addWidget(perf_group)
+
+        # ── Grid & Layout Section ───────────────────────────────────────
+        grid_group = QGroupBox("Grid & Layout")
+        grid_layout = QFormLayout()
+        grid_layout.setSpacing(8)
+
+        self._grid_combo = QComboBox()
+        self._grid_combo.addItems(["1x1", "2x2", "3x3", "4x4"])
+        current_grid = self._settings_service.get_tile_grid_size()
+        idx = self._grid_combo.findText(current_grid)
+        if idx >= 0:
+            self._grid_combo.setCurrentIndex(idx)
+        grid_layout.addRow("Tile Grid Size:", self._grid_combo)
+
+        grid_group.setLayout(grid_layout)
+        layout.addWidget(grid_group)
+
+        # ── Color Tagging Section ───────────────────────────────────────
+        color_group = QGroupBox("Color Tagging")
+        color_layout = QFormLayout()
+        color_layout.setSpacing(8)
+
+        self._color_enabled_check = QCheckBox("Enable color tagging")
+        self._color_enabled_check.setChecked(self._settings_service.get_color_tag_enabled())
+        color_layout.addRow(self._color_enabled_check)
+
+        self._palette_size_spin = QSpinBox()
+        self._palette_size_spin.setRange(2, 32)
+        self._palette_size_spin.setValue(self._settings_service.get_color_tag_palette_size())
+        color_layout.addRow("Palette Size:", self._palette_size_spin)
+
+        self._min_share_spin = QDoubleSpinBox()
+        self._min_share_spin.setRange(0.0, 1.0)
+        self._min_share_spin.setDecimals(2)
+        self._min_share_spin.setSingleStep(0.05)
+        self._min_share_spin.setValue(self._settings_service.get_color_tag_min_share())
+        color_layout.addRow("Min Color Share:", self._min_share_spin)
+
+        self._neutral_s_spin = QDoubleSpinBox()
+        self._neutral_s_spin.setRange(0.0, 1.0)
+        self._neutral_s_spin.setDecimals(2)
+        self._neutral_s_spin.setSingleStep(0.05)
+        self._neutral_s_spin.setValue(self._settings_service.get_color_tag_neutral_s_threshold())
+        color_layout.addRow("Neutral Saturation Threshold:", self._neutral_s_spin)
+
+        color_group.setLayout(color_layout)
+        layout.addWidget(color_group)
+
+        # ── Cache Section ───────────────────────────────────────────────
+        cache_group = QGroupBox("Cache")
+        cache_layout = QVBoxLayout()
+        cache_layout.setSpacing(8)
+
+        # Cache directory row
+        cache_dir_row = QHBoxLayout()
+        cache_dir_row.setSpacing(6)
+
+        current_cache = self._settings_service.get_cache_dir()
         display_path = str(current_cache) if current_cache else str(cache_dir())
 
         self._cache_dir_edit = QLineEdit(display_path)
         self._cache_dir_edit.setReadOnly(True)
-        cache_row.addWidget(self._cache_dir_edit)
+        cache_dir_row.addWidget(self._cache_dir_edit)
 
         self._browse_btn = QPushButton("Browse...")
         self._browse_btn.clicked.connect(self._browse_cache_dir)
-        cache_row.addWidget(self._browse_btn)
+        cache_dir_row.addWidget(self._browse_btn)
 
-        layout.addLayout(cache_row)
+        cache_layout.addLayout(cache_dir_row)
 
-        # ── Debug logging section ───────────────────────────────────────
-        self._debug_checkbox = QCheckBox("Enable debug logging")
-        self._debug_checkbox.setChecked(bool(self._settings.get("debug_mode")))
-        layout.addWidget(self._debug_checkbox)
-
-        # ── Cache format section ────────────────────────────────────────
+        # Cache format row
         format_row = QHBoxLayout()
         format_row.setSpacing(6)
 
-        format_label = QLabel("Cache Format:")
-        format_row.addWidget(format_label)
-
         self._format_combo = QComboBox()
         self._format_combo.addItems(["PNG", "JPEG"])
-
-        current_format = str(self._settings.get("cache_format")).lower()
+        current_format = self._settings_service.get_cache_format()
         self._format_combo.setCurrentIndex(0 if current_format == "png" else 1)
         format_row.addWidget(self._format_combo)
-
         format_row.addStretch()
-        layout.addLayout(format_row)
+
+        cache_layout.addLayout(format_row)
+
+        cache_group.setLayout(cache_layout)
+        layout.addWidget(cache_group)
+
+        # ── Debug Section ───────────────────────────────────────────────
+        debug_group = QGroupBox("Debug")
+        debug_layout = QVBoxLayout()
+        debug_layout.setSpacing(8)
+
+        self._debug_checkbox = QCheckBox("Enable debug logging")
+        self._debug_checkbox.setChecked(self._settings_service.get_debug_mode())
+        debug_layout.addWidget(self._debug_checkbox)
+
+        debug_group.setLayout(debug_layout)
+        layout.addWidget(debug_group)
+
+        # ── Wire color_tag_enabled dependency ───────────────────────────
+        self._color_enabled_check.toggled.connect(self._on_color_tag_toggled)
+        self._on_color_tag_toggled(self._color_enabled_check.isChecked())
 
         # ── Dialog buttons ──────────────────────────────────────────────
         layout.addStretch()
@@ -122,22 +210,41 @@ class SettingsDialog(QDialog):
         if chosen:
             self._cache_dir_edit.setText(chosen)
 
+    def _on_color_tag_toggled(self, enabled: bool) -> None:  # noqa: FBT001
+        """Enable/disable color tagging sub-widgets based on the checkbox."""
+        self._palette_size_spin.setEnabled(enabled)
+        self._min_share_spin.setEnabled(enabled)
+        self._neutral_s_spin.setEnabled(enabled)
+
     def _on_accept(self) -> None:
-        """Persist all settings and accept the dialog."""
-        # Compare against the platform default, not the currently active path
-        # (which may include a custom override). This prevents wiping a custom
-        # cache_dir when the user opens Preferences and clicks OK unchanged.
+        """Persist all settings via SettingsService and accept the dialog."""
+        # Performance
+        self._settings_service.set_max_psd_workers(self._psd_workers_spin.value())
+        self._settings_service.set_max_multi_preview(self._multi_preview_spin.value())
+        self._settings_service.set_large_canvas_threshold_mp(self._canvas_threshold_spin.value())
+
+        # Grid & Layout
+        self._settings_service.set_tile_grid_size(self._grid_combo.currentText())
+
+        # Color Tagging
+        self._settings_service.set_color_tag_enabled(self._color_enabled_check.isChecked())
+        self._settings_service.set_color_tag_palette_size(self._palette_size_spin.value())
+        self._settings_service.set_color_tag_min_share(self._min_share_spin.value())
+        self._settings_service.set_color_tag_neutral_s_threshold(self._neutral_s_spin.value())
+
+        # Cache — compare against platform default to avoid wiping custom path
         platform_default = str(data_dir() / "cache")
         cache_text = self._cache_dir_edit.text().strip()
 
         if cache_text == platform_default:
-            self._settings.set("cache_dir", None)
+            self._settings_service.set_cache_dir(None)
         else:
-            self._settings.set("cache_dir", cache_text)
-
-        self._settings.set("debug_mode", self._debug_checkbox.isChecked())
+            self._settings_service.set_cache_dir(cache_text)
 
         format_value = "png" if self._format_combo.currentIndex() == 0 else "jpeg"
-        self._settings.set("cache_format", format_value)
+        self._settings_service.set_cache_format(format_value)
+
+        # Debug
+        self._settings_service.set_debug_mode(self._debug_checkbox.isChecked())
 
         self.accept()

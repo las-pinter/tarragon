@@ -160,3 +160,26 @@ class SettingsService:
         if str(value) not in _VALID_CACHE_FORMATS:
             raise ValueError(f"Invalid cache_format: {value!r}. Expected one of {_VALID_CACHE_FORMATS}.")
         self._settings.set("cache_format", str(value))
+
+    # ── cache_dir ────────────────────────────────────────────────────────────
+
+    def get_cache_dir(self) -> str | None:
+        """Get custom cache directory path, or None for platform default."""
+        value = self._settings.get("cache_dir")
+        if value is None:
+            return None
+        return str(value)
+
+    def set_cache_dir(self, value: str | None) -> None:
+        """Set custom cache directory path. Pass None for platform default."""
+        self._settings.set("cache_dir", value)
+
+    # ── debug_mode ───────────────────────────────────────────────────────────
+
+    def get_debug_mode(self) -> bool:
+        """Get whether debug logging is enabled."""
+        return bool(self._settings.get("debug_mode"))
+
+    def set_debug_mode(self, value: bool) -> None:
+        """Set whether debug logging is enabled."""
+        self._settings.set("debug_mode", bool(value))

@@ -15,17 +15,6 @@ from PySide6.QtWidgets import QLabel, QSizePolicy, QVBoxLayout, QWidget
 from tarragon.widgets.preview_panel import PreviewPanel
 
 
-@pytest.fixture(autouse=True)
-def qapp() -> Any:
-    """Provide a shared QApplication instance for all Qt tests."""
-    from PySide6.QtWidgets import QApplication
-
-    app = QApplication.instance()
-    if app is None:
-        app = QApplication(["test"])
-    yield app
-
-
 @pytest.fixture
 def sample_image() -> Image.Image:
     """Create a sample PIL Image for testing."""

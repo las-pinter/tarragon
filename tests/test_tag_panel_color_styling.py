@@ -26,15 +26,6 @@ from tarragon.widgets.tag_panel import TagPanel
 # =========================================================================
 
 
-@pytest.fixture(autouse=True)
-def qapp() -> Generator[object, None, None]:
-    """Provide a shared QApplication instance for all Qt tests."""
-    app = QApplication.instance()
-    if app is None:
-        app = QApplication(["test"])
-    yield app
-
-
 @pytest.fixture
 def db() -> Database:
     """Create an in-memory Database with initialised schema."""

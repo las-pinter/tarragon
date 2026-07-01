@@ -18,15 +18,6 @@ from tarragon.widgets.color_filter_bar import ColorFilterBar
 # ── Fixtures ────────────────────────────────────────────────────────────────
 
 
-@pytest.fixture(autouse=True)
-def qapp() -> Generator[object, None, None]:  # noqa: PT004
-    """Provide a shared QApplication instance for all Qt tests."""
-    app = QApplication.instance()
-    if app is None:
-        app = QApplication(["test"])
-    yield app
-
-
 @pytest.fixture()
 def bar() -> Generator[ColorFilterBar, None, None]:
     """Provide a ColorFilterBar that is closed after the test."""

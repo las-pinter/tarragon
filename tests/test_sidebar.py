@@ -15,15 +15,6 @@ from tarragon.widgets.sidebar import FavoritesModel, SidebarWidget
 # ── Fixtures ──────────────────────────────────────────────────────────
 
 
-@pytest.fixture(autouse=True)
-def qapp() -> Generator[Any, None, None]:  # noqa: PT004005
-    """Provide a shared QApplication instance for all Qt tests."""
-    app = QApplication.instance()
-    if app is None:
-        app = QApplication(["test"])
-    yield app
-
-
 @pytest.fixture()
 def db() -> Generator[Database, None, None]:
     """Provide an isolated in-memory database with schema initialised."""

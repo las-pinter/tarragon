@@ -78,9 +78,9 @@ def _populate_test_data(db: Database) -> dict[str, int]:
 # ── Fixtures ─────────────────────────────────────────────────────────────
 
 
-@pytest.fixture()
+@pytest.fixture(scope="module")
 def db() -> Database:
-    """Provide an isolated in-memory SQLite database for each test."""
+    """Provide a module-scoped in-memory SQLite database."""
     database = Database(Path(":memory:"))
     database.init_schema()
     return database
@@ -92,9 +92,9 @@ def service(db: Database) -> QueryService:
     return QueryService(db)
 
 
-@pytest.fixture()
+@pytest.fixture(scope="module")
 def tag_ids(db: Database) -> dict[str, int]:
-    """Populate test data and return tag name → id mapping."""
+    """Populate test data once per module and return tag name → id mapping."""
     return _populate_test_data(db)
 
 

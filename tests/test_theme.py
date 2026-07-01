@@ -11,17 +11,6 @@ import pytest
 # ── Fixtures ───────────────────────────────────────────────────────────
 
 
-@pytest.fixture(autouse=True)
-def qapp() -> Generator[Any, None, None]:
-    """Provide a shared QApplication instance for all Qt tests."""
-    from PySide6.QtWidgets import QApplication
-
-    app = QApplication.instance()
-    if app is None:
-        app = QApplication(["test"])
-    yield app
-
-
 # ── Tokens JSON Tests ──────────────────────────────────────────────────
 
 

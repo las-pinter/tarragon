@@ -36,17 +36,6 @@ from tarragon.widgets.thumbnail_grid import (
 )
 
 
-@pytest.fixture(autouse=True)
-def qapp() -> Any:
-    """Provide a shared QApplication instance for all Qt tests."""
-    from PySide6.QtWidgets import QApplication
-
-    app = QApplication.instance()
-    if app is None:
-        app = QApplication(["test"])
-    yield app
-
-
 @pytest.fixture()
 def delegate() -> Any:
     """Provide a fresh ThumbnailDelegate."""

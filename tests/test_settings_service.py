@@ -12,10 +12,9 @@ from tarragon.settings import Settings
 
 
 @pytest.fixture()
-def service(tmp_path: Path) -> SettingsService:
-    """SettingsService backed by a temporary SQLite database with defaults."""
-    db_file = tmp_path / "settings_svc.db"
-    database = Database(db_file)
+def service() -> SettingsService:
+    """SettingsService backed by an in-memory SQLite database with defaults."""
+    database = Database(Path(":memory:"))
     database.init_schema()
     settings = Settings(database)
     settings.init_defaults()

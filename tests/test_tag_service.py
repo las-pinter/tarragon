@@ -19,15 +19,6 @@ from tarragon.services.tag_service import TagService
 # =========================================================================
 
 
-@pytest.fixture(autouse=True)
-def qapp() -> Generator[object, None, None]:
-    """Provide a shared QApplication instance for Qt-based tests."""
-    app = QApplication.instance()
-    if app is None:
-        app = QApplication(["test"])
-    yield app
-
-
 @pytest.fixture
 def db() -> Database:
     """Create an in-memory Database with initialised schema."""

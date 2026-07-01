@@ -22,17 +22,6 @@ from tarragon.services.thumbnail_service import ThumbnailService
 # =========================================================================
 
 
-@pytest.fixture(autouse=True)
-def qapp() -> Generator[object, None, None]:
-    """Provide a shared QApplication instance for Qt-based tests."""
-    from PySide6.QtWidgets import QApplication
-
-    app = QApplication.instance()
-    if app is None:
-        app = QApplication(["test"])
-    yield app
-
-
 @pytest.fixture()
 def db() -> Generator[Database, None, None]:
     """Provide an in-memory database for each test (isolated)."""

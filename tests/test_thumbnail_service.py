@@ -33,17 +33,6 @@ UNICODE_PATH = "照片/图像/画像/הוראה/ਤਸਵੀਰ/file.png"
 # =========================================================================
 
 
-@pytest.fixture(autouse=True)
-def qapp() -> Generator[object, None, None]:
-    """Provide a shared QApplication instance for Qt-based tests."""
-    from PySide6.QtWidgets import QApplication
-
-    app = QApplication.instance()
-    if app is None:
-        app = QApplication(["test"])
-    yield app
-
-
 @pytest.fixture
 def db_mock() -> MagicMock:
     """Mock Database with all CRUD methods as MagicMock."""

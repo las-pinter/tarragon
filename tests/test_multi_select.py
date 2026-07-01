@@ -23,15 +23,6 @@ from tarragon.widgets.thumbnail_grid import ThumbnailGrid
 # ── Fixtures ────────────────────────────────────────────────────────────
 
 
-@pytest.fixture(autouse=True)
-def qapp() -> Generator[Any, None, None]:
-    """Provide a shared QApplication instance for all Qt tests."""
-    app = QApplication.instance()
-    if app is None:
-        app = QApplication(["test"])
-    yield app
-
-
 @pytest.fixture
 def preview_panel() -> Generator[PreviewPanel, None, None]:
     """Provide a PreviewPanel that is closed after the test."""

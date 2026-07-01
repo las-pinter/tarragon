@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import time
 from pathlib import Path
+from typing import Any, Callable
 
 from PIL import Image
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal, Slot
@@ -32,9 +33,9 @@ class _RenderAllTask(QRunnable):
     def __init__(
         self,
         file_info: FileInfo,
-        on_done: callable,
-        on_error: callable,
-        render_func: callable,
+        on_done: Callable[..., Any],
+        on_error: Callable[..., Any],
+        render_func: Callable[..., Any],
     ) -> None:
         super().__init__()
         self._file_info = file_info
@@ -58,8 +59,8 @@ class _RenderTask(QRunnable):
         self,
         file_info: FileInfo,
         cache_format: str,
-        on_done: callable,
-        on_error: callable,
+        on_done: Callable[..., Any],
+        on_error: Callable[..., Any],
     ) -> None:
         super().__init__()
         self._file_info = file_info
@@ -87,8 +88,8 @@ class _RenderPSDTask(QRunnable):
         self,
         file_info: FileInfo,
         cache_format: str,
-        on_done: callable,
-        on_error: callable,
+        on_done: Callable[..., Any],
+        on_error: Callable[..., Any],
         large_canvas_threshold_mp: float,
         tile_grid_x: int,
         tile_grid_y: int,
@@ -206,7 +207,7 @@ class ThumbnailService(QObject):
         # Signal emission and DB upsert are handled inside _render_all_resolutions
         pass
 
-    def _emit_cached_thumbnails(self, file_info: FileInfo, cached: dict) -> None:
+    def _emit_cached_thumbnails(self, file_info: FileInfo, cached: dict[str, Any]) -> None:
         """Emit thumbnailReady signals for all cached resolutions."""
         for resolution_key, resolution_size in [
             ("thumbnail_cache_path", 256),
@@ -221,7 +222,7 @@ class ThumbnailService(QObject):
                 except Exception:
                     logger.warning("Corrupt cache file, skipping resolution %s: %s", resolution_size, cache_path, exc_info=True)
 
-    def _derive_missing_resolutions(self, file_info: FileInfo, cached: dict) -> str:
+    def _derive_missing_resolutions(self, file_info: FileInfo, cached: dict[str, Any]) -> str:
         """Derive missing smaller resolutions from the largest available cached image.
 
         Returns a status string: "derived" or "queued".

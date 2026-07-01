@@ -117,7 +117,7 @@ class TestSchema:
 
 
 class TestContextManager:
-    def test_context_manager_returns_self(self, tmp_path: Path) -> None:  # type: ignore[reportAttributeAccessIssue]
+    def test_context_manager_returns_self(self, tmp_path: Path) -> None:
         """Settings used as context manager returns itself and is usable inside the block."""
         db_file = tmp_path / "cm_test.db"
         database = Database(db_file)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Generator
 from pathlib import Path
 
 import pytest
@@ -12,7 +13,7 @@ from tarragon.db import Database
 
 
 @pytest.fixture()
-def db() -> Database:
+def db() -> Generator[Database, None, None]:
     """Provide an in-memory database for each test (isolated)."""
     conn = Database(Path(":memory:"))
     conn.init_schema()
@@ -92,6 +93,7 @@ class TestThumbnailUpsert:
         db.upsert_thumbnail(path, mtime=1700000999, size=2000, width=1024, height=768, cache_uuid="uuid2")
 
         result = db.get_thumbnail(path)
+        assert result is not None
         assert result["mtime"] == 1700000999
         assert result["size"] == 2000
         assert result["width"] == 1024
@@ -103,6 +105,7 @@ class TestThumbnailUpsert:
         path = "/images/empty.png"
         db.upsert_thumbnail(path, mtime=1, size=0, width=1, height=1, cache_uuid="uuid-none")
         result = db.get_thumbnail(path)
+        assert result is not None
         assert result["thumbnail_cache_path"] is None
         assert result["preview_cache_path"] is None
         assert result["full_cache_path"] is None
@@ -131,6 +134,7 @@ class TestThumbnailGet:
         path = "/images/timestamp.png"
         db.upsert_thumbnail(path, mtime=1, size=50, width=10, height=10, cache_uuid="ts-uuid")
         result = db.get_thumbnail(path)
+        assert result is not None
         assert result["created_at"] is not None
 
 
@@ -463,4 +467,4 @@ class TestContextManager:
 
         # Connection should be closed — executing raises an error
         with pytest.raises(sqlite3.ProgrammingError):
-            d._conn.execute("SELECT 1")  # type: ignore[reportAttributeAccessIssue]
+            d._conn.execute("SELECT 1")

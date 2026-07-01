@@ -5,6 +5,7 @@ from __future__ import annotations
 import threading
 from concurrent.futures import CancelledError
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -907,7 +908,7 @@ def test_composite_psd_in_process_missing_psdtools_returns_none(tmp_path: Path) 
 
     original_import = builtins.__import__
 
-    def mock_import(name, *args, **kwargs):
+    def mock_import(name: str, *args: Any, **kwargs: Any) -> Any:
         if name == "psd_tools":
             raise ImportError("No module named psd_tools")
         return original_import(name, *args, **kwargs)
@@ -1096,7 +1097,7 @@ def test_render_psd_image_concurrent_calls_are_safe(tmp_path: Path) -> None:
         mock_exec = MagicMock()
         mock_get_exec.return_value = mock_exec
 
-        def make_future(*args) -> MagicMock:
+        def make_future(*args: object) -> MagicMock:
             mock_future = MagicMock()
             mock_future.result.return_value = None
             return mock_future

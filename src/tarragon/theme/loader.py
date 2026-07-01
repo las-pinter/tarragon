@@ -48,7 +48,7 @@ class ThemeLoader:
             FileNotFoundError: If ``tokens.json`` is missing from the package.
         """
         files = importlib_resources.files(self.PACKAGE)
-        return json.loads(files.joinpath("tokens.json").read_text(encoding="utf-8"))  # noqa: F405
+        return dict(json.loads(files.joinpath("tokens.json").read_text(encoding="utf-8")))  # noqa: F405
 
 
 __all__ = ["ThemeLoader"]

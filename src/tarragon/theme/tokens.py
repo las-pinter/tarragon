@@ -11,7 +11,7 @@ except ImportError:
     from importlib_resources import files  # type: ignore[no-redef]
 
 
-def _tokens_path():
+def _tokens_path() -> Any:
     """Return the resource path to tokens.json."""
     return files("tarragon.theme") / "tokens.json"
 
@@ -23,7 +23,7 @@ def load_tokens() -> dict[str, Any]:
         Dictionary with keys: colors, typography, spacing, radius, motion, layout.
     """
     content = _tokens_path().read_text(encoding="utf-8")
-    return json.loads(content)
+    return dict(json.loads(content))
 
 
 def get_token(section: str, key: str) -> Any:

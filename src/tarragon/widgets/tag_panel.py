@@ -177,8 +177,10 @@ class TagPanel(QWidget):
         self._tag_checkboxes.clear()
         while self._scroll_layout.count():
             item = self._scroll_layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
+            if item is not None:
+                w = item.widget()
+                if w is not None:
+                    w.deleteLater()
 
         folder_scope = None if self._global_scope else (self._folder_path or None)
         tags = self._tag_service.get_all_tags(folder_path=folder_scope)

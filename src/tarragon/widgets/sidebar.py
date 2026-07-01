@@ -13,7 +13,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, override
 
-from PySide6.QtCore import QAbstractListModel, QDir, QModelIndex, Qt, Signal
+from PySide6.QtCore import QAbstractListModel, QDir, QModelIndex, QPersistentModelIndex, Qt, Signal
 from PySide6.QtWidgets import (
     QFileSystemModel,
     QHBoxLayout,
@@ -44,12 +44,12 @@ class FavoritesModel(QAbstractListModel):
         self.load_from_db()
 
     @override
-    def rowCount(self, parent: QModelIndex = QModelIndex()) -> int:  # noqa: N802
+    def rowCount(self, parent: QModelIndex | QPersistentModelIndex = QPersistentModelIndex()) -> int:  # noqa: N802
         """Return the number of favorite entries."""
         return len(self._favorites)
 
     @override
-    def data(self, index: QModelIndex, role: int = Qt.DisplayRole) -> Any:  # noqa: N802
+    def data(self, index: QModelIndex | QPersistentModelIndex, role: int = Qt.ItemDataRole.DisplayRole) -> Any:  # noqa: N802
         """Return data for *index* according to *role*.
 
         * ``DisplayRole`` → user label, or file basename if label is ``None``
@@ -60,13 +60,13 @@ class FavoritesModel(QAbstractListModel):
 
         fav = self._favorites[index.row()]
 
-        if role == Qt.DisplayRole:
+        if role == Qt.ItemDataRole.DisplayRole:
             label = fav.get("label")
             if label:
                 return label
             return Path(fav["path"]).name
 
-        if role == Qt.UserRole:
+        if role == Qt.ItemDataRole.UserRole:
             return fav["path"]
 
         return None
@@ -173,14 +173,14 @@ class SidebarWidget(QWidget):
         """Remove the currently selected favorite from the list."""
         indexes = self._list_view.selectedIndexes()
         if indexes:
-            path = indexes[0].data(Qt.UserRole)
+            path = indexes[0].data(Qt.ItemDataRole.UserRole)
             if path:
                 self._model.remove_favorite(path)
 
     def _on_favorite_double_clicked(self, index: QModelIndex) -> None:
         """Emit ``favorite_clicked`` with the path of the double-clicked item."""
         if index.isValid():
-            path = index.data(Qt.UserRole)
+            path = index.data(Qt.ItemDataRole.UserRole)
             if path:
                 self.favorite_clicked.emit(path)
 

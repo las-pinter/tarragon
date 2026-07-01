@@ -62,3 +62,14 @@ testpaths = ["tests"]
 python_files = ["test_*.py", "*_test.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
+
+[tool.mypy]
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+show_error_codes = true
+exclude = ["dist/"]
+
+[[tool.mypy.overrides]]
+module = ["PIL.*", "psd_tools.*", "importlib_resources"]
+ignore_missing_imports = true

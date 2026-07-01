@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any, Generator
 
 import pytest
 from PySide6.QtCore import QModelIndex, Qt
@@ -15,7 +16,7 @@ from tarragon.widgets.sidebar import FavoritesModel, SidebarWidget
 
 
 @pytest.fixture(autouse=True)
-def qapp():  # noqa: PT004005
+def qapp() -> Generator[Any, None, None]:  # noqa: PT004005
     """Provide a shared QApplication instance for all Qt tests."""
     app = QApplication.instance()
     if app is None:
@@ -24,7 +25,7 @@ def qapp():  # noqa: PT004005
 
 
 @pytest.fixture()
-def db() -> Database:
+def db() -> Generator[Database, None, None]:
     """Provide an isolated in-memory database with schema initialised."""
     conn = Database(Path(":memory:"))
     conn.init_schema()
@@ -53,7 +54,7 @@ def populated_model(populated_db: Database) -> FavoritesModel:
 
 
 @pytest.fixture()
-def sidebar(db: Database) -> SidebarWidget:
+def sidebar(db: Database) -> Generator[SidebarWidget, None, None]:
     """Provide a SidebarWidget that is cleaned up after the test."""
     w = SidebarWidget(db)
     yield w
@@ -69,7 +70,7 @@ class TestFavoritesModelLoad:
         assert populated_model.rowCount() == 2
 
     def test_empty_db_has_zero_rows(self, model: FavoritesModel) -> None:
-        """Model with an empty database has rowCount == 0."""
+        """Model with an empty database has rowCount() == 0."""
         assert model.rowCount() == 0
 
 
@@ -80,7 +81,7 @@ class TestFavoritesModelData:
     def test_display_role_returns_label(self, populated_model: FavoritesModel) -> None:
         """DisplayRole returns the user-provided label when available."""
         index = populated_model.index(0)
-        display = index.data(Qt.DisplayRole)
+        display = index.data(Qt.ItemDataRole.DisplayRole)
         assert display == "Landscapes"
 
     def test_display_role_falls_back_to_filename(
@@ -89,13 +90,13 @@ class TestFavoritesModelData:
     ) -> None:
         """DisplayRole returns the file basename when label is None."""
         index = populated_model.index(1)
-        display = index.data(Qt.DisplayRole)
+        display = index.data(Qt.ItemDataRole.DisplayRole)
         assert display == "portrait.jpg"
 
     def test_user_role_returns_path(self, populated_model: FavoritesModel) -> None:
         """UserRole returns the full path string."""
         index = populated_model.index(0)
-        path = index.data(Qt.UserRole)
+        path = index.data(Qt.ItemDataRole.UserRole)
         assert path == "/photos/landscape.png"
 
     def test_invalid_index_returns_none(self, populated_model: FavoritesModel) -> None:
@@ -109,7 +110,7 @@ class TestFavoritesModelData:
     ) -> None:
         """data() returns None for unsupported roles."""
         index = populated_model.index(0)
-        result = index.data(Qt.DecorationRole)
+        result = index.data(Qt.ItemDataRole.DecorationRole)
         assert result is None
 
 
@@ -121,12 +122,12 @@ class TestFavoritesModelMutate:
         """Adding a favourite via the model increases rowCount."""
         model.add_favorite("/new/path.png", label="New One")
         assert model.rowCount() == 1
-        assert model.index(0).data(Qt.DisplayRole) == "New One"
+        assert model.index(0).data(Qt.ItemDataRole.DisplayRole) == "New One"
 
     def test_add_favorite_without_label(self, model: FavoritesModel) -> None:
         """Adding a favourite without a label uses the filename as display."""
         model.add_favorite("/new/photo.jpg")
-        assert model.index(0).data(Qt.DisplayRole) == "photo.jpg"
+        assert model.index(0).data(Qt.ItemDataRole.DisplayRole) == "photo.jpg"
 
     def test_remove_favorite(self, model: FavoritesModel) -> None:
         """Adding then removing a favourite decreases rowCount to 0."""
@@ -140,7 +141,7 @@ class TestFavoritesModelMutate:
         assert populated_model.rowCount() == 2
         populated_model.remove_favorite("/photos/landscape.png")
         assert populated_model.rowCount() == 1
-        assert populated_model.index(0).data(Qt.DisplayRole) == "portrait.jpg"
+        assert populated_model.index(0).data(Qt.ItemDataRole.DisplayRole) == "portrait.jpg"
 
     def test_favorite_paths(self, populated_model: FavoritesModel) -> None:
         """favorite_paths() returns all stored paths."""
@@ -156,7 +157,7 @@ class TestFavoritesModelMutate:
         db.add_favorite("/external/path.tga", label="External")
         model.load_from_db()
         assert model.rowCount() == 1
-        assert model.index(0).data(Qt.DisplayRole) == "External"
+        assert model.index(0).data(Qt.ItemDataRole.DisplayRole) == "External"
 
 
 # ── SidebarWidget: structure ─────────────────────────────────────────
@@ -205,9 +206,12 @@ class TestSidebarWidgetFunctionality:
         """Setting the current folder and clicking 'Add' adds it to the model."""
         sidebar.set_current_folder("/my/folder")
         sidebar._on_add_clicked()
-        model = sidebar.findChild(QListView).model()
+        list_view = sidebar.findChild(QListView)
+        assert list_view is not None
+        model = list_view.model()
+        assert model is not None
         assert model.rowCount() == 1
-        assert model.index(0).data(Qt.UserRole) == "/my/folder"
+        assert model.index(0, 0).data(Qt.ItemDataRole.UserRole) == "/my/folder"
 
     def test_add_current_folder_without_path_does_nothing(
         self,
@@ -215,25 +219,33 @@ class TestSidebarWidgetFunctionality:
     ) -> None:
         """Clicking 'Add' without setting a current folder does not add anything."""
         sidebar._on_add_clicked()
-        model = sidebar.findChild(QListView).model()
+        list_view = sidebar.findChild(QListView)
+        assert list_view is not None
+        model = list_view.model()
+        assert model is not None
         assert model.rowCount() == 0
 
     def test_remove_selected_favorite(self, sidebar: SidebarWidget) -> None:
         """Adding then selecting and removing a favourite works."""
         sidebar.set_current_folder("/remove/this")
         sidebar._on_add_clicked()
-        assert sidebar.findChild(QListView).model().rowCount() == 1
+        list_view = sidebar.findChild(QListView)
+        assert list_view is not None
+        lv_model = list_view.model()
+        assert lv_model is not None
+        assert lv_model.rowCount() == 1
 
         # Select the item
-        list_view = sidebar.findChild(QListView)
-        index = list_view.model().index(0)
-        list_view.selectionModel().select(
+        index = lv_model.index(0, 0)
+        sel_model = list_view.selectionModel()
+        assert sel_model is not None
+        sel_model.select(
             index,
-            list_view.selectionModel().SelectionFlag.Select,
+            sel_model.SelectionFlag.Select,
         )
 
         sidebar._on_remove_clicked()
-        assert list_view.model().rowCount() == 0
+        assert lv_model.rowCount() == 0
 
     def test_favorite_clicked_signal(self, sidebar: SidebarWidget) -> None:
         """Double-clicking a favourite emits favorite_clicked with the path."""
@@ -241,11 +253,14 @@ class TestSidebarWidgetFunctionality:
         sidebar._on_add_clicked()
 
         # Capture the signal
-        captured_args = []
+        captured_args: list[tuple[str, ...]] = []
         sidebar.favorite_clicked.connect(lambda *args: captured_args.append(args))
 
         list_view = sidebar.findChild(QListView)
-        index = list_view.model().index(0)
+        assert list_view is not None
+        lv_model = list_view.model()
+        assert lv_model is not None
+        index = lv_model.index(0, 0)
         list_view.doubleClicked.emit(index)
 
         assert len(captured_args) == 1
@@ -260,4 +275,8 @@ class TestSidebarWidgetFunctionality:
         sidebar._on_add_clicked()
         # Don't select anything — just click Remove
         sidebar._on_remove_clicked()
-        assert sidebar.findChild(QListView).model().rowCount() == 1
+        list_view = sidebar.findChild(QListView)
+        assert list_view is not None
+        model = list_view.model()
+        assert model is not None
+        assert model.rowCount() == 1

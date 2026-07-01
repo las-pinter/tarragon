@@ -21,6 +21,7 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+from typing import Any
 
 from PIL import Image, ImageDraw
 
@@ -105,7 +106,7 @@ class TimingResult:
         }
 
 
-def time_function(func, *args, **kwargs) -> tuple[object, float]:
+def time_function(func: Any, *args: Any, **kwargs: Any) -> tuple[object, float]:
     """Call func and return (result, elapsed_seconds)."""
     start = time.perf_counter()
     result = func(*args, **kwargs)

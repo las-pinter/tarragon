@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QEvent, QItemSelection, QModelIndex, QRect, QSize, Qt, QTime, QTimer, Signal
+from typing import Any
+
+from PySide6.QtCore import QEvent, QItemSelection, QModelIndex, QObject, QPersistentModelIndex, QRect, QSize, Qt, QTime, QTimer, Signal
 from PySide6.QtGui import QColor, QHelpEvent, QMouseEvent, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -11,6 +13,7 @@ from PySide6.QtWidgets import (
     QStyledItemDelegate,
     QStyleOptionViewItem,
     QToolTip,
+    QWidget,
 )
 
 from tarragon.models.thumbnail_model import ThumbnailModel
@@ -57,11 +60,11 @@ class ThumbnailAnimator:
 
         # Hover scale animations: row -> animation state dict
         # State: {"current": float, "target": float, "start_val": float, "start_time": QTime}
-        self._hover_anims: dict[int, dict] = {}
+        self._hover_anims: dict[int, dict[str, Any]] = {}
 
         # Fade-in animations: row -> animation state dict
         # State: {"current": float, "start_time": QTime}
-        self._fade_anims: dict[int, dict] = {}
+        self._fade_anims: dict[int, dict[str, Any]] = {}
 
         # Rows that have completed their fade-in (no animation needed)
         self._faded_in: set[int] = set()
@@ -113,14 +116,14 @@ class ThumbnailAnimator:
         """Return the current animated scale factor for *row*."""
         anim = self._hover_anims.get(row)
         if anim is not None:
-            return anim["current"]
+            return float(anim["current"])
         return 1.0
 
     def get_opacity(self, row: int) -> float:
         """Return the current animated opacity for *row*."""
         anim = self._fade_anims.get(row)
         if anim is not None:
-            return anim["current"]
+            return float(anim["current"])
         return 1.0
 
     def is_animating(self) -> bool:
@@ -200,7 +203,7 @@ class ThumbnailDelegate(QStyledItemDelegate):
 
     def __init__(
         self,
-        parent: object | None = None,
+        parent: QObject | None = None,
         animator: ThumbnailAnimator | None = None,
     ) -> None:
         super().__init__(parent)
@@ -219,7 +222,7 @@ class ThumbnailDelegate(QStyledItemDelegate):
         self,
         painter: QPainter,
         option: QStyleOptionViewItem,
-        index: QModelIndex,
+        index: QModelIndex | QPersistentModelIndex,
     ) -> None:
         """Paint the thumbnail cell: background, image, name, PSD badge, selection border."""
         row = index.row()
@@ -335,7 +338,7 @@ class ThumbnailDelegate(QStyledItemDelegate):
     def sizeHint(  # noqa: N802
         self,
         option: QStyleOptionViewItem,
-        index: QModelIndex,
+        index: QModelIndex | QPersistentModelIndex,
     ) -> QSize:
         """Return the size of each grid cell.
 
@@ -351,7 +354,7 @@ class ThumbnailDelegate(QStyledItemDelegate):
         event: QHelpEvent,
         view: QAbstractItemView,
         option: QStyleOptionViewItem,
-        index: QModelIndex,
+        index: QModelIndex | QPersistentModelIndex,
     ) -> bool:
         """Show tooltip with full filename on hover."""
         if event.type() == QEvent.Type.ToolTip:
@@ -373,7 +376,7 @@ class ThumbnailGrid(QListView):
     selection_changed = Signal(list)  # list of selected path strings
     file_double_clicked = Signal(str)  # emits file path on double-click
 
-    def __init__(self, parent: object | None = None) -> None:
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setViewMode(QListView.ViewMode.IconMode)
         self.setIconSize(QSize(THUMBNAIL_SIZE, THUMBNAIL_SIZE))
@@ -405,10 +408,10 @@ class ThumbnailGrid(QListView):
         old_model = self.model()
         if old_model is not None:
             try:
-                old_model.modelAboutToBeReset.disconnect(  # type: ignore[union-attr]
+                old_model.modelAboutToBeReset.disconnect(
                     self._animator.notify_rows_about_to_reset
                 )
-                old_model.rowsInserted.disconnect(  # type: ignore[union-attr]
+                old_model.rowsInserted.disconnect(
                     self._on_rows_inserted
                 )
             except RuntimeError:

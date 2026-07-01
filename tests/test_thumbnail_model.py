@@ -45,7 +45,7 @@ class TestThumbnailModel:
         model.set_paths([Path("/some/long/path/image.jpg")])
 
         index = model.index(0, 0)
-        result = model.data(index, Qt.DisplayRole)
+        result = model.data(index, Qt.ItemDataRole.DisplayRole)
 
         assert result == "image.jpg"
 
@@ -66,12 +66,12 @@ class TestThumbnailModel:
         model.set_paths([Path("/test.png")])
 
         invalid_index = model.index(999, 0)
-        assert model.data(invalid_index, Qt.DisplayRole) is None
+        assert model.data(invalid_index, Qt.ItemDataRole.DisplayRole) is None
         assert model.data(invalid_index, ThumbnailModel.PathRole) is None
 
     def test_path_role_constant_value(self) -> None:
         """PathRole constant equals Qt.UserRole + 1."""
-        assert ThumbnailModel.PathRole == Qt.UserRole + 1
+        assert ThumbnailModel.PathRole == Qt.ItemDataRole.UserRole + 1
 
     # ------------------------------------------------------------------
     # Edge case tests — Gutslicka da Painboy's special brew
@@ -96,7 +96,7 @@ class TestThumbnailModel:
         model.set_paths([Path("/test.png")])
 
         index = model.index(-1, 0)
-        assert model.data(index, Qt.DisplayRole) is None
+        assert model.data(index, Qt.ItemDataRole.DisplayRole) is None
         assert model.data(index, ThumbnailModel.PathRole) is None
 
     def test_data_with_row_equal_to_count_returns_none(self) -> None:
@@ -106,14 +106,14 @@ class TestThumbnailModel:
 
         # rowCount is 1, so index(1, 0) is out of bounds
         index = model.index(1, 0)
-        assert model.data(index, Qt.DisplayRole) is None
+        assert model.data(index, Qt.ItemDataRole.DisplayRole) is None
         assert model.data(index, ThumbnailModel.PathRole) is None
 
     def test_data_with_empty_model_returns_none(self) -> None:
         """data() returns None on an empty model (no set_paths call)."""
         model = ThumbnailModel()
         index = model.index(0, 0)
-        assert model.data(index, Qt.DisplayRole) is None
+        assert model.data(index, Qt.ItemDataRole.DisplayRole) is None
         assert model.data(index, ThumbnailModel.PathRole) is None
 
     def test_data_with_unicode_path_returns_correct_values(self) -> None:
@@ -122,7 +122,7 @@ class TestThumbnailModel:
         model.set_paths([Path("/data/图片/照片.jpg")])
 
         index = model.index(0, 0)
-        assert model.data(index, Qt.DisplayRole) == "照片.jpg"
+        assert model.data(index, Qt.ItemDataRole.DisplayRole) == "照片.jpg"
         assert model.data(index, ThumbnailModel.PathRole) == "/data/图片/照片.jpg"
         assert isinstance(model.data(index, ThumbnailModel.PathRole), str)
 
@@ -132,7 +132,7 @@ class TestThumbnailModel:
         model.set_paths([Path("/data/file with spaces (1).png")])
 
         index = model.index(0, 0)
-        assert model.data(index, Qt.DisplayRole) == "file with spaces (1).png"
+        assert model.data(index, Qt.ItemDataRole.DisplayRole) == "file with spaces (1).png"
         assert model.data(index, ThumbnailModel.PathRole) == "/data/file with spaces (1).png"
 
     def test_data_with_deeply_nested_path(self) -> None:
@@ -142,7 +142,7 @@ class TestThumbnailModel:
         model.set_paths([deep_path])
 
         index = model.index(0, 0)
-        assert model.data(index, Qt.DisplayRole) == "image.jpg"
+        assert model.data(index, Qt.ItemDataRole.DisplayRole) == "image.jpg"
         assert model.data(index, ThumbnailModel.PathRole) == str(deep_path)
 
     def test_data_with_unsupported_roles_returns_none(self) -> None:
@@ -152,17 +152,17 @@ class TestThumbnailModel:
         index = model.index(0, 0)
 
         unsupported_roles = [
-            Qt.UserRole,
-            Qt.ToolTipRole,
-            Qt.StatusTipRole,
-            Qt.WhatsThisRole,
-            Qt.DecorationRole,
-            Qt.SizeHintRole,
-            Qt.FontRole,
-            Qt.TextAlignmentRole,
-            Qt.BackgroundRole,
-            Qt.ForegroundRole,
-            Qt.CheckStateRole,
+            Qt.ItemDataRole.UserRole,
+            Qt.ItemDataRole.ToolTipRole,
+            Qt.ItemDataRole.StatusTipRole,
+            Qt.ItemDataRole.WhatsThisRole,
+            Qt.ItemDataRole.DecorationRole,
+            Qt.ItemDataRole.SizeHintRole,
+            Qt.ItemDataRole.FontRole,
+            Qt.ItemDataRole.TextAlignmentRole,
+            Qt.ItemDataRole.BackgroundRole,
+            Qt.ItemDataRole.ForegroundRole,
+            Qt.ItemDataRole.CheckStateRole,
         ]
         for role in unsupported_roles:
             assert model.data(index, role) is None, f"Expected None for role {role}"
@@ -187,7 +187,7 @@ class TestThumbnailModel:
 
         assert model.rowCount() == 1
         index = model.index(0, 0)
-        assert model.data(index, Qt.DisplayRole) == "file_49.jpg"
+        assert model.data(index, Qt.ItemDataRole.DisplayRole) == "file_49.jpg"
         assert model.data(index, ThumbnailModel.PathRole) == "/path/file_49.jpg"
 
     # ------------------------------------------------------------------

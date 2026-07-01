@@ -5,6 +5,7 @@ WAAAGH! Wrenchbasha's torture chamber for da TagService!
 
 from __future__ import annotations
 
+from collections.abc import Generator
 from pathlib import Path
 
 import pytest
@@ -19,7 +20,7 @@ from tarragon.services.tag_service import TagService
 
 
 @pytest.fixture(autouse=True)
-def qapp():
+def qapp() -> Generator[object, None, None]:
     """Provide a shared QApplication instance for Qt-based tests."""
     app = QApplication.instance()
     if app is None:

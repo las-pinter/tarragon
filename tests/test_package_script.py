@@ -7,6 +7,7 @@ import importlib.util
 import os
 import stat
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -39,7 +40,7 @@ def release_docs_path() -> Path:
 
 
 @pytest.fixture()
-def package_module():
+def package_module() -> Any:
     """Import the package script as a module and return it."""
     spec = importlib.util.spec_from_file_location("package_nuitka", PACKAGE_SCRIPT)
     assert spec is not None, "Could not create module spec"
@@ -76,7 +77,7 @@ def test_package_script_is_executable(package_script_path: Path) -> None:
     assert has_main_guard, "Script must have an `if __name__ == '__main__'` guard"
 
 
-def test_build_function_exists(package_module) -> None:
+def test_build_function_exists(package_module: Any) -> None:
     """The build() function must be defined in the script."""
     assert hasattr(package_module, "build"), "build() function not found in script"
     assert callable(package_module.build), "build must be callable"
@@ -87,7 +88,7 @@ def test_build_function_exists(package_module) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_build_command_includes_pyside6_plugin(package_module) -> None:
+def test_build_command_includes_pyside6_plugin(package_module: Any) -> None:
     """The Nuitka command must include the PySide6 plugin flag."""
     with patch.object(package_module, "check_dependencies"), patch("subprocess.run") as mock_run:
         package_module.build(onefile=True)
@@ -97,7 +98,7 @@ def test_build_command_includes_pyside6_plugin(package_module) -> None:
     assert "--enable-plugin=pyside6" in cmd, "Nuitka command must include --enable-plugin=pyside6"
 
 
-def test_build_command_includes_entry_point(package_module) -> None:
+def test_build_command_includes_entry_point(package_module: Any) -> None:
     """The Nuitka command must reference the main.py entry point."""
     with patch.object(package_module, "check_dependencies"), patch("subprocess.run") as mock_run:
         package_module.build(onefile=True)
@@ -112,7 +113,7 @@ def test_build_command_includes_entry_point(package_module) -> None:
     ), f"Entry point path should contain src/tarragon, got: {entry_point}"
 
 
-def test_build_command_includes_tarragon_package(package_module) -> None:
+def test_build_command_includes_tarragon_package(package_module: Any) -> None:
     """The Nuitka command must include the tarragon package."""
     with patch.object(package_module, "check_dependencies"), patch("subprocess.run") as mock_run:
         package_module.build(onefile=True)
@@ -124,7 +125,7 @@ def test_build_command_includes_tarragon_package(package_module) -> None:
     ), "Nuitka command must include --include-package=tarragon to bundle the application package"
 
 
-def test_build_command_includes_python_path(package_module) -> None:
+def test_build_command_includes_python_path(package_module: Any) -> None:
     """The Nuitka build must set PYTHONPATH environment variable to the src directory."""
     with patch.object(package_module, "check_dependencies"), patch("subprocess.run") as mock_run:
         package_module.build(onefile=True)

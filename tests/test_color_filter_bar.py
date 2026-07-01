@@ -9,6 +9,8 @@ Covers:
 
 from __future__ import annotations
 
+from collections.abc import Generator
+
 import pytest
 from PySide6.QtWidgets import QApplication, QPushButton
 from tarragon.widgets.color_filter_bar import ColorFilterBar
@@ -17,7 +19,7 @@ from tarragon.widgets.color_filter_bar import ColorFilterBar
 
 
 @pytest.fixture(autouse=True)
-def qapp():  # noqa: PT004
+def qapp() -> Generator[object, None, None]:  # noqa: PT004
     """Provide a shared QApplication instance for all Qt tests."""
     app = QApplication.instance()
     if app is None:
@@ -26,7 +28,7 @@ def qapp():  # noqa: PT004
 
 
 @pytest.fixture()
-def bar() -> ColorFilterBar:
+def bar() -> Generator[ColorFilterBar, None, None]:
     """Provide a ColorFilterBar that is closed after the test."""
     w = ColorFilterBar()
     yield w
@@ -160,7 +162,7 @@ class TestColorFilterChangedSignal:
     def test_color_filter_changed_signal_on_toggle(self, bar: ColorFilterBar) -> None:
         """Toggling a swatch emits color_filter_changed with the active set."""
         # Arrange
-        captured: list[set] = []
+        captured: list[set[str]] = []
         bar.color_filter_changed.connect(lambda s: captured.append(s))
 
         # Act
@@ -173,7 +175,7 @@ class TestColorFilterChangedSignal:
     def test_signal_emitted_on_set_active(self, bar: ColorFilterBar) -> None:
         """set_active_colors also emits the signal."""
         # Arrange
-        captured: list[set] = []
+        captured: list[set[str]] = []
         bar.color_filter_changed.connect(lambda s: captured.append(s))
 
         # Act
@@ -186,7 +188,7 @@ class TestColorFilterChangedSignal:
     def test_signal_emitted_on_click(self, bar: ColorFilterBar) -> None:
         """Clicking a swatch button emits the signal."""
         # Arrange
-        captured: list[set] = []
+        captured: list[set[str]] = []
         bar.color_filter_changed.connect(lambda s: captured.append(s))
         btn = bar._swatch_buttons["yellow"]
 

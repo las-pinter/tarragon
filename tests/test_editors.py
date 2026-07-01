@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Generator
 from pathlib import Path
 from unittest.mock import patch
 
@@ -17,7 +18,7 @@ from tarragon.editors import (
 
 
 @pytest.fixture()
-def db() -> Database:
+def db() -> Generator[Database, None, None]:
     """Provide an in-memory database with schema initialised."""
     conn = Database(Path(":memory:"))
     conn.init_schema()

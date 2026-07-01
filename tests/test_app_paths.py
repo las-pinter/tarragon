@@ -8,7 +8,7 @@ import pytest
 MOCK_DATA = "/tmp/test-tarragon"
 
 
-def test_data_dir_returns_platform_path():
+def test_data_dir_returns_platform_path() -> None:
     """data_dir() returns the path reported by platformdirs.user_data_dir."""
     from tarragon.app_paths import data_dir
 
@@ -18,7 +18,7 @@ def test_data_dir_returns_platform_path():
     assert result == Path(MOCK_DATA)
 
 
-def test_db_path_under_data_dir():
+def test_db_path_under_data_dir() -> None:
     """db_path() resolves to <data_dir>/tarragon.db."""
     from tarragon.app_paths import db_path
 
@@ -28,7 +28,7 @@ def test_db_path_under_data_dir():
     assert result == Path(MOCK_DATA) / "tarragon.db"
 
 
-def test_cache_dir_under_data_dir():
+def test_cache_dir_under_data_dir() -> None:
     """cache_dir() resolves to <data_dir>/cache."""
     from tarragon.app_paths import cache_dir
 
@@ -62,7 +62,7 @@ def test_ensure_dirs_is_idempotent(tmp_path: Path) -> None:
         assert (tmp_path / "cache").is_dir()
 
 
-def test_data_dir_raises_runtimeerror_when_platformdirs_returns_none():
+def test_data_dir_raises_runtimeerror_when_platformdirs_returns_none() -> None:
     """data_dir() raises RuntimeError when platformdirs returns None."""
     from tarragon.app_paths import data_dir
 

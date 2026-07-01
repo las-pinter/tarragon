@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -36,7 +37,7 @@ from tarragon.widgets.thumbnail_grid import (
 
 
 @pytest.fixture(autouse=True)
-def qapp():
+def qapp() -> Any:
     """Provide a shared QApplication instance for all Qt tests."""
     from PySide6.QtWidgets import QApplication
 
@@ -47,13 +48,13 @@ def qapp():
 
 
 @pytest.fixture()
-def delegate():
+def delegate() -> Any:
     """Provide a fresh ThumbnailDelegate."""
     return ThumbnailDelegate()
 
 
 @pytest.fixture()
-def grid():
+def grid() -> Any:
     """Provide a ThumbnailGrid that is closed after the test."""
     g = ThumbnailGrid()
     yield g
@@ -61,7 +62,7 @@ def grid():
 
 
 @pytest.fixture()
-def grid_with_model(grid):
+def grid_with_model(grid: Any) -> Any:
     """Provide a ThumbnailGrid backed by a ThumbnailModel with sample paths."""
     model = ThumbnailModel()
     model.set_paths(
@@ -76,7 +77,7 @@ def grid_with_model(grid):
 
 
 @pytest.fixture()
-def mock_painter():
+def mock_painter() -> Any:
     """Provide a mocked QPainter for paint-method tests."""
     painter = MagicMock()
     painter.font.return_value = MagicMock()
@@ -86,7 +87,7 @@ def mock_painter():
 
 
 @pytest.fixture()
-def style_option():
+def style_option() -> QStyleOptionViewItem:
     """Provide a QStyleOptionViewItem with a realistic rect and no special state."""
     opt = QStyleOptionViewItem()
     cell_w = THUMBNAIL_SIZE + GRID_GAP * 2 + HOVER_MARGIN * 2
@@ -96,7 +97,7 @@ def style_option():
     return opt
 
 
-def _make_index(model, row):
+def _make_index(model: Any, row: int) -> Any:
     """Helper: return a valid QModelIndex for *row* in *model*."""
     return model.index(row)
 
@@ -104,12 +105,12 @@ def _make_index(model, row):
 # ── ThumbnailGrid Tests ──────────────────────────────────────────────
 
 
-def test_thumbnail_grid_is_qlistview():
+def test_thumbnail_grid_is_qlistview() -> None:
     """ThumbnailGrid is a QListView subclass."""
     assert issubclass(ThumbnailGrid, QListView)
 
 
-def test_thumbnail_grid_icon_mode(qapp):  # noqa: ARG001
+def test_thumbnail_grid_icon_mode(qapp: Any) -> None:  # noqa: ARG001
     """ThumbnailGrid uses IconMode view."""
     grid = ThumbnailGrid()
     try:
@@ -118,7 +119,7 @@ def test_thumbnail_grid_icon_mode(qapp):  # noqa: ARG001
         grid.close()
 
 
-def test_thumbnail_grid_has_delegate(qapp):  # noqa: ARG001
+def test_thumbnail_grid_has_delegate(qapp: Any) -> None:  # noqa: ARG001
     """ThumbnailGrid has a ThumbnailDelegate set."""
     grid = ThumbnailGrid()
     try:
@@ -128,7 +129,7 @@ def test_thumbnail_grid_has_delegate(qapp):  # noqa: ARG001
         grid.close()
 
 
-def test_thumbnail_grid_extended_selection(qapp):  # noqa: ARG001
+def test_thumbnail_grid_extended_selection(qapp: Any) -> None:  # noqa: ARG001
     """ThumbnailGrid allows extended (multi) selection."""
     grid = ThumbnailGrid()
     try:
@@ -137,7 +138,7 @@ def test_thumbnail_grid_extended_selection(qapp):  # noqa: ARG001
         grid.close()
 
 
-def test_thumbnail_grid_set_model(qapp):  # noqa: ARG001
+def test_thumbnail_grid_set_model(qapp: Any) -> None:  # noqa: ARG001
     """ThumbnailGrid accepts a ThumbnailModel."""
     grid = ThumbnailGrid()
     model = ThumbnailModel()
@@ -151,12 +152,12 @@ def test_thumbnail_grid_set_model(qapp):  # noqa: ARG001
 # ── ThumbnailDelegate Tests ──────────────────────────────────────────
 
 
-def test_thumbnail_delegate_is_qstyleditemdelegate():
+def test_thumbnail_delegate_is_qstyleditemdelegate() -> None:
     """ThumbnailDelegate is a QStyledItemDelegate subclass."""
     assert issubclass(ThumbnailDelegate, QStyledItemDelegate)
 
 
-def test_thumbnail_delegate_size_hint():
+def test_thumbnail_delegate_size_hint() -> None:
     """sizeHint returns correct dimensions for a grid cell.
 
     Includes HOVER_MARGIN on each side to accommodate hover-scale growth.
@@ -168,7 +169,7 @@ def test_thumbnail_delegate_size_hint():
     assert hint == QSize(expected_width, expected_height)
 
 
-def test_thumbnail_delegate_hover_tracking():
+def test_thumbnail_delegate_hover_tracking() -> None:
     """set_hovered_row updates the internal hovered row."""
     delegate = ThumbnailDelegate()
     assert delegate._hovered_row == -1
@@ -181,7 +182,7 @@ def test_thumbnail_delegate_hover_tracking():
 # ── Edge Case: Empty Model ───────────────────────────────────────────
 
 
-def test_paint_with_empty_model_does_not_crash(delegate, mock_painter, style_option):
+def test_paint_with_empty_model_does_not_crash(delegate: Any, mock_painter: Any, style_option: Any) -> None:
     """Painting when the model has 0 rows does not raise."""
     # No paths set — model is empty
     # Use an invalid index (row 0 on empty model)
@@ -192,7 +193,7 @@ def test_paint_with_empty_model_does_not_crash(delegate, mock_painter, style_opt
     assert mock_painter.restore.called
 
 
-def test_grid_with_empty_model_renders_without_error(grid):
+def test_grid_with_empty_model_renders_without_error(grid: Any) -> None:
     """ThumbnailGrid backed by an empty model does not crash on viewport update."""
     model = ThumbnailModel()
     grid.set_model(model)
@@ -204,7 +205,7 @@ def test_grid_with_empty_model_renders_without_error(grid):
 # ── Edge Case: Invalid Index in Delegate Paint ───────────────────────
 
 
-def test_paint_with_invalid_index_does_not_crash(delegate, mock_painter, style_option):
+def test_paint_with_invalid_index_does_not_crash(delegate: Any, mock_painter: Any, style_option: Any) -> None:
     """Painting with an invalid QModelIndex does not raise."""
     invalid_index = QModelIndex()
     assert not invalid_index.isValid()
@@ -213,7 +214,7 @@ def test_paint_with_invalid_index_does_not_crash(delegate, mock_painter, style_o
     assert mock_painter.restore.called
 
 
-def test_paint_with_invalid_index_uses_empty_name(delegate, mock_painter, style_option):
+def test_paint_with_invalid_index_uses_empty_name(delegate: Any, mock_painter: Any, style_option: Any) -> None:
     """Painting with invalid index falls back to empty string for display name."""
     invalid_index = QModelIndex()
     delegate.paint(mock_painter, style_option, invalid_index)
@@ -228,7 +229,7 @@ def test_paint_with_invalid_index_uses_empty_name(delegate, mock_painter, style_
 # ── Edge Case: None Data from Model ──────────────────────────────────
 
 
-def test_paint_when_path_role_returns_none(delegate, mock_painter, style_option):
+def test_paint_when_path_role_returns_none(delegate: Any, mock_painter: Any, style_option: Any) -> None:
     """Painting when PathRole returns None does not crash (no pixmap drawn)."""
     model = ThumbnailModel()
     model.set_paths([Path("/fake/test.png")])
@@ -237,7 +238,7 @@ def test_paint_when_path_role_returns_none(delegate, mock_painter, style_option)
     # Patch index.data to return None for PathRole
     original_data = index.data
 
-    def mock_data(role):
+    def mock_data(role: int) -> Any:
         if role == ThumbnailModel.PathRole:
             return None
         if role == Qt.ItemDataRole.DisplayRole:
@@ -254,7 +255,7 @@ def test_paint_when_path_role_returns_none(delegate, mock_painter, style_option)
     assert mock_painter.restore.called
 
 
-def test_paint_when_display_role_returns_none(delegate, mock_painter, style_option):
+def test_paint_when_display_role_returns_none(delegate: Any, mock_painter: Any, style_option: Any) -> None:
     """Painting when DisplayRole returns None uses empty string for name."""
     model = ThumbnailModel()
     model.set_paths([Path("/fake/test.png")])
@@ -262,7 +263,7 @@ def test_paint_when_display_role_returns_none(delegate, mock_painter, style_opti
 
     original_data = index.data
 
-    def mock_data(role):
+    def mock_data(role: int) -> Any:
         if role == Qt.ItemDataRole.DisplayRole:
             return None
         return original_data(role)
@@ -279,7 +280,7 @@ def test_paint_when_display_role_returns_none(delegate, mock_painter, style_opti
 # ── Edge Case: Very Long Filenames ───────────────────────────────────
 
 
-def test_paint_with_very_long_filename(delegate, mock_painter, style_option):
+def test_paint_with_very_long_filename(delegate: Any, mock_painter: Any, style_option: Any) -> None:
     """Painting with an extremely long filename does not crash."""
     model = ThumbnailModel()
     long_name = "a" * 500 + ".png"
@@ -308,7 +309,7 @@ def test_paint_with_very_long_filename(delegate, mock_painter, style_option):
         pytest.param("über_straße_final_v2.exr", id="german"),
     ],
 )
-def test_paint_with_unicode_filename(delegate, mock_painter, style_option, filename):
+def test_paint_with_unicode_filename(delegate: Any, mock_painter: Any, style_option: Any, filename: str) -> None:
     """Painting with various Unicode filenames does not crash."""
     model = ThumbnailModel()
     model.set_paths([Path(f"/fake/{filename}")])
@@ -322,7 +323,7 @@ def test_paint_with_unicode_filename(delegate, mock_painter, style_option, filen
 # ── Edge Case: Large Model (1000+ items) ─────────────────────────────
 
 
-def test_model_with_1000_items_does_not_crash(grid):
+def test_model_with_1000_items_does_not_crash(grid: Any) -> None:
     """ThumbnailGrid handles a model with 1000+ items without error."""
     model = ThumbnailModel()
     paths = [Path(f"/fake/batch_{i:04d}.png") for i in range(1000)]
@@ -339,7 +340,7 @@ def test_model_with_1000_items_does_not_crash(grid):
     assert last.data() == "batch_0999.png"
 
 
-def test_delegate_size_hint_consistent_across_indices(delegate):
+def test_delegate_size_hint_consistent_across_indices(delegate: Any) -> None:
     """sizeHint returns the same size regardless of index."""
     model = ThumbnailModel()
     model.set_paths([Path(f"/fake/img_{i}.png") for i in range(10)])
@@ -354,7 +355,7 @@ def test_delegate_size_hint_consistent_across_indices(delegate):
 # ── Edge Case: mouseMoveEvent on Invalid Index ───────────────────────
 
 
-def test_mouse_move_event_over_empty_area_resets_hover(grid_with_model):
+def test_mouse_move_event_over_empty_area_resets_hover(grid_with_model: Any) -> None:
     """mouseMoveEvent over an area with no item resets hover to -1."""
     grid, model = grid_with_model
     delegate = grid._delegate
@@ -377,7 +378,7 @@ def test_mouse_move_event_over_empty_area_resets_hover(grid_with_model):
     assert delegate._hovered_row == -1
 
 
-def test_mouse_move_event_triggers_viewport_update(grid_with_model):
+def test_mouse_move_event_triggers_viewport_update(grid_with_model: Any) -> None:
     """mouseMoveEvent triggers a viewport update when hovered row changes."""
     grid, _ = grid_with_model
     delegate = grid._delegate
@@ -397,7 +398,7 @@ def test_mouse_move_event_triggers_viewport_update(grid_with_model):
         mock_update.assert_called_once()
 
 
-def test_mouse_move_event_no_update_when_row_unchanged(grid_with_model):
+def test_mouse_move_event_no_update_when_row_unchanged(grid_with_model: Any) -> None:
     """mouseMoveEvent does NOT trigger viewport update when hovered row is unchanged."""
     grid, _ = grid_with_model
     delegate = grid._delegate
@@ -420,7 +421,7 @@ def test_mouse_move_event_no_update_when_row_unchanged(grid_with_model):
 # ── Edge Case: leaveEvent Resets Hover ───────────────────────────────
 
 
-def test_leave_event_resets_hover_state(grid_with_model):
+def test_leave_event_resets_hover_state(grid_with_model: Any) -> None:
     """leaveEvent resets the hovered row to -1."""
     grid, _ = grid_with_model
     delegate = grid._delegate
@@ -440,7 +441,7 @@ def test_leave_event_resets_hover_state(grid_with_model):
     assert delegate._hovered_row == -1
 
 
-def test_leave_event_triggers_viewport_update(grid_with_model):
+def test_leave_event_triggers_viewport_update(grid_with_model: Any) -> None:
     """leaveEvent triggers a viewport update for repaint."""
     grid, _ = grid_with_model
 
@@ -459,7 +460,7 @@ def test_leave_event_triggers_viewport_update(grid_with_model):
 # ── Edge Case: Multiple Rapid Hover Changes ──────────────────────────
 
 
-def test_rapid_hover_changes_track_correctly(delegate):
+def test_rapid_hover_changes_track_correctly(delegate: Any) -> None:
     """Rapid successive hover changes always reflect the latest row."""
     rows = [0, 5, 3, 99, -1, 42, 0, -1, 7, -1]
     for row in rows:
@@ -467,7 +468,7 @@ def test_rapid_hover_changes_track_correctly(delegate):
         assert delegate._hovered_row == row
 
 
-def test_rapid_hover_changes_via_mouse_events(grid_with_model):
+def test_rapid_hover_changes_via_mouse_events(grid_with_model: Any) -> None:
     """Rapid mouseMoveEvents correctly update hover state each time."""
     grid, _ = grid_with_model
     delegate = grid._delegate
@@ -489,7 +490,7 @@ def test_rapid_hover_changes_via_mouse_events(grid_with_model):
 # ── Edge Case: PSD/PSB Badge Painting ────────────────────────────────
 
 
-def test_paint_psd_file_draws_badge(delegate, mock_painter, style_option):
+def test_paint_psd_file_draws_badge(delegate: Any, mock_painter: Any, style_option: Any) -> None:
     """Painting a .psd file draws the PSD badge overlay."""
     model = ThumbnailModel()
     model.set_paths([Path("/fake/layer_composite.psd")])
@@ -505,7 +506,7 @@ def test_paint_psd_file_draws_badge(delegate, mock_painter, style_option):
     assert any("PSD" in str(call) for call in draw_text_calls)
 
 
-def test_paint_psb_file_draws_badge(delegate, mock_painter, style_option):
+def test_paint_psb_file_draws_badge(delegate: Any, mock_painter: Any, style_option: Any) -> None:
     """Painting a .psb file draws a PSB badge overlay (not PSD)."""
     model = ThumbnailModel()
     model.set_paths([Path("/fake/big_document.psb")])
@@ -519,7 +520,7 @@ def test_paint_psb_file_draws_badge(delegate, mock_painter, style_option):
     assert not any("PSD" in str(call) for call in draw_text_calls)
 
 
-def test_paint_psd_case_insensitive(delegate, mock_painter, style_option):
+def test_paint_psd_case_insensitive(delegate: Any, mock_painter: Any, style_option: Any) -> None:
     """PSD badge is drawn regardless of file extension case (.PSD, .Psd)."""
     model = ThumbnailModel()
     model.set_paths([Path("/fake/UPPER.PSD")])
@@ -531,7 +532,7 @@ def test_paint_psd_case_insensitive(delegate, mock_painter, style_option):
     assert any("PSD" in str(call) for call in draw_text_calls)
 
 
-def test_paint_non_psd_file_no_badge(delegate, mock_painter, style_option):
+def test_paint_non_psd_file_no_badge(delegate: Any, mock_painter: Any, style_option: Any) -> None:
     """Painting a .png file does NOT draw the PSD badge."""
     model = ThumbnailModel()
     model.set_paths([Path("/fake/regular_image.png")])
@@ -547,7 +548,7 @@ def test_paint_non_psd_file_no_badge(delegate, mock_painter, style_option):
 # ── Edge Case: Selection State Painting ──────────────────────────────
 
 
-def test_paint_selected_item_uses_secondary_bg(delegate, mock_painter, style_option):
+def test_paint_selected_item_uses_secondary_bg(delegate: Any, mock_painter: Any, style_option: Any) -> None:
     """Painting a selected item fills background with BG_SECONDARY."""
     model = ThumbnailModel()
     model.set_paths([Path("/fake/selected.png")])
@@ -566,7 +567,7 @@ def test_paint_selected_item_uses_secondary_bg(delegate, mock_painter, style_opt
     assert first_fill_args[1] == BG_SECONDARY
 
 
-def test_paint_selected_item_draws_coral_border(delegate, mock_painter, style_option):
+def test_paint_selected_item_draws_coral_border(delegate: Any, mock_painter: Any, style_option: Any) -> None:
     """Painting a selected item draws a coral selection border."""
     model = ThumbnailModel()
     model.set_paths([Path("/fake/selected.png")])
@@ -581,7 +582,7 @@ def test_paint_selected_item_draws_coral_border(delegate, mock_painter, style_op
     assert mock_painter.drawRect.called
 
 
-def test_paint_hovered_item_uses_lighter_bg(delegate, mock_painter, style_option):
+def test_paint_hovered_item_uses_lighter_bg(delegate: Any, mock_painter: Any, style_option: Any) -> None:
     """Painting a hovered item fills background with a lighter variant."""
     model = ThumbnailModel()
     model.set_paths([Path("/fake/hovered.png")])
@@ -601,7 +602,7 @@ def test_paint_hovered_item_uses_lighter_bg(delegate, mock_painter, style_option
     assert first_fill_args[1] == expected_color
 
 
-def test_paint_normal_item_uses_primary_bg(delegate, mock_painter, style_option):
+def test_paint_normal_item_uses_primary_bg(delegate: Any, mock_painter: Any, style_option: Any) -> None:
     """Painting a non-selected, non-hovered item uses BG_PRIMARY."""
     model = ThumbnailModel()
     model.set_paths([Path("/fake/normal.png")])
@@ -621,7 +622,7 @@ def test_paint_normal_item_uses_primary_bg(delegate, mock_painter, style_option)
 # ── Edge Case: Grid Configuration Details ────────────────────────────
 
 
-def test_thumbnail_grid_grid_size_matches_delegate(grid):
+def test_thumbnail_grid_grid_size_matches_delegate(grid: Any) -> None:
     """Grid size is large enough for delegate cell + extra spacing."""
     delegate_hint = grid._delegate.sizeHint(None, None)
     grid_size = grid.gridSize()
@@ -631,37 +632,37 @@ def test_thumbnail_grid_grid_size_matches_delegate(grid):
     assert grid_size.height() >= delegate_hint.height()
 
 
-def test_thumbnail_grid_mouse_tracking_enabled(grid):
+def test_thumbnail_grid_mouse_tracking_enabled(grid: Any) -> None:
     """ThumbnailGrid has mouse tracking enabled for hover effects."""
     assert grid.hasMouseTracking()
 
 
-def test_thumbnail_grid_icon_size_matches_thumbnail_size(grid):
+def test_thumbnail_grid_icon_size_matches_thumbnail_size(grid: Any) -> None:
     """Icon size matches THUMBNAIL_SIZE constant."""
     assert grid.iconSize() == QSize(THUMBNAIL_SIZE, THUMBNAIL_SIZE)
 
 
-def test_thumbnail_grid_wrapping_enabled(grid):
+def test_thumbnail_grid_wrapping_enabled(grid: Any) -> None:
     """ThumbnailGrid has wrapping enabled for multi-row layout."""
     assert grid.isWrapping()
 
 
-def test_thumbnail_grid_horizontal_scrollbar_always_off(grid):
+def test_thumbnail_grid_horizontal_scrollbar_always_off(grid: Any) -> None:
     """Horizontal scrollbar is always off."""
     assert grid.horizontalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
 
 
-def test_thumbnail_grid_uniform_item_sizes(grid):
+def test_thumbnail_grid_uniform_item_sizes(grid: Any) -> None:
     """Uniform item sizes enabled for performance."""
     assert grid.uniformItemSizes()
 
 
-def test_thumbnail_grid_spacing_uses_grid_gap(grid):
+def test_thumbnail_grid_spacing_uses_grid_gap(grid: Any) -> None:
     """Grid spacing is GRID_GAP for proper visual separation between cells."""
     assert grid.spacing() == GRID_GAP
 
 
-def test_grid_size_accounts_for_hover_margin(grid):
+def test_grid_size_accounts_for_hover_margin(grid: Any) -> None:
     """Grid size includes HOVER_MARGIN so hovered thumbnails don't overlap neighbors."""
     grid_size = grid.gridSize()
     expected_w = THUMBNAIL_SIZE + GRID_GAP * 2 + HOVER_MARGIN * 2
@@ -669,12 +670,12 @@ def test_grid_size_accounts_for_hover_margin(grid):
     assert grid_size == QSize(expected_w, expected_h)
 
 
-def test_grid_gap_provides_adequate_spacing():
+def test_grid_gap_provides_adequate_spacing() -> None:
     """GRID_GAP is at least 12px for comfortable visual breathing room."""
     assert GRID_GAP >= 12
 
 
-def test_hover_margin_covers_scale_growth():
+def test_hover_margin_covers_scale_growth() -> None:
     """HOVER_MARGIN is large enough to cover the hover-scale overshoot.
 
     At HOVER_SCALE_TARGET=1.02, a THUMBNAIL_SIZE image grows by
@@ -690,20 +691,20 @@ def test_hover_margin_covers_scale_growth():
 # ── Edge Case: Delegate Initial State ────────────────────────────────
 
 
-def test_delegate_initial_hover_is_negative_one():
+def test_delegate_initial_hover_is_negative_one() -> None:
     """ThumbnailDelegate starts with _hovered_row = -1 (no hover)."""
     d = ThumbnailDelegate()
     assert d._hovered_row == -1
 
 
-def test_delegate_set_hovered_row_with_large_value():
+def test_delegate_set_hovered_row_with_large_value() -> None:
     """set_hovered_row accepts arbitrarily large row numbers."""
     d = ThumbnailDelegate()
     d.set_hovered_row(999_999)
     assert d._hovered_row == 999_999
 
 
-def test_delegate_set_hovered_row_with_negative_value():
+def test_delegate_set_hovered_row_with_negative_value() -> None:
     """set_hovered_row accepts negative values (reset signal)."""
     d = ThumbnailDelegate()
     d.set_hovered_row(5)
@@ -714,7 +715,7 @@ def test_delegate_set_hovered_row_with_negative_value():
 # ── Edge Case: Paint Save/Restore Pairing ────────────────────────────
 
 
-def test_paint_always_pairs_save_and_restore(delegate, mock_painter, style_option):
+def test_paint_always_pairs_save_and_restore(delegate: Any, mock_painter: Any, style_option: Any) -> None:
     """paint() always calls save() and restore() exactly once each."""
     model = ThumbnailModel()
     model.set_paths([Path("/fake/test.png")])
@@ -726,7 +727,7 @@ def test_paint_always_pairs_save_and_restore(delegate, mock_painter, style_optio
     assert mock_painter.restore.call_count == 1
 
 
-def test_paint_save_restore_with_invalid_index(delegate, mock_painter, style_option):
+def test_paint_save_restore_with_invalid_index(delegate: Any, mock_painter: Any, style_option: Any) -> None:
     """paint() pairs save/restore even with an invalid index."""
     invalid = QModelIndex()
     delegate.paint(mock_painter, style_option, invalid)
@@ -738,7 +739,7 @@ def test_paint_save_restore_with_invalid_index(delegate, mock_painter, style_opt
 # ── Edge Case: Multiple Items Painted Sequentially ───────────────────
 
 
-def test_paint_multiple_items_sequentially(delegate, mock_painter, style_option):
+def test_paint_multiple_items_sequentially(delegate: Any, mock_painter: Any, style_option: Any) -> None:
     """Painting multiple items in sequence does not leak state between calls."""
     model = ThumbnailModel()
     model.set_paths(
@@ -760,7 +761,7 @@ def test_paint_multiple_items_sequentially(delegate, mock_painter, style_option)
 # ── Regression: State_Selected Fix ───────────────────────────────────
 
 
-def test_paint_with_selected_state_does_not_crash(delegate, mock_painter, style_option):
+def test_paint_with_selected_state_does_not_crash(delegate: Any, mock_painter: Any, style_option: Any) -> None:
     """Painting with State_Selected does not crash (regression for QStyle.StateFlag fix)."""
     model = ThumbnailModel()
     model.set_paths([Path("/fake/selected.png")])
@@ -777,7 +778,7 @@ def test_paint_with_selected_state_does_not_crash(delegate, mock_painter, style_
 # ── Text Truncation (Elision) ────────────────────────────────────────
 
 
-def test_paint_long_filename_uses_elided_text(delegate, style_option):
+def test_paint_long_filename_uses_elided_text(delegate: Any, style_option: Any) -> None:
     """Painting with a long filename uses QFontMetrics.elidedText for truncation."""
     mock_painter = MagicMock()
     mock_painter.font.return_value = MagicMock()
@@ -803,7 +804,7 @@ def test_paint_long_filename_uses_elided_text(delegate, style_option):
 # ── Tooltip Support (helpEvent) ──────────────────────────────────────
 
 
-def test_help_event_returns_true_for_tooltip(delegate):
+def test_help_event_returns_true_for_tooltip(delegate: Any) -> None:
     """helpEvent returns True and shows tooltip for ToolTip events."""
     model = ThumbnailModel()
     model.set_paths([Path("/fake/test_image.png")])
@@ -826,7 +827,7 @@ def test_help_event_returns_true_for_tooltip(delegate):
     assert call_args.args[1] == "test_image.png"
 
 
-def test_help_event_delegates_non_tooltip(delegate):
+def test_help_event_delegates_non_tooltip(delegate: Any) -> None:
     """helpEvent does NOT show tooltip for non-ToolTip events."""
     model = ThumbnailModel()
     model.set_paths([Path("/fake/test_image.png")])
@@ -851,7 +852,7 @@ def test_help_event_delegates_non_tooltip(delegate):
     mock_show.assert_not_called()
 
 
-def test_help_event_empty_name_returns_true(delegate):
+def test_help_event_empty_name_returns_true(delegate: Any) -> None:
     """helpEvent returns True for ToolTip even when name is empty (no tooltip shown)."""
     invalid_index = QModelIndex()
 

@@ -112,10 +112,7 @@ def extract_dominant_color_tags(
         if s <= neutral_s_threshold or v >= 0.92 or v <= 0.08:
             bucket = "neutral"
         else:
-            bucket = _hue_to_bucket(h)
-            if bucket is None:
-                # Hue in gap between buckets (310-345) → neutral
-                bucket = "neutral"
+            bucket = _hue_to_bucket(h) or "neutral"
 
         bucket_shares[bucket] = bucket_shares.get(bucket, 0.0) + count / total_pixels
 

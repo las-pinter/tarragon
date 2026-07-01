@@ -9,6 +9,7 @@ Testing patterns applied:
 
 from __future__ import annotations
 
+from collections.abc import Generator
 from pathlib import Path
 
 import pytest
@@ -25,7 +26,7 @@ from tarragon.widgets.tag_filter_bar import TagFilterBar
 
 
 @pytest.fixture(autouse=True)
-def qapp():
+def qapp() -> Generator[object, None, None]:
     """Provide a shared QApplication instance for all Qt tests."""
     app = QApplication.instance()
     if app is None:
@@ -48,7 +49,7 @@ def service(db: Database) -> TagService:
 
 
 @pytest.fixture
-def bar(service: TagService) -> TagFilterBar:
+def bar(service: TagService) -> Generator[TagFilterBar, None, None]:
     """Create a TagFilterBar that is cleaned up after the test."""
     w = TagFilterBar(service)
     yield w

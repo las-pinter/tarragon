@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+from collections.abc import Generator
+from pathlib import Path
+from typing import Any
+
 import pytest
 from PySide6.QtWidgets import QDockWidget, QMainWindow
 from tarragon.main_window import MainWindow
 
 
 @pytest.fixture(autouse=True)
-def qapp():
+def qapp() -> Generator[object, None, None]:
     """Provide a shared QApplication instance for all Qt tests."""
     from PySide6.QtWidgets import QApplication
 
@@ -21,12 +25,12 @@ def qapp():
 # ── Instantiation Tests ────────────────────────────────────────────────
 
 
-def test_main_window_is_qmainwindow():
+def test_main_window_is_qmainwindow() -> None:
     """MainWindow is a subclass of QMainWindow."""
     assert issubclass(MainWindow, QMainWindow)
 
 
-def test_main_window_instantiates_with_no_settings(qapp):  # noqa: ARG001
+def test_main_window_instantiates_with_no_settings(qapp: Any) -> None:  # noqa: ARG001
     """MainWindow can be created without a Settings instance (lazy init)."""
     window = MainWindow()
     try:
@@ -36,7 +40,7 @@ def test_main_window_instantiates_with_no_settings(qapp):  # noqa: ARG001
         window.close()
 
 
-def test_main_window_instantiates_with_settings(qapp):  # noqa: ARG001
+def test_main_window_instantiates_with_settings(qapp: Any) -> None:  # noqa: ARG001
     """MainWindow accepts a Settings-like object without error."""
 
     class _FakeSettings:
@@ -49,7 +53,7 @@ def test_main_window_instantiates_with_settings(qapp):  # noqa: ARG001
         def close(self) -> None:
             pass
 
-    window = MainWindow(settings=_FakeSettings())
+    window = MainWindow(settings=_FakeSettings())  # type: ignore[arg-type]
     try:
         assert window._settings is not None
     finally:
@@ -59,7 +63,7 @@ def test_main_window_instantiates_with_settings(qapp):  # noqa: ARG001
 # ── Dock Widget Tests ──────────────────────────────────────────────────
 
 
-def test_three_docks_exist(qapp):  # noqa: ARG001
+def test_three_docks_exist(qapp: Any) -> None:  # noqa: ARG001
     """MainWindow creates sidebar, grid, and preview docks."""
     window = MainWindow()
     try:
@@ -74,7 +78,7 @@ def test_three_docks_exist(qapp):  # noqa: ARG001
         window.close()
 
 
-def test_docks_have_correct_titles(qapp):  # noqa: ARG001
+def test_docks_have_correct_titles(qapp: Any) -> None:  # noqa: ARG001
     """Each dock panel has the expected title."""
     window = MainWindow()
     try:
@@ -85,7 +89,7 @@ def test_docks_have_correct_titles(qapp):  # noqa: ARG001
         window.close()
 
 
-def test_docks_are_attached_to_window(qapp):  # noqa: ARG001
+def test_docks_are_attached_to_window(qapp: Any) -> None:  # noqa: ARG001
     """All three docks are child widgets of the MainWindow."""
     window = MainWindow()
     try:
@@ -103,7 +107,7 @@ def test_docks_are_attached_to_window(qapp):  # noqa: ARG001
 # ── Menu Action Tests ──────────────────────────────────────────────────
 
 
-def test_open_folder_menu_exists(qapp):  # noqa: ARG001
+def test_open_folder_menu_exists(qapp: Any) -> None:  # noqa: ARG001
     """The File menu exists and action callbacks are registered."""
     window = MainWindow()
     try:
@@ -124,7 +128,7 @@ def test_open_folder_menu_exists(qapp):  # noqa: ARG001
         window.close()
 
 
-def test_open_folder_action_in_file_menu(qapp):  # noqa: ARG001
+def test_open_folder_action_in_file_menu(qapp: Any) -> None:  # noqa: ARG001
     """The 'Open Folder' action appears under the File menu in the menu bar."""
     from PySide6.QtWidgets import QMenu, QMenuBar
 
@@ -160,7 +164,7 @@ def test_open_folder_action_in_file_menu(qapp):  # noqa: ARG001
 # ── Default Size Tests ─────────────────────────────────────────────────
 
 
-def test_window_has_reasonable_default_size(qapp):  # noqa: ARG001
+def test_window_has_reasonable_default_size(qapp: Any) -> None:  # noqa: ARG001
     """MainWindow opens at approximately 1200x800."""
     window = MainWindow()
     try:
@@ -171,7 +175,7 @@ def test_window_has_reasonable_default_size(qapp):  # noqa: ARG001
         window.close()
 
 
-def test_default_size_constants_defined():
+def test_default_size_constants_defined() -> None:
     """MainWindow has DEFAULT_WIDTH and DEFAULT_HEIGHT class attributes."""
     assert MainWindow.DEFAULT_WIDTH == 1200
     assert MainWindow.DEFAULT_HEIGHT == 800
@@ -180,7 +184,7 @@ def test_default_size_constants_defined():
 # ── Bug 1 Regression: Filtered query must not clear gallery ────────────
 
 
-def test_run_filtered_query_does_not_clear_gallery_when_no_folder(qapp):  # noqa: ARG001
+def test_run_filtered_query_does_not_clear_gallery_when_no_folder(qapp: Any) -> None:  # noqa: ARG001
     """_run_filtered_query() must NOT clear the model when _current_folder is empty.
 
     Regression test for Bug 1: clicking a tag or thumbnail should not cause
@@ -215,7 +219,7 @@ def test_run_filtered_query_does_not_clear_gallery_when_no_folder(qapp):  # noqa
         window.close()
 
 
-def test_run_filtered_query_works_when_folder_is_set(qapp):  # noqa: ARG001
+def test_run_filtered_query_works_when_folder_is_set(qapp: Any) -> None:  # noqa: ARG001
     """_run_filtered_query() queries the DB and updates the model when folder is set."""
     from pathlib import Path
 
@@ -253,7 +257,7 @@ def test_run_filtered_query_works_when_folder_is_set(qapp):  # noqa: ARG001
 # ── Bug 2 Regression: has_filters includes tag filters ─────────────────
 
 
-def test_has_filters_includes_tag_filters(qapp):  # noqa: ARG001
+def test_has_filters_includes_tag_filters(qapp: Any) -> None:  # noqa: ARG001
     """_on_open_folder detects active tag filters and runs filtered query."""
     from pathlib import Path
 
@@ -300,7 +304,7 @@ def test_has_filters_includes_tag_filters(qapp):  # noqa: ARG001
 # ── Bug 2 Regression: Race condition fallback ──────────────────────────
 
 
-def test_race_condition_fallback_when_filtered_empty(qapp):  # noqa: ARG001
+def test_race_condition_fallback_when_filtered_empty(qapp: Any) -> None:  # noqa: ARG001
     """If filtered query returns empty but thumbnails exist, fall back to unfiltered."""
     from pathlib import Path
 
@@ -343,7 +347,7 @@ def test_race_condition_fallback_when_filtered_empty(qapp):  # noqa: ARG001
 # ── Bug 1 Regression: Global scope mode ────────────────────────────────
 
 
-def test_global_scope_queries_entire_db(qapp):  # noqa: ARG001
+def test_global_scope_queries_entire_db(qapp: Any) -> None:  # noqa: ARG001
     """In global mode, _run_filtered_query ignores folder constraint."""
     from pathlib import Path
 
@@ -395,7 +399,7 @@ def test_global_scope_queries_entire_db(qapp):  # noqa: ARG001
 # ── Bug 2 Regression: _on_folder_navigated applies filters ─────────────
 
 
-def test_folder_navigated_applies_active_filters(qapp, tmp_path):  # noqa: ARG001
+def test_folder_navigated_applies_active_filters(qapp: Any, tmp_path: Path) -> None:  # noqa: ARG001
     """Navigating to a folder via sidebar applies active filters."""
     from pathlib import Path
 

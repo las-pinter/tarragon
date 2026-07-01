@@ -390,11 +390,12 @@ class PreviewPanel(QWidget):
     @staticmethod
     def _format_size(size_bytes: int) -> str:
         """Format file size in human-readable form."""
+        value: float = size_bytes
         for unit in ("B", "KB", "MB", "GB"):
-            if size_bytes < 1024:
-                return f"{size_bytes:.1f} {unit}" if unit != "B" else f"{size_bytes} {unit}"
-            size_bytes /= 1024
-        return f"{size_bytes:.1f} TB"
+            if value < 1024:
+                return f"{value:.1f} {unit}" if unit != "B" else f"{size_bytes} {unit}"
+            value /= 1024
+        return f"{value:.1f} TB"
 
     @staticmethod
     def _pil_to_qimage(pil_image: Image.Image) -> QImage:

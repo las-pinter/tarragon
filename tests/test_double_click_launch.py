@@ -7,7 +7,9 @@ launch_editor via the mediator pattern.
 
 from __future__ import annotations
 
+from collections.abc import Generator
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -23,7 +25,7 @@ from tarragon.widgets.thumbnail_grid import ThumbnailGrid
 
 
 @pytest.fixture(autouse=True)
-def qapp():
+def qapp() -> Generator[object, None, None]:
     """Provide a shared QApplication instance for all Qt tests."""
     app = QApplication.instance()
     if app is None:
@@ -32,7 +34,7 @@ def qapp():
 
 
 @pytest.fixture()
-def grid():
+def grid() -> Generator[ThumbnailGrid, None, None]:
     """Provide a ThumbnailGrid that is closed after the test."""
     g = ThumbnailGrid()
     yield g
@@ -40,7 +42,7 @@ def grid():
 
 
 @pytest.fixture()
-def grid_with_model(grid):
+def grid_with_model(grid: ThumbnailGrid) -> tuple[ThumbnailGrid, ThumbnailModel]:
     """Provide a ThumbnailGrid backed by a ThumbnailModel with sample paths."""
     model = ThumbnailModel()
     model.set_paths(
@@ -55,7 +57,7 @@ def grid_with_model(grid):
 
 
 @pytest.fixture()
-def db() -> Database:
+def db() -> Generator[Database, None, None]:
     """Provide an in-memory database with schema initialised."""
     conn = Database(Path(":memory:"))
     conn.init_schema()
@@ -64,7 +66,7 @@ def db() -> Database:
 
 
 @pytest.fixture()
-def main_window(qapp, db):  # noqa: ARG001
+def main_window(qapp: Any, db: Database) -> Generator[MainWindow, None, None]:  # noqa: ARG001
     """Provide a MainWindow with setup_widgets called."""
     from tarragon.services.tag_service import TagService
 
@@ -92,7 +94,7 @@ def _make_double_click_event(x: float, y: float) -> QMouseEvent:
 # ── Test 1: Double-click emits signal with path ─────────────────
 
 
-def test_double_click_emits_signal(grid_with_model):
+def test_double_click_emits_signal(grid_with_model: tuple[ThumbnailGrid, ThumbnailModel]) -> None:
     """Double-clicking on a valid item emits file_double_clicked with the file path."""
     grid, model = grid_with_model
     emitted: list[str] = []
@@ -112,7 +114,7 @@ def test_double_click_emits_signal(grid_with_model):
 # ── Test 2: Double-click on empty area does nothing ─────────────
 
 
-def test_double_click_on_empty_does_nothing(grid_with_model):
+def test_double_click_on_empty_does_nothing(grid_with_model: tuple[ThumbnailGrid, ThumbnailModel]) -> None:
     """Double-clicking on an empty area (invalid index) does not emit the signal."""
     grid, _ = grid_with_model
     emitted: list[str] = []
@@ -129,7 +131,7 @@ def test_double_click_on_empty_does_nothing(grid_with_model):
 # ── Test 3: MainWindow connects signal to handler ───────────────
 
 
-def test_main_window_connects_signal(main_window):
+def test_main_window_connects_signal(main_window: MainWindow) -> None:
     """MainWindow.setup_widgets connects file_double_clicked to _on_file_double_clicked."""
     window = main_window
 
@@ -147,7 +149,7 @@ def test_main_window_connects_signal(main_window):
 # ── Test 4: Handler calls launch_editor with correct args ───────
 
 
-def test_handler_calls_launch_editor(main_window):
+def test_handler_calls_launch_editor(main_window: MainWindow) -> None:
     """_on_file_double_clicked calls launch_editor with db, path, and extension."""
     window = main_window
 
@@ -175,7 +177,7 @@ def test_handler_calls_launch_editor(main_window):
         pytest.param("/fake/archive.tar.gz", ".gz", id="double_ext"),
     ],
 )
-def test_handler_extracts_extension(main_window, path_str, expected_ext):
+def test_handler_extracts_extension(main_window: MainWindow, path_str: str, expected_ext: str) -> None:
     """_on_file_double_clicked correctly extracts the file extension from the path."""
     window = main_window
 

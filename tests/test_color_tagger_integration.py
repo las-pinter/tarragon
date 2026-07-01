@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from collections.abc import Generator
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -46,7 +47,7 @@ def settings_mock() -> MagicMock:
     """Mock Settings with color tagging enabled and default parameters."""
     mock = MagicMock()
 
-    def _get_side_effect(key: str):
+    def _get_side_effect(key: str) -> Any:
         defaults = {
             "cache_format": "png",
             "max_psd_workers": 3,
@@ -84,7 +85,7 @@ def _make_file_info(tmp_path: Path, name: str = "test.png") -> FileInfo:
 
 def _make_image(width: int = 128, height: int = 64, color: tuple[int, int, int] = (255, 0, 0)) -> Image.Image:
     """Helper to create a test PIL image."""
-    return Image.new("RGB", (width, height), color)  # type: ignore[arg-type]
+    return Image.new("RGB", (width, height), color)
 
 
 def _get_file_tag_names(db: Database, path: str) -> list[tuple[str, str]]:
@@ -297,7 +298,7 @@ class TestColorTaggingDisabled:
         # Arrange — settings with color_tag_enabled=False
         settings_mock = MagicMock()
 
-        def _get_side_effect(key: str):
+        def _get_side_effect(key: str) -> Any:
             defaults = {
                 "cache_format": "png",
                 "max_psd_workers": 3,
@@ -454,7 +455,7 @@ class TestSettingsParametersUsed:
         # Arrange — custom settings values
         settings_mock = MagicMock()
 
-        def _get_side_effect(key: str):
+        def _get_side_effect(key: str) -> Any:
             defaults = {
                 "cache_format": "png",
                 "max_psd_workers": 3,

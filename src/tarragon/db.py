@@ -68,7 +68,7 @@ class Database:
 
     # ── Thread-safe helpers ─────────────────────────────────────
 
-    def _execute(self, sql: str, params: tuple = ()) -> sqlite3.Cursor:
+    def _execute(self, sql: str, params: tuple[Any, ...] = ()) -> sqlite3.Cursor:
         """Execute SQL with lock for thread safety."""
         start = time.perf_counter()
         logger.debug("SQL: %s | params: %s", sql, params)
@@ -83,7 +83,7 @@ class Database:
             logger.error("SQL failed after %.3fs: %s | params: %s | error: %s", elapsed, sql, params, e)
             raise
 
-    def _executemany(self, sql: str, seq: list[tuple]) -> None:
+    def _executemany(self, sql: str, seq: list[tuple[Any, ...]]) -> None:
         """Execute executemany with lock for thread safety."""
         start = time.perf_counter()
         logger.debug("SQL (many): %s | rows: %d", sql, len(seq))
@@ -194,13 +194,13 @@ class Database:
         self._execute("DELETE FROM thumbnails WHERE path = ?", (path,))
         self._commit()
 
-    def get_thumbnail(self, path: str) -> dict | None:
+    def get_thumbnail(self, path: str) -> dict[str, Any] | None:
         """Fetch a single thumbnail record as a dict, or None if absent."""
         logger.debug("get_thumbnail: path=%s", path)
         row = self._execute("SELECT * FROM thumbnails WHERE path = ?", (path,)).fetchone()
         return _row_to_dict(row) if row else None
 
-    def list_thumbnails_for_folder(self, folder_path: str) -> list[dict]:
+    def list_thumbnails_for_folder(self, folder_path: str) -> list[dict[str, Any]]:
         """List all thumbnail records whose path starts with folder_path."""
         logger.debug("list_thumbnails_for_folder: folder_path=%s", folder_path)
         cursor = self._execute("SELECT * FROM thumbnails WHERE path LIKE ?", (f"{folder_path}%",))
@@ -215,7 +215,7 @@ class Database:
             "INSERT INTO tags (name) VALUES (?) ON CONFLICT(name) DO UPDATE SET name=name RETURNING id",
             (name,),
         )
-        return cursor.fetchone()["id"]
+        return int(cursor.fetchone()["id"])
 
     def add_file_tags(self, paths: list[str], tag_id: int, source: str = "user") -> None:
         """Associate one or more file paths with a given tag."""
@@ -286,7 +286,7 @@ class Database:
         self._execute("DELETE FROM favorites WHERE path = ?", (path,))
         self._commit()
 
-    def list_favorites(self) -> list[dict]:
+    def list_favorites(self) -> list[dict[str, Any]]:
         """Return all favorite records ordered by sort_order then path."""
         logger.debug("list_favorites")
         cursor = self._execute("SELECT * FROM favorites ORDER BY sort_order, path")
@@ -376,7 +376,7 @@ class Database:
                 (folder_path,),
             ).fetchone()
             self._conn.commit()
-        return row["cache_uuid"]
+        return str(row["cache_uuid"])
 
     def cleanup_stale_folder_uuids(self) -> int:
         """Remove folder_cache_uuids entries whose source folder no longer exists.

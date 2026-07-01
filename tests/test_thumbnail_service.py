@@ -7,7 +7,9 @@ TOUGH!
 
 from __future__ import annotations
 
+from collections.abc import Generator
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -32,7 +34,7 @@ UNICODE_PATH = "照片/图像/画像/הוראה/ਤਸਵੀਰ/file.png"
 
 
 @pytest.fixture(autouse=True)
-def qapp():
+def qapp() -> Generator[object, None, None]:
     """Provide a shared QApplication instance for Qt-based tests."""
     from PySide6.QtWidgets import QApplication
 
@@ -851,7 +853,7 @@ class TestCheckAndRenderEdgeCases:
         assert len(emitted) == 1
         assert emitted[0][0] == str(file_info.path)
         # Fallback path now dispatches render via threadpool (async)
-        service._threadpool.start.assert_called_once()
+        service._threadpool.start.assert_called_once()  # type: ignore[attr-defined]
 
     def test_check_and_render_db_returns_none_for_empty_path(
         self,
@@ -1138,7 +1140,7 @@ class TestDeriveMissingResolutionsSmallImages:
             "full_cache_path": str(full_path),
         }
 
-        emitted: list[tuple] = []
+        emitted: list[tuple[Any, ...]] = []
         service.thumbnailReady.connect(lambda *args: emitted.append(args))
 
         result = service._derive_missing_resolutions(file_info, cached)
@@ -1186,7 +1188,7 @@ class TestDeriveMissingResolutionsSmallImages:
             "full_cache_path": str(full_path),
         }
 
-        emitted: list[tuple] = []
+        emitted: list[tuple[Any, ...]] = []
         service.thumbnailReady.connect(lambda *args: emitted.append(args))
 
         result = service._derive_missing_resolutions(file_info, cached)
@@ -1229,7 +1231,7 @@ class TestDeriveMissingResolutionsSmallImages:
             "full_cache_path": str(full_path),
         }
 
-        emitted: list[tuple] = []
+        emitted: list[tuple[Any, ...]] = []
         service.thumbnailReady.connect(lambda *args: emitted.append(args))
 
         service._derive_missing_resolutions(file_info, cached)

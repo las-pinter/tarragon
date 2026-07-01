@@ -3,7 +3,7 @@
 import logging
 import sys
 
-from PySide6.QtGui import QColor, QPalette
+from PySide6.QtGui import QColor, QCloseEvent, QPalette
 from PySide6.QtWidgets import QApplication
 
 from tarragon.app_paths import db_path, ensure_dirs
@@ -37,6 +37,7 @@ class MainWindow(_MainWindow):
 
         # Resolve to owned or caller-provided instance.
         self._database = owned_database or database
+        assert self._database is not None  # At least one branch always provides a Database.
 
         # Ensure schema exists — idempotent; safe for caller-provided databases too.
         self._database.init_schema()
@@ -69,13 +70,13 @@ class MainWindow(_MainWindow):
         tag_service = TagService(self._database)
         self.setup_widgets(self._database, tag_service)
 
-    def closeEvent(self, event: object) -> None:  # noqa: ANN001, N802
+    def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802
         """Gracefully shut down Settings and Database on window close."""
         if isinstance(self._settings, Settings):
             self._settings.close()
         if isinstance(self._database, Database):
             self._database.close()
-        super().closeEvent(event)  # type: ignore[no-untyped-call]
+        super().closeEvent(event)
 
 
 def main() -> None:

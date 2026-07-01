@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 from typing import override
 
-from PySide6.QtCore import QAbstractListModel, QModelIndex, QObject, Qt
+from PySide6.QtCore import QAbstractListModel, QModelIndex, QObject, QPersistentModelIndex, Qt
 
 logger = logging.getLogger(__name__)
 
@@ -26,10 +26,10 @@ class ThumbnailModel(QAbstractListModel):
     Use :meth:`set_thumbnail` to register a cached path for a specific resolution.
     """
 
-    PathRole = Qt.UserRole + 1
-    ThumbnailRole256 = Qt.UserRole + 2   # 256px thumbnail
-    ThumbnailRole1024 = Qt.UserRole + 3  # 1024px preview
-    ThumbnailRoleFull = Qt.UserRole + 4  # Full resolution
+    PathRole: int = Qt.ItemDataRole.UserRole + 1
+    ThumbnailRole256: int = Qt.ItemDataRole.UserRole + 2   # 256px thumbnail
+    ThumbnailRole1024: int = Qt.ItemDataRole.UserRole + 3  # 1024px preview
+    ThumbnailRoleFull: int = Qt.ItemDataRole.UserRole + 4  # Full resolution
 
     def __init__(self, parent: QObject | None = None) -> None:
         """Initialise the model with an empty path list."""
@@ -40,12 +40,12 @@ class ThumbnailModel(QAbstractListModel):
         self._thumbnails: dict[str, dict[int | None, Path]] = {}
 
     @override
-    def rowCount(self, parent: QModelIndex = QModelIndex()) -> int:  # noqa: N802
+    def rowCount(self, parent: QModelIndex | QPersistentModelIndex = QPersistentModelIndex()) -> int:  # noqa: N802
         """Return the number of paths in the model."""
         return len(self._paths)
 
     @override
-    def data(self, index: QModelIndex, role: int = Qt.DisplayRole) -> object:
+    def data(self, index: QModelIndex | QPersistentModelIndex, role: int = Qt.ItemDataRole.DisplayRole) -> object:  # noqa: N802
         """Return data for *index* according to *role*.
 
         Returns ``None`` for invalid indices or unsupported roles.
@@ -55,7 +55,7 @@ class ThumbnailModel(QAbstractListModel):
 
         path = self._paths[index.row()]
 
-        if role == Qt.DisplayRole:
+        if role == Qt.ItemDataRole.DisplayRole:
             return path.name
         if role == ThumbnailModel.PathRole:
             return str(path)

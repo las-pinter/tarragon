@@ -6,6 +6,7 @@ import logging
 import time
 from pathlib import Path
 
+from PIL import Image
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
@@ -23,6 +24,7 @@ from tarragon.db import Database
 from tarragon.services.query_service import QueryService
 from tarragon.services.tag_service import TagService
 from tarragon.services.thumbnail_service import ThumbnailService
+from tarragon.settings import Settings
 from tarragon.thumbnail import _cache_file_path
 from tarragon.widgets.color_filter_bar import ColorFilterBar
 from tarragon.widgets.log_panel import LogPanel, QtLogHandler
@@ -51,7 +53,7 @@ class MainWindow(QMainWindow):
     DEFAULT_WIDTH = 1200
     DEFAULT_HEIGHT = 800
 
-    def __init__(self, settings: object | None = None) -> None:
+    def __init__(self, settings: Settings | None = None) -> None:
         """Initialize the main window.
 
         Args:
@@ -330,14 +332,14 @@ class MainWindow(QMainWindow):
             preview_path = thumb_record.get("preview_cache_path")
             if preview_path and Path(preview_path).is_file():
                 img = Image.open(preview_path)
-                img._from_cache = True  # type: ignore[attr-defined]
+                img._from_cache = True
                 return img
 
             # Fallback: full resolution cache
             full_path = thumb_record.get("full_cache_path")
             if full_path and Path(full_path).is_file():
                 img = Image.open(full_path)
-                img._from_cache = True  # type: ignore[attr-defined]
+                img._from_cache = True
                 return img
 
         # Fallback: open the original file directly
@@ -493,7 +495,9 @@ class MainWindow(QMainWindow):
 
         loader = ThemeLoader()
         qss_content = loader.load_qss()
-        QApplication.instance().setStyleSheet(qss_content)
+        app = QApplication.instance()
+        if isinstance(app, QApplication):
+            app.setStyleSheet(qss_content)
         logger.debug("Theme applied successfully")
 
     def _on_open_folder(self) -> None:

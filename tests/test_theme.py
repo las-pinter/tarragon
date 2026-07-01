@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any, Generator
 
 import pytest
 
@@ -11,7 +12,7 @@ import pytest
 
 
 @pytest.fixture(autouse=True)
-def qapp():
+def qapp() -> Generator[Any, None, None]:
     """Provide a shared QApplication instance for all Qt tests."""
     from PySide6.QtWidgets import QApplication
 
@@ -24,7 +25,7 @@ def qapp():
 # ── Tokens JSON Tests ──────────────────────────────────────────────────
 
 
-def test_tokens_json_is_valid():
+def test_tokens_json_is_valid() -> None:
     """tokens.json can be parsed as valid JSON."""
     tokens_path = Path(__file__).resolve().parent.parent / "src" / "tarragon" / "theme" / "tokens.json"
     with open(tokens_path, encoding="utf-8") as fh:
@@ -32,7 +33,7 @@ def test_tokens_json_is_valid():
     assert isinstance(data, dict), "tokens.json must be a JSON object at the top level"
 
 
-def test_tokens_json_has_all_sections():
+def test_tokens_json_has_all_sections() -> None:
     """tokens.json contains every required section from the design system spec."""
     tokens_path = Path(__file__).resolve().parent.parent / "src" / "tarragon" / "theme" / "tokens.json"
     with open(tokens_path, encoding="utf-8") as fh:
@@ -44,7 +45,7 @@ def test_tokens_json_has_all_sections():
     )
 
 
-def test_tokens_colors_section():
+def test_tokens_colors_section() -> None:
     """The colors section contains all expected color tokens."""
     from tarragon.theme.tokens import load_tokens
 
@@ -65,7 +66,7 @@ def test_tokens_colors_section():
     assert set(colors.keys()) == expected_keys
 
 
-def test_tokens_typography_section():
+def test_tokens_typography_section() -> None:
     """The typography section contains all expected font tokens."""
     from tarragon.theme.tokens import load_tokens
 
@@ -83,7 +84,7 @@ def test_tokens_typography_section():
     assert set(typos.keys()) == expected_keys
 
 
-def test_tokens_spacing_section():
+def test_tokens_spacing_section() -> None:
     """The spacing section contains xs, sm, md, lg, xl."""
     from tarragon.theme.tokens import load_tokens
 
@@ -94,7 +95,7 @@ def test_tokens_spacing_section():
         assert isinstance(spacing[key], int), f"Spacing value '{key}' must be an integer"
 
 
-def test_tokens_radius_section():
+def test_tokens_radius_section() -> None:
     """The radius section contains none, sm, md, lg."""
     from tarragon.theme.tokens import load_tokens
 
@@ -104,7 +105,7 @@ def test_tokens_radius_section():
         assert key in radii, f"Missing radius token: {key}"
 
 
-def test_tokens_motion_section():
+def test_tokens_motion_section() -> None:
     """The motion section contains duration and easing tokens."""
     from tarragon.theme.tokens import load_tokens
 
@@ -114,7 +115,7 @@ def test_tokens_motion_section():
         assert key in motion, f"Missing motion token: {key}"
 
 
-def test_tokens_layout_section():
+def test_tokens_layout_section() -> None:
     """The layout section contains thumbnail_size, grid_gap, dock_width_min, preview_height_min."""
     from tarragon.theme.tokens import load_tokens
 
@@ -124,7 +125,7 @@ def test_tokens_layout_section():
         assert key in layout, f"Missing layout token: {key}"
 
 
-def test_bg_primary_is_dark():
+def test_bg_primary_is_dark() -> None:
     """Background primary color matches the dark #16151A spec."""
     from tarragon.theme.tokens import get_token
 
@@ -132,7 +133,7 @@ def test_bg_primary_is_dark():
     assert bg.upper() == "#16151A"
 
 
-def test_coral_and_amber_accent_colors_present():
+def test_coral_and_amber_accent_colors_present() -> None:
     """Coral and amber accent colors are defined in tokens."""
     from tarragon.theme.tokens import get_token
 
@@ -148,7 +149,7 @@ def test_coral_and_amber_accent_colors_present():
 # ── QSS File Tests ─────────────────────────────────────────────────────
 
 
-def test_qss_file_exists_and_is_readable():
+def test_qss_file_exists_and_is_readable() -> None:
     """app.qss exists in the theme package and can be read as text."""
     from tarragon.theme.loader import ThemeLoader
 
@@ -158,7 +159,7 @@ def test_qss_file_exists_and_is_readable():
     assert len(qss) > 0, "QSS file must not be empty"
 
 
-def test_qss_contains_dark_background():
+def test_qss_contains_dark_background() -> None:
     """The QSS stylesheet references the dark background color #16151A."""
     from tarragon.theme.loader import ThemeLoader
 
@@ -167,7 +168,7 @@ def test_qss_contains_dark_background():
     assert "#16151A" in qss, "QSS must contain bg_primary color (#16151A)"
 
 
-def test_qss_contains_coral_accent_colors():
+def test_qss_contains_coral_accent_colors() -> None:
     """The QSS references coral accent colors for hover/select states."""
     from tarragon.theme.loader import ThemeLoader
 
@@ -177,7 +178,7 @@ def test_qss_contains_coral_accent_colors():
     assert "#D85A30" in qss, "QSS must contain coral_muted (#D85A30)"
 
 
-def test_qss_contains_amber_accent_color():
+def test_qss_contains_amber_accent_color() -> None:
     """The QSS references amber accent color for highlights and focus states."""
     from tarragon.theme.loader import ThemeLoader
 
@@ -186,7 +187,7 @@ def test_qss_contains_amber_accent_color():
     assert "#FAC775" in qss, "QSS must contain amber_accent (#FAC775)"
 
 
-def test_qss_does_not_use_forbidden_properties():
+def test_qss_does_not_use_forbidden_properties() -> None:
     """The QSS does not use gradients or shadows (design constraint)."""
     from tarragon.theme.loader import ThemeLoader
 
@@ -199,7 +200,7 @@ def test_qss_does_not_use_forbidden_properties():
 # ── MainWindow Integration Tests ────────────────────────────────────────
 
 
-def test_apply_theme_no_exception(qapp):  # noqa: ARG001
+def test_apply_theme_no_exception(qapp: Any) -> None:  # noqa: ARG001
     """MainWindow._apply_theme() applies stylesheet without raising."""
     from tarragon.main_window import MainWindow
 
@@ -211,7 +212,7 @@ def test_apply_theme_no_exception(qapp):  # noqa: ARG001
         window.close()
 
 
-def test_apply_theme_sets_stylesheet(qapp):  # noqa: ARG001
+def test_apply_theme_sets_stylesheet(qapp: Any) -> None:  # noqa: ARG001
     """After _apply_theme(), the stylesheet is non-empty."""
     from PySide6.QtWidgets import QApplication
 
@@ -220,14 +221,16 @@ def test_apply_theme_sets_stylesheet(qapp):  # noqa: ARG001
     window = MainWindow()
     try:
         window._apply_theme()
-        style = QApplication.instance().styleSheet()
+        app = QApplication.instance()
+        assert isinstance(app, QApplication)
+        style = app.styleSheet()
         assert isinstance(style, str), "setStyleSheet should store a string"
         assert len(style) > 0, "Style sheet must not be empty after apply"
     finally:
         window.close()
 
 
-def test_stylesheet_contains_dark_background(qapp):  # noqa: ARG001
+def test_stylesheet_contains_dark_background(qapp: Any) -> None:  # noqa: ARG001
     """The applied stylesheet contains the dark background color."""
     from PySide6.QtWidgets import QApplication
 
@@ -236,13 +239,15 @@ def test_stylesheet_contains_dark_background(qapp):  # noqa: ARG001
     window = MainWindow()
     try:
         window._apply_theme()
-        style = QApplication.instance().styleSheet()
+        app = QApplication.instance()
+        assert isinstance(app, QApplication)
+        style = app.styleSheet()
         assert "#16151A" in style, "Applied stylesheet must contain bg_primary"
     finally:
         window.close()
 
 
-def test_stylesheet_contains_coral_hover_state(qapp):  # noqa: ARG001
+def test_stylesheet_contains_coral_hover_state(qapp: Any) -> None:  # noqa: ARG001
     """The applied stylesheet references coral for hover states."""
     from PySide6.QtWidgets import QApplication
 
@@ -251,13 +256,15 @@ def test_stylesheet_contains_coral_hover_state(qapp):  # noqa: ARG001
     window = MainWindow()
     try:
         window._apply_theme()
-        style = QApplication.instance().styleSheet()
+        app = QApplication.instance()
+        assert isinstance(app, QApplication)
+        style = app.styleSheet()
         assert "#D85A30" in style, "Applied stylesheet must contain coral_muted for hover/pressed"
     finally:
         window.close()
 
 
-def test_stylesheet_contains_amber_select_state(qapp):  # noqa: ARG001
+def test_stylesheet_contains_amber_select_state(qapp: Any) -> None:  # noqa: ARG001
     """The applied stylesheet references amber for selected/focus states."""
     from PySide6.QtWidgets import QApplication
 
@@ -266,13 +273,15 @@ def test_stylesheet_contains_amber_select_state(qapp):  # noqa: ARG001
     window = MainWindow()
     try:
         window._apply_theme()
-        style = QApplication.instance().styleSheet()
+        app = QApplication.instance()
+        assert isinstance(app, QApplication)
+        style = app.styleSheet()
         assert "#FAC775" in style, "Applied stylesheet must contain amber_accent"
     finally:
         window.close()
 
 
-def test_theme_loader_loads_tokens():
+def test_theme_loader_loads_tokens() -> None:
     """ThemeLoader.load_tokens() returns a valid dict with all sections."""
     from tarragon.theme.loader import ThemeLoader
 
@@ -283,7 +292,7 @@ def test_theme_loader_loads_tokens():
     assert set(tokens.keys()) == required_sections
 
 
-def test_theme_loader_loads_qss():
+def test_theme_loader_loads_qss() -> None:
     """ThemeLoader.load_qss() returns a non-empty string."""
     from tarragon.theme.loader import ThemeLoader
 
@@ -293,7 +302,7 @@ def test_theme_loader_loads_qss():
     assert len(qss) > 0
 
 
-def test_theme_loader_is_singleton_safe():
+def test_theme_loader_is_singleton_safe() -> None:
     """Multiple ThemeLoader instances can coexist without issue."""
     from tarragon.theme.loader import ThemeLoader
 

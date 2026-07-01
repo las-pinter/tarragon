@@ -12,6 +12,7 @@ Testing patterns applied (from python-testing-patterns skill):
 
 from __future__ import annotations
 
+from collections.abc import Generator
 from pathlib import Path
 
 import pytest
@@ -26,7 +27,7 @@ from tarragon.widgets.tag_panel import TagPanel
 
 
 @pytest.fixture(autouse=True)
-def qapp():
+def qapp() -> Generator[object, None, None]:
     """Provide a shared QApplication instance for all Qt tests."""
     app = QApplication.instance()
     if app is None:
@@ -49,7 +50,7 @@ def service(db: Database) -> TagService:
 
 
 @pytest.fixture
-def panel(service: TagService) -> TagPanel:
+def panel(service: TagService) -> Generator[TagPanel, None, None]:
     """Create a TagPanel that is cleaned up after the test."""
     w = TagPanel(service)
     yield w

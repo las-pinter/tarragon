@@ -250,8 +250,6 @@ def test_has_filters_includes_tag_filters(qapp: Any) -> None:  # noqa: ARG001
     """_on_open_folder detects active tag filters and runs filtered query."""
     from pathlib import Path
 
-    from PySide6.QtCore import Qt
-
     from tarragon.db import Database
     from tarragon.services.tag_service import TagService
 
@@ -274,11 +272,8 @@ def test_has_filters_includes_tag_filters(qapp: Any) -> None:  # noqa: ARG001
         # Set current folder
         window._current_folder = "/test/photos/"
 
-        # Activate a tag filter via the tag_filter_bar
-        window.tag_filter_bar._active_tag_ids.add(tag_id)
-        cb = window.tag_filter_bar._tag_checkboxes.get(tag_id)
-        if cb is not None:
-            cb.setCheckState(Qt.CheckState.Checked)
+        # Activate a tag filter via the tag_filter_bar's toggle API
+        window.tag_filter_bar._toggle_tag(tag_id)
 
         # Verify has_active_filters works on tag_filter_bar
         assert window.tag_filter_bar.has_active_filters() is True
@@ -296,8 +291,6 @@ def test_has_filters_includes_tag_filters(qapp: Any) -> None:  # noqa: ARG001
 def test_race_condition_fallback_when_filtered_empty(qapp: Any) -> None:  # noqa: ARG001
     """If filtered query returns empty but thumbnails exist, fall back to unfiltered."""
     from pathlib import Path
-
-    from PySide6.QtCore import Qt
 
     from tarragon.db import Database
     from tarragon.services.tag_service import TagService
@@ -319,10 +312,7 @@ def test_race_condition_fallback_when_filtered_empty(qapp: Any) -> None:  # noqa
         # Create a tag and activate filter (but no files have it)
         tag_id = tag_service.get_or_create_tag("nonexistent")
         window.tag_filter_bar._refresh_tags()
-        window.tag_filter_bar._active_tag_ids.add(tag_id)
-        cb = window.tag_filter_bar._tag_checkboxes.get(tag_id)
-        if cb is not None:
-            cb.setCheckState(Qt.CheckState.Checked)
+        window.tag_filter_bar._toggle_tag(tag_id)
 
         # Filtered query should return empty, but fallback should show all thumbnails
         window._run_filtered_query()
@@ -365,11 +355,8 @@ def test_global_scope_queries_entire_db(qapp: Any) -> None:  # noqa: ARG001
         window._current_folder = "/folder_a/"
         window.tag_panel.set_folder_path("/folder_a/")
 
-        # Activate tag filter via tag_filter_bar
-        window.tag_filter_bar._active_tag_ids.add(tag_id)
-        cb = window.tag_filter_bar._tag_checkboxes.get(tag_id)
-        if cb is not None:
-            cb.setCheckState(Qt.CheckState.Checked)
+        # Activate tag filter via tag_filter_bar's toggle API
+        window.tag_filter_bar._toggle_tag(tag_id)
 
         # In local mode, should only return files in /folder_a/
         window._run_filtered_query()

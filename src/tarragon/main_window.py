@@ -144,6 +144,16 @@ class MainWindow(QMainWindow):
         # 5. Log at the bottom (hidden by default)
         self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self.log_dock)
 
+        # Set initial dock sizes — preview panel should be roughly half the
+        # remaining width after the sidebar, matching the gallery area.
+        sidebar_width = 220
+        preview_width = (self.width() - sidebar_width) // 2  # 490 at 1200px
+        self.resizeDocks(
+            [self.sidebar_dock, self.preview_dock],
+            [sidebar_width, preview_width],
+            Qt.Orientation.Horizontal,
+        )
+
     # ── Widget Setup ─────────────────────────────────────────────────
 
     def setup_widgets(self, db: Database, tag_service: TagService) -> None:

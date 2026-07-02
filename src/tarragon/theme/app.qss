@@ -214,6 +214,62 @@ QRadioButton {
     font-size: 12px;
 }
 
+QCheckBox::indicator {
+    width: 18px;
+    height: 18px;
+    border: 2px solid #FAC775;
+    border-radius: 3px;
+    background-color: #211f29;
+}
+
+QCheckBox::indicator:hover {
+    border-color: #FFD480;
+    background-color: #2a2836;
+}
+
+QCheckBox::indicator:checked {
+    background-color: #D85A30;
+    border-color: #FAC775;
+    image: none;
+}
+
+QCheckBox::indicator:checked:hover {
+    background-color: #E06540;
+}
+
+QCheckBox::indicator:disabled {
+    background-color: #1a1820;
+    border-color: #3a3845;
+}
+
+QGroupBox::indicator {
+    width: 18px;
+    height: 18px;
+    border: 2px solid #FAC775;
+    border-radius: 3px;
+    background-color: #211f29;
+}
+
+QGroupBox::indicator:hover {
+    border-color: #FFD480;
+    background-color: #2a2836;
+}
+
+QGroupBox::indicator:checked {
+    background-color: #D85A30;
+    border-color: #FAC775;
+    image: none;
+}
+
+QGroupBox::indicator:checked:hover {
+    background-color: #E06540;
+}
+
+QGroupBox::indicator:disabled {
+    background-color: #1a1820;
+    border-color: #3a3845;
+}
+
 /* ── Combo boxes ─────────────────────────────────────────────────── */
 QComboBox {
     background-color: #211f29;

@@ -27,6 +27,20 @@ from PySide6.QtWidgets import (
 
 from tarragon.services.tag_service import TagService
 
+# Canonical color-wheel order matching ColorFilterBar.BUCKET_HUES.
+COLOR_ORDER: list[str] = [
+    "red",
+    "orange",
+    "yellow",
+    "green",
+    "teal",
+    "cyan",
+    "blue",
+    "purple",
+    "magenta",
+    "neutral",
+]
+
 
 class TagPanel(QWidget):
     """A widget showing all known tags with tri-state checkboxes.
@@ -157,6 +171,23 @@ class TagPanel(QWidget):
 
     # ── Internal helpers ───────────────────────────────────────────────
 
+    @staticmethod
+    def _tag_sort_key(tag: dict[str, Any]) -> tuple[int, int | str]:
+        """Sort key: color tags first (in color-wheel order), then manual tags alphabetically.
+
+        Color tags (``"color:<name>"``) are ordered according to
+        ``COLOR_ORDER``.  Unknown color names sort after all known colors.
+        Manual (non-color) tags sort alphabetically after all color tags.
+        """
+        tag_name: str = tag["name"]
+        if tag_name.startswith("color:"):
+            color = tag_name[6:]  # strip "color:" prefix
+            try:
+                return (0, COLOR_ORDER.index(color))
+            except ValueError:
+                return (0, len(COLOR_ORDER))  # unknown colors go last among colors
+        return (1, tag_name)  # manual tags sorted alphabetically
+
     def _on_scope_changed(self, state: int) -> None:
         """Handle the Global/Local toggle change.
 
@@ -184,7 +215,8 @@ class TagPanel(QWidget):
 
         folder_scope = None if self._global_scope else (self._folder_path or None)
         tags = self._tag_service.get_all_tags(folder_path=folder_scope)
-        for tag in tags:
+        sorted_tags = sorted(tags, key=self._tag_sort_key)
+        for tag in sorted_tags:
             row = self._build_tag_row(tag)
             self._scroll_layout.addWidget(row)
 

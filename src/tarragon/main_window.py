@@ -306,8 +306,10 @@ class MainWindow(QMainWindow):
             try:
                 from PIL import Image
 
-                img = self._load_preview_image(path)
-                self.preview_panel.set_image(img, path)
+                img, orig_w, orig_h = self._load_preview_image(path)
+                self.preview_panel.set_image(
+                    img, path, original_width=orig_w, original_height=orig_h,
+                )
             except Exception:
                 logger.warning("Failed to load preview for %s", path, exc_info=True)
                 self.preview_panel.clear()
@@ -323,7 +325,7 @@ class MainWindow(QMainWindow):
                 try:
                     from PIL import Image
 
-                    img = self._load_preview_image(Path(p))
+                    img, _orig_w, _orig_h = self._load_preview_image(Path(p))
                     images.append(img)
                 except Exception:
                     logger.debug("Failed to load preview for multi-select: %s", p, exc_info=True)
@@ -333,7 +335,7 @@ class MainWindow(QMainWindow):
         if hasattr(self, "tag_panel"):
             self.tag_panel.set_selection(paths)
 
-    def _load_preview_image(self, path: Path) -> "Image.Image":
+    def _load_preview_image(self, path: Path) -> tuple[Image.Image, int | None, int | None]:
         """Load a preview image, preferring the 1024px cached preview when available.
 
         Checks ``db.get_thumbnail(path)`` for a ``preview_cache_path`` (1024px).
@@ -343,27 +345,41 @@ class MainWindow(QMainWindow):
         Images loaded from cache are marked with ``_from_cache = True`` so that
         ``PreviewPanel.set_image()`` can skip EXIF recovery from the original
         file (the cache already has correct orientation).
+
+        Returns:
+            A tuple of ``(image, original_width, original_height)``.
+            ``original_width`` and ``original_height`` are extracted from the
+            database record when available, so the preview panel can display
+            the true dimensions even when showing a downscaled thumbnail.
         """
         from PIL import Image
 
         thumb_record = self._db.get_thumbnail(str(path))
+
+        # Extract original dimensions from DB record (if available)
+        original_width: int | None = None
+        original_height: int | None = None
+        if thumb_record:
+            original_width = thumb_record.get("width")
+            original_height = thumb_record.get("height")
+
         if thumb_record:
             # Try 1024px preview first (good quality, fast)
             preview_path = thumb_record.get("preview_cache_path")
             if preview_path and Path(preview_path).is_file():
                 img = Image.open(preview_path)
                 img._from_cache = True
-                return img
+                return img, original_width, original_height
 
             # Fallback: full resolution cache
             full_path = thumb_record.get("full_cache_path")
             if full_path and Path(full_path).is_file():
                 img = Image.open(full_path)
                 img._from_cache = True
-                return img
+                return img, original_width, original_height
 
         # Fallback: open the original file directly
-        return Image.open(path)
+        return Image.open(path), original_width, original_height
 
     def _on_file_double_clicked(self, path: str) -> None:
         """Handle double-click on a thumbnail — launch external editor."""

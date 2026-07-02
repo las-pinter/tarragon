@@ -98,6 +98,8 @@ class PreviewPanel(QWidget):
         self._current_image: Image.Image | None = None
         self._current_path: Path | None = None
         self._cached_pixmap: QPixmap | None = None
+        self._original_width: int | None = None
+        self._original_height: int | None = None
 
     def _setup_ui(self) -> None:
         """Build the UI layout."""
@@ -144,18 +146,33 @@ class PreviewPanel(QWidget):
 
         self.setStyleSheet(f"background-color: {BG_PRIMARY};")
 
-    def set_image(self, image: Image.Image, path: Path | None = None) -> None:
+    def set_image(
+        self,
+        image: Image.Image,
+        path: Path | None = None,
+        original_width: int | None = None,
+        original_height: int | None = None,
+    ) -> None:
         """Set the image to display.
 
         Args:
             image: PIL Image to display
             path: Optional file path for metadata display and EXIF recovery
+            original_width: Original image width in pixels (before caching/thumbnailing).
+                When provided, displayed in metadata instead of the (possibly downscaled)
+                image's actual pixel width.
+            original_height: Original image height in pixels (before caching/thumbnailing).
+                When provided, displayed in metadata instead of the (possibly downscaled)
+                image's actual pixel height.
 
         Raises:
             TypeError: If ``image`` is None.
         """
         if image is None:
             raise TypeError("image must be a PIL Image, not None")
+
+        self._original_width = original_width
+        self._original_height = original_height
 
         logger.debug(
             "set_image: path=%s, size=%s, from_cache=%s",
@@ -231,6 +248,8 @@ class PreviewPanel(QWidget):
         self._current_image = None
         self._current_path = None
         self._cached_pixmap = None
+        self._original_width = None
+        self._original_height = None
         self._image_label.clear()
         self._image_label.setText("No preview")
         self._filename_label.clear()
@@ -372,8 +391,14 @@ class PreviewPanel(QWidget):
             self._filename_label.setText("Unknown file")
             self._size_label.setText("Size: Unknown")
 
-        # Dimensions
-        width, height = image.size
+        # Dimensions — use original dimensions if provided (cached thumbnails
+        # are downscaled, so image.size would show the thumbnail size, not the
+        # original image dimensions).
+        if self._original_width is not None and self._original_height is not None:
+            width = self._original_width
+            height = self._original_height
+        else:
+            width, height = image.size
         self._dimensions_label.setText(f"Dimensions: {width} × {height}")
 
         # Format — always derive from original file path, not cached image.

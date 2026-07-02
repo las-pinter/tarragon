@@ -391,35 +391,27 @@ class TestCheckboxInteraction:
 # =========================================================================
 
 
-class TestScopeToggle:
-    """Global/Local toggle in the tag panel."""
+class TestSetGlobalScope:
+    """set_global_scope controls scope from gallery tabs."""
 
-    def test_default_scope_is_local(self, panel: TagPanel) -> None:  # noqa: ARG002
-        """Panel starts in local scope mode by default."""
-        assert panel.is_global_scope() is False
+    def test_set_global_scope_true(self, panel: TagPanel) -> None:  # noqa: ARG002
+        """set_global_scope(True) sets _global_scope to True."""
+        panel.set_global_scope(True)
+        assert panel._global_scope is True
 
-    def test_toggle_to_global(self, panel: TagPanel) -> None:  # noqa: ARG002
-        """Checking the scope checkbox switches to global mode."""
-        panel._scope_checkbox.setCheckState(Qt.CheckState.Checked)
-        assert panel.is_global_scope() is True
+    def test_set_global_scope_false(self, panel: TagPanel) -> None:  # noqa: ARG002
+        """set_global_scope(False) sets _global_scope to False."""
+        panel._global_scope = True
+        panel.set_global_scope(False)
+        assert panel._global_scope is False
 
-    def test_toggle_back_to_local(self, panel: TagPanel) -> None:  # noqa: ARG002
-        """Unchecking the scope checkbox returns to local mode."""
-        panel._scope_checkbox.setCheckState(Qt.CheckState.Checked)
-        assert panel.is_global_scope() is True
-        panel._scope_checkbox.setCheckState(Qt.CheckState.Unchecked)
-        assert panel.is_global_scope() is False
-
-    def test_scope_changed_signal_emitted(self, panel: TagPanel) -> None:  # noqa: ARG002
-        """Toggling the scope checkbox emits scope_changed signal."""
-        captured: list[bool] = []
-        panel.scope_changed.connect(captured.append)
-
-        panel._scope_checkbox.setCheckState(Qt.CheckState.Checked)
-        assert captured == [True]
-
-        panel._scope_checkbox.setCheckState(Qt.CheckState.Unchecked)
-        assert captured == [True, False]
+    def test_set_global_scope_refreshes_tags(self, panel: TagPanel) -> None:  # noqa: ARG002
+        """set_global_scope calls _refresh_tags to update counts."""
+        called: list[bool] = []
+        tag_panel = panel
+        tag_panel._refresh_tags = lambda: called.append(True)  # type: ignore[method-assign]
+        tag_panel.set_global_scope(True)
+        assert called == [True]
 
     def test_set_folder_path_refreshes_tags(
         self, service: TagService, panel: TagPanel
@@ -445,7 +437,7 @@ class TestScopeToggle:
 
         panel.set_folder_path("/folder_a/")
         # Switch to global — count should now be 2
-        panel._scope_checkbox.setCheckState(Qt.CheckState.Checked)
+        panel.set_global_scope(True)
 
         labels = panel.findChildren(QLabel)
         label_texts = [label.text() for label in labels]

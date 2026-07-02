@@ -28,6 +28,7 @@ from tarragon.services.thumbnail_service import ThumbnailService
 from tarragon.settings import Settings
 from tarragon.thumbnail import _cache_file_path
 from tarragon.widgets.color_filter_bar import ColorFilterBar
+from tarragon.widgets.gallery_tabs import GalleryTabs
 from tarragon.widgets.log_panel import LogPanel, QtLogHandler
 from tarragon.widgets.preview_panel import PreviewPanel
 from tarragon.widgets.tag_filter_bar import TagFilterBar
@@ -213,10 +214,15 @@ class MainWindow(QMainWindow):
         self.tag_filter_bar = TagFilterBar(tag_service, parent=self)
         self.tag_filter_bar.tag_filter_changed.connect(self._on_tag_filter_changed)
 
-        # Gallery container: search + color filter + tag filter + grid stacked vertically
+        # ── Gallery tabs (Folder / All Images) ─────────────────────────
+        self._gallery_tabs = GalleryTabs(parent=self)
+        self._gallery_tabs.scope_changed.connect(self._on_scope_changed)
+
+        # Gallery container: tabs + search + color filter + tag filter + grid stacked vertically
         gallery_container = QWidget()
         gallery_layout = QVBoxLayout(gallery_container)
         gallery_layout.setContentsMargins(0, 0, 0, 0)
+        gallery_layout.addWidget(self._gallery_tabs)  # FIRST!
         gallery_layout.addWidget(self._search_edit)
         gallery_layout.addWidget(self.color_filter_bar)
         gallery_layout.addWidget(self.tag_filter_bar)
@@ -243,8 +249,8 @@ class MainWindow(QMainWindow):
             logging.DEBUG if self._settings_service and self._settings_service.get_debug_mode() else logging.INFO
         )
 
-        # Wire tag panel scope to re-run query (tag filtering is now via tag_filter_bar)
-        self.tag_panel.scope_changed.connect(self._on_scope_changed)
+        # Wire gallery tabs scope to tag panel and re-run query
+        # (signal connected above when _gallery_tabs was created)
 
         # Debounce timer for filename search (Deviation 4.5)
         self._search_timer = QTimer()
@@ -385,8 +391,12 @@ class MainWindow(QMainWindow):
         self._run_filtered_query()
 
     def _on_scope_changed(self, is_global: bool) -> None:  # noqa: FBT001
-        """Re-run the filtered query when the Global/Local toggle changes."""
+        """Handle gallery tab scope change.
+
+        Updates the tag panel scope and re-runs the filtered query.
+        """
         logger.debug("Scope changed: %s", "global" if is_global else "local")
+        self.tag_panel.set_global_scope(is_global)
         self._run_filtered_query()
 
     def _run_filtered_query(self) -> None:
@@ -396,8 +406,8 @@ class MainWindow(QMainWindow):
         colour-bucket set, and checked tag IDs into a single query, then
         updates the ThumbnailModel with the results.
 
-        In global scope mode (tag panel toggle), the folder constraint is
-        removed so results span the entire database.
+        In global scope mode (gallery tabs set to All Images), the folder
+        constraint is removed so results span the entire database.
 
         If no folder is currently selected (``_current_folder`` is empty)
         and we are NOT in global mode, the method returns without modifying
@@ -412,8 +422,8 @@ class MainWindow(QMainWindow):
 
         start = time.perf_counter()
 
-        # Determine folder scope based on global/local toggle
-        is_global = hasattr(self, "tag_panel") and self.tag_panel.is_global_scope()
+        # Determine browser scope based on gallery tabs
+        is_global = hasattr(self, "_gallery_tabs") and self._gallery_tabs.is_global_scope()
 
         # Don't clear the gallery if no folder is selected and not in global mode
         if not self._current_folder and not is_global:

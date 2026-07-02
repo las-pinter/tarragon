@@ -330,8 +330,6 @@ def test_global_scope_queries_entire_db(qapp: Any) -> None:  # noqa: ARG001
     """In global mode, _run_filtered_query ignores folder constraint."""
     from pathlib import Path
 
-    from PySide6.QtCore import Qt
-
     from tarragon.db import Database
     from tarragon.services.tag_service import TagService
 
@@ -362,8 +360,8 @@ def test_global_scope_queries_entire_db(qapp: Any) -> None:  # noqa: ARG001
         window._run_filtered_query()
         assert window.thumbnail_model.rowCount() == 1
 
-        # Switch to global mode
-        window.tag_panel._scope_checkbox.setCheckState(Qt.CheckState.Checked)
+        # Switch to global mode via gallery tabs
+        window._gallery_tabs._tab_widget.setCurrentIndex(1)  # "All Images"
 
         # Now should return files from both folders
         window._run_filtered_query()

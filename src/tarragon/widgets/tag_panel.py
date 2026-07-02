@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QCheckBox,
     QHBoxLayout,
@@ -51,10 +51,8 @@ class TagPanel(QWidget):
         selected files.
       * Type a new tag name and press *Add Tag* to create it.
 
-    Emits ``scope_changed`` when the Global/Local toggle changes.
+    Emits no signals; scope is controlled externally via ``set_global_scope()``.
     """
-
-    scope_changed = Signal(bool)  # True = global, False = local
 
     def __init__(self, tag_service: TagService, parent: QWidget | None = None) -> None:
         """Build the tag panel with header, scrollable list, and new-tag input."""
@@ -73,14 +71,6 @@ class TagPanel(QWidget):
         # Header
         header = QLabel("Tags")
         layout.addWidget(header)
-
-        # Global/Local scope toggle
-        scope_layout = QHBoxLayout()
-        self._scope_checkbox = QCheckBox("Global")
-        self._scope_checkbox.stateChanged.connect(self._on_scope_changed)
-        scope_layout.addWidget(self._scope_checkbox)
-        scope_layout.addStretch()
-        layout.addLayout(scope_layout)
 
         # Scroll area for tag checkboxes
         self._scroll_area = QScrollArea()
@@ -120,9 +110,14 @@ class TagPanel(QWidget):
         self._selected_paths = paths
         self._update_checkbox_states()
 
-    def is_global_scope(self) -> bool:
-        """Return True if the panel is in global scope mode."""
-        return self._global_scope
+    def set_global_scope(self, is_global: bool) -> None:
+        """Set scope from gallery tabs. Refreshes tag counts.
+
+        Args:
+            is_global: True for global scope, False for folder-scoped.
+        """
+        self._global_scope = is_global
+        self._refresh_tags()
 
     def set_folder_path(self, folder_path: str) -> None:
         """Set the current folder path for local-scoped tag counts.
@@ -187,16 +182,6 @@ class TagPanel(QWidget):
             except ValueError:
                 return (0, len(COLOR_ORDER))  # unknown colors go last among colors
         return (1, tag_name)  # manual tags sorted alphabetically
-
-    def _on_scope_changed(self, state: int) -> None:
-        """Handle the Global/Local toggle change.
-
-        Updates internal state, emits ``scope_changed``, and refreshes tag
-        counts to reflect the new scope.
-        """
-        self._global_scope = Qt.CheckState(state) == Qt.CheckState.Checked
-        self.scope_changed.emit(self._global_scope)
-        self._refresh_tags()
 
     def _refresh_tags(self) -> None:
         """Rebuild the entire tag list from the service.

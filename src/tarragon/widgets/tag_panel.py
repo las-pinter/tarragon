@@ -59,6 +59,7 @@ class TagPanel(QWidget):
         super().__init__(parent)
         self._tag_service = tag_service
         self._selected_paths: list[str] = []
+        self._cached_file_tags: dict[str, set[int]] = {}
         self._tag_checkboxes: dict[int, QCheckBox] = {}
         self._setting_checkboxes = False
         self._global_scope: bool = False  # False = local (default), True = global
@@ -106,8 +107,13 @@ class TagPanel(QWidget):
         used to decide whether the checkbox should be ``Checked``,
         ``PartiallyChecked``, or ``Unchecked``.  The *paths* are stored so
         that subsequent ``toggle_tag`` calls know which files to act on.
+
+        Tag IDs are batch-fetched once via
+        :meth:`TagService.get_file_tag_ids_batch` to avoid redundant
+        database queries when resolving tri-state for every tag.
         """
         self._selected_paths = paths
+        self._cached_file_tags = self._tag_service.get_file_tag_ids_batch(paths)
         self._update_checkbox_states()
 
     def set_global_scope(self, is_global: bool) -> None:
@@ -208,6 +214,8 @@ class TagPanel(QWidget):
         self._scroll_layout.addStretch()
 
         if self._selected_paths:
+            # Re-fetch cached tags since the DB may have changed
+            self._cached_file_tags = self._tag_service.get_file_tag_ids_batch(self._selected_paths)
             self._update_checkbox_states()
 
     def _build_tag_row(self, tag: dict[str, Any]) -> QWidget:
@@ -321,13 +329,19 @@ class TagPanel(QWidget):
     def _update_checkbox_states(self) -> None:
         """Sync every checkbox's state with the current file selection.
 
-        Uses ``tag_service.resolve_tri_state`` per tag.
+        Uses ``tag_service.resolve_tri_state`` per tag, passing the
+        pre-fetched ``_cached_file_tags`` so that only a single batch
+        query is needed instead of one query per tag.
         While updating, ``_setting_checkboxes`` is ``True`` so that the
         ``stateChanged`` handler does not treat these as user actions.
         """
         self._setting_checkboxes = True
         for tag_id, checkbox in self._tag_checkboxes.items():
-            state = self._tag_service.resolve_tri_state(self._selected_paths, tag_id)
+            state = self._tag_service.resolve_tri_state(
+                self._selected_paths,
+                tag_id,
+                self._cached_file_tags,
+            )
             checkbox.setCheckState(state)
         self._setting_checkboxes = False
 

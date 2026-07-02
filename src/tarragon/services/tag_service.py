@@ -68,20 +68,60 @@ class TagService(QObject):
         ).fetchall()
         return [{"id": row["id"], "name": row["name"], "source": row["source"]} for row in rows]
 
-    def resolve_tri_state(self, paths: list[str], tag_id: int) -> Qt.CheckState:
+    def get_file_tag_ids_batch(self, paths: list[str]) -> dict[str, set[int]]:
+        """Fetch tag IDs for multiple paths in a single query.
+
+        Returns
+        -------
+        dict[str, set[int]]
+            Mapping of path → set of tag_ids.  Paths with no tags map to
+            an empty set.
+        """
+        if not paths:
+            return {}
+
+        placeholders = ", ".join("?" * len(paths))
+        rows = self._db._execute(
+            f"SELECT path, tag_id FROM file_tags WHERE path IN ({placeholders})",
+            tuple(paths),
+        ).fetchall()
+
+        result: dict[str, set[int]] = {path: set() for path in paths}
+        for row in rows:
+            result[row["path"]].add(row["tag_id"])
+
+        return result
+
+    def resolve_tri_state(
+        self,
+        paths: list[str],
+        tag_id: int,
+        cached_tags: dict[str, set[int]] | None = None,
+    ) -> Qt.CheckState:
         """Determine the checked-state of *tag_id* across *paths*.
 
         Returns ``Qt.Checked`` when all files have the tag,
         ``Qt.PartiallyChecked`` when some do, and ``Qt.Unchecked``
         when none do.
+
+        Parameters
+        ----------
+        cached_tags:
+            Optional pre-fetched mapping of path → tag_ids (as returned
+            by :meth:`get_file_tag_ids_batch`).  When provided, the
+            database is **not** queried, avoiding redundant round-trips.
         """
         if not paths:
             return Qt.CheckState.Unchecked
 
         tagged = 0
         for path in paths:
-            if tag_id in self._db.get_file_tag_ids(path):
-                tagged += 1
+            if cached_tags is not None:
+                if tag_id in cached_tags.get(path, set()):
+                    tagged += 1
+            else:
+                if tag_id in self._db.get_file_tag_ids(path):
+                    tagged += 1
 
         if tagged == len(paths):
             return Qt.CheckState.Checked

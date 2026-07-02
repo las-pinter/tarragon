@@ -57,23 +57,39 @@ class SettingsDialog(QDialog):
 
         # ── Performance Section ─────────────────────────────────────────
         perf_group = QGroupBox("Performance")
+        perf_group.setToolTip(
+            "Settings that control rendering speed and memory usage."
+        )
         perf_layout = QFormLayout()
         perf_layout.setSpacing(8)
 
         self._psd_workers_spin = QSpinBox()
         self._psd_workers_spin.setRange(1, 8)
         self._psd_workers_spin.setValue(self._settings_service.get_max_psd_workers())
+        self._psd_workers_spin.setToolTip(
+            "Number of parallel processes for rendering PSD/PSB files. "
+            "Higher values speed up batch processing but use more RAM. "
+            "Changes require restart."
+        )
         perf_layout.addRow("Max PSD Workers:", self._psd_workers_spin)
 
         self._multi_preview_spin = QSpinBox()
         self._multi_preview_spin.setRange(1, 100)
         self._multi_preview_spin.setValue(self._settings_service.get_max_multi_preview())
+        self._multi_preview_spin.setToolTip(
+            "Maximum number of images to show when multiple files are selected. "
+            "Prevents memory issues with large selections."
+        )
         perf_layout.addRow("Max Multi-Preview:", self._multi_preview_spin)
 
         self._canvas_threshold_spin = QDoubleSpinBox()
         self._canvas_threshold_spin.setRange(0.1, 1000.0)
         self._canvas_threshold_spin.setDecimals(1)
         self._canvas_threshold_spin.setValue(self._settings_service.get_large_canvas_threshold_mp())
+        self._canvas_threshold_spin.setToolTip(
+            "Canvas size threshold (in megapixels) for switching to tiled PSD rendering. "
+            "Larger values use more memory but may be faster for big files."
+        )
         perf_layout.addRow("Large Canvas Threshold (MP):", self._canvas_threshold_spin)
 
         perf_group.setLayout(perf_layout)
@@ -81,6 +97,9 @@ class SettingsDialog(QDialog):
 
         # ── Grid & Layout Section ───────────────────────────────────────
         grid_group = QGroupBox("Grid & Layout")
+        grid_group.setToolTip(
+            "Settings for tiled rendering grid configuration."
+        )
         grid_layout = QFormLayout()
         grid_layout.setSpacing(8)
 
@@ -90,6 +109,10 @@ class SettingsDialog(QDialog):
         idx = self._grid_combo.findText(current_grid)
         if idx >= 0:
             self._grid_combo.setCurrentIndex(idx)
+        self._grid_combo.setToolTip(
+            "Grid size for tiled PSD rendering (e.g., '2x2' splits into 4 tiles). "
+            "Higher values reduce memory usage but may be slower."
+        )
         grid_layout.addRow("Tile Grid Size:", self._grid_combo)
 
         grid_group.setLayout(grid_layout)
@@ -97,16 +120,27 @@ class SettingsDialog(QDialog):
 
         # ── Color Tagging Section ───────────────────────────────────────
         color_group = QGroupBox("Color Tagging")
+        color_group.setToolTip(
+            "Automatic color tag extraction from dominant image colors."
+        )
         color_layout = QFormLayout()
         color_layout.setSpacing(8)
 
         self._color_enabled_check = QCheckBox("Enable color tagging")
         self._color_enabled_check.setChecked(self._settings_service.get_color_tag_enabled())
+        self._color_enabled_check.setToolTip(
+            "Enable automatic color tag extraction from images. "
+            "Tags like 'color:red', 'color:blue' are added based on dominant colors."
+        )
         color_layout.addRow(self._color_enabled_check)
 
         self._palette_size_spin = QSpinBox()
         self._palette_size_spin.setRange(2, 32)
         self._palette_size_spin.setValue(self._settings_service.get_color_tag_palette_size())
+        self._palette_size_spin.setToolTip(
+            "Number of dominant colors to extract per image. "
+            "Higher values detect more color variations but may be slower."
+        )
         color_layout.addRow("Palette Size:", self._palette_size_spin)
 
         self._min_share_spin = QDoubleSpinBox()
@@ -114,6 +148,10 @@ class SettingsDialog(QDialog):
         self._min_share_spin.setDecimals(2)
         self._min_share_spin.setSingleStep(0.05)
         self._min_share_spin.setValue(self._settings_service.get_color_tag_min_share())
+        self._min_share_spin.setToolTip(
+            "Minimum percentage of image area a color must cover to be tagged "
+            "(e.g., 0.10 = 10%). Lower values detect more colors."
+        )
         color_layout.addRow("Min Color Share:", self._min_share_spin)
 
         self._neutral_s_spin = QDoubleSpinBox()
@@ -121,6 +159,10 @@ class SettingsDialog(QDialog):
         self._neutral_s_spin.setDecimals(2)
         self._neutral_s_spin.setSingleStep(0.05)
         self._neutral_s_spin.setValue(self._settings_service.get_color_tag_neutral_s_threshold())
+        self._neutral_s_spin.setToolTip(
+            "Saturation threshold for neutral colors. "
+            "Colors with saturation below this are tagged as 'neutral' instead of a hue."
+        )
         color_layout.addRow("Neutral Saturation Threshold:", self._neutral_s_spin)
 
         color_group.setLayout(color_layout)
@@ -128,6 +170,9 @@ class SettingsDialog(QDialog):
 
         # ── Cache Section ───────────────────────────────────────────────
         cache_group = QGroupBox("Cache")
+        cache_group.setToolTip(
+            "Thumbnail cache storage location and image format."
+        )
         cache_layout = QVBoxLayout()
         cache_layout.setSpacing(8)
 
@@ -140,10 +185,18 @@ class SettingsDialog(QDialog):
 
         self._cache_dir_edit = QLineEdit(display_path)
         self._cache_dir_edit.setReadOnly(True)
+        self._cache_dir_edit.setToolTip(
+            "Custom directory for thumbnail cache. "
+            "Leave empty to use default location. Changes require cache rebuild."
+        )
         cache_dir_row.addWidget(self._cache_dir_edit)
 
         self._browse_btn = QPushButton("Browse...")
         self._browse_btn.clicked.connect(self._browse_cache_dir)
+        self._browse_btn.setToolTip(
+            "Custom directory for thumbnail cache. "
+            "Leave empty to use default location. Changes require cache rebuild."
+        )
         cache_dir_row.addWidget(self._browse_btn)
 
         cache_layout.addLayout(cache_dir_row)
@@ -156,6 +209,10 @@ class SettingsDialog(QDialog):
         self._format_combo.addItems(["PNG", "JPEG"])
         current_format = self._settings_service.get_cache_format()
         self._format_combo.setCurrentIndex(0 if current_format == "png" else 1)
+        self._format_combo.setToolTip(
+            "Cache file format: PNG (lossless, larger files) or JPEG (lossy, smaller files). "
+            "Changes require cache rebuild."
+        )
         format_row.addWidget(self._format_combo)
         format_row.addStretch()
 
@@ -166,11 +223,18 @@ class SettingsDialog(QDialog):
 
         # ── Debug Section ───────────────────────────────────────────────
         debug_group = QGroupBox("Debug")
+        debug_group.setToolTip(
+            "Developer debugging options."
+        )
         debug_layout = QVBoxLayout()
         debug_layout.setSpacing(8)
 
         self._debug_checkbox = QCheckBox("Enable debug logging")
         self._debug_checkbox.setChecked(self._settings_service.get_debug_mode())
+        self._debug_checkbox.setToolTip(
+            "Enable verbose debug logging. "
+            "Useful for troubleshooting but may slow down the application."
+        )
         debug_layout.addWidget(self._debug_checkbox)
 
         debug_group.setLayout(debug_layout)

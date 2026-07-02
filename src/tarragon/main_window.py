@@ -181,9 +181,9 @@ class MainWindow(QMainWindow):
         self.thumbnail_grid = ThumbnailGrid(parent=self)
         self.thumbnail_grid.set_model(self.thumbnail_model)
 
-        # Create thumbnail service (skip if settings is None, e.g. in tests)
-        if self._settings is not None:
-            self._thumbnail_service = ThumbnailService(db, self._settings, parent=self)
+        # Create thumbnail service (skip if settings_service is None, e.g. in tests)
+        if self._settings_service is not None:
+            self._thumbnail_service = ThumbnailService(db, self._settings_service, parent=self)
             self._thumbnail_service.thumbnailReady.connect(self._on_thumbnail_ready)
             self._thumbnail_service.errorOccurred.connect(self._on_thumbnail_error)
             # Auto-color tags from thumbnail rendering should refresh the tag panel
@@ -229,7 +229,9 @@ class MainWindow(QMainWindow):
         )
         root_logger = logging.getLogger()
         root_logger.addHandler(self._log_handler)
-        root_logger.setLevel(logging.DEBUG if self._settings and self._settings.get("debug_mode") else logging.INFO)
+        root_logger.setLevel(
+            logging.DEBUG if self._settings_service and self._settings_service.get_debug_mode() else logging.INFO
+        )
 
         # Wire tag panel scope to re-run query (tag filtering is now via tag_filter_bar)
         self.tag_panel.scope_changed.connect(self._on_scope_changed)
@@ -296,7 +298,7 @@ class MainWindow(QMainWindow):
         else:
             # Multi-select — load multiple images for mosaic
             # Read cap from settings instead of hardcoding (Deviation 4.2)
-            cap = self._settings.get("max_multi_preview") if self._settings else 9
+            cap = self._settings_service.get_max_multi_preview() if self._settings_service else 9
             if cap is None:
                 cap = 9
             images_to_show = min(len(paths), cap)

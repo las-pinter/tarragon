@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 from tarragon.db import Database
 from tarragon.scanner import FileInfo
-from tarragon.settings import Settings
+from tarragon.services.settings_service import SettingsService
 from tarragon.thumbnail import (
     _cache_file_path,
     _get_executor,
@@ -133,17 +133,19 @@ class ThumbnailService(QObject):
     errorOccurred = Signal(str, str)  # noqa: N815 — Qt signal follows camelCase convention
     tagsUpdated = Signal()  # noqa: N815 — emitted after auto-color tags are persisted
 
-    def __init__(self, db: Database, settings: Settings, parent: QObject | None = None) -> None:
+    def __init__(
+        self, db: Database, settings_service: SettingsService, parent: QObject | None = None
+    ) -> None:
         super().__init__(parent)
         self._db = db
-        self._settings = settings
+        self._settings_service = settings_service
         self._threadpool = QThreadPool()
-        self._cache_format: str = self._settings.get("cache_format")  # "png" or "jpeg"
+        self._cache_format: str = self._settings_service.get_cache_format()
 
         # Pre-initialize the shared PSD ProcessPoolExecutor with the
         # user-configured worker count (falls back to RAM-adaptive default
         # when the setting is absent / None).
-        max_psd_workers = int(self._settings.get("max_psd_workers"))
+        max_psd_workers = self._settings_service.get_max_psd_workers()
         _get_executor(max_workers=max_psd_workers)
 
     def set_cache_format(self, fmt: str) -> None:
@@ -345,8 +347,8 @@ class ThumbnailService(QObject):
 
         # Render full resolution first
         if file_info.extension.lower() in {".psd", ".psb"}:
-            threshold = self._settings.get("large_canvas_threshold_mp")
-            grid_str = self._settings.get("tile_grid_size")  # e.g. "2x2"
+            threshold = self._settings_service.get_large_canvas_threshold_mp()
+            grid_str = self._settings_service.get_tile_grid_size()  # e.g. "2x2"
             grid_x, grid_y = (int(d) for d in grid_str.split("x"))
             full_img = render_psd_image(
                 file_info.path,
@@ -385,15 +387,15 @@ class ThumbnailService(QObject):
             self.thumbnailReady.emit(str(file_info.path), img, size, cache_path_str)
 
         # Extract and persist dominant color tags (from full resolution)
-        if self._settings.get("color_tag_enabled"):
+        if self._settings_service.get_color_tag_enabled():
             try:
                 from tarragon.color_tagger import extract_dominant_color_tags
 
                 tags = extract_dominant_color_tags(
                     full_img,
-                    palette_size=self._settings.get("color_tag_palette_size"),
-                    min_share=self._settings.get("color_tag_min_share"),
-                    neutral_s_threshold=self._settings.get("color_tag_neutral_s_threshold"),
+                    palette_size=self._settings_service.get_color_tag_palette_size(),
+                    min_share=self._settings_service.get_color_tag_min_share(),
+                    neutral_s_threshold=self._settings_service.get_color_tag_neutral_s_threshold(),
                 )
                 self._db.replace_auto_color_tags(str(file_info.path), tags)
                 self.tagsUpdated.emit()
@@ -433,8 +435,8 @@ class ThumbnailService(QObject):
         already off the main thread, we run it in the QThreadPool to keep
         the main thread free.
         """
-        threshold = self._settings.get("large_canvas_threshold_mp")
-        grid_str = self._settings.get("tile_grid_size")  # e.g. "2x2"
+        threshold = self._settings_service.get_large_canvas_threshold_mp()
+        grid_str = self._settings_service.get_tile_grid_size()  # e.g. "2x2"
         grid_x, grid_y = (int(d) for d in grid_str.split("x"))
         task = _RenderPSDTask(
             file_info=file_info,

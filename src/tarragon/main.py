@@ -3,12 +3,13 @@
 import logging
 import sys
 
-from PySide6.QtGui import QColor, QCloseEvent, QPalette
+from PySide6.QtGui import QCloseEvent, QColor, QPalette
 from PySide6.QtWidgets import QApplication
 
 from tarragon.app_paths import db_path, ensure_dirs
 from tarragon.db import Database
 from tarragon.main_window import MainWindow as _MainWindow
+from tarragon.services.settings_service import SettingsService
 from tarragon.services.tag_service import TagService
 from tarragon.settings import Settings
 
@@ -54,9 +55,10 @@ class MainWindow(_MainWindow):
 
         resolved_settings = owned_settings or settings
 
-        # Configure custom cache directory if set
+        # Configure custom cache directory if set (via SettingsService for validated access)
         if resolved_settings is not None:
-            custom_cache = resolved_settings.get("cache_dir")
+            settings_service = SettingsService(resolved_settings)
+            custom_cache = settings_service.get_cache_dir()
             if custom_cache:
                 from pathlib import Path
 

@@ -7,13 +7,13 @@ TOUGH!
 
 from __future__ import annotations
 
-from collections.abc import Generator
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
 from PIL import Image
+
 from tarragon.scanner import FileInfo
 from tarragon.services.thumbnail_service import (
     ThumbnailService,
@@ -44,27 +44,24 @@ def db_mock() -> MagicMock:
 
 @pytest.fixture
 def settings_mock() -> MagicMock:
-    """Mock Settings with typed return values matching DEFAULTS."""
+    """Mock SettingsService with typed return values matching DEFAULTS."""
     mock = MagicMock()
-    _defaults = {
-        "cache_format": "png",
-        "max_psd_workers": 3,
-        "large_canvas_threshold_mp": 20.0,
-        "tile_grid_size": "2x2",
-        "color_tag_enabled": True,
-        "color_tag_palette_size": 8,
-        "color_tag_min_share": 0.10,
-        "color_tag_neutral_s_threshold": 0.15,
-    }
-    mock.get.side_effect = lambda key: _defaults.get(key, "png")
+    mock.get_cache_format.return_value = "png"
+    mock.get_max_psd_workers.return_value = 3
+    mock.get_large_canvas_threshold_mp.return_value = 20.0
+    mock.get_tile_grid_size.return_value = "2x2"
+    mock.get_color_tag_enabled.return_value = True
+    mock.get_color_tag_palette_size.return_value = 8
+    mock.get_color_tag_min_share.return_value = 0.10
+    mock.get_color_tag_neutral_s_threshold.return_value = 0.15
     return mock
 
 
 @pytest.fixture
 def service(db_mock: MagicMock, settings_mock: MagicMock) -> ThumbnailService:
-    """Create a ThumbnailService with mocked DB, settings, and QThreadPool."""
+    """Create a ThumbnailService with mocked DB, settings_service, and QThreadPool."""
     with patch("tarragon.services.thumbnail_service._get_executor"):
-        svc = ThumbnailService(db=db_mock, settings=settings_mock)
+        svc = ThumbnailService(db=db_mock, settings_service=settings_mock)
     # Replace the real QThreadPool with a mock that executes tasks synchronously
     # so tests can verify render_func dispatch through check_and_render().
     # QThreadPool.start() returns None (void) in real Qt — mock matches that.
@@ -90,12 +87,12 @@ class TestInstantiation:
     def test_service_instantiation(self, db_mock: MagicMock, settings_mock: MagicMock) -> None:
         """Creating a ThumbnailService stores dependencies, reads cache_format, and initializes PSD pool."""
         with patch("tarragon.services.thumbnail_service._get_executor") as mock_get_executor:
-            svc = ThumbnailService(db=db_mock, settings=settings_mock)
+            svc = ThumbnailService(db=db_mock, settings_service=settings_mock)
         assert svc._db is db_mock
-        assert svc._settings is settings_mock
+        assert svc._settings_service is settings_mock
         assert svc._cache_format == "png"
-        settings_mock.get.assert_any_call("cache_format")
-        settings_mock.get.assert_any_call("max_psd_workers")
+        settings_mock.get_cache_format.assert_called()
+        settings_mock.get_max_psd_workers.assert_called()
         mock_get_executor.assert_called_once_with(max_workers=3)
 
     def test_signals_exist(self, service: ThumbnailService) -> None:
@@ -1298,17 +1295,14 @@ class TestAutoColorTagSignal:
     ) -> None:
         """When color_tag_enabled is False, tagsUpdated is NOT emitted."""
         disabled_settings = MagicMock()
-        _defaults = {
-            "cache_format": "png",
-            "max_psd_workers": 3,
-            "large_canvas_threshold_mp": 20.0,
-            "tile_grid_size": "2x2",
-            "color_tag_enabled": False,  # Disabled!
-        }
-        disabled_settings.get.side_effect = lambda key: _defaults.get(key, "png")
+        disabled_settings.get_cache_format.return_value = "png"
+        disabled_settings.get_max_psd_workers.return_value = 3
+        disabled_settings.get_large_canvas_threshold_mp.return_value = 20.0
+        disabled_settings.get_tile_grid_size.return_value = "2x2"
+        disabled_settings.get_color_tag_enabled.return_value = False  # Disabled!
 
         with patch("tarragon.services.thumbnail_service._get_executor"):
-            svc = ThumbnailService(db=db_mock, settings=disabled_settings)
+            svc = ThumbnailService(db=db_mock, settings_service=disabled_settings)
 
         file_info = FileInfo(
             path=tmp_path / "source.png",

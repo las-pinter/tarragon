@@ -8,11 +8,11 @@ from __future__ import annotations
 
 from collections.abc import Generator
 from pathlib import Path
-from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
 from PIL import Image
+
 from tarragon.db import Database
 from tarragon.scanner import FileInfo
 from tarragon.services.thumbnail_service import ThumbnailService
@@ -33,31 +33,24 @@ def db() -> Generator[Database, None, None]:
 
 @pytest.fixture()
 def settings_mock() -> MagicMock:
-    """Mock Settings with color tagging enabled and default parameters."""
+    """Mock SettingsService with color tagging enabled and default parameters."""
     mock = MagicMock()
-
-    def _get_side_effect(key: str) -> Any:
-        defaults = {
-            "cache_format": "png",
-            "max_psd_workers": 3,
-            "large_canvas_threshold_mp": 20.0,
-            "tile_grid_size": "2x2",
-            "color_tag_enabled": True,
-            "color_tag_palette_size": 8,
-            "color_tag_min_share": 0.10,
-            "color_tag_neutral_s_threshold": 0.15,
-        }
-        return defaults.get(key)
-
-    mock.get.side_effect = _get_side_effect
+    mock.get_cache_format.return_value = "png"
+    mock.get_max_psd_workers.return_value = 3
+    mock.get_large_canvas_threshold_mp.return_value = 20.0
+    mock.get_tile_grid_size.return_value = "2x2"
+    mock.get_color_tag_enabled.return_value = True
+    mock.get_color_tag_palette_size.return_value = 8
+    mock.get_color_tag_min_share.return_value = 0.10
+    mock.get_color_tag_neutral_s_threshold.return_value = 0.15
     return mock
 
 
 @pytest.fixture()
 def service(db: Database, settings_mock: MagicMock) -> ThumbnailService:
-    """Create a ThumbnailService with real DB, mock settings, and mock threadpool."""
+    """Create a ThumbnailService with real DB, mock settings_service, and mock threadpool."""
     with patch("tarragon.services.thumbnail_service._get_executor"):
-        svc = ThumbnailService(db=db, settings=settings_mock)
+        svc = ThumbnailService(db=db, settings_service=settings_mock)
     svc._threadpool = MagicMock()
     return svc
 
@@ -286,20 +279,14 @@ class TestColorTaggingDisabled:
         """When color_tag_enabled is False, no color tags are extracted or persisted."""
         # Arrange — settings with color_tag_enabled=False
         settings_mock = MagicMock()
+        settings_mock.get_cache_format.return_value = "png"
+        settings_mock.get_max_psd_workers.return_value = 3
+        settings_mock.get_large_canvas_threshold_mp.return_value = 20.0
+        settings_mock.get_tile_grid_size.return_value = "2x2"
+        settings_mock.get_color_tag_enabled.return_value = False
 
-        def _get_side_effect(key: str) -> Any:
-            defaults = {
-                "cache_format": "png",
-                "max_psd_workers": 3,
-                "large_canvas_threshold_mp": 20.0,
-                "tile_grid_size": "2x2",
-                "color_tag_enabled": False,
-            }
-            return defaults.get(key)
-
-        settings_mock.get.side_effect = _get_side_effect
         with patch("tarragon.services.thumbnail_service._get_executor"):
-            svc = ThumbnailService(db=db, settings=settings_mock)
+            svc = ThumbnailService(db=db, settings_service=settings_mock)
         svc._threadpool = MagicMock()
 
         file_info = _make_file_info(tmp_path)
@@ -443,23 +430,17 @@ class TestSettingsParametersUsed:
         """extract_dominant_color_tags receives the correct parameters from settings."""
         # Arrange — custom settings values
         settings_mock = MagicMock()
+        settings_mock.get_cache_format.return_value = "png"
+        settings_mock.get_max_psd_workers.return_value = 3
+        settings_mock.get_large_canvas_threshold_mp.return_value = 20.0
+        settings_mock.get_tile_grid_size.return_value = "2x2"
+        settings_mock.get_color_tag_enabled.return_value = True
+        settings_mock.get_color_tag_palette_size.return_value = 4
+        settings_mock.get_color_tag_min_share.return_value = 0.25
+        settings_mock.get_color_tag_neutral_s_threshold.return_value = 0.30
 
-        def _get_side_effect(key: str) -> Any:
-            defaults = {
-                "cache_format": "png",
-                "max_psd_workers": 3,
-                "large_canvas_threshold_mp": 20.0,
-                "tile_grid_size": "2x2",
-                "color_tag_enabled": True,
-                "color_tag_palette_size": 4,
-                "color_tag_min_share": 0.25,
-                "color_tag_neutral_s_threshold": 0.30,
-            }
-            return defaults.get(key)
-
-        settings_mock.get.side_effect = _get_side_effect
         with patch("tarragon.services.thumbnail_service._get_executor"):
-            svc = ThumbnailService(db=db, settings=settings_mock)
+            svc = ThumbnailService(db=db, settings_service=settings_mock)
         svc._threadpool = MagicMock()
 
         file_info = _make_file_info(tmp_path)

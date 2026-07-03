@@ -326,7 +326,7 @@ def _shutdown_executor() -> None:
     global _shared_executor
     with _executor_lock:
         if _shared_executor is not None:
-            _shared_executor.shutdown(wait=False)
+            _shared_executor.shutdown(wait=False, cancel_futures=True)
             _shared_executor = None
 
 

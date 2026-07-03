@@ -179,6 +179,11 @@ class ThumbnailService(QObject):
                 (milliseconds).  Defaults to 5 000 (5 seconds).
         """
         self.cancel_pending()
+        # Shut down the ProcessPoolExecutor first to cancel any pending PSD renders.
+        # This prevents worker processes from blocking on queue.get() indefinitely.
+        from tarragon.thumbnail import _shutdown_executor
+
+        _shutdown_executor()
         self._threadpool.waitForDone(timeout_ms)
         logger.debug("ThumbnailService shutdown complete")
 

@@ -45,12 +45,19 @@ def test_tokens_colors_section() -> None:
         "bg_secondary",
         "bg_tertiary",
         "surface_highlight",
+        "surface_hover",
         "coral_strong",
         "coral_muted",
+        "coral_dark",
         "amber_accent",
+        "amber_light",
+        "amber_dark",
         "text_primary",
         "text_secondary",
         "text_tertiary",
+        "bg_disabled",
+        "border_disabled",
+        "bg_log_panel",
     }
     assert set(colors.keys()) == expected_keys
 
@@ -63,9 +70,11 @@ def test_tokens_typography_section() -> None:
     typos = tokens["typography"]
     expected_keys = {
         "font_family",
+        "mono_family",
         "body_size",
         "heading_size",
         "small_size",
+        "log_size",
         "weight_regular",
         "weight_medium",
         "weight_semibold",

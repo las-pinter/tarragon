@@ -549,11 +549,10 @@ class MainWindow(QMainWindow):
             set_cache_dir(Path(new_cache) if new_cache else None)
 
     def _apply_theme(self) -> None:
-        """Load and apply the QSS stylesheet from theme/app.qss."""
-        from tarragon.theme.loader import ThemeLoader
+        """Generate and apply the QSS stylesheet from design tokens."""
+        from tarragon.theme.loader import load_and_generate_qss
 
-        loader = ThemeLoader()
-        qss_content = loader.load_qss()
+        qss_content = load_and_generate_qss()
         app = QApplication.instance()
         if isinstance(app, QApplication):
             app.setStyleSheet(qss_content)

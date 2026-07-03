@@ -12,6 +12,8 @@ try:
 except ImportError:  # pragma: no cover
     import importlib_resources  # type: ignore[no-redef]
 
+from tarragon.theme.qss_generator import generate_qss
+
 logger = logging.getLogger(__name__)
 
 
@@ -25,17 +27,19 @@ class ThemeLoader:
     PACKAGE = "tarragon.theme"
 
     def load_qss(self) -> str:
-        """Read the QSS stylesheet from *app.qss* inside the theme package.
+        """Generate the QSS stylesheet dynamically from design tokens.
+
+        Loads ``tokens.json`` and passes the tokens through
+        :func:`~tarragon.theme.qss_generator.generate_qss` to produce
+        a deterministic stylesheet.  Changing token values in ``tokens.json``
+        and re-calling this method updates the entire theme.
 
         Returns:
-            The raw QSS text content.
-
-        Raises:
-            FileNotFoundError: If ``app.qss`` is missing from the package.
+            The generated QSS text content.
         """
-        files = importlib_resources.files(self.PACKAGE)
-        qss_content = files.joinpath("app.qss").read_text(encoding="utf-8")
-        logger.debug("Loaded QSS stylesheet (%d chars)", len(qss_content))
+        tokens = self.load_tokens()
+        qss_content = generate_qss(tokens)
+        logger.debug("Generated QSS stylesheet (%d chars)", len(qss_content))
         return qss_content
 
     def load_tokens(self) -> dict[str, Any]:
@@ -51,4 +55,17 @@ class ThemeLoader:
         return dict(json.loads(files.joinpath("tokens.json").read_text(encoding="utf-8")))  # noqa: F405
 
 
-__all__ = ["ThemeLoader"]
+def load_and_generate_qss() -> str:
+    """Load tokens and generate the QSS stylesheet in one call.
+
+    Convenience function that creates a :class:`ThemeLoader`, reads
+    ``tokens.json``, and returns the generated QSS string.
+
+    Returns:
+        The generated QSS text ready for ``QApplication.setStyleSheet``.
+    """
+    loader = ThemeLoader()
+    return loader.load_qss()
+
+
+__all__ = ["ThemeLoader", "load_and_generate_qss"]

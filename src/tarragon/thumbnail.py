@@ -326,7 +326,23 @@ def _shutdown_executor() -> None:
     global _shared_executor
     with _executor_lock:
         if _shared_executor is not None:
-            _shared_executor.shutdown(wait=False, cancel_futures=True)
+            # Try graceful shutdown first
+            try:
+                _shared_executor.shutdown(wait=False, cancel_futures=True)
+            except Exception:
+                # If graceful shutdown fails, force terminate
+                pass
+            # Forcefully terminate any remaining worker processes
+            # This is necessary because workers may be stuck in system calls
+            # that can't be interrupted by cancel_futures
+            try:
+                if hasattr(_shared_executor, "_processes"):
+                    for process in _shared_executor._processes.values():
+                        if process.is_alive():
+                            process.terminate()
+            except Exception:
+                # Ignore errors during termination
+                pass
             _shared_executor = None
 
 

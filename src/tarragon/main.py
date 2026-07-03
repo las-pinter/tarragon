@@ -1,6 +1,7 @@
 """Tarragon application entry point."""
 
 import logging
+import os
 import sys
 
 from PySide6.QtGui import QCloseEvent, QPalette
@@ -86,9 +87,13 @@ class MainWindow(_MainWindow):
         self.setup_widgets(self._database, tag_service)
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802
-        """Gracefully shut down ThumbnailService, Settings and Database on window close."""
-        # Shut down thumbnail service first — cancels pending work and waits
-        # for in-flight renders to finish (with timeout).
+        """Shut down all services and exit immediately.
+
+        Uses os._exit(0) after cleanup to ensure immediate termination,
+        bypassing atexit handlers that may hang on stuck worker processes.
+        """
+        # Shut down thumbnail service first — cancels pending work and
+        # forcefully terminates any stuck worker processes.
         if hasattr(self, "_thumbnail_service"):
             self._thumbnail_service.shutdown()
         if isinstance(self._settings, Settings):
@@ -96,6 +101,11 @@ class MainWindow(_MainWindow):
         if isinstance(self._database, Database):
             self._database.close()
         super().closeEvent(event)
+        # Force immediate exit — bypasses atexit handlers that may hang
+        # on ProcessPoolExecutor worker processes stuck in system calls.
+        # Skip this during testing to allow pytest to clean up properly.
+        if "pytest" not in sys.modules:
+            os._exit(0)
 
 
 def main() -> None:

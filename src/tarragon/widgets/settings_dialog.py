@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
 
 from tarragon.app_paths import cache_dir, data_dir
 from tarragon.services.settings_service import SettingsService
+from tarragon.theme.spacing import MD, SM, XS
 
 
 class SettingsDialog(QDialog):
@@ -52,16 +53,14 @@ class SettingsDialog(QDialog):
 
         # ── Main layout ─────────────────────────────────────────────────
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(12, 12, 12, 12)
-        layout.setSpacing(10)
+        layout.setContentsMargins(MD, MD, MD, MD)
+        layout.setSpacing(SM)
 
         # ── Performance Section ─────────────────────────────────────────
         perf_group = QGroupBox("Performance")
-        perf_group.setToolTip(
-            "Settings that control rendering speed and memory usage."
-        )
+        perf_group.setToolTip("Settings that control rendering speed and memory usage.")
         perf_layout = QFormLayout()
-        perf_layout.setSpacing(8)
+        perf_layout.setSpacing(SM)
 
         self._psd_workers_spin = QSpinBox()
         self._psd_workers_spin.setRange(1, 8)
@@ -97,11 +96,9 @@ class SettingsDialog(QDialog):
 
         # ── Grid & Layout Section ───────────────────────────────────────
         grid_group = QGroupBox("Grid & Layout")
-        grid_group.setToolTip(
-            "Settings for tiled rendering grid configuration."
-        )
+        grid_group.setToolTip("Settings for tiled rendering grid configuration.")
         grid_layout = QFormLayout()
-        grid_layout.setSpacing(8)
+        grid_layout.setSpacing(SM)
 
         self._grid_combo = QComboBox()
         self._grid_combo.addItems(["1x1", "2x2", "3x3", "4x4"])
@@ -120,11 +117,9 @@ class SettingsDialog(QDialog):
 
         # ── Color Tagging Section ───────────────────────────────────────
         color_group = QGroupBox("Color Tagging")
-        color_group.setToolTip(
-            "Automatic color tag extraction from dominant image colors."
-        )
+        color_group.setToolTip("Automatic color tag extraction from dominant image colors.")
         color_layout = QFormLayout()
-        color_layout.setSpacing(8)
+        color_layout.setSpacing(SM)
 
         self._color_enabled_check = QCheckBox("Enable color tagging")
         self._color_enabled_check.setChecked(self._settings_service.get_color_tag_enabled())
@@ -170,15 +165,13 @@ class SettingsDialog(QDialog):
 
         # ── Cache Section ───────────────────────────────────────────────
         cache_group = QGroupBox("Cache")
-        cache_group.setToolTip(
-            "Thumbnail cache storage location and image format."
-        )
+        cache_group.setToolTip("Thumbnail cache storage location and image format.")
         cache_layout = QVBoxLayout()
-        cache_layout.setSpacing(8)
+        cache_layout.setSpacing(SM)
 
         # Cache directory row
         cache_dir_row = QHBoxLayout()
-        cache_dir_row.setSpacing(6)
+        cache_dir_row.setSpacing(XS)
 
         current_cache = self._settings_service.get_cache_dir()
         display_path = str(current_cache) if current_cache else str(cache_dir())
@@ -186,16 +179,14 @@ class SettingsDialog(QDialog):
         self._cache_dir_edit = QLineEdit(display_path)
         self._cache_dir_edit.setReadOnly(True)
         self._cache_dir_edit.setToolTip(
-            "Custom directory for thumbnail cache. "
-            "Leave empty to use default location. Changes require cache rebuild."
+            "Custom directory for thumbnail cache. Leave empty to use default location. Changes require cache rebuild."
         )
         cache_dir_row.addWidget(self._cache_dir_edit)
 
         self._browse_btn = QPushButton("Browse...")
         self._browse_btn.clicked.connect(self._browse_cache_dir)
         self._browse_btn.setToolTip(
-            "Custom directory for thumbnail cache. "
-            "Leave empty to use default location. Changes require cache rebuild."
+            "Custom directory for thumbnail cache. Leave empty to use default location. Changes require cache rebuild."
         )
         cache_dir_row.addWidget(self._browse_btn)
 
@@ -203,7 +194,7 @@ class SettingsDialog(QDialog):
 
         # Cache format row
         format_row = QHBoxLayout()
-        format_row.setSpacing(6)
+        format_row.setSpacing(XS)
 
         self._format_combo = QComboBox()
         self._format_combo.addItems(["PNG", "JPEG"])
@@ -223,17 +214,14 @@ class SettingsDialog(QDialog):
 
         # ── Debug Section ───────────────────────────────────────────────
         debug_group = QGroupBox("Debug")
-        debug_group.setToolTip(
-            "Developer debugging options."
-        )
+        debug_group.setToolTip("Developer debugging options.")
         debug_layout = QVBoxLayout()
-        debug_layout.setSpacing(8)
+        debug_layout.setSpacing(SM)
 
         self._debug_checkbox = QCheckBox("Enable debug logging")
         self._debug_checkbox.setChecked(self._settings_service.get_debug_mode())
         self._debug_checkbox.setToolTip(
-            "Enable verbose debug logging. "
-            "Useful for troubleshooting but may slow down the application."
+            "Enable verbose debug logging. Useful for troubleshooting but may slow down the application."
         )
         debug_layout.addWidget(self._debug_checkbox)
 
@@ -248,7 +236,7 @@ class SettingsDialog(QDialog):
         layout.addStretch()
 
         button_row = QHBoxLayout()
-        button_row.setSpacing(8)
+        button_row.setSpacing(SM)
         button_row.addStretch()
 
         self._ok_btn = QPushButton("OK")

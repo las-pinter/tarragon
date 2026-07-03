@@ -22,6 +22,8 @@ from PySide6.QtWidgets import (
 )
 
 from tarragon.services.tag_service import TagService
+from tarragon.theme.colors import AMBER_ACCENT, CORAL_MUTED, SURFACE_HOVER
+from tarragon.theme.spacing import SM, XS
 
 
 class TagFilterBar(QWidget):
@@ -42,8 +44,8 @@ class TagFilterBar(QWidget):
 
         # ── Layout ──────────────────────────────────────────────────────
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(4)
+        layout.setContentsMargins(SM, XS, SM, XS)
+        layout.setSpacing(XS)
 
         # "Add Tag+" button — always visible, opens tag menu on click
         self._add_button = QPushButton("Add Tag+")
@@ -55,7 +57,7 @@ class TagFilterBar(QWidget):
         self._chips_container = QWidget()
         self._chips_layout = QHBoxLayout(self._chips_container)
         self._chips_layout.setContentsMargins(0, 0, 0, 0)
-        self._chips_layout.setSpacing(4)
+        self._chips_layout.setSpacing(XS)
         layout.addWidget(self._chips_container)
 
         layout.addStretch()
@@ -162,31 +164,33 @@ class TagFilterBar(QWidget):
         """
         chip = QFrame()
         chip.setStyleSheet(
-            "QFrame {  background-color: #2a2836;  border: 1px solid #FAC775;  border-radius: 10px;  padding: 2px 6px;}"
+            f"QFrame {{  background-color: {SURFACE_HOVER.name()};  "
+            f"border: 1px solid {AMBER_ACCENT.name()};  "
+            f"border-radius: 10px;  padding: 2px 6px;}}"
         )
 
         chip_layout = QHBoxLayout(chip)
-        chip_layout.setContentsMargins(6, 2, 6, 2)
-        chip_layout.setSpacing(4)
+        chip_layout.setContentsMargins(XS, XS, XS, XS)
+        chip_layout.setSpacing(XS)
 
         label = QLabel(tag_name)
-        label.setStyleSheet("QLabel { color: #FAC775; border: none; background: transparent; }")
+        label.setStyleSheet(f"QLabel {{ color: {AMBER_ACCENT.name()}; border: none; background: transparent; }}")
         chip_layout.addWidget(label)
 
         remove_btn = QPushButton("\u00d7")
         remove_btn.setFixedSize(16, 16)
         remove_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         remove_btn.setStyleSheet(
-            "QPushButton {"
-            "  color: #D85A30;"
-            "  border: none;"
-            "  background: transparent;"
-            "  font-weight: bold;"
-            "  padding: 0;"
-            "}"
-            "QPushButton:hover {"
-            "  color: #FF6B40;"
-            "}"
+            f"QPushButton {{"
+            f"  color: {CORAL_MUTED.name()};"
+            f"  border: none;"
+            f"  background: transparent;"
+            f"  font-weight: bold;"
+            f"  padding: 0;"
+            f"}}"
+            f"QPushButton:hover {{"
+            f"  color: #FF6B40;"
+            f"}}"
         )
         remove_btn.clicked.connect(lambda _checked=False, tid=tag_id: self._remove_tag(tid))
         chip_layout.addWidget(remove_btn)

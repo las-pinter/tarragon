@@ -312,6 +312,9 @@ QGroupBox {{
     border-radius: {r_sm}px;
     margin-top: {md}px;
     padding-top: {lg}px;
+    padding-left: {sm}px;
+    padding-right: {sm}px;
+    padding-bottom: {sm}px;
     color: {text_primary};
 }}
 
@@ -329,6 +332,7 @@ QRadioButton {{
     color: {text_primary};
     font-family: {ui_font};
     font-size: {body_px}px;
+    padding: {xs}px;
 }}
 
 QCheckBox::indicator {{
@@ -425,6 +429,32 @@ QPlainTextEdit#logText {{
     padding: {xs}px;
     selection-background-color: {coral_muted};
     selection-color: {text_primary};
+}}
+
+/* ── Tab widgets ─────────────────────────────────────────────────── */
+QTabWidget::pane {{
+    border: 1px solid {bg_tertiary};
+    border-radius: {r_sm}px;
+    padding: {sm}px;
+}}
+
+QTabBar::tab {{
+    background-color: {bg_tertiary};
+    color: {text_secondary};
+    font-family: {ui_font};
+    font-size: {body_px}px;
+    padding: {xs}px {md}px;
+    border: none;
+}}
+
+QTabBar::tab:selected {{
+    background-color: {bg_secondary};
+    color: {amber_accent};
+}}
+
+QTabBar::tab:hover {{
+    background-color: {surface_highlight};
+    color: {amber_accent};
 }}
 """
 

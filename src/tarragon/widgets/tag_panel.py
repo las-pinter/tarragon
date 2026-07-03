@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
 
 from tarragon.services.tag_service import TagService
 from tarragon.theme.color_buckets import BUCKET_COLORS, BUCKET_HEX_COLORS
+from tarragon.theme.spacing import SM
 
 # Re-export under the legacy name used by the sort-key helper.
 COLOR_ORDER: list[str] = list(BUCKET_COLORS)
@@ -57,7 +58,7 @@ class TagPanel(QWidget):
 
         # ── Layout ──────────────────────────────────────────────────────
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setContentsMargins(SM, SM, SM, SM)
 
         # Header
         header = QLabel("Tags")

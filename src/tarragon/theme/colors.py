@@ -29,6 +29,9 @@ CORAL_STRONG: QColor = QColor(_colors["coral_strong"])
 CORAL_MUTED: QColor = QColor(_colors["coral_muted"])
 AMBER_ACCENT: QColor = QColor(_colors["amber_accent"])
 
+# ── Surface interaction colours ──────────────────────────────────────────────
+SURFACE_HOVER: QColor = QColor(_colors["surface_hover"])
+
 # ── Text colours ─────────────────────────────────────────────────────────────
 TEXT_PRIMARY: QColor = QColor(_colors["text_primary"])
 TEXT_SECONDARY: QColor = QColor(_colors["text_secondary"])
@@ -42,6 +45,7 @@ __all__ = [
     "CORAL_MUTED",
     "CORAL_STRONG",
     "SURFACE_HIGHLIGHT",
+    "SURFACE_HOVER",
     "TEXT_PRIMARY",
     "TEXT_SECONDARY",
     "TEXT_TERTIARY",

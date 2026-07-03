@@ -195,6 +195,9 @@ QGroupBox {
     border-radius: 5px;
     margin-top: 12px;
     padding-top: 16px;
+    padding-left: 8px;
+    padding-right: 8px;
+    padding-bottom: 8px;
     color: #ece9f2;
 }
 
@@ -212,6 +215,7 @@ QRadioButton {
     color: #ece9f2;
     font-family: "Segoe UI", -apple-system, sans-serif;
     font-size: 12px;
+    padding: 4px;
 }
 
 QCheckBox::indicator {
@@ -308,4 +312,30 @@ QPlainTextEdit#logText {
     padding: 4px;
     selection-background-color: #D85A30;
     selection-color: #ece9f2;
+}
+
+/* ── Tab widgets ─────────────────────────────────────────────────── */
+QTabWidget::pane {
+    border: 1px solid #211f29;
+    border-radius: 5px;
+    padding: 8px;
+}
+
+QTabBar::tab {
+    background-color: #211f29;
+    color: #A09CA3;
+    font-family: "Segoe UI", -apple-system, sans-serif;
+    font-size: 12px;
+    padding: 4px 12px;
+    border: none;
+}
+
+QTabBar::tab:selected {
+    background-color: #1c1b22;
+    color: #FAC775;
+}
+
+QTabBar::tab:hover {
+    background-color: #3D3B44;
+    color: #FAC775;
 }

@@ -241,10 +241,10 @@ class TestSwatchesHaveCorrectColors:
 
         # Assert
         btn = bar._swatch_buttons["red"]
-        assert "#FAC775" in btn.styleSheet()
+        assert "#fac775" in btn.styleSheet()
 
     def test_inactive_swatch_lacks_amber_border(self, bar: ColorFilterBar) -> None:
         """An inactive swatch does not show the amber border colour."""
         # Assert (no toggles — all inactive)
         btn = bar._swatch_buttons["red"]
-        assert "#FAC775" not in btn.styleSheet()
+        assert "#fac775" not in btn.styleSheet()

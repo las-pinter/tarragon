@@ -11,6 +11,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QImage, QPixmap, QResizeEvent
 from PySide6.QtWidgets import QLabel, QSizePolicy, QVBoxLayout, QWidget
 
+from tarragon.theme.spacing import SM
 from tarragon.theme.tokens import get_token
 
 logger = logging.getLogger(__name__)
@@ -104,8 +105,8 @@ class PreviewPanel(QWidget):
     def _setup_ui(self) -> None:
         """Build the UI layout."""
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(8, 8, 8, 8)
-        layout.setSpacing(8)
+        layout.setContentsMargins(SM, SM, SM, SM)
+        layout.setSpacing(SM)
 
         # Image label (centered, scaled)
         self._image_label = QLabel()
@@ -176,7 +177,9 @@ class PreviewPanel(QWidget):
 
         logger.debug(
             "set_image: path=%s, size=%s, from_cache=%s",
-            path, image.size, getattr(image, "_from_cache", False),
+            path,
+            image.size,
+            getattr(image, "_from_cache", False),
         )
 
         # Apply EXIF orientation so phone-camera images display upright.

@@ -26,20 +26,10 @@ from PySide6.QtWidgets import (
 )
 
 from tarragon.services.tag_service import TagService
+from tarragon.theme.color_buckets import BUCKET_COLORS, BUCKET_HEX_COLORS
 
-# Canonical color-wheel order matching ColorFilterBar.BUCKET_HUES.
-COLOR_ORDER: list[str] = [
-    "red",
-    "orange",
-    "yellow",
-    "green",
-    "teal",
-    "cyan",
-    "blue",
-    "purple",
-    "magenta",
-    "neutral",
-]
+# Re-export under the legacy name used by the sort-key helper.
+COLOR_ORDER: list[str] = list(BUCKET_COLORS)
 
 
 class TagPanel(QWidget):
@@ -280,19 +270,7 @@ class TagPanel(QWidget):
 
         Returns a default grey (``#888888``) for unrecognised names.
         """
-        color_map: dict[str, str] = {
-            "red": "#E74C3C",
-            "orange": "#F39C12",
-            "yellow": "#F1C40F",
-            "green": "#27AE60",
-            "teal": "#1ABC9C",
-            "cyan": "#00BCD4",
-            "blue": "#3498DB",
-            "purple": "#9B59B6",
-            "magenta": "#E91E63",
-            "neutral": "#7F8C8D",
-        }
-        return color_map.get(color_name, "#888888")
+        return BUCKET_HEX_COLORS.get(color_name, "#888888")
 
     def _on_checkbox_state_changed(self, tag_id: int, state: int) -> None:
         """Handle a change in a tag checkbox's state.

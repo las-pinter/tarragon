@@ -10,6 +10,8 @@ from __future__ import annotations
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QHBoxLayout, QPushButton, QScrollArea, QWidget
 
+from tarragon.theme.color_buckets import BUCKET_HEX_COLORS
+
 # -- Style constants ----------------------------------------------------------
 
 _SWATCH_SIZE = 36
@@ -29,19 +31,8 @@ class ColorFilterBar(QWidget):
 
     color_filter_changed = Signal(set)  # set of "color:<bucket>" strings
 
-    # Representative hue colours for each bucket
-    BUCKET_HUES: dict[str, str] = {
-        "red": "#E74C3C",
-        "orange": "#F39C12",
-        "yellow": "#F1C40F",
-        "green": "#27AE60",
-        "teal": "#1ABC9C",
-        "cyan": "#00BCD4",
-        "blue": "#3498DB",
-        "purple": "#9B59B6",
-        "magenta": "#E91E63",
-        "neutral": "#7F8C8D",
-    }
+    # Representative hue colours for each bucket — sourced from color_buckets.
+    BUCKET_HUES: dict[str, str] = dict(BUCKET_HEX_COLORS)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         """Create the filter bar with one swatch per colour bucket."""

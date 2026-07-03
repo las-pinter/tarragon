@@ -8,18 +8,7 @@ from __future__ import annotations
 
 from PIL import Image
 
-COLOR_BUCKETS = [
-    ("red", 0, 15),
-    ("red", 345, 360),  # Wrap-around for red
-    ("orange", 15, 33),
-    ("yellow", 33, 50),
-    ("green", 50, 85),
-    ("teal", 85, 105),
-    ("cyan", 105, 140),
-    ("blue", 140, 200),
-    ("purple", 200, 270),
-    ("magenta", 270, 310),
-]
+from tarragon.theme.color_buckets import COLOR_BUCKETS
 
 
 def _rgb_to_hsv(r: float, g: float, b: float) -> tuple[float, float, float]:
@@ -52,9 +41,10 @@ def _hue_to_bucket(hue: float) -> str | None:
 
     Returns None if the hue falls in a gap between buckets (310-345).
     """
-    for name, h_min, h_max in COLOR_BUCKETS:
-        if h_min <= hue < h_max:
-            return name
+    for name, ranges in COLOR_BUCKETS.items():
+        for h_min, h_max in ranges:
+            if h_min <= hue < h_max:
+                return name
     return None
 
 

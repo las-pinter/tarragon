@@ -1085,6 +1085,419 @@ class TestRenderTaskEdgeCases:
 
 
 # =========================================================================
+# Cancellation — cancel_pending, reset_cancel, shutdown
+# =========================================================================
+
+
+class TestCancellation:
+    """ThumbnailService cancellation: cancel_pending, reset_cancel, shutdown."""
+
+    def test_cancel_event_initially_clear(
+        self,
+        service: ThumbnailService,
+    ) -> None:
+        """Cancel event is not set after construction."""
+        assert not service._cancel_event.is_set()
+
+    def test_cancel_pending_sets_event_and_clears_pool(
+        self,
+        service: ThumbnailService,
+    ) -> None:
+        """cancel_pending() sets the cancel event and clears the threadpool."""
+        service.cancel_pending()
+        assert service._cancel_event.is_set()
+        service._threadpool.clear.assert_called_once()  # type: ignore[attr-defined]
+
+    def test_reset_cancel_clears_event(
+        self,
+        service: ThumbnailService,
+    ) -> None:
+        """reset_cancel() clears the cancel event after cancel_pending()."""
+        service.cancel_pending()
+        assert service._cancel_event.is_set()
+        service.reset_cancel()
+        assert not service._cancel_event.is_set()
+
+    def test_shutdown_calls_cancel_and_wait_for_done(
+        self,
+        service: ThumbnailService,
+    ) -> None:
+        """shutdown() cancels pending work and waits for the threadpool."""
+        service.shutdown(timeout_ms=1000)
+        assert service._cancel_event.is_set()
+        service._threadpool.waitForDone.assert_called_once_with(1000)  # type: ignore[attr-defined]
+
+    def test_shutdown_default_timeout(
+        self,
+        service: ThumbnailService,
+    ) -> None:
+        """shutdown() uses 5000 ms timeout by default."""
+        service.shutdown()
+        service._threadpool.waitForDone.assert_called_once_with(5000)  # type: ignore[attr-defined]
+
+
+# =========================================================================
+# Cancellation — _RenderAllTask honours cancel event
+# =========================================================================
+
+
+class TestRenderAllTaskCancellation:
+    """_RenderAllTask checks cancel event before starting work."""
+
+    def test_render_all_task_aborts_when_cancelled(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        """_RenderAllTask.run() returns immediately when cancel event is set."""
+        import threading
+
+        from tarragon.services.thumbnail_service import _RenderAllTask
+
+        file_info = FileInfo(
+            path=tmp_path / "source.png",
+            mtime=1000.0,
+            size=500,
+            extension=".png",
+        )
+        on_done = MagicMock()
+        on_error = MagicMock()
+        render_func = MagicMock()
+
+        cancel_event = threading.Event()
+        cancel_event.set()  # Already cancelled
+
+        task = _RenderAllTask(
+            file_info=file_info,
+            on_done=on_done,
+            on_error=on_error,
+            render_func=render_func,
+            cancel_event=cancel_event,
+        )
+
+        task.run()
+
+        render_func.assert_not_called()
+        on_done.assert_not_called()
+        on_error.assert_not_called()
+
+    def test_render_all_task_runs_when_not_cancelled(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        """_RenderAllTask.run() proceeds normally when cancel event is clear."""
+        import threading
+
+        from tarragon.services.thumbnail_service import _RenderAllTask
+
+        file_info = FileInfo(
+            path=tmp_path / "source.png",
+            mtime=1000.0,
+            size=500,
+            extension=".png",
+        )
+        on_done = MagicMock()
+        on_error = MagicMock()
+        render_func = MagicMock()
+
+        cancel_event = threading.Event()  # Not set
+
+        task = _RenderAllTask(
+            file_info=file_info,
+            on_done=on_done,
+            on_error=on_error,
+            render_func=render_func,
+            cancel_event=cancel_event,
+        )
+
+        task.run()
+
+        render_func.assert_called_once_with(file_info)
+        on_done.assert_called_once_with(file_info)
+        on_error.assert_not_called()
+
+    def test_render_all_task_works_without_cancel_event(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        """_RenderAllTask.run() works when cancel_event is None (backward compat)."""
+        from tarragon.services.thumbnail_service import _RenderAllTask
+
+        file_info = FileInfo(
+            path=tmp_path / "source.png",
+            mtime=1000.0,
+            size=500,
+            extension=".png",
+        )
+        on_done = MagicMock()
+        on_error = MagicMock()
+        render_func = MagicMock()
+
+        task = _RenderAllTask(
+            file_info=file_info,
+            on_done=on_done,
+            on_error=on_error,
+            render_func=render_func,
+            # cancel_event omitted (None)
+        )
+
+        task.run()
+
+        render_func.assert_called_once_with(file_info)
+        on_done.assert_called_once_with(file_info)
+
+
+# =========================================================================
+# Cancellation — _render_all_resolutions honours cancel event
+# =========================================================================
+
+
+class TestRenderAllResolutionsCancellation:
+    """_render_all_resolutions checks cancel event between steps."""
+
+    def test_render_all_aborts_before_render_when_cancelled(
+        self,
+        tmp_path: Path,
+        service: ThumbnailService,
+    ) -> None:
+        """_render_all_resolutions returns early when cancel event is set."""
+        file_info = FileInfo(
+            path=tmp_path / "source.png",
+            mtime=1000.0,
+            size=500,
+            extension=".png",
+        )
+
+        # Set cancel before calling
+        service._cancel_event.set()
+
+        with (
+            patch("tarragon.services.thumbnail_service.render_plain_image") as mock_render,
+            patch("tarragon.services.thumbnail_service.save_to_cache") as mock_save,
+        ):
+            service._render_all_resolutions(file_info)
+
+        # Should NOT have called render or save
+        mock_render.assert_not_called()
+        mock_save.assert_not_called()
+
+    def test_render_all_aborts_after_render_when_cancelled(
+        self,
+        tmp_path: Path,
+        service: ThumbnailService,
+    ) -> None:
+        """_render_all_resolutions aborts after render if cancel is set mid-flight."""
+        file_info = FileInfo(
+            path=tmp_path / "source.png",
+            mtime=1000.0,
+            size=500,
+            extension=".png",
+        )
+
+        mock_img = MagicMock(spec=Image.Image)
+        mock_img.width = 64
+        mock_img.height = 64
+
+        def set_cancel_on_render(*args: object, **kwargs: object) -> MagicMock:
+            """Simulate cancel being set during the render step."""
+            service._cancel_event.set()
+            return mock_img
+
+        with (
+            patch("tarragon.services.thumbnail_service.render_plain_image", side_effect=set_cancel_on_render),
+            patch("tarragon.services.thumbnail_service.save_to_cache") as mock_save,
+            patch("tarragon.services.thumbnail_service.generate_cache_uuid", return_value="test-uuid"),
+            patch("tarragon.services.thumbnail_service.generate_cache_paths") as mock_paths,
+        ):
+            mock_paths.return_value = {
+                "256": tmp_path / "cache" / "256.png",
+                "1024": tmp_path / "cache" / "1024.png",
+                "full": tmp_path / "cache" / "full.png",
+            }
+            service._render_all_resolutions(file_info)
+
+        # Should NOT have saved anything after render was cancelled
+        mock_save.assert_not_called()
+
+    def test_render_all_passes_cancel_event_to_psd_render(
+        self,
+        tmp_path: Path,
+        service: ThumbnailService,
+        settings_mock: MagicMock,
+    ) -> None:
+        """_render_all_resolutions passes cancel_event to render_psd_image for PSD files."""
+        file_info = FileInfo(
+            path=tmp_path / "document.psd",
+            mtime=1000.0,
+            size=500,
+            extension=".psd",
+        )
+
+        def set_cancel_and_return_none(*args: object, **kwargs: object) -> None:
+            """Set cancel event during the PSD render call so subsequent steps abort."""
+            service._cancel_event.set()
+
+        with (
+            patch(
+                "tarragon.services.thumbnail_service.render_psd_image", side_effect=set_cancel_and_return_none
+            ) as mock_psd,
+            patch("tarragon.services.thumbnail_service.generate_cache_uuid", return_value="test-uuid"),
+            patch("tarragon.services.thumbnail_service.generate_cache_paths") as mock_paths,
+        ):
+            mock_paths.return_value = {
+                "256": tmp_path / "cache" / "256.png",
+                "1024": tmp_path / "cache" / "1024.png",
+                "full": tmp_path / "cache" / "full.png",
+            }
+            service._render_all_resolutions(file_info)
+
+        # Verify cancel_event was passed to render_psd_image
+        mock_psd.assert_called_once()
+        call_kwargs = mock_psd.call_args.kwargs
+        assert call_kwargs.get("cancel_event") is service._cancel_event
+
+
+# =========================================================================
+# Cancellation — render_psd_image honours cancel event
+# =========================================================================
+
+
+class TestRenderPsdImageCancellation:
+    """render_psd_image polls cancel_event while waiting on the future."""
+
+    def test_render_psd_returns_none_when_cancelled(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        """render_psd_image returns None when cancel_event is set."""
+        import threading
+        from concurrent.futures import Future
+
+        from tarragon.thumbnail import render_psd_image
+
+        cancel_event = threading.Event()
+        cancel_event.set()  # Already cancelled
+
+        mock_future: Future[bytes | None] = Future()
+        # Don't resolve the future — it should be cancelled before waiting
+
+        with (
+            patch("tarragon.thumbnail._get_executor") as mock_exec,
+        ):
+            mock_executor = MagicMock()
+            mock_executor.submit.return_value = mock_future
+            mock_exec.return_value = mock_executor
+
+            result = render_psd_image(
+                tmp_path / "test.psd",
+                20.0,
+                2,
+                2,
+                cancel_event=cancel_event,
+            )
+
+        assert result is None
+        # Future should have been cancelled
+        assert mock_future.cancelled()
+
+    def test_render_psd_works_without_cancel_event(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        """render_psd_image works normally when cancel_event is None."""
+        import io
+        from concurrent.futures import Future
+
+        from PIL import Image
+
+        from tarragon.thumbnail import render_psd_image
+
+        # Create a resolved future with valid PNG bytes
+        img = Image.new("RGB", (10, 10), color="red")
+
+        buf = io.BytesIO()
+        img.save(buf, "PNG")
+        png_bytes = buf.getvalue()
+
+        mock_future: Future[bytes | None] = Future()
+        mock_future.set_result(png_bytes)
+
+        with patch("tarragon.thumbnail._get_executor") as mock_exec:
+            mock_executor = MagicMock()
+            mock_executor.submit.return_value = mock_future
+            mock_exec.return_value = mock_executor
+
+            result = render_psd_image(
+                tmp_path / "test.psd",
+                20.0,
+                2,
+                2,
+                cancel_event=None,
+            )
+
+        assert result is not None
+        assert result.size == (10, 10)
+
+
+# =========================================================================
+# Cancellation — check_and_render passes cancel_event to _RenderAllTask
+# =========================================================================
+
+
+class TestCheckAndRenderCancellation:
+    """check_and_render wires cancel_event into _RenderAllTask."""
+
+    def test_check_and_render_passes_cancel_event(
+        self,
+        tmp_path: Path,
+        service: ThumbnailService,
+        db_mock: MagicMock,
+    ) -> None:
+        """check_and_render creates _RenderAllTask with the service's cancel_event."""
+        file_info = FileInfo(
+            path=tmp_path / "source.png",
+            mtime=1000.0,
+            size=500,
+            extension=".png",
+        )
+        db_mock.get_thumbnail.return_value = None
+
+        with patch("tarragon.services.thumbnail_service._RenderAllTask") as mock_task_cls:
+            mock_task = MagicMock()
+            mock_task_cls.return_value = mock_task
+
+            service.check_and_render(file_info)
+
+        # Verify _RenderAllTask was constructed with cancel_event
+        mock_task_cls.assert_called_once()
+        call_kwargs = mock_task_cls.call_args.kwargs
+        assert call_kwargs.get("cancel_event") is service._cancel_event
+
+    def test_cancel_prevents_stale_signals_on_folder_switch(
+        self,
+        tmp_path: Path,
+        service: ThumbnailService,
+        db_mock: MagicMock,
+    ) -> None:
+        """After cancel_pending(), _render_all_resolutions aborts (no stale signals)."""
+        file_info = FileInfo(
+            path=tmp_path / "source.png",
+            mtime=1000.0,
+            size=500,
+            extension=".png",
+        )
+        db_mock.get_thumbnail.return_value = None
+
+        # Simulate folder switch: cancel then reset
+        service.cancel_pending()
+        service.reset_cancel()
+
+        # Now check_and_render should work normally (cancel was reset)
+        with patch.object(service, "_render_all_resolutions") as mock_render:
+            service.check_and_render(file_info)
+            mock_render.assert_called_once_with(file_info)
+
+
+# =========================================================================
 # _derive_missing_resolutions — small image caching
 # =========================================================================
 

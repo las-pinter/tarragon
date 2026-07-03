@@ -336,6 +336,7 @@ def render_psd_image(
     tile_grid_x: int,
     tile_grid_y: int,
     target_size: int | None = None,
+    cancel_event: threading.Event | None = None,
 ) -> Image.Image | None:
     """Dispatch PSD compositing via ``ProcessPoolExecutor``.
 
@@ -350,6 +351,10 @@ def render_psd_image(
         If specified, the composited image is shrunk so the longest side
         is at most *target_size* pixels.  If ``None``, no resizing is
         performed (full resolution output).
+    cancel_event:
+        Optional ``threading.Event`` for cooperative cancellation.  When
+        set, the future is cancelled and ``None`` is returned immediately.
+        The event is polled every 500 ms while waiting for the subprocess.
     """
     executor = _get_executor()
     future = executor.submit(
@@ -361,7 +366,20 @@ def render_psd_image(
         target_size,
     )
     try:
-        result_bytes = future.result(timeout=120)  # 2 minute timeout
+        # Poll with cancellation support instead of blocking for 120 s.
+        while not future.done():
+            if cancel_event is not None and cancel_event.is_set():
+                future.cancel()
+                return None
+            try:
+                result_bytes = future.result(timeout=0.5)
+                if result_bytes is not None:
+                    return Image.open(io.BytesIO(result_bytes))
+                return None
+            except TimeoutError:
+                continue
+        # Future completed — retrieve the result.
+        result_bytes = future.result()
         if result_bytes is not None:
             return Image.open(io.BytesIO(result_bytes))
         return None

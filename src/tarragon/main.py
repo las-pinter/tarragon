@@ -86,7 +86,11 @@ class MainWindow(_MainWindow):
         self.setup_widgets(self._database, tag_service)
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802
-        """Gracefully shut down Settings and Database on window close."""
+        """Gracefully shut down ThumbnailService, Settings and Database on window close."""
+        # Shut down thumbnail service first — cancels pending work and waits
+        # for in-flight renders to finish (with timeout).
+        if hasattr(self, "_thumbnail_service"):
+            self._thumbnail_service.shutdown()
         if isinstance(self._settings, Settings):
             self._settings.close()
         if isinstance(self._database, Database):

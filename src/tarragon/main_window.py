@@ -309,7 +309,10 @@ class MainWindow(QMainWindow):
 
                 img, orig_w, orig_h = self._load_preview_image(path)
                 self.preview_panel.set_image(
-                    img, path, original_width=orig_w, original_height=orig_h,
+                    img,
+                    path,
+                    original_width=orig_w,
+                    original_height=orig_h,
                 )
             except Exception:
                 logger.warning("Failed to load preview for %s", path, exc_info=True)
@@ -463,7 +466,12 @@ class MainWindow(QMainWindow):
         elapsed = time.perf_counter() - start
         logger.debug(
             "Filtered query: folder=%s, filename=%r, colors=%s, tags=%s → %d results in %.3fs",
-            folder_path, filename_filter, color_tags, tag_ids, len(results), elapsed,
+            folder_path,
+            filename_filter,
+            color_tags,
+            tag_ids,
+            len(results),
+            elapsed,
         )
 
         # Race-condition guard: if filters are active but query returned empty,
@@ -569,6 +577,12 @@ class MainWindow(QMainWindow):
         folder_path = Path(folder)
         logger.info("Scanning folder: %s", folder_path)
 
+        # Cancel pending thumbnail generation from the previous folder
+        # before scanning the new one, then reset the cancel flag.
+        if hasattr(self, "_thumbnail_service"):
+            self._thumbnail_service.cancel_pending()
+            self._thumbnail_service.reset_cancel()
+
         # Store current folder for filtered queries
         self._current_folder = str(folder_path)
 
@@ -621,6 +635,12 @@ class MainWindow(QMainWindow):
         folder = Path(folder_path)
         if not folder.exists() or not folder.is_dir():
             return
+
+        # Cancel pending thumbnail generation from the previous folder
+        # before scanning the new one, then reset the cancel flag.
+        if hasattr(self, "_thumbnail_service"):
+            self._thumbnail_service.cancel_pending()
+            self._thumbnail_service.reset_cancel()
 
         self._current_folder = str(folder)
 

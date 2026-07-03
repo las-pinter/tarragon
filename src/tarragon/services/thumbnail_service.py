@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from pathlib import Path
 from typing import Any, Callable
@@ -36,15 +37,21 @@ class _RenderAllTask(QRunnable):
         on_done: Callable[..., Any],
         on_error: Callable[..., Any],
         render_func: Callable[..., Any],
+        cancel_event: threading.Event | None = None,
     ) -> None:
         super().__init__()
         self._file_info = file_info
         self._on_done = on_done
         self._on_error = on_error
         self._render_func = render_func
+        self._cancel_event = cancel_event
 
     def run(self) -> None:
         """Execute render in worker thread."""
+        # Check cancellation before starting expensive work.
+        if self._cancel_event is not None and self._cancel_event.is_set():
+            logger.debug("_RenderAllTask cancelled before start: %s", self._file_info.path)
+            return
         try:
             self._render_func(self._file_info)
             self._on_done(self._file_info)
@@ -133,12 +140,11 @@ class ThumbnailService(QObject):
     errorOccurred = Signal(str, str)  # noqa: N815 — Qt signal follows camelCase convention
     tagsUpdated = Signal()  # noqa: N815 — emitted after auto-color tags are persisted
 
-    def __init__(
-        self, db: Database, settings_service: SettingsService, parent: QObject | None = None
-    ) -> None:
+    def __init__(self, db: Database, settings_service: SettingsService, parent: QObject | None = None) -> None:
         super().__init__(parent)
         self._db = db
         self._settings_service = settings_service
+        self._cancel_event = threading.Event()
         self._threadpool = QThreadPool()
         self._cache_format: str = self._settings_service.get_cache_format()
 
@@ -147,6 +153,34 @@ class ThumbnailService(QObject):
         # when the setting is absent / None).
         max_psd_workers = self._settings_service.get_max_psd_workers()
         _get_executor(max_workers=max_psd_workers)
+
+    def cancel_pending(self) -> None:
+        """Cancel all pending thumbnail generation.
+
+        Sets the cancel event (signalling in-flight tasks to abort) and
+        clears the QThreadPool of queued-but-not-started runnables.
+        """
+        self._cancel_event.set()
+        self._threadpool.clear()
+        logger.debug("Cancelled pending thumbnail generation")
+
+    def reset_cancel(self) -> None:
+        """Reset the cancel flag so new tasks can proceed.
+
+        Call this when starting a new folder scan after ``cancel_pending()``.
+        """
+        self._cancel_event.clear()
+
+    def shutdown(self, timeout_ms: int = 5000) -> None:
+        """Graceful shutdown — cancel pending tasks, wait for running ones.
+
+        Args:
+            timeout_ms: Maximum time to wait for in-flight tasks to finish
+                (milliseconds).  Defaults to 5 000 (5 seconds).
+        """
+        self.cancel_pending()
+        self._threadpool.waitForDone(timeout_ms)
+        logger.debug("ThumbnailService shutdown complete")
 
     def set_cache_format(self, fmt: str) -> None:
         """Update the cache format setting."""
@@ -197,6 +231,7 @@ class ThumbnailService(QObject):
             on_done=self._on_render_all_done,
             on_error=self._on_error,
             render_func=self._render_all_resolutions,
+            cancel_event=self._cancel_event,
         )
         self._threadpool.start(task)
         logger.debug("Queued render for %s", file_info.path)
@@ -222,7 +257,9 @@ class ThumbnailService(QObject):
                     img = Image.open(cache_path)
                     self.thumbnailReady.emit(str(file_info.path), img, resolution_size, cache_path)
                 except Exception:
-                    logger.warning("Corrupt cache file, skipping resolution %s: %s", resolution_size, cache_path, exc_info=True)
+                    logger.warning(
+                        "Corrupt cache file, skipping resolution %s: %s", resolution_size, cache_path, exc_info=True
+                    )
 
     def _derive_missing_resolutions(self, file_info: FileInfo, cached: dict[str, Any]) -> str:
         """Derive missing smaller resolutions from the largest available cached image.
@@ -257,6 +294,7 @@ class ThumbnailService(QObject):
                 on_done=self._on_render_all_done,
                 on_error=self._on_error,
                 render_func=self._render_all_resolutions,
+                cancel_event=self._cancel_event,
             )
             self._threadpool.start(task)
             logger.debug("Queued render for %s", file_info.path)
@@ -305,7 +343,9 @@ class ThumbnailService(QObject):
                 img = Image.open(cached["thumbnail_cache_path"])
                 self.thumbnailReady.emit(str(file_info.path), img, 256, cached["thumbnail_cache_path"])
             except Exception:
-                logger.warning("Failed to emit cached thumbnail (256): %s", cached["thumbnail_cache_path"], exc_info=True)
+                logger.warning(
+                    "Failed to emit cached thumbnail (256): %s", cached["thumbnail_cache_path"], exc_info=True
+                )
         if cached.get("preview_cache_path") and Path(cached["preview_cache_path"]).exists():
             try:
                 img = Image.open(cached["preview_cache_path"])
@@ -335,9 +375,19 @@ class ThumbnailService(QObject):
         return "derived"
 
     def _render_all_resolutions(self, file_info: FileInfo) -> None:
-        """Render all three resolutions from the source file."""
+        """Render all three resolutions from the source file.
+
+        Checks ``self._cancel_event`` between expensive steps so that a
+        folder switch or app shutdown can abort stale work early.
+        """
         start = time.perf_counter()
         logger.debug("_render_all_resolutions: %s", file_info.path)
+
+        # ── Cancel check: before any work ──────────────────────────────
+        if self._cancel_event.is_set():
+            logger.debug("_render_all_resolutions cancelled before start: %s", file_info.path)
+            return
+
         # Get or create a per-folder UUID so all images in the same folder
         # share a cache directory.  Atomic insert prevents race conditions
         # when two threads process images from the same folder simultaneously.
@@ -356,9 +406,15 @@ class ThumbnailService(QObject):
                 grid_x,
                 grid_y,
                 target_size=None,
+                cancel_event=self._cancel_event,
             )
         else:
             full_img = render_plain_image(file_info.path, target_size=None)
+
+        # ── Cancel check: after expensive render ───────────────────────
+        if self._cancel_event.is_set():
+            logger.debug("_render_all_resolutions cancelled after render: %s", file_info.path)
+            return
 
         if full_img is None:
             self.errorOccurred.emit(str(file_info.path), "Failed to render image")
@@ -377,6 +433,11 @@ class ThumbnailService(QObject):
         preview_path = None
 
         for size, img in smaller_sizes.items():
+            # ── Cancel check: between resolution saves ─────────────────
+            if self._cancel_event.is_set():
+                logger.debug("_render_all_resolutions cancelled during smaller sizes: %s", file_info.path)
+                return
+
             resolution_key = "256" if size == 256 else "1024"
             save_to_cache(img, cache_paths[resolution_key], "png")
             cache_path_str = str(cache_paths[resolution_key])

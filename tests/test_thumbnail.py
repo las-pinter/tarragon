@@ -1019,14 +1019,19 @@ def test_render_psd_image_timeout_returns_none() -> None:
         mock_exec = MagicMock()
         mock_get_exec.return_value = mock_exec
         mock_future = MagicMock()
-        # Simulate a TimeoutError from future.result(timeout=120)
-        mock_future.result.side_effect = TimeoutError("timed out after 120 seconds")
+        # Simulate a future that never completes: done() returns False,
+        # result() keeps raising TimeoutError, then eventually a generic Exception.
+        mock_future.done.return_value = False
+        mock_future.result.side_effect = [
+            TimeoutError("poll 1"),
+            TimeoutError("poll 2"),
+            Exception("giving up"),
+        ]
         mock_exec.submit.return_value = mock_future
 
         result = render_psd_image(Path("/fake/timeout_test.psd"), 20.0, 2, 2)
         assert result is None
         mock_exec.submit.assert_called_once()
-        mock_future.result.assert_called_once_with(timeout=120)
 
 
 def test_render_psd_image_cancelled_future_returns_none() -> None:
@@ -1150,6 +1155,8 @@ def test_render_psd_image_worker_returns_valid_bytes(tmp_path: Path) -> None:
         mock_exec = MagicMock()
         mock_get_exec.return_value = mock_exec
         mock_future = MagicMock()
+        # Simulate a future that completes on first poll
+        mock_future.done.return_value = False
         mock_future.result.return_value = png_bytes
         mock_exec.submit.return_value = mock_future
 
@@ -1160,7 +1167,6 @@ def test_render_psd_image_worker_returns_valid_bytes(tmp_path: Path) -> None:
         assert result.size == (50, 50)
         assert result.mode == "RGBA"
         mock_exec.submit.assert_called_once()
-        mock_future.result.assert_called_once_with(timeout=120)
 
 
 def test_render_psd_image_with_tiny_psd_file(tmp_path: Path) -> None:

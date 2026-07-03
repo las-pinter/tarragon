@@ -3,7 +3,7 @@
 import logging
 import sys
 
-from PySide6.QtGui import QCloseEvent, QColor, QPalette
+from PySide6.QtGui import QCloseEvent, QPalette
 from PySide6.QtWidgets import QApplication
 
 from tarragon.app_paths import db_path, ensure_dirs
@@ -12,6 +12,19 @@ from tarragon.main_window import MainWindow as _MainWindow
 from tarragon.services.settings_service import SettingsService
 from tarragon.services.tag_service import TagService
 from tarragon.settings import Settings
+from tarragon.theme.colors import (
+    AMBER_ACCENT,
+    BG_PRIMARY,
+    BG_SECONDARY,
+    BG_TERTIARY,
+    CORAL_MUTED,
+    CORAL_STRONG,
+    HIGHLIGHT_DISABLED,
+    SEPARATOR,
+    TEXT_PRIMARY,
+    TEXT_SECONDARY,
+    TEXT_TERTIARY,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -101,36 +114,31 @@ def main() -> None:
 
     # Set dark palette for Fusion style (matches design tokens)
     palette = QPalette()
-    palette.setColor(QPalette.ColorRole.Window, QColor("#16151A"))
-    palette.setColor(QPalette.ColorRole.WindowText, QColor("#ece9f2"))
-    palette.setColor(QPalette.ColorRole.Base, QColor("#1c1b22"))
-    palette.setColor(QPalette.ColorRole.AlternateBase, QColor("#211f29"))
-    palette.setColor(QPalette.ColorRole.ToolTipBase, QColor("#211f29"))
-    palette.setColor(QPalette.ColorRole.ToolTipText, QColor("#ece9f2"))
-    palette.setColor(QPalette.ColorRole.Text, QColor("#ece9f2"))
-    palette.setColor(QPalette.ColorRole.Button, QColor("#211f29"))
-    palette.setColor(QPalette.ColorRole.ButtonText, QColor("#ece9f2"))
-    palette.setColor(QPalette.ColorRole.BrightText, QColor("#F0997B"))  # coral_strong
-    palette.setColor(QPalette.ColorRole.Highlight, QColor("#D85A30"))  # coral_muted
-    palette.setColor(QPalette.ColorRole.HighlightedText, QColor("#ece9f2"))
-    palette.setColor(QPalette.ColorRole.Link, QColor("#FAC775"))  # amber_accent
+    palette.setColor(QPalette.ColorRole.Window, BG_PRIMARY)
+    palette.setColor(QPalette.ColorRole.WindowText, TEXT_PRIMARY)
+    palette.setColor(QPalette.ColorRole.Base, BG_SECONDARY)
+    palette.setColor(QPalette.ColorRole.AlternateBase, BG_TERTIARY)
+    palette.setColor(QPalette.ColorRole.ToolTipBase, BG_TERTIARY)
+    palette.setColor(QPalette.ColorRole.ToolTipText, TEXT_PRIMARY)
+    palette.setColor(QPalette.ColorRole.Text, TEXT_PRIMARY)
+    palette.setColor(QPalette.ColorRole.Button, BG_TERTIARY)
+    palette.setColor(QPalette.ColorRole.ButtonText, TEXT_PRIMARY)
+    palette.setColor(QPalette.ColorRole.BrightText, CORAL_STRONG)
+    palette.setColor(QPalette.ColorRole.Highlight, CORAL_MUTED)
+    palette.setColor(QPalette.ColorRole.HighlightedText, TEXT_PRIMARY)
+    palette.setColor(QPalette.ColorRole.Link, AMBER_ACCENT)
 
     # Disabled color group — for disabled widgets
-    disabled_text = QColor("#74707B")  # text_tertiary
-    palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.WindowText, disabled_text)
-    palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.Text, disabled_text)
-    palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.ButtonText, disabled_text)
-    palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.HighlightedText, disabled_text)
-    palette.setColor(
-        QPalette.ColorGroup.Disabled, QPalette.ColorRole.Highlight, QColor("#4A3A35")
-    )  # muted disabled selection
+    palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.WindowText, TEXT_TERTIARY)
+    palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.Text, TEXT_TERTIARY)
+    palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.ButtonText, TEXT_TERTIARY)
+    palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.HighlightedText, TEXT_TERTIARY)
+    palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.Highlight, HIGHLIGHT_DISABLED)
 
     # Additional roles for completeness
-    # Derived: tuned dark separator between bg_primary (#16151A) and bg_secondary (#1c1b22).
-    # Update if either token changes.
-    palette.setColor(QPalette.ColorRole.Mid, QColor("#1E1D23"))
-    palette.setColor(QPalette.ColorRole.LinkVisited, QColor("#A09CA3"))  # text_secondary
-    palette.setColor(QPalette.ColorRole.PlaceholderText, QColor("#74707B"))  # text_tertiary
+    palette.setColor(QPalette.ColorRole.Mid, SEPARATOR)
+    palette.setColor(QPalette.ColorRole.LinkVisited, TEXT_SECONDARY)
+    palette.setColor(QPalette.ColorRole.PlaceholderText, TEXT_TERTIARY)
     app.setPalette(palette)
 
     window = MainWindow()

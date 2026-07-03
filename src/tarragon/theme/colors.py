@@ -37,6 +37,10 @@ TEXT_PRIMARY: QColor = QColor(_colors["text_primary"])
 TEXT_SECONDARY: QColor = QColor(_colors["text_secondary"])
 TEXT_TERTIARY: QColor = QColor(_colors["text_tertiary"])
 
+# ── Misc colours ─────────────────────────────────────────────────────────────
+HIGHLIGHT_DISABLED: QColor = QColor(_colors["highlight_disabled"])
+SEPARATOR: QColor = QColor(_colors["separator"])
+
 __all__ = [
     "AMBER_ACCENT",
     "BG_PRIMARY",
@@ -44,6 +48,8 @@ __all__ = [
     "BG_TERTIARY",
     "CORAL_MUTED",
     "CORAL_STRONG",
+    "HIGHLIGHT_DISABLED",
+    "SEPARATOR",
     "SURFACE_HIGHLIGHT",
     "SURFACE_HOVER",
     "TEXT_PRIMARY",

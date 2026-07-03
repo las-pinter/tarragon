@@ -58,6 +58,8 @@ def test_tokens_colors_section() -> None:
         "bg_disabled",
         "border_disabled",
         "bg_log_panel",
+        "highlight_disabled",
+        "separator",
     }
     assert set(colors.keys()) == expected_keys
 

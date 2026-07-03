@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
 )
 
 from tarragon.db import Database
+from tarragon.scanner import FileInfo
 from tarragon.services.query_service import QueryService
 from tarragon.services.settings_service import SettingsService
 from tarragon.services.tag_service import TagService
@@ -480,6 +481,24 @@ class MainWindow(QMainWindow):
                 results = [Path(t["path"]) for t in thumbnails_in_folder]
 
         self.thumbnail_model.set_paths(results)
+
+        # Dispatch thumbnail renders for cache population
+        if hasattr(self, "_thumbnail_service"):
+            for path in results:
+                # Skip if already cached in model
+                if str(path) in self.thumbnail_model._thumbnails:
+                    continue
+                try:
+                    stat = path.stat()
+                    fi = FileInfo(
+                        path=path,
+                        mtime=stat.st_mtime,
+                        size=stat.st_size,
+                        extension=path.suffix.lower(),
+                    )
+                    self._thumbnail_service.check_and_render(fi)
+                except OSError:
+                    logger.debug("Could not stat path: %s", path)
 
     # ── Menu Actions ───────────────────────────────────────────────────
 

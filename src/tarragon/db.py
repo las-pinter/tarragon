@@ -403,6 +403,29 @@ class Database:
 
         return len(stale_paths)
 
+    # ── Folder listing ──────────────────────────────────────────
+
+    def list_distinct_folders(self) -> list[str]:
+        """Return a sorted list of distinct folder paths from the thumbnails table.
+
+        Extracts the parent directory of each thumbnail path and returns
+        the unique set, sorted alphabetically.  Paths with empty or
+        missing parent directories are excluded.
+
+        Returns
+        -------
+        list[str]
+            Sorted list of distinct folder path strings.
+        """
+        logger.debug("list_distinct_folders")
+        cursor = self._execute("SELECT path FROM thumbnails WHERE path != ''")
+        folders: set[str] = set()
+        for row in cursor.fetchall():
+            parent = str(Path(row["path"]).parent)
+            if parent and parent != ".":
+                folders.add(parent)
+        return sorted(folders)
+
     # ── Context manager protocol ─────────────────────────────────
 
     def __enter__(self) -> Database:

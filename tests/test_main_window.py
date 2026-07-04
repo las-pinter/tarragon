@@ -409,3 +409,123 @@ def test_folder_navigated_applies_active_filters(qapp: Any, tmp_path: Path) -> N
         assert window.thumbnail_model.rowCount() <= 2  # Filter applied via query service
     finally:
         window.close()
+
+
+# ── Folder Filter in Global Mode ─────────────────────────────────────
+
+
+def test_folder_filter_in_global_mode(qapp: Any) -> None:  # noqa: ARG001
+    """In global mode, the folder filter dropdown restricts results to a specific folder."""
+    from pathlib import Path
+
+    from tarragon.db import Database
+    from tarragon.services.tag_service import TagService
+
+    window = MainWindow()
+    try:
+        db = Database(Path(":memory:"))
+        db.init_schema()
+
+        # Thumbnails in two different folders
+        db.upsert_thumbnail(
+            "/folder_a/img1.png", mtime=1, size=100, width=800, height=600, cache_uuid="u1"
+        )
+        db.upsert_thumbnail(
+            "/folder_b/img2.png", mtime=2, size=200, width=1024, height=768, cache_uuid="u2"
+        )
+        db.upsert_thumbnail(
+            "/folder_a/img3.png", mtime=3, size=300, width=640, height=480, cache_uuid="u3"
+        )
+
+        tag_service = TagService(db=db)
+        window.setup_widgets(db, tag_service)
+
+        # Set a current folder so the gallery isn't blocked
+        window._current_folder = "/folder_a/"
+
+        # Switch to global mode ("All Images" tab)
+        window._gallery_tabs._tab_widget.setCurrentIndex(1)
+
+        # Without folder filter, should show all 3 thumbnails
+        window._run_filtered_query()
+        assert window.thumbnail_model.rowCount() == 3
+
+        # Set folder filter to /folder_a
+        window._filter_state.folder_filter = "/folder_a"
+        window._run_filtered_query()
+        assert window.thumbnail_model.rowCount() == 2
+
+        # Set folder filter to /folder_b
+        window._filter_state.folder_filter = "/folder_b"
+        window._run_filtered_query()
+        assert window.thumbnail_model.rowCount() == 1
+
+        # Clear folder filter (back to all)
+        window._filter_state.folder_filter = ""
+        window._run_filtered_query()
+        assert window.thumbnail_model.rowCount() == 3
+    finally:
+        window.close()
+
+
+def test_filter_bar_replaces_separate_bars(qapp: Any) -> None:  # noqa: ARG001
+    """MainWindow uses FilterBar instead of separate ColorFilterBar and TagFilterBar."""
+    from pathlib import Path
+
+    from tarragon.db import Database
+    from tarragon.services.tag_service import TagService
+    from tarragon.widgets.filter_bar import FilterBar
+
+    window = MainWindow()
+    try:
+        db = Database(Path(":memory:"))
+        db.init_schema()
+        tag_service = TagService(db=db)
+        window.setup_widgets(db, tag_service)
+
+        # FilterBar exists and is the combined widget
+        assert hasattr(window, "filter_bar")
+        assert isinstance(window.filter_bar, FilterBar)
+
+        # Backward-compatible references still work
+        assert hasattr(window, "color_filter_bar")
+        assert hasattr(window, "tag_filter_bar")
+        assert window.color_filter_bar is window.filter_bar.color_filter_bar
+        assert window.tag_filter_bar is window.filter_bar.tag_filter_bar
+    finally:
+        window.close()
+
+
+def test_scope_change_shows_folder_combo(qapp: Any) -> None:  # noqa: ARG001
+    """Switching to global mode shows the folder dropdown in the FilterBar."""
+    from pathlib import Path
+
+    from PySide6.QtWidgets import QComboBox
+
+    from tarragon.db import Database
+    from tarragon.services.tag_service import TagService
+
+    window = MainWindow()
+    try:
+        db = Database(Path(":memory:"))
+        db.init_schema()
+        tag_service = TagService(db=db)
+        window.setup_widgets(db, tag_service)
+
+        # Find the combo box in the filter bar
+        combos = window.filter_bar.findChildren(QComboBox)
+        assert len(combos) == 1
+        combo = combos[0]
+
+        # Initially hidden (local mode)
+        assert combo.isHidden()
+
+        # Switch to global mode
+        window._gallery_tabs._tab_widget.setCurrentIndex(1)
+        assert not combo.isHidden()
+
+        # Switch back to local mode
+        window._gallery_tabs._tab_widget.setCurrentIndex(0)
+        assert combo.isHidden()
+    finally:
+        window.close()

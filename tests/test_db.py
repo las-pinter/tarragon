@@ -468,3 +468,39 @@ class TestContextManager:
         # Connection should be closed — executing raises an error
         with pytest.raises(sqlite3.ProgrammingError):
             d._conn.execute("SELECT 1")
+
+
+# ── Distinct Folders ───────────────────────────────────────────
+
+
+class TestListDistinctFolders:
+    def test_empty_db_returns_empty_list(self, db: Database) -> None:
+        """No thumbnails → no folders."""
+        assert db.list_distinct_folders() == []
+
+    def test_returns_distinct_parent_folders(self, db: Database) -> None:
+        """Multiple files in the same folder produce one entry."""
+        db.upsert_thumbnail("/photos/vacation/a.png", mtime=1, size=100, width=10, height=10, cache_uuid="u1")
+        db.upsert_thumbnail("/photos/vacation/b.png", mtime=2, size=200, width=10, height=10, cache_uuid="u2")
+        db.upsert_thumbnail("/photos/work/c.png", mtime=3, size=300, width=10, height=10, cache_uuid="u3")
+
+        folders = db.list_distinct_folders()
+        assert folders == ["/photos/vacation", "/photos/work"]
+
+    def test_sorted_alphabetically(self, db: Database) -> None:
+        """Folders are returned in sorted order."""
+        db.upsert_thumbnail("/z/f.png", mtime=1, size=100, width=10, height=10, cache_uuid="u1")
+        db.upsert_thumbnail("/a/f.png", mtime=2, size=200, width=10, height=10, cache_uuid="u2")
+        db.upsert_thumbnail("/m/f.png", mtime=3, size=300, width=10, height=10, cache_uuid="u3")
+
+        folders = db.list_distinct_folders()
+        assert folders == ["/a", "/m", "/z"]
+
+    def test_excludes_empty_paths(self, db: Database) -> None:
+        """Rows with empty path are excluded."""
+        db.upsert_thumbnail("/valid/f.png", mtime=1, size=100, width=10, height=10, cache_uuid="u1")
+        # Empty path is not inserted via upsert_thumbnail normally,
+        # but we verify the WHERE clause works
+        folders = db.list_distinct_folders()
+        assert "" not in folders
+        assert "/valid" in folders

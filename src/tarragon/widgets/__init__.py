@@ -1,5 +1,6 @@
 """Widgets package."""
 
+from .filter_bar import FilterBar
 from .gallery_tabs import GalleryTabs
 from .log_panel import LogPanel, QtLogHandler
 from .preview_panel import PreviewPanel
@@ -11,6 +12,7 @@ from .thumbnail_grid import ThumbnailDelegate, ThumbnailGrid
 
 __all__ = [
     "FavoritesModel",
+    "FilterBar",
     "GalleryTabs",
     "LogPanel",
     "PreviewPanel",

@@ -22,13 +22,20 @@ class FilterState:
     filename_filter: str = ""
     tag_ids: set[int] = field(default_factory=set)
     color_tags: set[str] = field(default_factory=set)
+    folder_filter: str = ""
 
     def is_empty(self) -> bool:
         """Return ``True`` if no filters are active."""
-        return not self.filename_filter and not self.tag_ids and not self.color_tags
+        return (
+            not self.filename_filter
+            and not self.tag_ids
+            and not self.color_tags
+            and not self.folder_filter
+        )
 
     def clear(self) -> None:
         """Clear all filters, restoring the unfiltered state."""
         self.filename_filter = ""
         self.tag_ids.clear()
         self.color_tags.clear()
+        self.folder_filter = ""

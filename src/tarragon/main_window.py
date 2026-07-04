@@ -28,11 +28,10 @@ from tarragon.services.settings_service import SettingsService
 from tarragon.services.tag_service import TagService
 from tarragon.services.thumbnail_service import ThumbnailService
 from tarragon.settings import Settings
-from tarragon.widgets.color_filter_bar import ColorFilterBar
+from tarragon.widgets.filter_bar import FilterBar
 from tarragon.widgets.gallery_tabs import GalleryTabs
 from tarragon.widgets.log_panel import LogPanel, QtLogHandler, apply_debug_level
 from tarragon.widgets.preview_panel import PreviewPanel
-from tarragon.widgets.tag_filter_bar import TagFilterBar
 from tarragon.widgets.thumbnail_grid import ThumbnailGrid
 
 logger = logging.getLogger(__name__)
@@ -208,26 +207,26 @@ class MainWindow(QMainWindow):
         self._search_edit.setClearButtonEnabled(True)
         self._search_edit.textChanged.connect(self._on_search_text_changed)
 
-        # ── Color filter bar (Deviation 4.1) ───────────────────────────
-        self.color_filter_bar = ColorFilterBar(parent=self)
-        self.color_filter_bar.color_filter_changed.connect(self._on_color_filter_changed)
-
-        # ── Tag filter bar ─────────────────────────────────────────────
-        self.tag_filter_bar = TagFilterBar(tag_service, parent=self)
-        self.tag_filter_bar.tag_filter_changed.connect(self._on_tag_filter_changed)
+        # ── Combined filter bar (colour + tag + folder filters) ────
+        self.filter_bar = FilterBar(tag_service, db, parent=self)
+        # Backward-compatible references for existing code and tests
+        self.color_filter_bar = self.filter_bar.color_filter_bar
+        self.tag_filter_bar = self.filter_bar.tag_filter_bar
+        self.filter_bar.color_filter_changed.connect(self._on_color_filter_changed)
+        self.filter_bar.tag_filter_changed.connect(self._on_tag_filter_changed)
+        self.filter_bar.folder_filter_changed.connect(self._on_folder_filter_changed)
 
         # ── Gallery tabs (Folder / All Images) ─────────────────────────
         self._gallery_tabs = GalleryTabs(parent=self)
         self._gallery_tabs.scope_changed.connect(self._on_scope_changed)
 
-        # Gallery container: tabs + search + color filter + tag filter + grid stacked vertically
+        # Gallery container: tabs + search + combined filter bar + grid stacked vertically
         gallery_container = QWidget()
         gallery_layout = QVBoxLayout(gallery_container)
         gallery_layout.setContentsMargins(0, 0, 0, 0)
         gallery_layout.addWidget(self._gallery_tabs)  # FIRST!
         gallery_layout.addWidget(self._search_edit)
-        gallery_layout.addWidget(self.color_filter_bar)
-        gallery_layout.addWidget(self.tag_filter_bar)
+        gallery_layout.addWidget(self.filter_bar)
         gallery_layout.addWidget(self.thumbnail_grid, stretch=1)
         self.grid_dock.setWidget(gallery_container)
 
@@ -416,13 +415,21 @@ class MainWindow(QMainWindow):
         self._filter_state.tag_ids = set(tag_ids)
         self._run_filtered_query()
 
+    def _on_folder_filter_changed(self, folder_path: str) -> None:
+        """Re-run the filtered query when the folder dropdown selection changes."""
+        logger.debug("Folder filter changed: %s", folder_path)
+        self._filter_state.folder_filter = folder_path
+        self._run_filtered_query()
+
     def _on_scope_changed(self, is_global: bool) -> None:  # noqa: FBT001
         """Handle gallery tab scope change.
 
-        Updates the tag panel scope and re-runs the filtered query.
+        Updates the tag panel scope, the filter bar visibility, and re-runs
+        the filtered query.
         """
         logger.debug("Scope changed: %s", "global" if is_global else "local")
         self.tag_panel.set_global_scope(is_global)
+        self.filter_bar.set_scope(is_global)
         self._run_filtered_query()
 
     def _run_filtered_query(self) -> None:
@@ -455,7 +462,12 @@ class MainWindow(QMainWindow):
         if not self._current_folder and not is_global:
             return
 
-        folder_path = "" if is_global else self._current_folder
+        # In global mode, use the folder filter dropdown selection (may be "" for all)
+        # In local mode, use the currently navigated folder
+        if is_global:
+            folder_path = self._filter_state.folder_filter
+        else:
+            folder_path = self._current_folder
 
         filename_filter = self._filter_state.filename_filter
         color_tags = self._filter_state.color_tags
@@ -644,6 +656,10 @@ class MainWindow(QMainWindow):
         # Update sidebar with current folder
         if hasattr(self, "sidebar_widget"):
             self.sidebar_widget.set_current_folder(str(folder_path))
+
+        # Refresh folder dropdown in the filter bar (new folders may have been scanned)
+        if hasattr(self, "filter_bar"):
+            self.filter_bar.refresh_folders()
 
     def _on_favorite_clicked(self, folder_path: str) -> None:
         """Handle favorite folder selection."""

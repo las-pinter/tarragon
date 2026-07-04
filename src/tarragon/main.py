@@ -10,6 +10,7 @@ from PySide6.QtWidgets import QApplication
 from tarragon.app_paths import db_path, ensure_dirs
 from tarragon.db import Database
 from tarragon.main_window import MainWindow as _MainWindow
+from tarragon.migrations import MigrationRunner
 from tarragon.services.settings_service import SettingsService
 from tarragon.services.tag_service import TagService
 from tarragon.settings import Settings
@@ -54,8 +55,8 @@ class MainWindow(_MainWindow):
         self._database = owned_database or database
         assert self._database is not None  # At least one branch always provides a Database.
 
-        # Ensure schema exists — idempotent; safe for caller-provided databases too.
-        self._database.init_schema()
+        # Ensure schema exists and version tracking is bootstrapped.
+        MigrationRunner(self._database).run()
 
         # Clean up folder_cache_uuids entries whose source folders no longer exist.
         stale_count = self._database.cleanup_stale_folder_uuids()

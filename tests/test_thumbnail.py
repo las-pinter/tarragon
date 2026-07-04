@@ -1275,25 +1275,25 @@ def test_generate_cache_uuid_unique() -> None:
 
 def test_generate_cache_paths_structure(tmp_path: Path) -> None:
     """generate_cache_paths returns correct paths and creates directories."""
-    from tarragon.thumbnail import generate_cache_paths
+    from tarragon.thumbnail import RESOLUTION_PREVIEW, RESOLUTION_THUMBNAIL, generate_cache_paths
 
     source = Path("/photos/vacation/sunset.jpg")
 
     with patch("tarragon.thumbnail.cache_dir", return_value=tmp_path):
         paths = generate_cache_paths(source, "abc12345")
 
-    assert "256" in paths
-    assert "1024" in paths
+    assert str(RESOLUTION_THUMBNAIL) in paths
+    assert str(RESOLUTION_PREVIEW) in paths
     assert "full" in paths
 
     # Check structure: cache/{resolution}/{folder}_{uuid}/{filename}.png
-    assert paths["256"] == tmp_path / "256" / "vacation_abc12345" / "sunset.png"
-    assert paths["1024"] == tmp_path / "1024" / "vacation_abc12345" / "sunset.png"
+    assert paths[str(RESOLUTION_THUMBNAIL)] == tmp_path / str(RESOLUTION_THUMBNAIL) / "vacation_abc12345" / "sunset.png"
+    assert paths[str(RESOLUTION_PREVIEW)] == tmp_path / str(RESOLUTION_PREVIEW) / "vacation_abc12345" / "sunset.png"
     assert paths["full"] == tmp_path / "full" / "vacation_abc12345" / "sunset.png"
 
     # Directories created
-    assert (tmp_path / "256" / "vacation_abc12345").exists()
-    assert (tmp_path / "1024" / "vacation_abc12345").exists()
+    assert (tmp_path / str(RESOLUTION_THUMBNAIL) / "vacation_abc12345").exists()
+    assert (tmp_path / str(RESOLUTION_PREVIEW) / "vacation_abc12345").exists()
     assert (tmp_path / "full" / "vacation_abc12345").exists()
 
 
@@ -1304,27 +1304,27 @@ def test_generate_cache_paths_structure(tmp_path: Path) -> None:
 
 def test_derive_smaller_sizes_no_upscaling() -> None:
     """derive_smaller_sizes includes small images as-is (no upscaling) for all target sizes."""
-    from tarragon.thumbnail import derive_smaller_sizes
+    from tarragon.thumbnail import RESOLUTION_PREVIEW, RESOLUTION_THUMBNAIL, derive_smaller_sizes
 
     small_img = Image.new("RGB", (100, 100))
-    result = derive_smaller_sizes(small_img, [256, 1024])
+    result = derive_smaller_sizes(small_img, [RESOLUTION_THUMBNAIL, RESOLUTION_PREVIEW])
     # All target sizes are included — image is copied as-is, not upscaled
-    assert set(result.keys()) == {256, 1024}
-    assert result[256].size == (100, 100)  # Original size preserved
-    assert result[1024].size == (100, 100)  # Original size preserved
+    assert set(result.keys()) == {RESOLUTION_THUMBNAIL, RESOLUTION_PREVIEW}
+    assert result[RESOLUTION_THUMBNAIL].size == (100, 100)  # Original size preserved
+    assert result[RESOLUTION_PREVIEW].size == (100, 100)  # Original size preserved
     # Verify they are copies, not the same object
-    assert result[256] is not small_img
-    assert result[1024] is not small_img
+    assert result[RESOLUTION_THUMBNAIL] is not small_img
+    assert result[RESOLUTION_PREVIEW] is not small_img
 
 
 def test_derive_smaller_sizes_correct_sizes() -> None:
     """derive_smaller_sizes produces correctly sized images preserving aspect ratio."""
-    from tarragon.thumbnail import derive_smaller_sizes
+    from tarragon.thumbnail import RESOLUTION_PREVIEW, RESOLUTION_THUMBNAIL, derive_smaller_sizes
 
     large_img = Image.new("RGB", (2000, 1500))
-    result = derive_smaller_sizes(large_img, [256, 1024])
+    result = derive_smaller_sizes(large_img, [RESOLUTION_THUMBNAIL, RESOLUTION_PREVIEW])
 
-    assert 256 in result
-    assert 1024 in result
-    assert result[256].size == (256, 192)  # Aspect ratio preserved
-    assert result[1024].size == (1024, 768)
+    assert RESOLUTION_THUMBNAIL in result
+    assert RESOLUTION_PREVIEW in result
+    assert result[RESOLUTION_THUMBNAIL].size == (256, 192)  # Aspect ratio preserved
+    assert result[RESOLUTION_PREVIEW].size == (1024, 768)

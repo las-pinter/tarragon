@@ -16,6 +16,7 @@ from PIL import Image
 from tarragon.db import Database
 from tarragon.scanner import FileInfo
 from tarragon.services.thumbnail_service import ThumbnailService
+from tarragon.thumbnail import RESOLUTION_PREVIEW, RESOLUTION_THUMBNAIL
 
 # =========================================================================
 # Fixtures
@@ -106,8 +107,8 @@ def _run_render_all_resolutions(
         patch("tarragon.services.thumbnail_service.derive_smaller_sizes", return_value={}),
     ):
         mock_paths.return_value = {
-            "256": tmp_path / "cache" / "256.png",
-            "1024": tmp_path / "cache" / "1024.png",
+            str(RESOLUTION_THUMBNAIL): tmp_path / "cache" / "256.png",
+            str(RESOLUTION_PREVIEW): tmp_path / "cache" / "1024.png",
             "full": cache_path,
         }
 
@@ -345,8 +346,8 @@ class TestColorTaggingFailureIsolated:
             ),
         ):
             mock_paths.return_value = {
-                "256": tmp_path / "cache" / "256.png",
-                "1024": tmp_path / "cache" / "1024.png",
+                str(RESOLUTION_THUMBNAIL): tmp_path / "cache" / "256.png",
+                str(RESOLUTION_PREVIEW): tmp_path / "cache" / "1024.png",
                 "full": tmp_path / "cache" / "full.png",
             }
             # Act — should NOT raise
@@ -398,8 +399,8 @@ class TestColorTaggingFailureIsolated:
             ),
         ):
             mock_paths.return_value = {
-                "256": tmp_path / "cache" / "256.png",
-                "1024": tmp_path / "cache" / "1024.png",
+                str(RESOLUTION_THUMBNAIL): tmp_path / "cache" / "256.png",
+                str(RESOLUTION_PREVIEW): tmp_path / "cache" / "1024.png",
                 "full": tmp_path / "cache" / "full.png",
             }
             # Act — should NOT raise
@@ -459,8 +460,8 @@ class TestSettingsParametersUsed:
             ) as mock_extract,
         ):
             mock_paths.return_value = {
-                "256": tmp_path / "cache" / "256.png",
-                "1024": tmp_path / "cache" / "1024.png",
+                str(RESOLUTION_THUMBNAIL): tmp_path / "cache" / "256.png",
+                str(RESOLUTION_PREVIEW): tmp_path / "cache" / "1024.png",
                 "full": tmp_path / "cache" / "full.png",
             }
             svc._render_all_resolutions(file_info)
@@ -496,8 +497,8 @@ class TestSettingsParametersUsed:
             ) as mock_extract,
         ):
             mock_paths.return_value = {
-                "256": tmp_path / "cache" / "256.png",
-                "1024": tmp_path / "cache" / "1024.png",
+                str(RESOLUTION_THUMBNAIL): tmp_path / "cache" / "256.png",
+                str(RESOLUTION_PREVIEW): tmp_path / "cache" / "1024.png",
                 "full": tmp_path / "cache" / "full.png",
             }
             service._render_all_resolutions(file_info)
@@ -567,8 +568,8 @@ class TestColorTaggingSkippedForNullInputs:
             patch("tarragon.color_tagger.extract_dominant_color_tags", return_value=["color:red"]) as mock_extract,
         ):
             mock_paths.return_value = {
-                "256": tmp_path / "cache" / "256.png",
-                "1024": tmp_path / "cache" / "1024.png",
+                str(RESOLUTION_THUMBNAIL): tmp_path / "cache" / "256.png",
+                str(RESOLUTION_PREVIEW): tmp_path / "cache" / "1024.png",
                 "full": tmp_path / "cache" / "full.png",
             }
             service._render_all_resolutions(file_info)

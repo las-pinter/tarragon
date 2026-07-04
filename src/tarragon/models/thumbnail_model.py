@@ -9,6 +9,8 @@ from typing import override
 
 from PySide6.QtCore import QAbstractListModel, QModelIndex, QObject, QPersistentModelIndex, Qt
 
+from tarragon.thumbnail import RESOLUTION_FULL, RESOLUTION_PREVIEW, RESOLUTION_THUMBNAIL
+
 logger = logging.getLogger(__name__)
 
 
@@ -60,13 +62,13 @@ class ThumbnailModel(QAbstractListModel):
         if role == ThumbnailModel.PathRole:
             return str(path)
         if role == ThumbnailModel.ThumbnailRole256:
-            cache_path = self._thumbnails.get(str(path), {}).get(256)
+            cache_path = self._thumbnails.get(str(path), {}).get(RESOLUTION_THUMBNAIL)
             return str(cache_path) if cache_path else ""
         if role == ThumbnailModel.ThumbnailRole1024:
-            cache_path = self._thumbnails.get(str(path), {}).get(1024)
+            cache_path = self._thumbnails.get(str(path), {}).get(RESOLUTION_PREVIEW)
             return str(cache_path) if cache_path else ""
         if role == ThumbnailModel.ThumbnailRoleFull:
-            cache_path = self._thumbnails.get(str(path), {}).get(None)
+            cache_path = self._thumbnails.get(str(path), {}).get(RESOLUTION_FULL)
             return str(cache_path) if cache_path else ""
 
         return None
@@ -120,8 +122,8 @@ class ThumbnailModel(QAbstractListModel):
     @staticmethod
     def _resolution_to_role(resolution: int | None) -> int:
         """Map a resolution value to the corresponding Qt role."""
-        if resolution == 256:
+        if resolution == RESOLUTION_THUMBNAIL:
             return ThumbnailModel.ThumbnailRole256
-        if resolution == 1024:
+        if resolution == RESOLUTION_PREVIEW:
             return ThumbnailModel.ThumbnailRole1024
         return ThumbnailModel.ThumbnailRoleFull

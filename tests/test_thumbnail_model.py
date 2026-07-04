@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 from PySide6.QtCore import QModelIndex, Qt
 from tarragon.models.thumbnail_model import ThumbnailModel
+from tarragon.thumbnail import RESOLUTION_FULL, RESOLUTION_PREVIEW, RESOLUTION_THUMBNAIL
 
 
 class TestThumbnailModel:
@@ -195,12 +196,12 @@ class TestThumbnailModel:
     # ------------------------------------------------------------------
 
     def test_set_thumbnail_with_resolution_256(self) -> None:
-        """set_thumbnail with resolution=256 stores path in ThumbnailRole256 only."""
+        """set_thumbnail with resolution=RESOLUTION_THUMBNAIL stores path in ThumbnailRole256 only."""
         model = ThumbnailModel()
         model.set_paths([Path("/test/image.jpg")])
 
         cache_path = Path("/cache/256/test_abc/image.png")
-        model.set_thumbnail("/test/image.jpg", cache_path, resolution=256)
+        model.set_thumbnail("/test/image.jpg", cache_path, resolution=RESOLUTION_THUMBNAIL)
 
         index = model.index(0, 0)
         assert model.data(index, ThumbnailModel.ThumbnailRole256) == str(cache_path)
@@ -212,9 +213,9 @@ class TestThumbnailModel:
         model = ThumbnailModel()
         model.set_paths([Path("/test/image.jpg")])
 
-        model.set_thumbnail("/test/image.jpg", Path("/cache/256/test/image.png"), resolution=256)
-        model.set_thumbnail("/test/image.jpg", Path("/cache/1024/test/image.png"), resolution=1024)
-        model.set_thumbnail("/test/image.jpg", Path("/cache/full/test/image.png"), resolution=None)
+        model.set_thumbnail("/test/image.jpg", Path("/cache/256/test/image.png"), resolution=RESOLUTION_THUMBNAIL)
+        model.set_thumbnail("/test/image.jpg", Path("/cache/1024/test/image.png"), resolution=RESOLUTION_PREVIEW)
+        model.set_thumbnail("/test/image.jpg", Path("/cache/full/test/image.png"), resolution=RESOLUTION_FULL)
 
         index = model.index(0, 0)
         assert model.data(index, ThumbnailModel.ThumbnailRole256) == "/cache/256/test/image.png"
@@ -231,9 +232,9 @@ class TestThumbnailModel:
         model.set_paths([Path("/a/one.jpg"), Path("/b/two.jpg"), Path("/c/three.jpg")])
 
         # Set thumbnails for all three
-        model.set_thumbnail("/a/one.jpg", Path("/cache/256/one.png"), resolution=256)
-        model.set_thumbnail("/b/two.jpg", Path("/cache/256/two.png"), resolution=256)
-        model.set_thumbnail("/c/three.jpg", Path("/cache/256/three.png"), resolution=256)
+        model.set_thumbnail("/a/one.jpg", Path("/cache/256/one.png"), resolution=RESOLUTION_THUMBNAIL)
+        model.set_thumbnail("/b/two.jpg", Path("/cache/256/two.png"), resolution=RESOLUTION_THUMBNAIL)
+        model.set_thumbnail("/c/three.jpg", Path("/cache/256/three.png"), resolution=RESOLUTION_THUMBNAIL)
 
         # Now filter to just two paths (removing /c/three.jpg)
         model.set_paths([Path("/a/one.jpg"), Path("/b/two.jpg")])
@@ -253,8 +254,8 @@ class TestThumbnailModel:
         """
         model = ThumbnailModel()
         model.set_paths([Path("/a/one.jpg"), Path("/b/two.jpg")])
-        model.set_thumbnail("/a/one.jpg", Path("/cache/256/one.png"), resolution=256)
-        model.set_thumbnail("/b/two.jpg", Path("/cache/256/two.png"), resolution=256)
+        model.set_thumbnail("/a/one.jpg", Path("/cache/256/one.png"), resolution=RESOLUTION_THUMBNAIL)
+        model.set_thumbnail("/b/two.jpg", Path("/cache/256/two.png"), resolution=RESOLUTION_THUMBNAIL)
 
         # Replace with completely different paths
         model.set_paths([Path("/c/three.jpg")])
@@ -270,8 +271,8 @@ class TestThumbnailModel:
         paths = [Path("/a/one.jpg"), Path("/b/two.jpg")]
         model.set_paths(paths)
 
-        model.set_thumbnail("/a/one.jpg", Path("/cache/256/one.png"), resolution=256)
-        model.set_thumbnail("/b/two.jpg", Path("/cache/1024/two.png"), resolution=1024)
+        model.set_thumbnail("/a/one.jpg", Path("/cache/256/one.png"), resolution=RESOLUTION_THUMBNAIL)
+        model.set_thumbnail("/b/two.jpg", Path("/cache/1024/two.png"), resolution=RESOLUTION_PREVIEW)
 
         # Re-set the same paths (e.g. after a no-op filter)
         model.set_paths(paths)
@@ -289,7 +290,7 @@ class TestThumbnailModel:
         """
         model = ThumbnailModel()
         model.set_paths([Path("/a/one.jpg")])
-        model.set_thumbnail("/a/one.jpg", Path("/cache/256/one.png"), resolution=256)
+        model.set_thumbnail("/a/one.jpg", Path("/cache/256/one.png"), resolution=RESOLUTION_THUMBNAIL)
 
         model.set_paths([])
 
@@ -310,7 +311,7 @@ class TestThumbnailModel:
         # Set thumbnails for all 100 files
         for i in range(100):
             path_str = f"/img/file_{i:03d}.jpg"
-            model.set_thumbnail(path_str, Path(f"/cache/256/file_{i:03d}.png"), resolution=256)
+            model.set_thumbnail(path_str, Path(f"/cache/256/file_{i:03d}.png"), resolution=RESOLUTION_THUMBNAIL)
 
         # Filter to 10 files
         filtered_paths = all_paths[:10]

@@ -17,6 +17,9 @@ from tarragon.db import Database
 from tarragon.scanner import FileInfo
 from tarragon.services.settings_service import SettingsService
 from tarragon.thumbnail import (
+    RESOLUTION_FULL,
+    RESOLUTION_PREVIEW,
+    RESOLUTION_THUMBNAIL,
     _cache_file_path,
     _get_executor,
     derive_smaller_sizes,
@@ -246,9 +249,9 @@ class ThumbnailService(QObject):
     def _emit_cached_thumbnails(self, file_info: FileInfo, cached: dict[str, Any]) -> None:
         """Emit thumbnailReady signals for all cached resolutions."""
         for resolution_key, resolution_size in [
-            ("thumbnail_cache_path", 256),
-            ("preview_cache_path", 1024),
-            ("full_cache_path", None),
+            ("thumbnail_cache_path", RESOLUTION_THUMBNAIL),
+            ("preview_cache_path", RESOLUTION_PREVIEW),
+            ("full_cache_path", RESOLUTION_FULL),
         ]:
             cache_path = cached.get(resolution_key)
             if cache_path and Path(cache_path).exists():
@@ -275,14 +278,14 @@ class ThumbnailService(QObject):
         if full_path and Path(full_path).exists():
             try:
                 source_image = Image.open(full_path)
-                source_resolution = None  # Full resolution
+                source_resolution = RESOLUTION_FULL  # Full resolution
             except Exception:
                 logger.warning("Failed to open cached full resolution: %s", full_path, exc_info=True)
 
         if source_image is None and preview_path and Path(preview_path).exists():
             try:
                 source_image = Image.open(preview_path)
-                source_resolution = 1024
+                source_resolution = RESOLUTION_PREVIEW
             except Exception:
                 logger.warning("Failed to open cached preview resolution: %s", preview_path, exc_info=True)
 
@@ -309,31 +312,31 @@ class ThumbnailService(QObject):
         final_preview_path = cached.get("preview_cache_path")
         final_full_path = cached.get("full_cache_path")
 
-        # Save missing thumbnail (256)
+        # Save missing thumbnail (RESOLUTION_THUMBNAIL)
         if not cached.get("thumbnail_cache_path") or not Path(cached["thumbnail_cache_path"]).exists():
-            if max(source_image.size) > 256:
+            if max(source_image.size) > RESOLUTION_THUMBNAIL:
                 thumb_img = source_image.copy()
-                thumb_img.thumbnail((256, 256), Image.LANCZOS)
+                thumb_img.thumbnail((RESOLUTION_THUMBNAIL, RESOLUTION_THUMBNAIL), Image.LANCZOS)
             else:
-                # Source is smaller than 256 — include as-is
+                # Source is smaller than RESOLUTION_THUMBNAIL — include as-is
                 thumb_img = source_image.copy()
-            save_to_cache(thumb_img, cache_paths["256"], "png")
-            final_thumb_path = str(cache_paths["256"])
-            self.thumbnailReady.emit(str(file_info.path), thumb_img, 256, final_thumb_path)
+            save_to_cache(thumb_img, cache_paths[str(RESOLUTION_THUMBNAIL)], "png")
+            final_thumb_path = str(cache_paths[str(RESOLUTION_THUMBNAIL)])
+            self.thumbnailReady.emit(str(file_info.path), thumb_img, RESOLUTION_THUMBNAIL, final_thumb_path)
 
-        # Save missing preview (1024) — only if source is full resolution
-        if source_resolution is None and (
+        # Save missing preview (RESOLUTION_PREVIEW) — only if source is full resolution
+        if source_resolution == RESOLUTION_FULL and (
             not cached.get("preview_cache_path") or not Path(cached["preview_cache_path"]).exists()
         ):
-            if max(source_image.size) > 1024:
+            if max(source_image.size) > RESOLUTION_PREVIEW:
                 preview_img = source_image.copy()
-                preview_img.thumbnail((1024, 1024), Image.LANCZOS)
+                preview_img.thumbnail((RESOLUTION_PREVIEW, RESOLUTION_PREVIEW), Image.LANCZOS)
             else:
-                # Source is smaller than 1024 — include as-is
+                # Source is smaller than RESOLUTION_PREVIEW — include as-is
                 preview_img = source_image.copy()
-            save_to_cache(preview_img, cache_paths["1024"], "png")
-            final_preview_path = str(cache_paths["1024"])
-            self.thumbnailReady.emit(str(file_info.path), preview_img, 1024, final_preview_path)
+            save_to_cache(preview_img, cache_paths[str(RESOLUTION_PREVIEW)], "png")
+            final_preview_path = str(cache_paths[str(RESOLUTION_PREVIEW)])
+            self.thumbnailReady.emit(str(file_info.path), preview_img, RESOLUTION_PREVIEW, final_preview_path)
 
         # Emit signals for already-cached resolutions (BUG #3 fix)
         self._emit_cached_thumbnails(file_info, cached)
@@ -384,11 +387,11 @@ class ThumbnailService(QObject):
                 threshold,
                 grid_x,
                 grid_y,
-                target_size=None,
+                target_size=RESOLUTION_FULL,
                 cancel_event=self._cancel_event,
             )
         else:
-            full_img = render_plain_image(file_info.path, target_size=None)
+            full_img = render_plain_image(file_info.path, target_size=RESOLUTION_FULL)
 
         # ── Cancel check: after expensive render ───────────────────────
         if self._cancel_event.is_set():
@@ -402,10 +405,10 @@ class ThumbnailService(QObject):
 
         # Save full resolution
         save_to_cache(full_img, cache_paths["full"], "png")
-        self.thumbnailReady.emit(str(file_info.path), full_img, None, str(cache_paths["full"]))
+        self.thumbnailReady.emit(str(file_info.path), full_img, RESOLUTION_FULL, str(cache_paths["full"]))
 
         # Derive and save smaller resolutions
-        smaller_sizes = derive_smaller_sizes(full_img, [256, 1024])
+        smaller_sizes = derive_smaller_sizes(full_img, [RESOLUTION_THUMBNAIL, RESOLUTION_PREVIEW])
 
         # Track which paths were actually saved (BUG #4 fix)
         thumb_path = None
@@ -417,12 +420,12 @@ class ThumbnailService(QObject):
                 logger.debug("_render_all_resolutions cancelled during smaller sizes: %s", file_info.path)
                 return
 
-            resolution_key = "256" if size == 256 else "1024"
+            resolution_key = str(RESOLUTION_THUMBNAIL) if size == RESOLUTION_THUMBNAIL else str(RESOLUTION_PREVIEW)
             save_to_cache(img, cache_paths[resolution_key], "png")
             cache_path_str = str(cache_paths[resolution_key])
-            if size == 256:
+            if size == RESOLUTION_THUMBNAIL:
                 thumb_path = cache_path_str
-            elif size == 1024:
+            elif size == RESOLUTION_PREVIEW:
                 preview_path = cache_path_str
             self.thumbnailReady.emit(str(file_info.path), img, size, cache_path_str)
 
@@ -497,9 +500,9 @@ class ThumbnailService(QObject):
         resolution (resolution_size=None).  The new multi-resolution path
         (_render_all_resolutions) handles its own signal emission.
         """
-        # Emit with resolution_size=None (full resolution) for legacy tasks
+        # Emit with resolution_size=RESOLUTION_FULL (full resolution) for legacy tasks
         cache_path_str = str(cache_path) if cache_path else None
-        self.thumbnailReady.emit(str(file_info.path), img, None, cache_path_str)
+        self.thumbnailReady.emit(str(file_info.path), img, RESOLUTION_FULL, cache_path_str)
 
     def _on_error(self, file_info: FileInfo, error_message: str) -> None:
         """Handle render error."""

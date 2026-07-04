@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
 )
 
 from tarragon.db import Database
+from tarragon.models import FilterState
 from tarragon.scanner import FileInfo
 from tarragon.services.query_service import QueryService
 from tarragon.services.settings_service import SettingsService
@@ -173,6 +174,7 @@ class MainWindow(QMainWindow):
 
         # Query service for filtered gallery queries
         self._query_service = QueryService(db)
+        self._filter_state = FilterState()
         self._current_folder: str = ""
 
         # Sidebar
@@ -389,16 +391,19 @@ class MainWindow(QMainWindow):
     def _on_search_text_changed(self, text: str) -> None:
         """Restart the debounce timer when the search text changes."""
         logger.debug("Search text changed: %r", text)
+        self._filter_state.filename_filter = text
         self._search_timer.start()
 
     def _on_color_filter_changed(self, color_tags: set[str]) -> None:
         """Re-run the filtered query when color filter swatches change."""
         logger.debug("Color filter changed: %s", color_tags)
+        self._filter_state.color_tags = set(color_tags)
         self._run_filtered_query()
 
     def _on_tag_filter_changed(self, tag_ids: set[int]) -> None:
         """Re-run the filtered query when tag filter checkboxes change."""
         logger.debug("Tag filter changed: %s", tag_ids)
+        self._filter_state.tag_ids = set(tag_ids)
         self._run_filtered_query()
 
     def _on_scope_changed(self, is_global: bool) -> None:  # noqa: FBT001
@@ -442,11 +447,9 @@ class MainWindow(QMainWindow):
 
         folder_path = "" if is_global else self._current_folder
 
-        filename_filter = self._search_edit.text() if hasattr(self, "_search_edit") else ""
-        color_tags = self.color_filter_bar.get_active_colors() if hasattr(self, "color_filter_bar") else set()
-        tag_ids: set[int] = set()
-        if hasattr(self, "tag_filter_bar"):
-            tag_ids = self.tag_filter_bar.get_active_tag_ids()
+        filename_filter = self._filter_state.filename_filter
+        color_tags = self._filter_state.color_tags
+        tag_ids = self._filter_state.tag_ids
 
         results = self._query_service.query(
             folder_path=folder_path,

@@ -20,6 +20,7 @@ from tarragon.services.thumbnail_service import (
     _RenderPSDTask,
     _RenderTask,
 )
+from tarragon.thumbnail import RESOLUTION_FULL, RESOLUTION_PREVIEW, RESOLUTION_THUMBNAIL
 
 # =========================================================================
 # Constants for edge case testing
@@ -166,11 +167,11 @@ class TestCheckAndRender:
         # Should emit 3 signals (one per resolution)
         assert len(emitted) == 3, f"Expected 3 emissions, got {len(emitted)}"
         assert emitted[0][0] == str(file_info.path)
-        # Resolution sizes: 256, 1024, None (full)
+        # Resolution sizes: RESOLUTION_THUMBNAIL, RESOLUTION_PREVIEW, RESOLUTION_FULL (full)
         resolution_sizes = [e[2] for e in emitted]
-        assert 256 in resolution_sizes
-        assert 1024 in resolution_sizes
-        assert None in resolution_sizes
+        assert RESOLUTION_THUMBNAIL in resolution_sizes
+        assert RESOLUTION_PREVIEW in resolution_sizes
+        assert RESOLUTION_FULL in resolution_sizes
         # No render dispatch since all cached
         db_mock.upsert_thumbnail.assert_not_called()
 
@@ -1308,8 +1309,8 @@ class TestRenderAllResolutionsCancellation:
             patch("tarragon.services.thumbnail_service.generate_cache_paths") as mock_paths,
         ):
             mock_paths.return_value = {
-                "256": tmp_path / "cache" / "256.png",
-                "1024": tmp_path / "cache" / "1024.png",
+                str(RESOLUTION_THUMBNAIL): tmp_path / "cache" / "256.png",
+                str(RESOLUTION_PREVIEW): tmp_path / "cache" / "1024.png",
                 "full": tmp_path / "cache" / "full.png",
             }
             service._render_all_resolutions(file_info)
@@ -1343,8 +1344,8 @@ class TestRenderAllResolutionsCancellation:
             patch("tarragon.services.thumbnail_service.generate_cache_paths") as mock_paths,
         ):
             mock_paths.return_value = {
-                "256": tmp_path / "cache" / "256.png",
-                "1024": tmp_path / "cache" / "1024.png",
+                str(RESOLUTION_THUMBNAIL): tmp_path / "cache" / "256.png",
+                str(RESOLUTION_PREVIEW): tmp_path / "cache" / "1024.png",
                 "full": tmp_path / "cache" / "full.png",
             }
             service._render_all_resolutions(file_info)
@@ -1546,8 +1547,8 @@ class TestDeriveMissingResolutionsSmallImages:
         assert result == "derived"
         # Both 256 and 1024 should have been saved
         resolution_sizes = [e[2] for e in emitted]
-        assert 256 in resolution_sizes, "256 tier should be populated for small images"
-        assert 1024 in resolution_sizes, "1024 tier should be populated for small images"
+        assert RESOLUTION_THUMBNAIL in resolution_sizes, "256 tier should be populated for small images"
+        assert RESOLUTION_PREVIEW in resolution_sizes, "1024 tier should be populated for small images"
         # DB should have been updated with all paths
         db_mock.upsert_thumbnail.assert_called_once()
         call_kwargs = db_mock.upsert_thumbnail.call_args.kwargs
@@ -1594,8 +1595,8 @@ class TestDeriveMissingResolutionsSmallImages:
         assert result == "derived"
         resolution_sizes = [e[2] for e in emitted]
         # 256 should be derived (500 > 256 → resized), 1024 should be included as-is
-        assert 256 in resolution_sizes
-        assert 1024 in resolution_sizes, "1024 tier should be populated for medium images"
+        assert RESOLUTION_THUMBNAIL in resolution_sizes
+        assert RESOLUTION_PREVIEW in resolution_sizes, "1024 tier should be populated for medium images"
 
     def test_small_image_not_upscaled_in_cache(
         self,
@@ -1636,7 +1637,7 @@ class TestDeriveMissingResolutionsSmallImages:
 
         # Find the 1024 emission and verify the image was NOT upscaled
         for emission in emitted:
-            if emission[2] == 1024:
+            if emission[2] == RESOLUTION_PREVIEW:
                 cached_preview_img = emission[1]
                 assert cached_preview_img.size == (200, 150), (
                     f"Small image should NOT be upscaled to 1024, got size {cached_preview_img.size}"
@@ -1689,8 +1690,8 @@ class TestAutoColorTagSignal:
             patch("tarragon.color_tagger.extract_dominant_color_tags", return_value=["red", "blue"]),
         ):
             mock_paths.return_value = {
-                "256": tmp_path / "cache" / "256.png",
-                "1024": tmp_path / "cache" / "1024.png",
+                str(RESOLUTION_THUMBNAIL): tmp_path / "cache" / "256.png",
+                str(RESOLUTION_PREVIEW): tmp_path / "cache" / "1024.png",
                 "full": tmp_path / "cache" / "full.png",
             }
             service._render_all_resolutions(file_info)
@@ -1738,8 +1739,8 @@ class TestAutoColorTagSignal:
             patch("tarragon.services.thumbnail_service.derive_smaller_sizes", return_value={}),
         ):
             mock_paths.return_value = {
-                "256": tmp_path / "cache" / "256.png",
-                "1024": tmp_path / "cache" / "1024.png",
+                str(RESOLUTION_THUMBNAIL): tmp_path / "cache" / "256.png",
+                str(RESOLUTION_PREVIEW): tmp_path / "cache" / "1024.png",
                 "full": tmp_path / "cache" / "full.png",
             }
             svc._render_all_resolutions(file_info)
@@ -1781,8 +1782,8 @@ class TestAutoColorTagSignal:
             ),
         ):
             mock_paths.return_value = {
-                "256": tmp_path / "cache" / "256.png",
-                "1024": tmp_path / "cache" / "1024.png",
+                str(RESOLUTION_THUMBNAIL): tmp_path / "cache" / "256.png",
+                str(RESOLUTION_PREVIEW): tmp_path / "cache" / "1024.png",
                 "full": tmp_path / "cache" / "full.png",
             }
             # Should not raise — color tagging failure is swallowed
@@ -1824,8 +1825,8 @@ class TestPerFolderUuid:
             patch("tarragon.services.thumbnail_service.derive_smaller_sizes", return_value={}),
         ):
             mock_paths.return_value = {
-                "256": tmp_path / "cache" / "256.png",
-                "1024": tmp_path / "cache" / "1024.png",
+                str(RESOLUTION_THUMBNAIL): tmp_path / "cache" / "256.png",
+                str(RESOLUTION_PREVIEW): tmp_path / "cache" / "1024.png",
                 "full": tmp_path / "cache" / "full.png",
             }
             service._render_all_resolutions(file_info)
@@ -1859,8 +1860,8 @@ class TestPerFolderUuid:
             patch("tarragon.services.thumbnail_service.derive_smaller_sizes", return_value={}),
         ):
             mock_paths.return_value = {
-                "256": tmp_path / "cache" / "256.png",
-                "1024": tmp_path / "cache" / "1024.png",
+                str(RESOLUTION_THUMBNAIL): tmp_path / "cache" / "256.png",
+                str(RESOLUTION_PREVIEW): tmp_path / "cache" / "1024.png",
                 "full": tmp_path / "cache" / "full.png",
             }
             service._render_all_resolutions(file_info)
@@ -1891,8 +1892,8 @@ class TestPerFolderUuid:
             patch("tarragon.services.thumbnail_service.derive_smaller_sizes", return_value={}),
         ):
             mock_paths.return_value = {
-                "256": tmp_path / "cache" / "256.png",
-                "1024": tmp_path / "cache" / "1024.png",
+                str(RESOLUTION_THUMBNAIL): tmp_path / "cache" / "256.png",
+                str(RESOLUTION_PREVIEW): tmp_path / "cache" / "1024.png",
                 "full": tmp_path / "cache" / "full.png",
             }
             service._render_all_resolutions(file_a)

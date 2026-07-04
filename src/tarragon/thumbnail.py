@@ -15,6 +15,9 @@ from PIL import Image, ImageOps
 from tarragon.app_paths import cache_dir
 
 __all__ = [
+    "RESOLUTION_FULL",
+    "RESOLUTION_PREVIEW",
+    "RESOLUTION_THUMBNAIL",
     "derive_smaller_sizes",
     "generate_cache_paths",
     "generate_cache_uuid",
@@ -107,7 +110,7 @@ def generate_cache_paths(source_path: Path, cache_uuid: str) -> dict[str, Path]:
 
     # Generate paths for each resolution
     paths: dict[str, Path] = {}
-    for resolution in ("256", "1024", "full"):
+    for resolution in (str(RESOLUTION_THUMBNAIL), str(RESOLUTION_PREVIEW), "full"):
         resolution_dir = cache_dir() / resolution / base_name
         resolution_dir.mkdir(parents=True, exist_ok=True)
         paths[resolution] = resolution_dir / f"{filename}.png"

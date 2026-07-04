@@ -7,7 +7,7 @@ from typing import Any, Generator
 
 import pytest
 from PySide6.QtCore import QModelIndex, Qt
-from PySide6.QtWidgets import QApplication, QLabel, QListView, QPushButton
+from PySide6.QtWidgets import QApplication, QLabel, QListView, QPushButton, QTreeView
 
 from tarragon.db import Database
 from tarragon.widgets.sidebar import FavoritesModel, SidebarWidget
@@ -239,7 +239,7 @@ class TestSidebarWidgetFunctionality:
         assert lv_model.rowCount() == 0
 
     def test_favorite_clicked_signal(self, sidebar: SidebarWidget) -> None:
-        """Double-clicking a favourite emits favorite_clicked with the path."""
+        """Single-clicking a favourite emits favorite_clicked with the path."""
         sidebar.set_current_folder("/clicked/path.exr")
         sidebar._on_add_clicked()
 
@@ -252,10 +252,57 @@ class TestSidebarWidgetFunctionality:
         lv_model = list_view.model()
         assert lv_model is not None
         index = lv_model.index(0, 0)
-        list_view.doubleClicked.emit(index)
+        list_view.clicked.emit(index)
 
         assert len(captured_args) == 1
         assert captured_args[0] == ("/clicked/path.exr",)
+
+    def test_favorite_single_click_navigation(self, sidebar: SidebarWidget) -> None:
+        """Single-clicking a favorite navigates to its path (not double-click)."""
+        sidebar.set_current_folder("/nav/target.exr")
+        sidebar._on_add_clicked()
+
+        captured: list[str] = []
+        sidebar.favorite_clicked.connect(lambda path: captured.append(path))
+
+        list_view = sidebar.findChild(QListView)
+        assert list_view is not None
+        lv_model = list_view.model()
+        assert lv_model is not None
+        index = lv_model.index(0, 0)
+
+        # Single click should navigate
+        list_view.clicked.emit(index)
+        assert captured == ["/nav/target.exr"]
+
+    def test_favorite_double_click_does_not_navigate(self, sidebar: SidebarWidget) -> None:
+        """Double-clicking a favorite no longer emits favorite_clicked."""
+        sidebar.set_current_folder("/double/click.exr")
+        sidebar._on_add_clicked()
+
+        captured: list[str] = []
+        sidebar.favorite_clicked.connect(lambda path: captured.append(path))
+
+        list_view = sidebar.findChild(QListView)
+        assert list_view is not None
+        lv_model = list_view.model()
+        assert lv_model is not None
+        index = lv_model.index(0, 0)
+
+        # Double-click should NOT navigate (signal was changed to clicked)
+        list_view.doubleClicked.emit(index)
+        assert captured == []
+
+    def test_favorite_clicked_invalid_index_does_not_emit(
+        self, sidebar: SidebarWidget
+    ) -> None:
+        """Clicking with an invalid index does not emit favorite_clicked."""
+        captured: list[str] = []
+        sidebar.favorite_clicked.connect(lambda path: captured.append(path))
+
+        # Call the handler directly with an invalid index
+        sidebar._on_favorite_clicked(QModelIndex())
+        assert captured == []
 
     def test_remove_button_does_nothing_when_nothing_selected(
         self,
@@ -271,3 +318,30 @@ class TestSidebarWidgetFunctionality:
         model = list_view.model()
         assert model is not None
         assert model.rowCount() == 1
+
+    def test_folder_single_click_emits_navigated(
+        self,
+        sidebar: SidebarWidget,
+        tmp_path: Path,
+    ) -> None:
+        """Single-clicking a folder in the tree emits folder_navigated."""
+        # Create a subfolder so the tree has something to show
+        subfolder = tmp_path / "subfolder"
+        subfolder.mkdir()
+
+        # Point the folder model at our temp directory
+        sidebar._folder_model.setRootPath(str(tmp_path))
+        tree = sidebar.findChild(QTreeView)
+        assert tree is not None
+        tree.setRootIndex(sidebar._folder_model.index(str(tmp_path)))
+
+        # Capture the signal
+        captured: list[str] = []
+        sidebar.folder_navigated.connect(lambda path: captured.append(path))
+
+        # Get the index for the subfolder and emit a single click
+        child_index = sidebar._folder_model.index(str(subfolder))
+        tree.clicked.emit(child_index)
+
+        assert len(captured) == 1
+        assert captured[0] == str(subfolder)

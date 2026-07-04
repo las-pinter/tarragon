@@ -2,7 +2,7 @@
 
 Provides a ``FavoritesModel`` (``QAbstractListModel``) backed by the database
 favorites repository, and a ``SidebarWidget`` that renders it with add/remove
-controls and emits a signal when a favorite is double-clicked.
+controls and emits a signal when a favorite is clicked.
 
 The sidebar also includes a navigable folder tree (``QTreeView`` backed by
 ``QFileSystemModel``) for browsing the local filesystem.
@@ -97,8 +97,8 @@ class FavoritesModel(QAbstractListModel):
 class SidebarWidget(QWidget):
     """A sidebar panel that shows a folder tree and a list of favorite folders.
 
-    Emits ``favorite_clicked(str)`` when the user double-clicks a favorite row.
-    Emits ``folder_navigated(str)`` when the user double-clicks a folder in the tree.
+    Emits ``favorite_clicked(str)`` when the user clicks a favorite row.
+    Emits ``folder_navigated(str)`` when the user clicks a folder in the tree.
     """
 
     favorite_clicked = Signal(str)  # path string
@@ -130,7 +130,7 @@ class SidebarWidget(QWidget):
         # Hide all columns except the name column (column 0)
         for col in range(1, self._folder_model.columnCount()):
             self._folder_tree.hideColumn(col)
-        self._folder_tree.doubleClicked.connect(self._on_folder_double_clicked)
+        self._folder_tree.clicked.connect(self._on_folder_clicked)
         layout.addWidget(self._folder_tree, stretch=1)
 
         # ── Favorites ───────────────────────────────────────────
@@ -140,7 +140,7 @@ class SidebarWidget(QWidget):
         # List view
         self._list_view = QListView()
         self._list_view.setModel(self._model)
-        self._list_view.doubleClicked.connect(self._on_favorite_double_clicked)
+        self._list_view.clicked.connect(self._on_favorite_clicked)
         layout.addWidget(self._list_view, stretch=1)
 
         # Buttons
@@ -177,15 +177,15 @@ class SidebarWidget(QWidget):
             if path:
                 self._model.remove_favorite(path)
 
-    def _on_favorite_double_clicked(self, index: QModelIndex) -> None:
-        """Emit ``favorite_clicked`` with the path of the double-clicked item."""
+    def _on_favorite_clicked(self, index: QModelIndex) -> None:
+        """Emit ``favorite_clicked`` with the path of the clicked item."""
         if index.isValid():
             path = index.data(Qt.ItemDataRole.UserRole)
             if path:
                 self.favorite_clicked.emit(path)
 
-    def _on_folder_double_clicked(self, index: QModelIndex) -> None:
-        """Emit ``folder_navigated`` with the path of the double-clicked folder."""
+    def _on_folder_clicked(self, index: QModelIndex) -> None:
+        """Emit ``folder_navigated`` with the path of the clicked folder."""
         if index.isValid():
             path = self._folder_model.filePath(index)
             if path:

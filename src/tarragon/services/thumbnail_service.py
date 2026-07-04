@@ -144,6 +144,11 @@ class ThumbnailService(QObject):
         logger.debug("check_and_render: %s", file_info.path)
         cached = self._db.get_thumbnail(str(file_info.path))
 
+        # Auto-regeneration: When source file mtime or size changes,
+        # the cache is considered stale and triggers a full re-render.
+        # This happens automatically on folder re-scan — no manual
+        # invalidation needed. The comparison uses int(mtime) to match
+        # the integer precision stored in the database.
         # Check if cache is valid (mtime + size match)
         if cached and cached["mtime"] == int(file_info.mtime) and cached["size"] == file_info.size:
             # Check if we have all three resolutions

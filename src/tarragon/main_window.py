@@ -305,8 +305,6 @@ class MainWindow(QMainWindow):
             # Single selection — load image and show
             path = Path(paths[0])
             try:
-                from PIL import Image
-
                 img, orig_w, orig_h = self._load_preview_image(path)
                 self.preview_panel.set_image(
                     img,
@@ -327,8 +325,6 @@ class MainWindow(QMainWindow):
             images = []
             for p in paths[:images_to_show]:
                 try:
-                    from PIL import Image
-
                     img, _orig_w, _orig_h = self._load_preview_image(Path(p))
                     images.append(img)
                 except Exception:
@@ -356,8 +352,6 @@ class MainWindow(QMainWindow):
             database record when available, so the preview panel can display
             the true dimensions even when showing a downscaled thumbnail.
         """
-        from PIL import Image
-
         thumb_record = self._db.get_thumbnail(str(path))
 
         # Extract original dimensions from DB record (if available)

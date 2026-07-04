@@ -343,26 +343,7 @@ class ThumbnailService(QObject):
             self.thumbnailReady.emit(str(file_info.path), preview_img, 1024, final_preview_path)
 
         # Emit signals for already-cached resolutions (BUG #3 fix)
-        if cached.get("thumbnail_cache_path") and Path(cached["thumbnail_cache_path"]).exists():
-            try:
-                img = Image.open(cached["thumbnail_cache_path"])
-                self.thumbnailReady.emit(str(file_info.path), img, 256, cached["thumbnail_cache_path"])
-            except Exception:
-                logger.warning(
-                    "Failed to emit cached thumbnail (256): %s", cached["thumbnail_cache_path"], exc_info=True
-                )
-        if cached.get("preview_cache_path") and Path(cached["preview_cache_path"]).exists():
-            try:
-                img = Image.open(cached["preview_cache_path"])
-                self.thumbnailReady.emit(str(file_info.path), img, 1024, cached["preview_cache_path"])
-            except Exception:
-                logger.warning("Failed to emit cached preview (1024): %s", cached["preview_cache_path"], exc_info=True)
-        if cached.get("full_cache_path") and Path(cached["full_cache_path"]).exists():
-            try:
-                img = Image.open(cached["full_cache_path"])
-                self.thumbnailReady.emit(str(file_info.path), img, None, cached["full_cache_path"])
-            except Exception:
-                logger.warning("Failed to emit cached full resolution: %s", cached["full_cache_path"], exc_info=True)
+        self._emit_cached_thumbnails(file_info, cached)
 
         # Update database with all paths (BUG #5 fix: preserve existing paths)
         self._db.upsert_thumbnail(

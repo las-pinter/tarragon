@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from importlib.resources.abc import Traversable
 from typing import Any
 
 try:
@@ -11,7 +12,7 @@ except ImportError:
     from importlib_resources import files  # type: ignore[no-redef]
 
 
-def _tokens_path() -> Any:
+def _tokens_path() -> Traversable:
     """Return the resource path to tokens.json."""
     return files("tarragon.theme") / "tokens.json"
 

@@ -4,11 +4,24 @@ from __future__ import annotations
 
 from typing import Any
 
-from PySide6.QtCore import QEvent, QItemSelection, QModelIndex, QObject, QPersistentModelIndex, QRect, QSize, Qt, QTime, QTimer, Signal
-from PySide6.QtGui import QHelpEvent, QMouseEvent, QPainter, QPen, QPixmap
+from PySide6.QtCore import (
+    QEvent,
+    QItemSelection,
+    QModelIndex,
+    QObject,
+    QPersistentModelIndex,
+    QRect,
+    QSize,
+    Qt,
+    QTime,
+    QTimer,
+    Signal,
+)
+from PySide6.QtGui import QAction, QContextMenuEvent, QHelpEvent, QMouseEvent, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QListView,
+    QMenu,
     QStyle,
     QStyledItemDelegate,
     QStyleOptionViewItem,
@@ -388,12 +401,18 @@ class ThumbnailGrid(QListView):
 
     selection_changed = Signal(list)  # list of selected path strings
     file_double_clicked = Signal(str)  # emits file path on double-click
+    regenerate_requested = Signal(str)  # emits file path on "Regenerate Thumbnail" action
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setViewMode(QListView.ViewMode.IconMode)
         self.setIconSize(QSize(THUMBNAIL_SIZE, THUMBNAIL_SIZE))
-        self.setGridSize(QSize(THUMBNAIL_SIZE + GRID_GAP * 2 + HOVER_MARGIN * 2, THUMBNAIL_SIZE + GRID_GAP * 2 + TEXT_AREA_HEIGHT + HOVER_MARGIN * 2))
+        self.setGridSize(
+            QSize(
+                THUMBNAIL_SIZE + GRID_GAP * 2 + HOVER_MARGIN * 2,
+                THUMBNAIL_SIZE + GRID_GAP * 2 + TEXT_AREA_HEIGHT + HOVER_MARGIN * 2,
+            )
+        )
         self.setWrapping(True)
         self.setResizeMode(QListView.ResizeMode.Adjust)
         self.setSelectionMode(QListView.SelectionMode.ExtendedSelection)
@@ -421,12 +440,8 @@ class ThumbnailGrid(QListView):
         old_model = self.model()
         if old_model is not None:
             try:
-                old_model.modelAboutToBeReset.disconnect(
-                    self._animator.notify_rows_about_to_reset
-                )
-                old_model.rowsInserted.disconnect(
-                    self._on_rows_inserted
-                )
+                old_model.modelAboutToBeReset.disconnect(self._animator.notify_rows_about_to_reset)
+                old_model.rowsInserted.disconnect(self._on_rows_inserted)
             except RuntimeError:
                 pass  # Signal was not connected
 
@@ -469,6 +484,21 @@ class ThumbnailGrid(QListView):
             if path:
                 self.file_double_clicked.emit(path)
         super().mouseDoubleClickEvent(event)
+
+    def contextMenuEvent(self, event: QContextMenuEvent) -> None:  # noqa: N802
+        """Show a context menu with 'Regenerate Thumbnail' when right-clicking an item."""
+        index = self.indexAt(event.pos())
+        if not index.isValid():
+            return
+        path = index.data(ThumbnailModel.PathRole)
+        if not path:
+            return
+
+        menu = QMenu(self)
+        regenerate_action = QAction("Regenerate Thumbnail", self)
+        regenerate_action.triggered.connect(lambda: self.regenerate_requested.emit(path))
+        menu.addAction(regenerate_action)
+        menu.exec(event.globalPos())
 
     def selectionChanged(  # noqa: N802
         self,

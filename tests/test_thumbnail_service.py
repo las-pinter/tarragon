@@ -1585,3 +1585,211 @@ class TestThumbnailServiceEdgeCases:
         assert service._cache_format == "png"
         service.set_cache_format("jpeg")
         assert service._cache_format == "jpeg"
+
+
+# =========================================================================
+# invalidate_cache_files — standalone helper in thumbnail.py
+# =========================================================================
+
+
+class TestInvalidateCacheFiles:
+    """invalidate_cache_files deletes cache files and DB records."""
+
+    def test_deletes_cache_files_from_disk(
+        self,
+        tmp_path: Path,
+        db_mock: MagicMock,
+    ) -> None:
+        """Cache files for all 3 resolutions are deleted from disk."""
+        from tarragon.thumbnail import invalidate_cache_files
+
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir(parents=True)
+        thumb_path = cache_dir / "thumb.png"
+        preview_path = cache_dir / "preview.png"
+        full_path = cache_dir / "full.png"
+        # Create the files
+        thumb_path.write_bytes(b"fake_thumb")
+        preview_path.write_bytes(b"fake_preview")
+        full_path.write_bytes(b"fake_full")
+
+        source_path = str(tmp_path / "source.png")
+        db_mock.get_thumbnail.return_value = {
+            "thumbnail_cache_path": str(thumb_path),
+            "preview_cache_path": str(preview_path),
+            "full_cache_path": str(full_path),
+        }
+
+        invalidate_cache_files(db_mock, source_path)
+
+        assert not thumb_path.exists()
+        assert not preview_path.exists()
+        assert not full_path.exists()
+        db_mock.delete_thumbnail.assert_called_once_with(source_path)
+
+    def test_no_db_record_is_noop(
+        self,
+        db_mock: MagicMock,
+    ) -> None:
+        """When no DB record exists, invalidate_cache_files is a no-op."""
+        from tarragon.thumbnail import invalidate_cache_files
+
+        db_mock.get_thumbnail.return_value = None
+
+        invalidate_cache_files(db_mock, "/nonexistent/path.png")
+
+        db_mock.delete_thumbnail.assert_not_called()
+
+    def test_missing_cache_files_handled_gracefully(
+        self,
+        tmp_path: Path,
+        db_mock: MagicMock,
+    ) -> None:
+        """Cache files that don't exist on disk don't cause errors (missing_ok=True)."""
+        from tarragon.thumbnail import invalidate_cache_files
+
+        source_path = str(tmp_path / "source.png")
+        db_mock.get_thumbnail.return_value = {
+            "thumbnail_cache_path": str(tmp_path / "missing_thumb.png"),
+            "preview_cache_path": str(tmp_path / "missing_preview.png"),
+            "full_cache_path": str(tmp_path / "missing_full.png"),
+        }
+
+        # Should not raise
+        invalidate_cache_files(db_mock, source_path)
+
+        db_mock.delete_thumbnail.assert_called_once_with(source_path)
+
+    def test_partial_cache_paths_only_deletes_existing(
+        self,
+        tmp_path: Path,
+        db_mock: MagicMock,
+    ) -> None:
+        """Only non-None cache paths are processed for deletion."""
+        from tarragon.thumbnail import invalidate_cache_files
+
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir(parents=True)
+        thumb_path = cache_dir / "thumb.png"
+        thumb_path.write_bytes(b"fake_thumb")
+
+        source_path = str(tmp_path / "source.png")
+        db_mock.get_thumbnail.return_value = {
+            "thumbnail_cache_path": str(thumb_path),
+            "preview_cache_path": None,
+            "full_cache_path": None,
+        }
+
+        invalidate_cache_files(db_mock, source_path)
+
+        assert not thumb_path.exists()
+        db_mock.delete_thumbnail.assert_called_once_with(source_path)
+
+
+# =========================================================================
+# invalidate_and_render — ThumbnailService method
+# =========================================================================
+
+
+class TestInvalidateAndRender:
+    """invalidate_and_render deletes cache and re-renders from source."""
+
+    def test_invalidates_cache_and_calls_check_and_render(
+        self,
+        tmp_path: Path,
+        service: ThumbnailService,
+        db_mock: MagicMock,
+    ) -> None:
+        """invalidate_and_render deletes cache files and calls check_and_render."""
+        # Create a source file on disk
+        source_file = tmp_path / "source.png"
+        source_file.write_bytes(b"fake_image_data")
+
+        # Create cache files
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir(parents=True)
+        thumb_path = cache_dir / "thumb.png"
+        preview_path = cache_dir / "preview.png"
+        full_path = cache_dir / "full.png"
+        thumb_path.write_bytes(b"fake_thumb")
+        preview_path.write_bytes(b"fake_preview")
+        full_path.write_bytes(b"fake_full")
+
+        db_mock.get_thumbnail.return_value = {
+            "thumbnail_cache_path": str(thumb_path),
+            "preview_cache_path": str(preview_path),
+            "full_cache_path": str(full_path),
+        }
+
+        with patch.object(service, "check_and_render", return_value="queued") as mock_render:
+            service.invalidate_and_render(source_file)
+
+        # Cache files should be deleted
+        assert not thumb_path.exists()
+        assert not preview_path.exists()
+        assert not full_path.exists()
+        # DB record should be deleted
+        db_mock.delete_thumbnail.assert_called_once_with(str(source_file))
+        # check_and_render should be called with correct FileInfo
+        mock_render.assert_called_once()
+        call_args = mock_render.call_args[0][0]
+        assert isinstance(call_args, FileInfo)
+        assert call_args.path == source_file
+
+    def test_no_cache_exists_still_renders(
+        self,
+        tmp_path: Path,
+        service: ThumbnailService,
+        db_mock: MagicMock,
+    ) -> None:
+        """invalidate_and_render works when no cache exists (graceful handling)."""
+        source_file = tmp_path / "source.png"
+        source_file.write_bytes(b"fake_image_data")
+
+        db_mock.get_thumbnail.return_value = None
+
+        with patch.object(service, "check_and_render", return_value="queued") as mock_render:
+            service.invalidate_and_render(source_file)
+
+        # delete_thumbnail should NOT be called since no record exists
+        db_mock.delete_thumbnail.assert_not_called()
+        # check_and_render should still be called
+        mock_render.assert_called_once()
+
+    def test_missing_source_file_does_not_render(
+        self,
+        tmp_path: Path,
+        service: ThumbnailService,
+        db_mock: MagicMock,
+    ) -> None:
+        """invalidate_and_render does not render when source file doesn't exist."""
+        nonexistent = tmp_path / "does_not_exist.png"
+
+        db_mock.get_thumbnail.return_value = None
+
+        with patch.object(service, "check_and_render") as mock_render:
+            service.invalidate_and_render(nonexistent)
+
+        # check_and_render should NOT be called since source file doesn't exist
+        mock_render.assert_not_called()
+
+    def test_file_info_has_correct_metadata(
+        self,
+        tmp_path: Path,
+        service: ThumbnailService,
+        db_mock: MagicMock,
+    ) -> None:
+        """invalidate_and_render creates FileInfo with correct mtime, size, extension."""
+        source_file = tmp_path / "photo.PSD"
+        source_file.write_bytes(b"fake_psd_data")
+
+        db_mock.get_thumbnail.return_value = None
+
+        with patch.object(service, "check_and_render", return_value="queued") as mock_render:
+            service.invalidate_and_render(source_file)
+
+        call_args = mock_render.call_args[0][0]
+        assert call_args.path == source_file
+        assert call_args.extension == ".psd"  # lowercase
+        assert call_args.size == source_file.stat().st_size
+        assert call_args.mtime == source_file.stat().st_mtime

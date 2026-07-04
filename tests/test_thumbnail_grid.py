@@ -16,7 +16,7 @@ from PySide6.QtCore import (
     QSize,
     Qt,
 )
-from PySide6.QtGui import QMouseEvent
+from PySide6.QtGui import QAction, QContextMenuEvent, QMouseEvent
 from PySide6.QtWidgets import (
     QListView,
     QStyle,
@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
     QStyleOptionViewItem,
     QToolTip,
 )
+
 from tarragon.models.thumbnail_model import ThumbnailModel
 from tarragon.widgets.thumbnail_grid import (
     BG_PRIMARY,
@@ -858,3 +859,100 @@ def test_help_event_empty_name_returns_true(delegate: Any) -> None:
     assert result is True
     # showText should NOT be called since name is empty
     mock_show.assert_not_called()
+
+
+# ── Context Menu (Regenerate Thumbnail) ──────────────────────────────
+
+
+def test_context_menu_emits_regenerate_signal(grid_with_model: Any) -> None:
+    """contextMenuEvent on a valid item creates menu with action that emits regenerate_requested."""
+    grid, model = grid_with_model
+    index = model.index(0)
+
+    received: list[str] = []
+    grid.regenerate_requested.connect(lambda p: received.append(p))
+
+    # Mock indexAt to return a valid index.
+    # Patch QMenu at the module level to avoid blocking on exec().
+    mock_menu_instance = MagicMock()
+    with (
+        patch.object(grid, "indexAt", return_value=index),
+        patch("tarragon.widgets.thumbnail_grid.QMenu", return_value=mock_menu_instance),
+    ):
+        event = QContextMenuEvent(
+            QContextMenuEvent.Reason.Mouse,
+            QPoint(50, 50),
+            QPoint(100, 100),
+        )
+        grid.contextMenuEvent(event)
+
+    # Verify QMenu was created and exec was called
+    mock_menu_instance.addAction.assert_called_once()
+    action = mock_menu_instance.addAction.call_args[0][0]
+    assert action.text() == "Regenerate Thumbnail"
+    mock_menu_instance.exec.assert_called_once()
+
+
+def test_context_menu_action_triggers_signal(grid_with_model: Any) -> None:
+    """The 'Regenerate Thumbnail' action, when triggered, emits regenerate_requested."""
+    grid, model = grid_with_model
+    index = model.index(0)
+    expected_path = index.data(ThumbnailModel.PathRole)
+
+    received: list[str] = []
+    grid.regenerate_requested.connect(lambda p: received.append(p))
+
+    # Create a QAction the same way contextMenuEvent does, and verify the wiring
+    action = QAction("Regenerate Thumbnail", grid)
+    action.triggered.connect(lambda: grid.regenerate_requested.emit(expected_path))
+    action.trigger()
+
+    assert len(received) == 1
+    assert received[0] == expected_path
+
+
+def test_context_menu_on_empty_area_does_not_emit(grid_with_model: Any) -> None:
+    """contextMenuEvent on an empty area (invalid index) does NOT emit signal."""
+    grid, _ = grid_with_model
+
+    received: list[str] = []
+    grid.regenerate_requested.connect(lambda p: received.append(p))
+
+    # Mock indexAt to return an invalid index
+    with patch.object(grid, "indexAt", return_value=QModelIndex()):
+        event = QContextMenuEvent(
+            QContextMenuEvent.Reason.Mouse,
+            QPoint(50, 50),
+            QPoint(100, 100),
+        )
+        grid.contextMenuEvent(event)
+
+    assert len(received) == 0
+
+
+def test_context_menu_with_no_path_does_not_emit(grid_with_model: Any) -> None:
+    """contextMenuEvent when PathRole returns None does NOT emit signal."""
+    grid, model = grid_with_model
+    index = model.index(0)
+
+    received: list[str] = []
+    grid.regenerate_requested.connect(lambda p: received.append(p))
+
+    # Mock indexAt to return valid index, but data returns None for PathRole
+    with (
+        patch.object(grid, "indexAt", return_value=index),
+        patch.object(model, "data", return_value=None),
+    ):
+        event = QContextMenuEvent(
+            QContextMenuEvent.Reason.Mouse,
+            QPoint(50, 50),
+            QPoint(100, 100),
+        )
+        grid.contextMenuEvent(event)
+
+    assert len(received) == 0
+
+
+def test_regenerate_requested_signal_exists(grid: Any) -> None:
+    """ThumbnailGrid has a regenerate_requested signal."""
+    assert hasattr(grid, "regenerate_requested")

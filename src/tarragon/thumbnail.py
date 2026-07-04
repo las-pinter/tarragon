@@ -5,14 +5,18 @@ from __future__ import annotations
 import atexit
 import hashlib
 import io
+import logging
 import threading
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
+from typing import Any
 
 import psutil
 from PIL import Image, ImageOps
 
 from tarragon.app_paths import cache_dir
+
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "RESOLUTION_FULL",
@@ -21,6 +25,7 @@ __all__ = [
     "derive_smaller_sizes",
     "generate_cache_paths",
     "generate_cache_uuid",
+    "invalidate_cache_files",
     "render_plain_image",
     "render_psd_image",
     "save_to_cache",
@@ -116,6 +121,45 @@ def generate_cache_paths(source_path: Path, cache_uuid: str) -> dict[str, Path]:
         paths[resolution] = resolution_dir / f"{filename}.png"
 
     return paths
+
+
+def invalidate_cache_files(db: Any, source_path: str) -> None:
+    """Delete cached thumbnail files from disk and remove the DB record.
+
+    Looks up the cache record for *source_path* in *db*, deletes the
+    actual PNG files for all three resolution tiers (256px, 1024px, full),
+    then removes the database row.
+
+    Parameters
+    ----------
+    db:
+        A :class:`~tarragon.db.Database` instance (or compatible mock).
+    source_path:
+        The original source file path (as a string).
+
+    Notes
+    -----
+    Uses ``Path.unlink(missing_ok=True)`` so missing files do not raise.
+    If no DB record exists for *source_path*, the function is a no-op.
+    """
+    cached = db.get_thumbnail(source_path)
+    if cached is None:
+        logger.debug("invalidate_cache_files: no DB record for %s", source_path)
+        return
+
+    deleted_paths: list[str] = []
+    for key in ("thumbnail_cache_path", "preview_cache_path", "full_cache_path"):
+        cache_file = cached.get(key)
+        if cache_file:
+            Path(cache_file).unlink(missing_ok=True)
+            deleted_paths.append(cache_file)
+
+    db.delete_thumbnail(source_path)
+    logger.info(
+        "invalidate_cache_files: deleted %d cache file(s) for %s",
+        len(deleted_paths),
+        source_path,
+    )
 
 
 def render_plain_image(file_path: Path, target_size: int | None = None) -> Image.Image | None:

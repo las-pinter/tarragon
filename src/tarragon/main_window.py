@@ -264,6 +264,9 @@ class MainWindow(QMainWindow):
         # Wire double-click signal for editor launch
         self.thumbnail_grid.file_double_clicked.connect(self._on_file_double_clicked)
 
+        # Wire regenerate signal for manual thumbnail regeneration
+        self.thumbnail_grid.regenerate_requested.connect(self._on_regenerate_requested)
+
     def _on_thumbnail_ready(
         self, source_path: str, img: object, resolution_size: int | None, cache_path: str | None
     ) -> None:
@@ -385,6 +388,13 @@ class MainWindow(QMainWindow):
         file_path = Path(path)
         extension = file_path.suffix
         launch_editor(self._db, file_path, extension)
+
+    def _on_regenerate_requested(self, file_path: str) -> None:
+        """Handle 'Regenerate Thumbnail' context menu action."""
+        path = Path(file_path)
+        if hasattr(self, "_thumbnail_service"):
+            logger.info("Regenerating thumbnail for %s", path.name)
+            self._thumbnail_service.invalidate_and_render(path)
 
     # ── Filtered Query Helpers ─────────────────────────────────────────
 

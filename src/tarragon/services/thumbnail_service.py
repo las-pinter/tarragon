@@ -24,6 +24,7 @@ from tarragon.thumbnail import (
     derive_smaller_sizes,
     generate_cache_paths,
     generate_cache_uuid,
+    invalidate_cache_files,
     render_plain_image,
     render_psd_image,
     save_to_cache,
@@ -175,6 +176,45 @@ class ThumbnailService(QObject):
         elapsed = time.perf_counter() - start
         logger.debug("check_and_render completed in %.3fs: status=queued", elapsed)
         return "queued"
+
+    def invalidate_and_render(self, source_path: Path) -> None:
+        """Delete cached thumbnails and re-render from source.
+
+        Invalidates all cache files for *source_path* (deletes PNGs from
+        disk and removes the DB record), then triggers a fresh render
+        via :meth:`check_and_render`.
+
+        Parameters
+        ----------
+        source_path:
+            Path to the original source image file.
+
+        Notes
+        -----
+        If the source file does not exist on disk, the method logs a
+        warning and returns without rendering.
+        """
+        logger.info("Regenerating thumbnail for: %s", source_path)
+
+        # Delete existing cache files and DB record
+        invalidate_cache_files(self._db, str(source_path))
+
+        # Stat the file to build a FileInfo for re-rendering
+        try:
+            stat = source_path.stat()
+        except OSError:
+            logger.warning("invalidate_and_render: source file not found: %s", source_path)
+            return
+
+        file_info = FileInfo(
+            path=source_path,
+            mtime=stat.st_mtime,
+            size=stat.st_size,
+            extension=source_path.suffix.lower(),
+        )
+
+        # Re-render from scratch (cache was just invalidated)
+        self.check_and_render(file_info)
 
     def _emit_cached_thumbnails(self, file_info: FileInfo, cached: dict[str, Any]) -> None:
         """Emit thumbnailReady signals for all cached resolutions."""

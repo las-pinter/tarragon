@@ -956,3 +956,68 @@ def test_context_menu_with_no_path_does_not_emit(grid_with_model: Any) -> None:
 def test_regenerate_requested_signal_exists(grid: Any) -> None:
     """ThumbnailGrid has a regenerate_requested signal."""
     assert hasattr(grid, "regenerate_requested")
+
+
+# ── Container Margin (visual gap between thumbnails) ─────────────────
+
+
+def test_paint_background_uses_inset_rect(delegate: Any, mock_painter: Any, style_option: Any) -> None:
+    """Background fillRect uses a rect inset by HOVER_MARGIN, not the full option.rect.
+
+    This ensures a visible gap between adjacent thumbnail containers.
+    """
+    model = ThumbnailModel()
+    model.set_paths([Path("/fake/test.png")])
+    index = model.index(0)
+
+    delegate.set_hovered_row(-1)
+    style_option.state = QStyle.StateFlag.State_None
+
+    delegate.paint(mock_painter, style_option, index)
+
+    fill_calls = mock_painter.fillRect.call_args_list
+    assert len(fill_calls) >= 1
+    bg_rect = fill_calls[0].args[0]
+
+    # Background rect should be inset by HOVER_MARGIN on all sides
+    expected_rect = style_option.rect.adjusted(
+        HOVER_MARGIN, HOVER_MARGIN, -HOVER_MARGIN, -HOVER_MARGIN
+    )
+    assert bg_rect == expected_rect
+
+
+def test_paint_background_rect_is_smaller_than_cell(delegate: Any, mock_painter: Any, style_option: Any) -> None:
+    """Background container rect is strictly smaller than the full cell rect."""
+    model = ThumbnailModel()
+    model.set_paths([Path("/fake/test.png")])
+    index = model.index(0)
+
+    delegate.paint(mock_painter, style_option, index)
+
+    fill_calls = mock_painter.fillRect.call_args_list
+    bg_rect = fill_calls[0].args[0]
+
+    assert bg_rect.width() < style_option.rect.width()
+    assert bg_rect.height() < style_option.rect.height()
+
+
+def test_paint_selection_border_uses_inset_rect(delegate: Any, mock_painter: Any, style_option: Any) -> None:
+    """Selection border drawRect uses the inset container rect, not the full cell."""
+    model = ThumbnailModel()
+    model.set_paths([Path("/fake/selected.png")])
+    index = model.index(0)
+
+    style_option.state = QStyle.StateFlag.State_Selected
+
+    delegate.paint(mock_painter, style_option, index)
+
+    # The drawRect call for the selection border should use the inset rect
+    container_rect = style_option.rect.adjusted(
+        HOVER_MARGIN, HOVER_MARGIN, -HOVER_MARGIN, -HOVER_MARGIN
+    )
+    expected_border_rect = container_rect.adjusted(1, 1, -1, -1)
+
+    draw_rect_calls = mock_painter.drawRect.call_args_list
+    assert len(draw_rect_calls) >= 1
+    border_rect = draw_rect_calls[0].args[0]
+    assert border_rect == expected_border_rect

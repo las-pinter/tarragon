@@ -269,16 +269,20 @@ class ThumbnailDelegate(QStyledItemDelegate):
                 painter.scale(scale, scale)
                 painter.translate(-cx, -cy)
 
-        # ── Cell background ──────────────────────────────────────────
+        # ── Cell background (inset by HOVER_MARGIN for visual gap) ───
         is_hovered = row == self._hovered_row
         is_selected = bool(option.state & QStyle.StateFlag.State_Selected)
 
+        container_rect = option.rect.adjusted(
+            HOVER_MARGIN, HOVER_MARGIN, -HOVER_MARGIN, -HOVER_MARGIN
+        )
+
         if is_selected:
-            painter.fillRect(option.rect, BG_SECONDARY)
+            painter.fillRect(container_rect, BG_SECONDARY)
         elif is_hovered:
-            painter.fillRect(option.rect, BG_SECONDARY.lighter(110))
+            painter.fillRect(container_rect, BG_SECONDARY.lighter(110))
         else:
-            painter.fillRect(option.rect, BG_PRIMARY)
+            painter.fillRect(container_rect, BG_PRIMARY)
 
         # ── Compute image area ───────────────────────────────────────
         cell_rect = option.rect.adjusted(GRID_GAP, GRID_GAP, -GRID_GAP, -GRID_GAP)
@@ -356,7 +360,7 @@ class ThumbnailDelegate(QStyledItemDelegate):
             pen = QPen(CORAL_STRONG, 1.5)
             painter.setPen(pen)
             painter.setBrush(Qt.BrushStyle.NoBrush)
-            border_rect = option.rect.adjusted(1, 1, -1, -1)
+            border_rect = container_rect.adjusted(1, 1, -1, -1)
             painter.drawRect(border_rect)
 
         painter.restore()

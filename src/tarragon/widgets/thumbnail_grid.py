@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from PySide6.QtCore import QEvent, QItemSelection, QModelIndex, QObject, QPersistentModelIndex, QRect, QSize, Qt, QTime, QTimer, Signal
-from PySide6.QtGui import QColor, QHelpEvent, QMouseEvent, QPainter, QPen, QPixmap
+from PySide6.QtGui import QHelpEvent, QMouseEvent, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QListView,
@@ -17,18 +17,29 @@ from PySide6.QtWidgets import (
 )
 
 from tarragon.models.thumbnail_model import ThumbnailModel
+from tarragon.theme.colors import (
+    BG_PRIMARY,
+    BG_SECONDARY,
+    CORAL_STRONG,
+    TEXT_PRIMARY,
+)
+from tarragon.theme.tokens import get_token
 from tarragon.theme.typography import SMALL_SIZE
 
-# Theme tokens (coral-amber dark palette)
-CORAL_STRONG = QColor("#F0997B")
-AMBER_ACCENT = QColor("#FAC775")
-BG_PRIMARY = QColor("#16151A")
-BG_SECONDARY = QColor("#1c1b22")
-TEXT_PRIMARY = QColor("#ece9f2")
-TEXT_SECONDARY = QColor("#A09CA3")
-PSD_BADGE_COLOR = QColor("#F0997B")
-THUMBNAIL_SIZE = 160
-GRID_GAP = 14
+# ── Layout tokens (from tokens.json) ─────────────────────────────────────────
+THUMBNAIL_SIZE: int = get_token("layout", "thumbnail_size")
+# NOTE: tokens.json grid_gap=8, but 14px is used intentionally for visual
+# breathing room around hover-scaled thumbnails (test enforces >= 12px).
+GRID_GAP: int = 14
+
+# ── PSD badge layout constants ────────────────────────────────────────────────
+PSD_BADGE_RIGHT_OFFSET = 30
+PSD_BADGE_TOP_OFFSET = 4
+PSD_BADGE_WIDTH = 26
+PSD_BADGE_HEIGHT = 14
+
+# ── Text area height in grid cell sizeHint ────────────────────────────────────
+TEXT_AREA_HEIGHT = 24
 
 # Animation tokens (from tokens.json motion values)
 HOVER_SCALE_TARGET = 1.02
@@ -312,12 +323,12 @@ class ThumbnailDelegate(QStyledItemDelegate):
         path_str = index.data(ThumbnailModel.PathRole) or ""
         if path_str.lower().endswith((".psd", ".psb")):
             badge_rect = QRect(
-                image_rect.right() - 30,
-                image_rect.top() + 4,
-                26,
-                14,
+                image_rect.right() - PSD_BADGE_RIGHT_OFFSET,
+                image_rect.top() + PSD_BADGE_TOP_OFFSET,
+                PSD_BADGE_WIDTH,
+                PSD_BADGE_HEIGHT,
             )
-            painter.fillRect(badge_rect, PSD_BADGE_COLOR)
+            painter.fillRect(badge_rect, CORAL_STRONG)
             painter.setPen(Qt.GlobalColor.white)
             small_font = painter.font()
             # PSD badge: intentionally 7pt — too small for any design token
@@ -348,7 +359,7 @@ class ThumbnailDelegate(QStyledItemDelegate):
         """
         return QSize(
             THUMBNAIL_SIZE + GRID_GAP * 2 + HOVER_MARGIN * 2,
-            THUMBNAIL_SIZE + GRID_GAP * 2 + 24 + HOVER_MARGIN * 2,
+            THUMBNAIL_SIZE + GRID_GAP * 2 + TEXT_AREA_HEIGHT + HOVER_MARGIN * 2,
         )
 
     def helpEvent(  # noqa: N802
@@ -382,7 +393,7 @@ class ThumbnailGrid(QListView):
         super().__init__(parent)
         self.setViewMode(QListView.ViewMode.IconMode)
         self.setIconSize(QSize(THUMBNAIL_SIZE, THUMBNAIL_SIZE))
-        self.setGridSize(QSize(THUMBNAIL_SIZE + GRID_GAP * 2 + HOVER_MARGIN * 2, THUMBNAIL_SIZE + GRID_GAP * 2 + 24 + HOVER_MARGIN * 2))
+        self.setGridSize(QSize(THUMBNAIL_SIZE + GRID_GAP * 2 + HOVER_MARGIN * 2, THUMBNAIL_SIZE + GRID_GAP * 2 + TEXT_AREA_HEIGHT + HOVER_MARGIN * 2))
         self.setWrapping(True)
         self.setResizeMode(QListView.ResizeMode.Adjust)
         self.setSelectionMode(QListView.SelectionMode.ExtendedSelection)

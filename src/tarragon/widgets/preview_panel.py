@@ -313,7 +313,7 @@ class PreviewPanel(QWidget):
         cell_h = available_h // rows
 
         # Create the mosaic canvas (dark background)
-        mosaic = Image.new("RGB", (canvas_size, canvas_size), color="#1c1b22")
+        mosaic = Image.new("RGB", (canvas_size, canvas_size), color=BG_SECONDARY)
 
         for idx, img in enumerate(display_images):
             row_i = idx // cols
@@ -326,7 +326,7 @@ class PreviewPanel(QWidget):
             cell_img = ImageOps.contain(cell_img, (cell_w, cell_h), Image.Resampling.LANCZOS)
 
             # Center the contained image on a cell-sized background
-            cell_bg = Image.new("RGB", (cell_w, cell_h), color="#1c1b22")
+            cell_bg = Image.new("RGB", (cell_w, cell_h), color=BG_SECONDARY)
             if cell_img.mode == "RGBA":
                 cell_bg.paste(
                     cell_img,

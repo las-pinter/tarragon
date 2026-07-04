@@ -561,13 +561,26 @@ class MainWindow(QMainWindow):
 
     def _on_open_folder(self) -> None:
         """Callback for File → Open Folder — scan folder and populate grid."""
-        from tarragon.scanner import scan_folder
-
         folder = QFileDialog.getExistingDirectory(self, "Open Folder", "")
         if not folder:
             return
+        self._navigate_to_folder(Path(folder))
 
-        folder_path = Path(folder)
+    def _on_folder_navigated(self, folder_path: str) -> None:
+        """Handle folder selection from sidebar tree."""
+        folder = Path(folder_path)
+        if not folder.exists() or not folder.is_dir():
+            return
+        self._navigate_to_folder(folder)
+
+    def _navigate_to_folder(self, folder_path: Path) -> None:
+        """Shared folder navigation: scan, update grid, render thumbnails, update sidebar.
+
+        Both ``_on_open_folder`` and ``_on_folder_navigated`` delegate here
+        after obtaining / validating the target path.
+        """
+        from tarragon.scanner import scan_folder
+
         logger.info("Scanning folder: %s", folder_path)
 
         # Cancel pending thumbnail generation from the previous folder
@@ -587,6 +600,7 @@ class MainWindow(QMainWindow):
         file_infos = scan_folder(folder_path)
         if not file_infos:
             logger.warning("No images found in %s", folder_path)
+            self.thumbnail_model.set_paths([])
             return
 
         # Update thumbnail model — use query service if any filters are active,
@@ -620,64 +634,6 @@ class MainWindow(QMainWindow):
         # Update sidebar with current folder
         if hasattr(self, "sidebar_widget"):
             self.sidebar_widget.set_current_folder(str(folder_path))
-
-    def _on_folder_navigated(self, folder_path: str) -> None:
-        """Handle folder selection from sidebar tree."""
-        from tarragon.scanner import scan_folder
-
-        folder = Path(folder_path)
-        if not folder.exists() or not folder.is_dir():
-            return
-
-        # Cancel pending thumbnail generation from the previous folder
-        # before scanning the new one, then reset the cancel flag.
-        if hasattr(self, "_thumbnail_service"):
-            self._thumbnail_service.cancel_pending()
-            self._thumbnail_service.reset_cancel()
-
-        self._current_folder = str(folder)
-
-        # Update tag panel folder scope for local counts
-        if hasattr(self, "tag_panel"):
-            self.tag_panel.set_folder_path(str(folder))
-
-        file_infos = scan_folder(folder)
-
-        if not file_infos:
-            self.thumbnail_model.set_paths([])
-            return
-
-        # Check if any filters are active — if so, apply them instead of showing all
-        has_filters = (
-            (hasattr(self, "_search_edit") and self._search_edit.text())
-            or (hasattr(self, "color_filter_bar") and self.color_filter_bar.get_active_colors())
-            or (hasattr(self, "tag_filter_bar") and self.tag_filter_bar.has_active_filters())
-        )
-        if has_filters and hasattr(self, "_query_service"):
-            self._run_filtered_query()
-        else:
-            # Update thumbnail model with all paths
-            paths = [fi.path for fi in file_infos]
-            self.thumbnail_model.set_paths(paths)
-
-        # Dispatch thumbnail renders
-        if hasattr(self, "_thumbnail_service"):
-            statuses: dict[str, int] = {"cached": 0, "queued": 0, "derived": 0}
-            for fi in file_infos:
-                status = self._thumbnail_service.check_and_render(fi)
-                statuses[status] = statuses.get(status, 0) + 1
-            logger.info(
-                "Processed %d images in %s: %d queued for render, %d already cached, %d derived from existing",
-                len(file_infos),
-                folder,
-                statuses["queued"],
-                statuses["cached"],
-                statuses["derived"],
-            )
-
-        # Update sidebar
-        if hasattr(self, "sidebar_widget"):
-            self.sidebar_widget.set_current_folder(str(folder))
 
     def _on_favorite_clicked(self, folder_path: str) -> None:
         """Handle favorite folder selection."""

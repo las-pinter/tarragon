@@ -25,18 +25,25 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from tarragon.theme.colors import (
+    AMBER_ACCENT,
+    CORAL_MUTED,
+    CORAL_STRONG,
+    TEXT_PRIMARY,
+    TEXT_TERTIARY,
+)
 from tarragon.theme.typography import LOG_SIZE
 
-# Color mapping: log level → display color
+# Color mapping: log level → display color (sourced from theme tokens)
 _LEVEL_COLORS: dict[int, str] = {
-    logging.DEBUG: "#74707B",
-    logging.INFO: "#ece9f2",
-    logging.WARNING: "#FAC775",
-    logging.ERROR: "#F0997B",
-    logging.CRITICAL: "#D85A30",
+    logging.DEBUG: TEXT_TERTIARY.name(),
+    logging.INFO: TEXT_PRIMARY.name(),
+    logging.WARNING: AMBER_ACCENT.name(),
+    logging.ERROR: CORAL_STRONG.name(),
+    logging.CRITICAL: CORAL_MUTED.name(),
 }
 
-_DEFAULT_COLOR = "#ece9f2"
+_DEFAULT_COLOR = TEXT_PRIMARY.name()
 
 
 def apply_debug_level(enabled: bool) -> None:

@@ -20,7 +20,6 @@ from tarragon.thumbnail import (
     RESOLUTION_FULL,
     RESOLUTION_PREVIEW,
     RESOLUTION_THUMBNAIL,
-    _cache_file_path,
     _get_executor,
     derive_smaller_sizes,
     generate_cache_paths,
@@ -59,75 +58,6 @@ class _RenderAllTask(QRunnable):
             self._render_func(self._file_info)
             if self._on_done is not None:
                 self._on_done(self._file_info)
-        except Exception as exc:
-            self._on_error(self._file_info, str(exc))
-
-
-class _RenderTask(QRunnable):
-    """Runs a single plain-image render in a QThreadPool worker thread."""
-
-    def __init__(
-        self,
-        file_info: FileInfo,
-        cache_format: str,
-        on_done: Callable[..., Any],
-        on_error: Callable[..., Any],
-    ) -> None:
-        super().__init__()
-        self._file_info = file_info
-        self._cache_format = cache_format
-        self._on_done = on_done
-        self._on_error = on_error
-        self._cache_path: Path | None = None
-
-    def run(self) -> None:
-        """Execute render in worker thread."""
-        try:
-            img = render_plain_image(self._file_info.path)
-            if img is not None:
-                self._cache_path, _ = _cache_file_path(self._file_info.path, self._cache_format)
-                save_to_cache(img, self._cache_path, self._cache_format)
-            self._on_done(self._file_info, img, self._cache_path)
-        except Exception as exc:
-            self._on_error(self._file_info, str(exc))
-
-
-class _RenderPSDTask(QRunnable):
-    """Runs PSD rendering in a QThreadPool worker thread."""
-
-    def __init__(
-        self,
-        file_info: FileInfo,
-        cache_format: str,
-        on_done: Callable[..., Any],
-        on_error: Callable[..., Any],
-        large_canvas_threshold_mp: float,
-        tile_grid_x: int,
-        tile_grid_y: int,
-    ) -> None:
-        super().__init__()
-        self._file_info = file_info
-        self._cache_format = cache_format
-        self._on_done = on_done
-        self._on_error = on_error
-        self._large_canvas_threshold_mp = large_canvas_threshold_mp
-        self._tile_grid_x = tile_grid_x
-        self._tile_grid_y = tile_grid_y
-        self._cache_path: Path | None = None
-
-    def run(self) -> None:
-        """Execute PSD render in worker thread."""
-        try:
-            img = render_psd_image(
-                self._file_info.path,
-                self._large_canvas_threshold_mp,
-                self._tile_grid_x,
-                self._tile_grid_y,
-            )
-            if img is not None:
-                self._cache_path, _ = _cache_file_path(self._file_info.path, self._cache_format)
-                save_to_cache(img, self._cache_path, self._cache_format)
-            self._on_done(self._file_info, img, self._cache_path)
         except Exception as exc:
             self._on_error(self._file_info, str(exc))
 
@@ -459,50 +389,6 @@ class ThumbnailService(QObject):
         )
         elapsed = time.perf_counter() - start
         logger.debug("_render_all_resolutions completed in %.3fs: %s", elapsed, file_info.path)
-
-    def _render_plain(self, file_info: FileInfo) -> None:
-        """Dispatch plain image render to QThreadPool."""
-        task = _RenderTask(
-            file_info=file_info,
-            cache_format=self._cache_format,
-            on_done=self._on_done,
-            on_error=self._on_error,
-        )
-        self._threadpool.start(task)
-        logger.debug("Queued plain render for %s", file_info.path)
-
-    def _render_psd(self, file_info: FileInfo) -> None:
-        """Dispatch PSD/PSB render via ProcessPoolExecutor (blocking in worker thread).
-
-        Since render_psd_image() uses ProcessPoolExecutor internally and is
-        already off the main thread, we run it in the QThreadPool to keep
-        the main thread free.
-        """
-        threshold = self._settings_service.get_large_canvas_threshold_mp()
-        grid_str = self._settings_service.get_tile_grid_size()  # e.g. "2x2"
-        grid_x, grid_y = (int(d) for d in grid_str.split("x"))
-        task = _RenderPSDTask(
-            file_info=file_info,
-            cache_format=self._cache_format,
-            on_done=self._on_done,
-            on_error=self._on_error,
-            large_canvas_threshold_mp=threshold,
-            tile_grid_x=grid_x,
-            tile_grid_y=grid_y,
-        )
-        self._threadpool.start(task)
-        logger.debug("Queued PSD render for %s", file_info.path)
-
-    def _on_done(self, file_info: FileInfo, img: Image.Image | None, cache_path: Path | None) -> None:
-        """Handle completion of a legacy render task — emit thumbnailReady.
-
-        Note: The legacy _RenderTask/_RenderPSDTask path emits at full
-        resolution (resolution_size=None).  The new multi-resolution path
-        (_render_all_resolutions) handles its own signal emission.
-        """
-        # Emit with resolution_size=RESOLUTION_FULL (full resolution) for legacy tasks
-        cache_path_str = str(cache_path) if cache_path else None
-        self.thumbnailReady.emit(str(file_info.path), img, RESOLUTION_FULL, cache_path_str)
 
     def _on_error(self, file_info: FileInfo, error_message: str) -> None:
         """Handle render error."""

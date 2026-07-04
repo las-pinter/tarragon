@@ -242,10 +242,11 @@ class TagPanel(QWidget):
             swatch.setFixedSize(16, 16)
             swatch.setObjectName("colorSwatch")
             hex_color = self._get_color_hex(color_name)
+            # TODO: #888 has no matching color token — generic swatch border grey.
             swatch.setStyleSheet(f"background-color: {hex_color}; border: 1px solid #888;")
             row_layout.addWidget(swatch)
 
-            # Outlined/dashed row style for auto-color tags
+            # TODO: #555 has no matching color token — generic auto-color row border grey.
             row.setStyleSheet("border: 1px dashed #555; border-radius: 2px; padding: 2px;")
             row.setToolTip("Auto color tag")
 

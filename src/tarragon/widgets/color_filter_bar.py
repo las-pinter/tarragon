@@ -19,6 +19,7 @@ from tarragon.theme.spacing import SM, XS
 _SWATCH_SIZE = 36
 _ACTIVE_BORDER_COLOR: str = AMBER_ACCENT.name()
 _ACTIVE_BORDER_WIDTH = 2
+# TODO: #555555 has no matching color token — generic inactive border grey.
 _INACTIVE_BORDER_COLOR = "#555555"
 _INACTIVE_BORDER_WIDTH = 1
 

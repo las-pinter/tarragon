@@ -189,6 +189,7 @@ class TagFilterBar(QWidget):
             f"  padding: 0;"
             f"}}"
             f"QPushButton:hover {{"
+            # TODO: #FF6B40 has no matching color token — brighter coral for hover feedback.
             f"  color: #FF6B40;"
             f"}}"
         )

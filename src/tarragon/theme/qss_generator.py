@@ -114,6 +114,9 @@ def generate_qss(tokens: dict[str, Any]) -> str:
     border_disabled = c["border_disabled"]
     bg_log_panel = c["bg_log_panel"]
 
+    # NOTE: #E06540 (checkbox checked:hover bg) has no matching color token —
+    # it's a brighter pressed-coral used only for hover feedback in QSS.
+
     return f"""\
 /* Tarragon Theme — Dark Coral-Amber Aesthetic */
 /* Generated from tokens.json: colors, typography, spacing, radius, layout */

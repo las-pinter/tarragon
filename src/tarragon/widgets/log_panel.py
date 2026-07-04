@@ -25,6 +25,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from tarragon.theme.typography import LOG_SIZE
+
 # Color mapping: log level → display color
 _LEVEL_COLORS: dict[int, str] = {
     logging.DEBUG: "#74707B",
@@ -35,6 +37,15 @@ _LEVEL_COLORS: dict[int, str] = {
 }
 
 _DEFAULT_COLOR = "#ece9f2"
+
+
+def apply_debug_level(enabled: bool) -> None:
+    """Set root logger level to DEBUG or INFO based on enabled flag.
+
+    Args:
+        enabled: If ``True``, set root logger to ``DEBUG``; otherwise ``INFO``.
+    """
+    logging.getLogger().setLevel(logging.DEBUG if enabled else logging.INFO)
 
 
 class LogPanel(QWidget):
@@ -79,7 +90,7 @@ class LogPanel(QWidget):
 
         font = QFont()
         font.setFamilies(["Consolas", "Courier New", "monospace"])
-        font.setPointSize(11)
+        font.setPointSize(LOG_SIZE)
         self._text_area.setFont(font)
 
         layout.addWidget(self._text_area)
@@ -106,7 +117,7 @@ class LogPanel(QWidget):
 
     def set_debug_enabled(self, enabled: bool) -> None:
         """Toggle the root logger between DEBUG and INFO levels."""
-        logging.getLogger().setLevel(logging.DEBUG if enabled else logging.INFO)
+        apply_debug_level(enabled)
 
 
 class QtLogHandler(logging.Handler):

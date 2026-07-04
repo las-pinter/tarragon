@@ -1,6 +1,6 @@
 """Typed QColor constants derived from tokens.json.
 
-Every colour in the ``colors`` section of *tokens.json* is exposed as a
+Every color in the ``colors`` section of *tokens.json* is exposed as a
 module-level :class:`QColor` constant using ``UPPER_CASE`` naming.
 
 Example::
@@ -18,34 +18,46 @@ from tarragon.theme.tokens import load_tokens
 # ── Load tokens once at import time ──────────────────────────────────────────
 _colors: dict[str, str] = load_tokens()["colors"]
 
-# ── Background colours ───────────────────────────────────────────────────────
+# ── Background colors ────────────────────────────────────────────────────────
 BG_PRIMARY: QColor = QColor(_colors["bg_primary"])
 BG_SECONDARY: QColor = QColor(_colors["bg_secondary"])
 BG_TERTIARY: QColor = QColor(_colors["bg_tertiary"])
 SURFACE_HIGHLIGHT: QColor = QColor(_colors["surface_highlight"])
 
-# ── Accent colours ───────────────────────────────────────────────────────────
+# ── Accent colors ────────────────────────────────────────────────────────────
 CORAL_STRONG: QColor = QColor(_colors["coral_strong"])
 CORAL_MUTED: QColor = QColor(_colors["coral_muted"])
+CORAL_DARK: QColor = QColor(_colors["coral_dark"])
 AMBER_ACCENT: QColor = QColor(_colors["amber_accent"])
+AMBER_LIGHT: QColor = QColor(_colors["amber_light"])
+AMBER_DARK: QColor = QColor(_colors["amber_dark"])
 
-# ── Surface interaction colours ──────────────────────────────────────────────
+# ── Surface interaction colors ───────────────────────────────────────────────
 SURFACE_HOVER: QColor = QColor(_colors["surface_hover"])
 
-# ── Text colours ─────────────────────────────────────────────────────────────
+# ── Text colors ──────────────────────────────────────────────────────────────
 TEXT_PRIMARY: QColor = QColor(_colors["text_primary"])
 TEXT_SECONDARY: QColor = QColor(_colors["text_secondary"])
 TEXT_TERTIARY: QColor = QColor(_colors["text_tertiary"])
 
-# ── Misc colours ─────────────────────────────────────────────────────────────
+# ── Misc colors ──────────────────────────────────────────────────────────────
+BG_DISABLED: QColor = QColor(_colors["bg_disabled"])
+BORDER_DISABLED: QColor = QColor(_colors["border_disabled"])
+BG_LOG_PANEL: QColor = QColor(_colors["bg_log_panel"])
 HIGHLIGHT_DISABLED: QColor = QColor(_colors["highlight_disabled"])
 SEPARATOR: QColor = QColor(_colors["separator"])
 
 __all__ = [
     "AMBER_ACCENT",
+    "AMBER_DARK",
+    "AMBER_LIGHT",
+    "BG_DISABLED",
+    "BG_LOG_PANEL",
     "BG_PRIMARY",
     "BG_SECONDARY",
     "BG_TERTIARY",
+    "BORDER_DISABLED",
+    "CORAL_DARK",
     "CORAL_MUTED",
     "CORAL_STRONG",
     "HIGHLIGHT_DISABLED",

@@ -1,9 +1,9 @@
-"""Consolidated colour-bucket definitions for the colour tagger and UI widgets.
+"""Consolidated color-bucket definitions for the color tagger and UI widgets.
 
 This module is the **single source of truth** for:
 
-* The canonical display order of colour buckets (:data:`BUCKET_COLORS`).
-* The representative hex colour for each bucket (:data:`BUCKET_HEX_COLORS`).
+* The canonical display order of color buckets (:data:`BUCKET_COLORS`).
+* The representative hex color for each bucket (:data:`BUCKET_HEX_COLORS`).
 * The hue ranges used to classify pixels into buckets (:data:`COLOR_BUCKETS`).
 
 These maps were previously duplicated across ``color_tagger.py``,
@@ -16,7 +16,7 @@ from collections.abc import Mapping
 
 # ── Display order ────────────────────────────────────────────────────────────
 
-#: Canonical colour-wheel order for display in UI widgets.
+#: Canonical color-wheel order for display in UI widgets.
 #: Use a tuple (immutable) since this ordering must never change at runtime.
 BUCKET_COLORS: tuple[str, ...] = (
     "red",
@@ -31,9 +31,9 @@ BUCKET_COLORS: tuple[str, ...] = (
     "neutral",
 )
 
-# ── Representative hex colours ───────────────────────────────────────────────
+# ── Representative hex colors ────────────────────────────────────────────────
 
-#: Mapping of bucket name → representative hex colour for swatches and labels.
+#: Mapping of bucket name → representative hex color for swatches and labels.
 BUCKET_HEX_COLORS: Mapping[str, str] = {
     "red": "#E74C3C",
     "orange": "#F39C12",

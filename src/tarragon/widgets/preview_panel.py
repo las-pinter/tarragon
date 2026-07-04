@@ -13,6 +13,7 @@ from PySide6.QtWidgets import QLabel, QSizePolicy, QVBoxLayout, QWidget
 
 from tarragon.theme.spacing import SM
 from tarragon.theme.tokens import get_token
+from tarragon.theme.typography import BODY_SIZE
 
 logger = logging.getLogger(__name__)
 
@@ -120,7 +121,7 @@ class PreviewPanel(QWidget):
             f"  border: 1px solid {CORAL_STRONG};"
             f"  border-radius: 4px;"
             f"  color: {TEXT_SECONDARY};"
-            f"  font-size: 12px;"
+            f"  font-size: {BODY_SIZE}px;"
             f"}}"
         )
         layout.addWidget(self._image_label, stretch=1)
@@ -211,7 +212,7 @@ class PreviewPanel(QWidget):
 
         # Convert RGBA to RGB for display — alpha channel causes washed-out /
         # gray rendering in Qt's RGBA8888 format.  Composite onto the preview
-        # background colour so transparency is visually preserved.
+        # background color so transparency is visually preserved.
         if image.mode == "RGBA":
             background = Image.new("RGB", image.size, BG_SECONDARY)
             background.paste(image, mask=image.split()[3])  # alpha as mask

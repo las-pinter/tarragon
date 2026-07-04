@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 )
 
 from tarragon.models.thumbnail_model import ThumbnailModel
+from tarragon.theme.typography import SMALL_SIZE
 
 # Theme tokens (coral-amber dark palette)
 CORAL_STRONG = QColor("#F0997B")
@@ -291,7 +292,7 @@ class ThumbnailDelegate(QStyledItemDelegate):
         name = index.data(Qt.ItemDataRole.DisplayRole) or ""
         painter.setPen(TEXT_PRIMARY)
         font = painter.font()
-        font.setPointSize(10)
+        font.setPointSize(SMALL_SIZE)
         painter.setFont(font)
         text_rect = QRect(
             cell_rect.x(),
@@ -319,6 +320,7 @@ class ThumbnailDelegate(QStyledItemDelegate):
             painter.fillRect(badge_rect, PSD_BADGE_COLOR)
             painter.setPen(Qt.GlobalColor.white)
             small_font = painter.font()
+            # PSD badge: intentionally 7pt — too small for any design token
             small_font.setPointSize(7)
             small_font.setBold(True)
             painter.setFont(small_font)

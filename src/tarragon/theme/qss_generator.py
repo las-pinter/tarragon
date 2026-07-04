@@ -59,7 +59,7 @@ def generate_qss(tokens: dict[str, Any]) -> str:
     """Generate a complete QSS stylesheet from design tokens.
 
     The output is deterministic: the same *tokens* dictionary always produces
-    the same QSS string.  All hardcoded colour, spacing, typography, and
+    the same QSS string.  All hardcoded color, spacing, typography, and
     border-radius values are resolved from the token dictionaries.
 
     Args:
@@ -96,7 +96,7 @@ def generate_qss(tokens: dict[str, Any]) -> str:
     r_md = int(r["md"])
     r_lg = int(r["lg"])
 
-    # Colour shortcuts for readability.
+    # Color shortcuts for readability.
     bg_primary = c["bg_primary"]
     bg_secondary = c["bg_secondary"]
     bg_tertiary = c["bg_tertiary"]
@@ -335,7 +335,7 @@ QRadioButton {{
     padding: {xs}px;
 }}
 
-QCheckBox::indicator {{
+QCheckBox::indicator, QGroupBox::indicator {{
     width: 18px;
     height: 18px;
     border: 2px solid {amber_accent};
@@ -343,50 +343,22 @@ QCheckBox::indicator {{
     background-color: {bg_tertiary};
 }}
 
-QCheckBox::indicator:hover {{
+QCheckBox::indicator:hover, QGroupBox::indicator:hover {{
     border-color: {amber_light};
     background-color: {surface_hover};
 }}
 
-QCheckBox::indicator:checked {{
+QCheckBox::indicator:checked, QGroupBox::indicator:checked {{
     background-color: {coral_muted};
     border-color: {amber_accent};
     image: none;
 }}
 
-QCheckBox::indicator:checked:hover {{
+QCheckBox::indicator:checked:hover, QGroupBox::indicator:checked:hover {{
     background-color: #E06540;
 }}
 
-QCheckBox::indicator:disabled {{
-    background-color: {bg_disabled};
-    border-color: {border_disabled};
-}}
-
-QGroupBox::indicator {{
-    width: 18px;
-    height: 18px;
-    border: 2px solid {amber_accent};
-    border-radius: {r_xs}px;
-    background-color: {bg_tertiary};
-}}
-
-QGroupBox::indicator:hover {{
-    border-color: {amber_light};
-    background-color: {surface_hover};
-}}
-
-QGroupBox::indicator:checked {{
-    background-color: {coral_muted};
-    border-color: {amber_accent};
-    image: none;
-}}
-
-QGroupBox::indicator:checked:hover {{
-    background-color: #E06540;
-}}
-
-QGroupBox::indicator:disabled {{
+QCheckBox::indicator:disabled, QGroupBox::indicator:disabled {{
     background-color: {bg_disabled};
     border-color: {border_disabled};
 }}

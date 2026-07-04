@@ -6,10 +6,14 @@ import logging
 import sqlite3
 import threading
 import time
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+#: Acceptable SQLite parameter types (any sequence thereof).
+SqlParams = Sequence[str | int | float | bytes | None]
 
 INITIAL_SCHEMA = """
 CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);
@@ -68,7 +72,7 @@ class Database:
 
     # ── Thread-safe helpers ─────────────────────────────────────
 
-    def _execute(self, sql: str, params: tuple[Any, ...] = ()) -> sqlite3.Cursor:
+    def _execute(self, sql: str, params: SqlParams = ()) -> sqlite3.Cursor:
         """Execute SQL with lock for thread safety."""
         start = time.perf_counter()
         logger.debug("SQL: %s | params: %s", sql, params)
@@ -78,12 +82,12 @@ class Database:
             elapsed = time.perf_counter() - start
             logger.debug("SQL completed in %.3fs", elapsed)
             return cursor
-        except Exception as e:
+        except sqlite3.Error as e:
             elapsed = time.perf_counter() - start
             logger.error("SQL failed after %.3fs: %s | params: %s | error: %s", elapsed, sql, params, e)
             raise
 
-    def _executemany(self, sql: str, seq: list[tuple[Any, ...]]) -> None:
+    def _executemany(self, sql: str, seq: Sequence[SqlParams]) -> None:
         """Execute executemany with lock for thread safety."""
         start = time.perf_counter()
         logger.debug("SQL (many): %s | rows: %d", sql, len(seq))
@@ -92,7 +96,7 @@ class Database:
                 self._conn.executemany(sql, seq)
             elapsed = time.perf_counter() - start
             logger.debug("SQL (many) completed in %.3fs", elapsed)
-        except Exception as e:
+        except sqlite3.Error as e:
             elapsed = time.perf_counter() - start
             logger.error("SQL (many) failed after %.3fs: %s | rows: %d | error: %s", elapsed, sql, len(seq), e)
             raise
@@ -106,7 +110,7 @@ class Database:
                 self._conn.executescript(sql)
             elapsed = time.perf_counter() - start
             logger.debug("SQL (script) completed in %.3fs", elapsed)
-        except Exception as e:
+        except sqlite3.Error as e:
             elapsed = time.perf_counter() - start
             logger.error("SQL (script) failed after %.3fs: error: %s", elapsed, e)
             raise

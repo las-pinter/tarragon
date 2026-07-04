@@ -52,7 +52,7 @@ class QueryService:
             must have **all** of the specified tags.
         color_tags:
             Set of auto-color tag names.  **OR** semantics — a file needs
-            **any** of the specified colour tags.
+            **any** of the specified color tags.
 
         Returns
         -------

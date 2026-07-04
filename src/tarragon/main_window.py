@@ -27,10 +27,9 @@ from tarragon.services.settings_service import SettingsService
 from tarragon.services.tag_service import TagService
 from tarragon.services.thumbnail_service import ThumbnailService
 from tarragon.settings import Settings
-from tarragon.thumbnail import _cache_file_path
 from tarragon.widgets.color_filter_bar import ColorFilterBar
 from tarragon.widgets.gallery_tabs import GalleryTabs
-from tarragon.widgets.log_panel import LogPanel, QtLogHandler
+from tarragon.widgets.log_panel import LogPanel, QtLogHandler, apply_debug_level
 from tarragon.widgets.preview_panel import PreviewPanel
 from tarragon.widgets.tag_filter_bar import TagFilterBar
 from tarragon.widgets.thumbnail_grid import ThumbnailGrid
@@ -246,9 +245,7 @@ class MainWindow(QMainWindow):
         )
         root_logger = logging.getLogger()
         root_logger.addHandler(self._log_handler)
-        root_logger.setLevel(
-            logging.DEBUG if self._settings_service and self._settings_service.get_debug_mode() else logging.INFO
-        )
+        apply_debug_level(self._settings_service.get_debug_mode() if self._settings_service else False)
 
         # Wire gallery tabs scope to tag panel and re-run query
         # (signal connected above when _gallery_tabs was created)
@@ -417,7 +414,7 @@ class MainWindow(QMainWindow):
         """Execute a QueryService query combining all active filters.
 
         Combines the current folder scope, filename search text, active
-        colour-bucket set, and checked tag IDs into a single query, then
+        color-bucket set, and checked tag IDs into a single query, then
         updates the ThumbnailModel with the results.
 
         In global scope mode (gallery tabs set to All Images), the folder
@@ -544,8 +541,7 @@ class MainWindow(QMainWindow):
         if dialog.exec():
             # Settings were saved, apply changes
             # Update debug logging level
-            debug_mode = self._settings_service.get_debug_mode()
-            logging.getLogger().setLevel(logging.DEBUG if debug_mode else logging.INFO)
+            apply_debug_level(self._settings_service.get_debug_mode())
             # Apply cache dir change immediately
             new_cache = self._settings_service.get_cache_dir()
             set_cache_dir(Path(new_cache) if new_cache else None)

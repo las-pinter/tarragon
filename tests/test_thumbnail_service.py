@@ -96,9 +96,8 @@ class TestInstantiation:
         mock_get_executor.assert_called_once_with(max_workers=3)
 
     def test_signals_exist(self, service: ThumbnailService) -> None:
-        """ThumbnailService exposes the three required signals."""
+        """ThumbnailService exposes the required signals."""
         assert hasattr(service, "thumbnailReady")
-        assert hasattr(service, "thumbnailsUpdated")
         assert hasattr(service, "errorOccurred")
 
     def test_set_cache_format(self, service: ThumbnailService) -> None:
@@ -2134,9 +2133,7 @@ class TestThumbnailServiceEdgeCases:
         service: ThumbnailService,
     ) -> None:
         """Each signal is a distinct Qt signal object."""
-        assert service.thumbnailReady is not service.thumbnailsUpdated
         assert service.thumbnailReady is not service.errorOccurred
-        assert service.thumbnailsUpdated is not service.errorOccurred
 
     def test_cache_format_round_trip_changes(
         self,

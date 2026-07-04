@@ -295,10 +295,12 @@ class TagPanel(QWidget):
         if check_state == Qt.CheckState.PartiallyChecked:
             # User clicked on a PartiallyChecked checkbox → treat as Checked
             self._setting_checkboxes = True
-            checkbox = self._tag_checkboxes.get(tag_id)
-            if checkbox is not None:
-                checkbox.setCheckState(Qt.CheckState.Checked)
-            self._setting_checkboxes = False
+            try:
+                checkbox = self._tag_checkboxes.get(tag_id)
+                if checkbox is not None:
+                    checkbox.setCheckState(Qt.CheckState.Checked)
+            finally:
+                self._setting_checkboxes = False
             self.toggle_tag(tag_id, True)
         elif check_state == Qt.CheckState.Checked:
             self.toggle_tag(tag_id, True)
@@ -315,14 +317,16 @@ class TagPanel(QWidget):
         ``stateChanged`` handler does not treat these as user actions.
         """
         self._setting_checkboxes = True
-        for tag_id, checkbox in self._tag_checkboxes.items():
-            state = self._tag_service.resolve_tri_state(
-                self._selected_paths,
-                tag_id,
-                self._cached_file_tags,
-            )
-            checkbox.setCheckState(state)
-        self._setting_checkboxes = False
+        try:
+            for tag_id, checkbox in self._tag_checkboxes.items():
+                state = self._tag_service.resolve_tri_state(
+                    self._selected_paths,
+                    tag_id,
+                    self._cached_file_tags,
+                )
+                checkbox.setCheckState(state)
+        finally:
+            self._setting_checkboxes = False
 
     def _on_add_tag_clicked(self) -> None:
         """Create a new tag from the input text, then clear the input."""

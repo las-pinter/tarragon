@@ -66,7 +66,7 @@ Services sit between the UI widgets and the data layer, providing business logic
 
 `services/thumbnail_service.py` — Coordinates thumbnail generation, caching, and UI signal emission.
 
-- Inherits `QObject` to emit Qt signals (`thumbnailReady`, `thumbnailsUpdated`, `errorOccurred`).
+- Inherits `QObject` to emit Qt signals (`thumbnailReady`, `errorOccurred`).
 - Uses a `QThreadPool` for plain image renders (worker threads via `_RenderTask`).
 - Delegates PSD/PSB compositing to the module-level `ProcessPoolExecutor` (via `_RenderPSDTask`).
 - On render completion, persists thumbnail metadata to the database and optionally extracts color tags.

@@ -34,6 +34,9 @@ HEADING_SIZE: int = int(_typo["heading_size"])
 #: Small / caption text size in points.
 SMALL_SIZE: int = int(_typo["small_size"])
 
+#: Log / monospace text size in points.
+LOG_SIZE: int = int(_typo["log_size"])
+
 #: Regular font weight (400).
 WEIGHT_REGULAR: int = int(_typo["weight_regular"])
 
@@ -103,6 +106,7 @@ __all__ = [
     "BODY_SIZE",
     "FONT_FAMILY",
     "HEADING_SIZE",
+    "LOG_SIZE",
     "SMALL_SIZE",
     "WEIGHT_MEDIUM",
     "WEIGHT_REGULAR",

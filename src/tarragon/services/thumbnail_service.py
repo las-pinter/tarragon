@@ -34,9 +34,9 @@ class _RenderAllTask(QRunnable):
     def __init__(
         self,
         file_info: FileInfo,
-        on_done: Callable[..., Any],
         on_error: Callable[..., Any],
         render_func: Callable[..., Any],
+        on_done: Callable[..., Any] | None = None,
         cancel_event: threading.Event | None = None,
     ) -> None:
         super().__init__()
@@ -54,7 +54,8 @@ class _RenderAllTask(QRunnable):
             return
         try:
             self._render_func(self._file_info)
-            self._on_done(self._file_info)
+            if self._on_done is not None:
+                self._on_done(self._file_info)
         except Exception as exc:
             self._on_error(self._file_info, str(exc))
 
@@ -136,7 +137,6 @@ class ThumbnailService(QObject):
     """
 
     thumbnailReady = Signal(str, object, object, object)  # noqa: N815 — (path, image, resolution_size, cache_path)
-    thumbnailsUpdated = Signal(list)  # noqa: N815 — Qt signal follows camelCase convention
     errorOccurred = Signal(str, str)  # noqa: N815 — Qt signal follows camelCase convention
     tagsUpdated = Signal()  # noqa: N815 — emitted after auto-color tags are persisted
 
@@ -233,7 +233,6 @@ class ThumbnailService(QObject):
         # Cache miss or invalid — render all resolutions from source (async)
         task = _RenderAllTask(
             file_info=file_info,
-            on_done=self._on_render_all_done,
             on_error=self._on_error,
             render_func=self._render_all_resolutions,
             cancel_event=self._cancel_event,
@@ -243,11 +242,6 @@ class ThumbnailService(QObject):
         elapsed = time.perf_counter() - start
         logger.debug("check_and_render completed in %.3fs: status=queued", elapsed)
         return "queued"
-
-    def _on_render_all_done(self, file_info: FileInfo) -> None:
-        """Handle completion of multi-resolution render (called from main thread)."""
-        # Signal emission and DB upsert are handled inside _render_all_resolutions
-        pass
 
     def _emit_cached_thumbnails(self, file_info: FileInfo, cached: dict[str, Any]) -> None:
         """Emit thumbnailReady signals for all cached resolutions."""
@@ -296,7 +290,6 @@ class ThumbnailService(QObject):
             # No cached image available — render from source (async)
             task = _RenderAllTask(
                 file_info=file_info,
-                on_done=self._on_render_all_done,
                 on_error=self._on_error,
                 render_func=self._render_all_resolutions,
                 cancel_event=self._cancel_event,

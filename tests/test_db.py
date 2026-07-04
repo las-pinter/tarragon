@@ -267,6 +267,71 @@ class TestReplaceAutoColorTags:
         assert id_b in db.get_file_tag_ids("/clear.png")
 
 
+class TestDeleteTag:
+    def test_delete_tag_removes_tag(self, db: Database) -> None:
+        """delete_tag removes the tag from the tags table."""
+        tag_id = db.ensure_tag("deleteme")
+        db.delete_tag(tag_id)
+
+        # Verify tag is gone
+        row = db._conn.execute("SELECT * FROM tags WHERE id = ?", (tag_id,)).fetchone()
+        assert row is None
+
+    def test_delete_tag_cascades_to_file_tags(self, db: Database) -> None:
+        """Deleting a tag CASCADE-deletes all file-tag associations."""
+        tag_id = db.ensure_tag("cascade-test")
+        db.add_file_tags(["/a.png", "/b.png", "/c.png"], tag_id)
+
+        # Verify associations exist
+        assert db.get_file_tag_ids("/a.png") == {tag_id}
+        assert db.get_file_tag_ids("/b.png") == {tag_id}
+        assert db.get_file_tag_ids("/c.png") == {tag_id}
+
+        # Delete the tag
+        db.delete_tag(tag_id)
+
+        # All associations should be gone
+        assert db.get_file_tag_ids("/a.png") == set()
+        assert db.get_file_tag_ids("/b.png") == set()
+        assert db.get_file_tag_ids("/c.png") == set()
+
+    def test_delete_tag_nonexistent_does_not_error(self, db: Database) -> None:
+        """Deleting a non-existent tag silently succeeds."""
+        db.delete_tag(99999)  # Should not raise
+
+    def test_delete_tag_preserves_other_tags(self, db: Database) -> None:
+        """Deleting one tag does not affect other tags."""
+        id_keep = db.ensure_tag("keep")
+        id_delete = db.ensure_tag("delete")
+        db.add_file_tags(["/x.png"], id_keep)
+        db.add_file_tags(["/x.png"], id_delete)
+
+        db.delete_tag(id_delete)
+
+        # keep tag should still exist
+        assert db.get_file_tag_ids("/x.png") == {id_keep}
+        row = db._conn.execute("SELECT * FROM tags WHERE id = ?", (id_keep,)).fetchone()
+        assert row is not None
+
+
+class TestGetTagName:
+    def test_get_tag_name_returns_name(self, db: Database) -> None:
+        """get_tag_name returns the correct name for an existing tag."""
+        tag_id = db.ensure_tag("test-tag")
+        assert db.get_tag_name(tag_id) == "test-tag"
+
+    def test_get_tag_name_returns_none_for_missing(self, db: Database) -> None:
+        """get_tag_name returns None for a non-existent tag id."""
+        assert db.get_tag_name(99999) is None
+
+    def test_get_tag_name_multiple_tags(self, db: Database) -> None:
+        """get_tag_name returns correct names for different tags."""
+        id_a = db.ensure_tag("alpha")
+        id_b = db.ensure_tag("beta")
+        assert db.get_tag_name(id_a) == "alpha"
+        assert db.get_tag_name(id_b) == "beta"
+
+
 # ── Favorites CRUD ─────────────────────────────────────────────
 
 

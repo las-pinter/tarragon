@@ -52,6 +52,18 @@ class TagService(QObject):
             self._db.remove_file_tags(paths, tag_id)
         self.tagsChanged.emit()
 
+    def delete_tag(self, tag_id: int) -> None:
+        """Delete a tag and emit tagsChanged signal.
+
+        The underlying database CASCADE-deletes all file-tag associations.
+        """
+        self._db.delete_tag(tag_id)
+        self.tagsChanged.emit()
+
+    def get_tag_name(self, tag_id: int) -> str | None:
+        """Get tag name by ID. Returns None if the tag does not exist."""
+        return self._db.get_tag_name(tag_id)
+
     # ── Queries ─────────────────────────────────────────────────────────────
 
     def get_tags_for_file(self, path: str) -> list[dict[str, Any]]:

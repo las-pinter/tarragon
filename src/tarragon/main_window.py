@@ -415,10 +415,10 @@ class MainWindow(QMainWindow):
         self._filter_state.tag_ids = set(tag_ids)
         self._run_filtered_query()
 
-    def _on_folder_filter_changed(self, folder_path: str) -> None:
-        """Re-run the filtered query when the folder dropdown selection changes."""
-        logger.debug("Folder filter changed: %s", folder_path)
-        self._filter_state.folder_filter = folder_path
+    def _on_folder_filter_changed(self, folder_paths: set[str]) -> None:
+        """Re-run the filtered query when the folder chip selection changes."""
+        logger.debug("Folder filter changed: %s", folder_paths)
+        self._filter_state.folder_filters = set(folder_paths)
         self._run_filtered_query()
 
     def _on_scope_changed(self, is_global: bool) -> None:  # noqa: FBT001
@@ -462,27 +462,27 @@ class MainWindow(QMainWindow):
         if not self._current_folder and not is_global:
             return
 
-        # In global mode, use the folder filter dropdown selection (may be "" for all)
+        # In global mode, use the folder filter dropdown selection (may be empty set for all)
         # In local mode, use the currently navigated folder
         if is_global:
-            folder_path = self._filter_state.folder_filter
+            folder_filters = self._filter_state.folder_filters
         else:
-            folder_path = self._current_folder
+            folder_filters = {self._current_folder} if self._current_folder else set()
 
         filename_filter = self._filter_state.filename_filter
         color_tags = self._filter_state.color_tags
         tag_ids = self._filter_state.tag_ids
 
         results = self._query_service.query(
-            folder_path=folder_path,
+            folder_filters=folder_filters,
             filename_filter=filename_filter,
             tag_ids=tag_ids,
             color_tags=color_tags,
         )
         elapsed = time.perf_counter() - start
         logger.debug(
-            "Filtered query: folder=%s, filename=%r, colors=%s, tags=%s → %d results in %.3fs",
-            folder_path,
+            "Filtered query: folders=%s, filename=%r, colors=%s, tags=%s → %d results in %.3fs",
+            folder_filters,
             filename_filter,
             color_tags,
             tag_ids,

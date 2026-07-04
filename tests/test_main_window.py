@@ -451,17 +451,17 @@ def test_folder_filter_in_global_mode(qapp: Any) -> None:  # noqa: ARG001
         assert window.thumbnail_model.rowCount() == 3
 
         # Set folder filter to /folder_a
-        window._filter_state.folder_filter = "/folder_a"
+        window._filter_state.folder_filters = {"/folder_a"}
         window._run_filtered_query()
         assert window.thumbnail_model.rowCount() == 2
 
         # Set folder filter to /folder_b
-        window._filter_state.folder_filter = "/folder_b"
+        window._filter_state.folder_filters = {"/folder_b"}
         window._run_filtered_query()
         assert window.thumbnail_model.rowCount() == 1
 
         # Clear folder filter (back to all)
-        window._filter_state.folder_filter = ""
+        window._filter_state.folder_filters = set()
         window._run_filtered_query()
         assert window.thumbnail_model.rowCount() == 3
     finally:
@@ -496,11 +496,11 @@ def test_filter_bar_replaces_separate_bars(qapp: Any) -> None:  # noqa: ARG001
         window.close()
 
 
-def test_scope_change_shows_folder_combo(qapp: Any) -> None:  # noqa: ARG001
-    """Switching to global mode shows the folder dropdown in the FilterBar."""
+def test_scope_change_shows_folder_button(qapp: Any) -> None:  # noqa: ARG001
+    """Switching to global mode shows the Add Folder+ button in the FilterBar."""
     from pathlib import Path
 
-    from PySide6.QtWidgets import QComboBox
+    from PySide6.QtWidgets import QPushButton
 
     from tarragon.db import Database
     from tarragon.services.tag_service import TagService
@@ -512,20 +512,21 @@ def test_scope_change_shows_folder_combo(qapp: Any) -> None:  # noqa: ARG001
         tag_service = TagService(db=db)
         window.setup_widgets(db, tag_service)
 
-        # Find the combo box in the filter bar
-        combos = window.filter_bar.findChildren(QComboBox)
-        assert len(combos) == 1
-        combo = combos[0]
+        # Find the Add Folder+ button in the filter bar
+        btns = window.filter_bar.findChildren(QPushButton)
+        folder_btns = [b for b in btns if b.text() == "Add Folder+"]
+        assert len(folder_btns) == 1
+        folder_btn = folder_btns[0]
 
         # Initially hidden (local mode)
-        assert combo.isHidden()
+        assert folder_btn.isHidden()
 
         # Switch to global mode
         window._gallery_tabs._tab_widget.setCurrentIndex(1)
-        assert not combo.isHidden()
+        assert not folder_btn.isHidden()
 
         # Switch back to local mode
         window._gallery_tabs._tab_widget.setCurrentIndex(0)
-        assert combo.isHidden()
+        assert folder_btn.isHidden()
     finally:
         window.close()

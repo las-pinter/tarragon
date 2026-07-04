@@ -328,3 +328,69 @@ class TestGetAllTagsScoped:
 
         tags = service.get_all_tags(folder_path="")
         assert tags[0]["usage_count"] == 1
+
+
+# =========================================================================
+# delete_tag
+# =========================================================================
+
+
+class TestDeleteTag:
+    """delete_tag — removes tag and emits tagsChanged."""
+
+    def test_delete_tag_removes_tag(self, service: TagService) -> None:
+        """delete_tag removes the tag from the database."""
+        tag_id = service.get_or_create_tag("deleteme")
+        service.delete_tag(tag_id)
+
+        all_tags = service.get_all_tags()
+        assert all(t["id"] != tag_id for t in all_tags)
+
+    def test_delete_tag_emits_tags_changed(self, service: TagService) -> None:
+        """delete_tag emits the tagsChanged signal."""
+        tag_id = service.get_or_create_tag("signal-test")
+
+        emitted: list[bool] = []
+        service.tagsChanged.connect(lambda: emitted.append(True))
+
+        service.delete_tag(tag_id)
+        assert len(emitted) == 1
+
+    def test_delete_tag_cascades_to_file_associations(
+        self, service: TagService
+    ) -> None:
+        """Deleting a tag removes it from all files (CASCADE)."""
+        tag_id = service.get_or_create_tag("cascade")
+        service.add_tags_to_files(["/a.png", "/b.png"], ["cascade"])
+
+        # Verify tags exist on files
+        assert any(t["name"] == "cascade" for t in service.get_tags_for_file("/a.png"))
+
+        service.delete_tag(tag_id)
+
+        # Tag should be gone from all files
+        assert not any(t["name"] == "cascade" for t in service.get_tags_for_file("/a.png"))
+        assert not any(t["name"] == "cascade" for t in service.get_tags_for_file("/b.png"))
+
+
+# =========================================================================
+# get_tag_name
+# =========================================================================
+
+
+class TestGetTagName:
+    """get_tag_name — retrieve tag name by ID."""
+
+    def test_get_tag_name_returns_name(self, service: TagService) -> None:
+        """get_tag_name returns the correct name for an existing tag."""
+        tag_id = service.get_or_create_tag("my-tag")
+        assert service.get_tag_name(tag_id) == "my-tag"
+
+    def test_get_tag_name_returns_none_for_missing(self, service: TagService) -> None:
+        """get_tag_name returns None for a non-existent tag id."""
+        assert service.get_tag_name(99999) is None
+
+    def test_get_tag_name_color_tag(self, service: TagService) -> None:
+        """get_tag_name works for color tags too."""
+        tag_id = service.get_or_create_tag("color:red")
+        assert service.get_tag_name(tag_id) == "color:red"

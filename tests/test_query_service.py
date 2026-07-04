@@ -110,7 +110,7 @@ class TestQueryService:
         tag_ids: dict[str, int],  # noqa: ARG002
     ) -> None:
         """No filters at all — returns every path under the folder."""
-        result = service.query("/test/photos/")
+        result = service.query(folder_filters={"/test/photos/"})
 
         assert len(result) == 6
         paths = {str(p) for p in result}
@@ -127,7 +127,7 @@ class TestQueryService:
         tag_ids: dict[str, int],  # noqa: ARG002
     ) -> None:
         """Results are ordered alphabetically by path."""
-        result = service.query("/test/photos/")
+        result = service.query(folder_filters={"/test/photos/"})
         path_strs = [str(p) for p in result]
         assert path_strs == sorted(path_strs)
 
@@ -137,7 +137,7 @@ class TestQueryService:
         tag_ids: dict[str, int],  # noqa: ARG002
     ) -> None:
         """Filename filter returns only paths whose basename contains the string."""
-        result = service.query("/test/photos/", filename_filter="beach")
+        result = service.query(folder_filters={"/test/photos/"}, filename_filter="beach")
 
         paths = {str(p) for p in result}
         assert paths == {"/test/photos/sunset_beach.png"}
@@ -148,7 +148,7 @@ class TestQueryService:
         tag_ids: dict[str, int],  # noqa: ARG002
     ) -> None:
         """Filename matching is case-insensitive (ASCII)."""
-        result = service.query("/test/photos/", filename_filter="BEACH")
+        result = service.query(folder_filters={"/test/photos/"}, filename_filter="BEACH")
 
         paths = {str(p) for p in result}
         assert paths == {"/test/photos/sunset_beach.png"}
@@ -160,13 +160,13 @@ class TestQueryService:
     ) -> None:
         """Percent and underscore in the filter string are safely escaped."""
         # These special chars should be treated as literals, not LIKE wildcards
-        result = service.query("/test/photos/", filename_filter="%_")
+        result = service.query(folder_filters={"/test/photos/"}, filename_filter="%_")
 
         # No path contains the literal string "%_" so result should be empty
         assert result == []
 
         # Also test that a path containing these chars won't match accidentally
-        result2 = service.query("/test/photos/", filename_filter="do_")
+        result2 = service.query(folder_filters={"/test/photos/"}, filename_filter="do_")
         # "doc.txt" — the '_' should be literal, so "do_" won't match "doc.txt"
         # 'c' != '_', so no match
         assert result2 == []
@@ -174,7 +174,7 @@ class TestQueryService:
     def test_tag_filter_requires_all_tags(self, service: QueryService, tag_ids: dict[str, int]) -> None:
         """AND semantics: file must have ALL specified tags."""
         result = service.query(
-            "/test/photos/",
+            folder_filters={"/test/photos/"},
             tag_ids={tag_ids["beach"], tag_ids["vacation"]},
         )
 
@@ -189,16 +189,16 @@ class TestQueryService:
         """Tag filter that matches nothing returns an empty list."""
         # Combine two tags that never appear together
         result = service.query(
-            "/test/photos/",
+            folder_filters={"/test/photos/"},
             tag_ids={tag_ids["beach"], tag_ids["nature"]},
         )
 
         assert result == []
 
-    def test_color_tag_or_semantics(self, service: QueryService, tag_ids: dict[str, int]) -> None:
-        """OR semantics: file with ANY of the specified colour tags matches."""
+    def test_color_tag_and_semantics_single(self, service: QueryService, tag_ids: dict[str, int]) -> None:
+        """Single colour tag: files with that tag match."""
         result = service.query(
-            "/test/photos/",
+            folder_filters={"/test/photos/"},
             color_tags={"green"},
         )
 
@@ -209,30 +209,27 @@ class TestQueryService:
             "/test/photos/green_valley.png",
         }
 
-    def test_color_tag_or_semantics_multiple(self, service: QueryService, tag_ids: dict[str, int]) -> None:
-        """Multiple colour tags: any match suffices."""
+    def test_color_tag_and_semantics_multiple(self, service: QueryService, tag_ids: dict[str, int]) -> None:
+        """AND semantics: file must have ALL specified colour tags."""
         result = service.query(
-            "/test/photos/",
+            folder_filters={"/test/photos/"},
             color_tags={"green", "blue"},
         )
 
         paths = {str(p) for p in result}
+        # No file has BOTH green AND blue colour tags
         # green → forest_path.jpg, green_valley.png
         # blue  → blue_ocean.jpg, mountain_top.jpg
-        assert paths == {
-            "/test/photos/forest_path.jpg",
-            "/test/photos/green_valley.png",
-            "/test/photos/blue_ocean.jpg",
-            "/test/photos/mountain_top.jpg",
-        }
+        # Intersection: empty
+        assert paths == set()
 
     def test_tag_and_color_combined(self, service: QueryService, tag_ids: dict[str, int]) -> None:
         """Both tag AND colour filters applied together (AND between groups).
 
-        File must have ALL manual tags AND ANY of the colour tags.
+        File must have ALL manual tags AND ALL of the colour tags.
         """
         result = service.query(
-            "/test/photos/",
+            folder_filters={"/test/photos/"},
             tag_ids={tag_ids["nature"]},
             color_tags={"green"},
         )
@@ -250,8 +247,8 @@ class TestQueryService:
         service: QueryService,
         tag_ids: dict[str, int],  # noqa: ARG002
     ) -> None:
-        """Empty folder_path queries the entire database (global mode)."""
-        result = service.query("")
+        """Empty folder_filters queries the entire database (global mode)."""
+        result = service.query()
         # Should return all 7 thumbnails across both folders
         assert len(result) == 7
 
@@ -261,7 +258,7 @@ class TestQueryService:
         tag_ids: dict[str, int],  # noqa: ARG002
     ) -> None:
         """Non-existent folder returns an empty list."""
-        result = service.query("/nonexistent/")
+        result = service.query(folder_filters={"/nonexistent/"})
         assert result == []
 
     def test_empty_tag_ids_set_ignored(
@@ -270,7 +267,7 @@ class TestQueryService:
         tag_ids: dict[str, int],  # noqa: ARG002
     ) -> None:
         """Empty tag_ids set is treated as no tag filter (returns all)."""
-        result = service.query("/test/photos/", tag_ids=set())
+        result = service.query(folder_filters={"/test/photos/"}, tag_ids=set())
         assert len(result) == 6
 
     def test_empty_color_tags_set_ignored(
@@ -279,18 +276,18 @@ class TestQueryService:
         tag_ids: dict[str, int],  # noqa: ARG002
     ) -> None:
         """Empty color_tags set is treated as no color filter (returns all)."""
-        result = service.query("/test/photos/", color_tags=set())
+        result = service.query(folder_filters={"/test/photos/"}, color_tags=set())
         assert len(result) == 6
 
-    # ── Bug 1: Global query (empty folder_path) ────────────────────────
+    # ── Bug 1: Global query (empty folder_filters) ────────────────────
 
     def test_global_query_returns_all_thumbnails(
         self,
         service: QueryService,
         tag_ids: dict[str, int],  # noqa: ARG002
     ) -> None:
-        """Empty folder_path queries the entire database (global mode)."""
-        result = service.query("")
+        """Empty folder_filters queries the entire database (global mode)."""
+        result = service.query()
         # 6 in /test/photos/ + 1 in /test/other/ = 7 total
         assert len(result) == 7
 
@@ -300,7 +297,7 @@ class TestQueryService:
         tag_ids: dict[str, int],
     ) -> None:
         """Global query with tag filter returns matches from all folders."""
-        result = service.query("", tag_ids={tag_ids["beach"]})
+        result = service.query(folder_filters=set(), tag_ids={tag_ids["beach"]})
         paths = {str(p) for p in result}
         # beach tag: sunset_beach.png, blue_ocean.jpg (photos) + beach.png (other)
         assert paths == {
@@ -315,7 +312,7 @@ class TestQueryService:
         tag_ids: dict[str, int],  # noqa: ARG002
     ) -> None:
         """Global query with color filter returns matches from all folders."""
-        result = service.query("", color_tags={"warm"})
+        result = service.query(folder_filters=set(), color_tags={"warm"})
         paths = {str(p) for p in result}
         # warm: sunset_beach.png (photos) + beach.png (other)
         assert paths == {
@@ -329,9 +326,40 @@ class TestQueryService:
         tag_ids: dict[str, int],  # noqa: ARG002
     ) -> None:
         """Global query with filename filter works across all folders."""
-        result = service.query("", filename_filter="beach")
+        result = service.query(folder_filters=set(), filename_filter="beach")
         paths = {str(p) for p in result}
         assert paths == {
             "/test/photos/sunset_beach.png",
             "/test/other/beach.png",
         }
+
+    # ── Multi-folder OR logic ─────────────────────────────────────────
+
+    def test_multi_folder_or_logic(
+        self,
+        service: QueryService,
+        tag_ids: dict[str, int],  # noqa: ARG002
+    ) -> None:
+        """Multiple folders: thumbnails from ANY of the folders are returned (OR)."""
+        result = service.query(folder_filters={"/test/photos/", "/test/other/"})
+        # All 7 thumbnails across both folders
+        assert len(result) == 7
+
+    def test_multi_folder_or_with_partial_match(
+        self,
+        service: QueryService,
+        tag_ids: dict[str, int],  # noqa: ARG002
+    ) -> None:
+        """Multiple folders where only some match — returns union of matches."""
+        result = service.query(folder_filters={"/test/photos/", "/nonexistent/"})
+        # Only /test/photos/ matches (6 thumbnails)
+        assert len(result) == 6
+
+    def test_empty_folder_filters_returns_all(
+        self,
+        service: QueryService,
+        tag_ids: dict[str, int],  # noqa: ARG002
+    ) -> None:
+        """Empty folder_filters set means no folder constraint (global mode)."""
+        result = service.query(folder_filters=set())
+        assert len(result) == 7

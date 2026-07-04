@@ -442,3 +442,164 @@ class TestSetGlobalScope:
         labels = panel.findChildren(QLabel)
         label_texts = [label.text() for label in labels]
         assert any("beach (2)" in t for t in label_texts)
+
+
+# =========================================================================
+# TestContextMenu
+# =========================================================================
+
+
+class TestContextMenu:
+    """Context menu — right-click delete functionality."""
+
+    def test_context_menu_helper_get_tag_id(
+        self, service: TagService, panel: TagPanel
+    ) -> None:
+        """_get_tag_id_from_widget extracts tag_id from checkbox."""
+        tag_id = service.get_or_create_tag("test-tag")
+        panel._refresh_tags()
+
+        # Find the checkbox for our tag
+        checkbox = panel._tag_checkboxes[tag_id]
+
+        # Should extract tag_id from checkbox itself
+        assert panel._get_tag_id_from_widget(checkbox) == tag_id
+
+        # Should extract tag_id from parent row widget
+        row = checkbox.parentWidget()
+        assert panel._get_tag_id_from_widget(row) == tag_id
+
+    def test_context_menu_helper_get_tag_id_none(
+        self, panel: TagPanel
+    ) -> None:
+        """_get_tag_id_from_widget returns None for widgets without tag_id."""
+        # Header label has no tag_id
+        labels = panel.findChildren(QLabel)
+        header_label = next((l for l in labels if l.text() == "Tags"), None)
+        assert header_label is not None
+        assert panel._get_tag_id_from_widget(header_label) is None
+
+        # None input
+        assert panel._get_tag_id_from_widget(None) is None
+
+    def test_is_color_tag_true(
+        self, service: TagService, panel: TagPanel
+    ) -> None:
+        """_is_color_tag returns True for color tags."""
+        tag_id = service.get_or_create_tag("color:red")
+        assert panel._is_color_tag(tag_id) is True
+
+    def test_is_color_tag_false(
+        self, service: TagService, panel: TagPanel
+    ) -> None:
+        """_is_color_tag returns False for regular tags."""
+        tag_id = service.get_or_create_tag("regular-tag")
+        assert panel._is_color_tag(tag_id) is False
+
+    def test_is_color_tag_missing(
+        self, panel: TagPanel
+    ) -> None:
+        """_is_color_tag returns False for non-existent tag."""
+        assert panel._is_color_tag(99999) is False
+
+    def test_confirm_and_delete_tag_confirmed(
+        self, service: TagService, panel: TagPanel, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """_confirm_and_delete_tag deletes when user confirms."""
+        tag_id = service.get_or_create_tag("delete-me")
+
+        # Mock QMessageBox.question to return Yes
+        from PySide6.QtWidgets import QMessageBox
+
+        monkeypatch.setattr(
+            QMessageBox,
+            "question",
+            lambda *args, **kwargs: QMessageBox.StandardButton.Yes,
+        )
+
+        panel._confirm_and_delete_tag(tag_id)
+
+        # Tag should be deleted
+        assert service.get_tag_name(tag_id) is None
+
+    def test_confirm_and_delete_tag_cancelled(
+        self, service: TagService, panel: TagPanel, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """_confirm_and_delete_tag does not delete when user cancels."""
+        tag_id = service.get_or_create_tag("keep-me")
+
+        # Mock QMessageBox.question to return No
+        from PySide6.QtWidgets import QMessageBox
+
+        monkeypatch.setattr(
+            QMessageBox,
+            "question",
+            lambda *args, **kwargs: QMessageBox.StandardButton.No,
+        )
+
+        panel._confirm_and_delete_tag(tag_id)
+
+        # Tag should still exist
+        assert service.get_tag_name(tag_id) == "keep-me"
+
+    def test_confirm_and_delete_tag_missing(
+        self, panel: TagPanel, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """_confirm_and_delete_tag handles missing tag gracefully."""
+        # Should not raise even if tag doesn't exist
+        panel._confirm_and_delete_tag(99999)
+
+    def test_context_menu_blocks_color_tags(
+        self, service: TagService, panel: TagPanel, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Context menu does not show delete for color tags."""
+        tag_id = service.get_or_create_tag("color:blue")
+        panel._refresh_tags()
+
+        # Track if _confirm_and_delete_tag is called
+        called: list[bool] = []
+        monkeypatch.setattr(
+            panel,
+            "_confirm_and_delete_tag",
+            lambda tid: called.append(True),
+        )
+
+        # Simulate context menu event on color tag checkbox
+        checkbox = panel._tag_checkboxes[tag_id]
+        from PySide6.QtCore import QPoint
+        from PySide6.QtGui import QContextMenuEvent
+
+        # Map checkbox position to panel coordinates
+        viewport = panel._scroll_area.viewport()
+        checkbox_in_viewport = checkbox.mapTo(viewport, QPoint(0, 0))
+        panel_pos = panel.mapFrom(viewport, checkbox_in_viewport)
+        event = QContextMenuEvent(
+            QContextMenuEvent.Reason.Mouse,
+            panel_pos,
+        )
+
+        panel.contextMenuEvent(event)
+
+        # Should not have called delete for color tag
+        assert len(called) == 0
+
+    def test_context_menu_allows_custom_tags(
+        self, service: TagService, panel: TagPanel, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Context menu allows delete for custom (non-color) tags."""
+        tag_id = service.get_or_create_tag("custom-tag")
+        panel._refresh_tags()
+
+        # Verify the helper methods work correctly for custom tags
+        checkbox = panel._tag_checkboxes[tag_id]
+
+        # _get_tag_id_from_widget should find the tag_id
+        found_id = panel._get_tag_id_from_widget(checkbox)
+        assert found_id == tag_id
+
+        # _is_color_tag should return False for custom tags
+        assert panel._is_color_tag(tag_id) is False
+
+        # Verify the tag can be deleted via the service
+        service.delete_tag(tag_id)
+        assert service.get_tag_name(tag_id) is None

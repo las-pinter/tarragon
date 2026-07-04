@@ -1,7 +1,8 @@
 """Query service — SQL filter composition for thumbnail queries.
 
-Combines filename text search, tag ID filters (AND semantics), and
-color tag filters (OR semantics) into a single parameterized query.
+Combines filename text search, tag ID filters (AND semantics),
+color tag filters (AND semantics), and folder filters (OR semantics)
+into a single parameterized query.
 """
 
 from __future__ import annotations
@@ -30,7 +31,7 @@ class QueryService:
 
     def query(
         self,
-        folder_path: str,
+        folder_filters: set[str] | None = None,
         filename_filter: str = "",
         tag_ids: set[int] | None = None,
         color_tags: set[str] | None = None,
@@ -39,10 +40,11 @@ class QueryService:
 
         Parameters
         ----------
-        folder_path:
-            Root folder to scope the query.  Only thumbnails whose path
-            starts with this string are considered.  When empty or ``None``,
-            the query spans the **entire database** (global mode).
+        folder_filters:
+            Set of folder paths to scope the query.  Thumbnails whose path
+            starts with **any** of these strings are included (OR semantics).
+            When empty or ``None``, the query spans the **entire database**
+            (global mode).
         filename_filter:
             If non-empty, only paths whose **filename** (basename) contains
             this string (case-insensitive) are returned.  The special LIKE
@@ -51,8 +53,8 @@ class QueryService:
             Set of manual tag IDs to require.  **AND** semantics — a file
             must have **all** of the specified tags.
         color_tags:
-            Set of auto-color tag names.  **OR** semantics — a file needs
-            **any** of the specified color tags.
+            Set of auto-color tag names.  **AND** semantics — a file must
+            have **all** of the specified color tags.
 
         Returns
         -------
@@ -60,9 +62,10 @@ class QueryService:
             Matching paths ordered alphabetically.
         """
         start = time.perf_counter()
+        folder_filters = folder_filters or set()
         logger.debug(
-            "Query start: folder=%s, filename_filter=%s, color_tags=%s, tag_ids=%s",
-            folder_path, filename_filter, color_tags, tag_ids,
+            "Query start: folders=%s, filename_filter=%s, color_tags=%s, tag_ids=%s",
+            folder_filters, filename_filter, color_tags, tag_ids,
         )
         tag_ids = tag_ids or set()
         color_tags = color_tags or set()
@@ -71,9 +74,12 @@ class QueryService:
         params: list[Any] = []
 
         # ── Folder scope (empty = global / entire DB) ──────────────
-        if folder_path:
-            conditions.append("path LIKE ?")
-            params.append(f"{folder_path}%")
+        if folder_filters:
+            folder_conds: list[str] = []
+            for folder in sorted(folder_filters):
+                folder_conds.append("path LIKE ?")
+                params.append(f"{folder}%")
+            conditions.append(f"({' OR '.join(folder_conds)})")
 
         # ── Filename filter (applied to basename via %/%) ──────────
         if filename_filter:
@@ -95,17 +101,20 @@ class QueryService:
             params.extend(sorted(tag_ids))
             params.append(len(tag_ids))
 
-        # ── Color tag filter (OR semantics) ────────────────────────
+        # ── Color tag filter (AND semantics) ───────────────────────
         if color_tags:
             placeholders = ",".join("?" * len(color_tags))
             conditions.append(
                 "path IN ("
                 "SELECT ft.path FROM file_tags ft "
                 "JOIN tags t ON t.id = ft.tag_id "
-                f"WHERE t.name IN ({placeholders})"
+                f"WHERE t.name IN ({placeholders}) "
+                "GROUP BY ft.path "
+                "HAVING COUNT(DISTINCT t.name) = ?"
                 ")"
             )
             params.extend(sorted(color_tags))
+            params.append(len(color_tags))
 
         if conditions:
             sql = f"SELECT path FROM thumbnails WHERE {' AND '.join(conditions)} ORDER BY path"

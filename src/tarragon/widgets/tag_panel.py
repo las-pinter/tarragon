@@ -14,11 +14,14 @@ from __future__ import annotations
 from typing import Any
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QContextMenuEvent
 from PySide6.QtWidgets import (
     QCheckBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QMenu,
+    QMessageBox,
     QPushButton,
     QScrollArea,
     QVBoxLayout,
@@ -335,3 +338,75 @@ class TagPanel(QWidget):
         if name:
             self.create_new_tag(name)
             self._tag_input.clear()
+
+    # ── Context menu (tag deletion) ──────────────────────────────
+
+    def contextMenuEvent(self, event: QContextMenuEvent) -> None:  # noqa: N802
+        """Show a context menu with 'Delete' for custom (non-color) tags."""
+        # Map event position to scroll area viewport coordinates
+        viewport = self._scroll_area.viewport()
+        viewport_pos = viewport.mapFrom(self, event.pos())
+        widget = viewport.childAt(viewport_pos)
+        tag_id = self._get_tag_id_from_widget(widget)
+
+        if tag_id is None:
+            return
+
+        if self._is_color_tag(tag_id):
+            return
+
+        menu = QMenu(self)
+        delete_action = menu.addAction("Delete")
+
+        action = menu.exec(event.globalPos())
+        if action == delete_action:
+            self._confirm_and_delete_tag(tag_id)
+
+    def _get_tag_id_from_widget(self, widget: QWidget | None) -> int | None:
+        """Walk up the parent chain from *widget* to find a tag_id property.
+
+        The tag_id is stored as a dynamic property on the ``QCheckBox``
+        inside each tag row.  This method traverses upward from the
+        clicked widget (which may be the checkbox, label, or swatch)
+        until it finds a sibling/child checkbox with a ``tag_id``.
+        """
+        if widget is None:
+            return None
+
+        # Walk up the parent chain looking for a QCheckBox with tag_id
+        current: QWidget | None = widget
+        while current is not None and current is not self:
+            if isinstance(current, QCheckBox):
+                tag_id = current.property("tag_id")
+                if tag_id is not None:
+                    return int(tag_id)
+            # Check children of the current widget for a checkbox with tag_id
+            for child in current.findChildren(QCheckBox):
+                tag_id = child.property("tag_id")
+                if tag_id is not None:
+                    return int(tag_id)
+            current = current.parentWidget()
+        return None
+
+    def _is_color_tag(self, tag_id: int) -> bool:
+        """Return True if the tag is a color tag (name starts with 'color:')."""
+        tag_name = self._tag_service.get_tag_name(tag_id)
+        if tag_name is None:
+            return False
+        return tag_name.startswith("color:")
+
+    def _confirm_and_delete_tag(self, tag_id: int) -> None:
+        """Show a confirmation dialog and delete the tag if confirmed."""
+        tag_name = self._tag_service.get_tag_name(tag_id)
+        if tag_name is None:
+            return
+
+        reply = QMessageBox.question(
+            self,
+            "Delete Tag",
+            f"Delete tag '{tag_name}'?\n\nThis will remove the tag from all images.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            self._tag_service.delete_tag(tag_id)

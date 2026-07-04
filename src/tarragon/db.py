@@ -246,6 +246,24 @@ class Database:
         cursor = self._execute("SELECT tag_id FROM file_tags WHERE path = ?", (path,))
         return {row["tag_id"] for row in cursor.fetchall()}
 
+    def delete_tag(self, tag_id: int) -> None:
+        """Delete a tag from the database. Also removes all file-tag associations.
+
+        Manually deletes file_tags rows since SQLite requires
+        ``PRAGMA foreign_keys = ON`` for CASCADE to take effect, and
+        Tarragon does not enable that pragma globally.
+        """
+        logger.debug("delete_tag: tag_id=%d", tag_id)
+        self._execute("DELETE FROM file_tags WHERE tag_id = ?", (tag_id,))
+        self._execute("DELETE FROM tags WHERE id = ?", (tag_id,))
+        self._commit()
+
+    def get_tag_name(self, tag_id: int) -> str | None:
+        """Return the name of a tag by its id, or None if not found."""
+        logger.debug("get_tag_name: tag_id=%d", tag_id)
+        row = self._execute("SELECT name FROM tags WHERE id = ?", (tag_id,)).fetchone()
+        return row["name"] if row else None
+
     def replace_auto_color_tags(self, path: str, tags: list[str]) -> None:
         """Delete old auto_color tags for a path and insert new ones."""
         logger.debug("replace_auto_color_tags: path=%s, tags=%d", path, len(tags))

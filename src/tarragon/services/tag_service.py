@@ -71,14 +71,7 @@ class TagService(QObject):
 
         Each entry: ``{"id": int, "name": str, "source": str}``.
         """
-        rows = self._db._execute(
-            """SELECT t.id, t.name, ft.source
-               FROM tags t
-               JOIN file_tags ft ON ft.tag_id = t.id
-               WHERE ft.path = ?""",
-            (path,),
-        ).fetchall()
-        return [{"id": row["id"], "name": row["name"], "source": row["source"]} for row in rows]
+        return self._db.get_tags_for_file(path)
 
     def get_file_tag_ids_batch(self, paths: list[str]) -> dict[str, set[int]]:
         """Fetch tag IDs for multiple paths in a single query.
@@ -89,20 +82,7 @@ class TagService(QObject):
             Mapping of path → set of tag_ids.  Paths with no tags map to
             an empty set.
         """
-        if not paths:
-            return {}
-
-        placeholders = ", ".join("?" * len(paths))
-        rows = self._db._execute(
-            f"SELECT path, tag_id FROM file_tags WHERE path IN ({placeholders})",
-            tuple(paths),
-        ).fetchall()
-
-        result: dict[str, set[int]] = {path: set() for path in paths}
-        for row in rows:
-            result[row["path"]].add(row["tag_id"])
-
-        return result
+        return self._db.get_file_tag_ids_batch(paths)
 
     def resolve_tri_state(
         self,
@@ -154,22 +134,4 @@ class TagService(QObject):
             whose path starts with *folder_path* (local mode).  When ``None``
             or empty, counts span the entire database (global mode).
         """
-        if folder_path:
-            rows = self._db._execute(
-                """SELECT t.id, t.name, COUNT(ft.path) AS usage_count
-                   FROM tags t
-                   LEFT JOIN file_tags ft ON ft.tag_id = t.id
-                     AND ft.path LIKE ?
-                   GROUP BY t.id, t.name
-                   ORDER BY t.name""",
-                (f"{folder_path}%",),
-            ).fetchall()
-        else:
-            rows = self._db._execute(
-                """SELECT t.id, t.name, COUNT(ft.path) AS usage_count
-                   FROM tags t
-                   LEFT JOIN file_tags ft ON ft.tag_id = t.id
-                   GROUP BY t.id, t.name
-                   ORDER BY t.name""",
-            ).fetchall()
-        return [{"id": row["id"], "name": row["name"], "usage_count": row["usage_count"]} for row in rows]
+        return self._db.get_all_tags_with_counts(folder_path)

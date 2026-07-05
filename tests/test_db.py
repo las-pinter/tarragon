@@ -155,6 +155,15 @@ class TestThumbnailListForFolder:
         result = db.list_thumbnails_for_folder("/nonexistent/folder/")
         assert result == []
 
+    def test_does_not_match_sibling_folder_with_shared_prefix(self, db: Database) -> None:
+        """Querying '/photos' must NOT match '/photos-vacation/img.png'."""
+        db.upsert_thumbnail("/photos/img.png", mtime=1, size=100, width=10, height=10, cache_uuid="u1")
+        db.upsert_thumbnail("/photos-vacation/img.png", mtime=2, size=200, width=10, height=10, cache_uuid="u2")
+
+        results = db.list_thumbnails_for_folder("/photos")
+        paths = {r["path"] for r in results}
+        assert paths == {"/photos/img.png"}
+
 
 # ── Tag CRUD ───────────────────────────────────────────────────
 

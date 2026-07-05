@@ -385,8 +385,7 @@ class TestRefreshFolders:
         assert len(bar._selected_folders) == 2
 
         # Remove vacation from DB
-        db._execute("DELETE FROM thumbnails WHERE path LIKE '/photos/vacation/%'")
-        db._commit()
+        db.delete_thumbnails_by_folder("/photos/vacation")
 
         bar.refresh_folders()
 

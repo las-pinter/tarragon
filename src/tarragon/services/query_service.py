@@ -78,7 +78,7 @@ class QueryService:
             folder_conds: list[str] = []
             for folder in sorted(folder_filters):
                 folder_conds.append("path LIKE ?")
-                params.append(f"{folder}%")
+                params.append(f"{folder.rstrip('/')}/%")
             conditions.append(f"({' OR '.join(folder_conds)})")
 
         # ── Filename filter (applied to basename via %/%) ──────────
@@ -121,7 +121,7 @@ class QueryService:
         else:
             sql = "SELECT path FROM thumbnails ORDER BY path"
 
-        rows = self._db._execute(sql, tuple(params)).fetchall()
+        rows = self._db.fetch_all(sql, tuple(params))
         elapsed = time.perf_counter() - start
         results = [Path(row["path"]) for row in rows]
         logger.debug("Query returned %d results in %.3fs", len(results), elapsed)

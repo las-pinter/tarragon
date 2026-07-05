@@ -120,6 +120,27 @@ class Database:
         with self._lock:
             self._conn.commit()
 
+    # ── Generic query executor ────────────────────────────────────
+
+    def fetch_all(self, sql: str, params: SqlParams = ()) -> list[dict[str, Any]]:
+        """Execute a SQL query and return all rows as a list of dicts.
+
+        Parameters
+        ----------
+        sql:
+            Parameterized SQL query string.
+        params:
+            Query parameters.
+
+        Returns
+        -------
+        list[dict[str, Any]]
+            List of row dicts (column_name → value).
+        """
+        logger.debug("fetch_all: %s | params: %s", sql, params)
+        cursor = self._execute(sql, params)
+        return [_row_to_dict(row) for row in cursor.fetchall()]
+
     # ── Lifecycle ────────────────────────────────────────────────
 
     def init_schema(self) -> None:
@@ -207,8 +228,24 @@ class Database:
     def list_thumbnails_for_folder(self, folder_path: str) -> list[dict[str, Any]]:
         """List all thumbnail records whose path starts with folder_path."""
         logger.debug("list_thumbnails_for_folder: folder_path=%s", folder_path)
-        cursor = self._execute("SELECT * FROM thumbnails WHERE path LIKE ?", (f"{folder_path}%",))
+        cursor = self._execute("SELECT * FROM thumbnails WHERE path LIKE ?", (f"{folder_path.rstrip('/')}/%",))
         return [_row_to_dict(row) for row in cursor.fetchall()]
+
+    def delete_thumbnails_by_folder(self, folder_path: str) -> None:
+        """Remove all thumbnail records whose path starts with *folder_path*.
+
+        Parameters
+        ----------
+        folder_path:
+            Folder path prefix.  All thumbnails whose path begins with
+            this value (followed by ``/``) are deleted.
+        """
+        logger.debug("delete_thumbnails_by_folder: folder_path=%s", folder_path)
+        self._execute(
+            "DELETE FROM thumbnails WHERE path LIKE ?",
+            (f"{folder_path.rstrip('/')}/%",),
+        )
+        self._commit()
 
     # ── Tag CRUD ─────────────────────────────────────────────────
 
@@ -245,6 +282,59 @@ class Database:
         logger.debug("get_file_tag_ids: path=%s", path)
         cursor = self._execute("SELECT tag_id FROM file_tags WHERE path = ?", (path,))
         return {row["tag_id"] for row in cursor.fetchall()}
+
+    def get_tags_for_file(self, path: str) -> list[dict[str, Any]]:
+        """Return all tags attached to a specific file.
+
+        Parameters
+        ----------
+        path:
+            The file path to look up tags for.
+
+        Returns
+        -------
+        list[dict[str, Any]]
+            List of dicts with keys: ``id``, ``name``, ``source``.
+        """
+        logger.debug("get_tags_for_file: path=%s", path)
+        return self.fetch_all(
+            """SELECT t.id, t.name, ft.source
+               FROM tags t
+               JOIN file_tags ft ON ft.tag_id = t.id
+               WHERE ft.path = ?""",
+            (path,),
+        )
+
+    def get_file_tag_ids_batch(self, paths: list[str]) -> dict[str, set[int]]:
+        """Batch lookup of tag IDs for multiple file paths.
+
+        More efficient than calling :meth:`get_file_tag_ids` in a loop.
+
+        Parameters
+        ----------
+        paths:
+            List of file paths to look up.
+
+        Returns
+        -------
+        dict[str, set[int]]
+            Mapping of path → set of tag_ids.  Paths with no tags map
+            to an empty set.
+        """
+        logger.debug("get_file_tag_ids_batch: %d paths", len(paths))
+        if not paths:
+            return {}
+
+        placeholders = ", ".join("?" * len(paths))
+        rows = self.fetch_all(
+            f"SELECT path, tag_id FROM file_tags WHERE path IN ({placeholders})",
+            tuple(paths),
+        )
+
+        result: dict[str, set[int]] = {path: set() for path in paths}
+        for row in rows:
+            result[row["path"]].add(row["tag_id"])
+        return result
 
     def delete_tag(self, tag_id: int) -> None:
         """Delete a tag from the database. Also removes all file-tag associations.
@@ -285,6 +375,41 @@ class Database:
                 [(path, tid, "auto_color") for tid in tag_ids],
             )
         self._commit()
+
+    def get_all_tags_with_counts(self, folder_path: str | None = None) -> list[dict[str, Any]]:
+        """Return all tags with their usage counts.
+
+        Parameters
+        ----------
+        folder_path:
+            When provided and non-empty, usage counts are scoped to files
+            whose path starts with *folder_path* (local mode).  When ``None``
+            or empty, counts span the entire database (global mode).
+
+        Returns
+        -------
+        list[dict[str, Any]]
+            List of dicts with keys: ``id``, ``name``, ``usage_count``.
+            Ordered alphabetically by name.
+        """
+        logger.debug("get_all_tags_with_counts: folder_path=%s", folder_path)
+        if folder_path:
+            return self.fetch_all(
+                """SELECT t.id, t.name, COUNT(ft.path) AS usage_count
+                   FROM tags t
+                   LEFT JOIN file_tags ft ON ft.tag_id = t.id
+                     AND ft.path LIKE ?
+                   GROUP BY t.id, t.name
+                   ORDER BY t.name""",
+                (f"{folder_path.rstrip('/')}/%",),
+            )
+        return self.fetch_all(
+            """SELECT t.id, t.name, COUNT(ft.path) AS usage_count
+               FROM tags t
+               LEFT JOIN file_tags ft ON ft.tag_id = t.id
+               GROUP BY t.id, t.name
+               ORDER BY t.name""",
+        )
 
     # ── Favorites CRUD ───────────────────────────────────────────
 

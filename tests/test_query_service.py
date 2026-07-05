@@ -363,3 +363,18 @@ class TestQueryService:
         """Empty folder_filters set means no folder constraint (global mode)."""
         result = service.query(folder_filters=set())
         assert len(result) == 7
+
+    # ── Folder prefix collision ───────────────────────────────────────
+
+    def test_folder_filter_does_not_match_sibling_with_shared_prefix(
+        self,
+        db: Database,
+    ) -> None:
+        """Folder filter '/photos' must NOT match '/photos-vacation/img.png'."""
+        svc = QueryService(db)
+        db.upsert_thumbnail("/photos/img.png", mtime=1, size=100, width=10, height=10, cache_uuid="p1")
+        db.upsert_thumbnail("/photos-vacation/img.png", mtime=2, size=200, width=10, height=10, cache_uuid="p2")
+
+        result = svc.query(folder_filters={"/photos"})
+        paths = {str(p) for p in result}
+        assert paths == {"/photos/img.png"}

@@ -5,12 +5,11 @@ WAAAGH! Wrenchbasha's torture chamber for da TagService!
 
 from __future__ import annotations
 
-from collections.abc import Generator
 from pathlib import Path
 
 import pytest
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QApplication
+
 from tarragon.db import Database
 from tarragon.services.tag_service import TagService
 
@@ -170,11 +169,7 @@ class TestGetTagsForFile:
 
         # Manually add an auto_color tag to check source preservation
         tag_id = service.get_or_create_tag("auto_tag")
-        service._db._execute(
-            "INSERT INTO file_tags (path, tag_id, source) VALUES (?, ?, ?)",
-            ("/img/a.png", tag_id, "auto_color"),
-        )
-        service._db._commit()
+        service._db.add_file_tags(["/img/a.png"], tag_id, source="auto_color")
 
         tags = service.get_tags_for_file("/img/a.png")
         sources = {t["source"] for t in tags}
@@ -327,6 +322,16 @@ class TestGetAllTagsScoped:
         service._db.add_file_tags(["/a/1.png"], tag_id)
 
         tags = service.get_all_tags(folder_path="")
+        assert tags[0]["usage_count"] == 1
+
+    def test_folder_path_does_not_match_sibling_with_shared_prefix(
+        self, service: TagService
+    ) -> None:
+        """folder_path='/photos' must NOT count files in '/photos-vacation/'."""
+        tag_id = service.get_or_create_tag("beach")
+        service._db.add_file_tags(["/photos/img.png", "/photos-vacation/img.png"], tag_id)
+
+        tags = service.get_all_tags(folder_path="/photos")
         assert tags[0]["usage_count"] == 1
 
 

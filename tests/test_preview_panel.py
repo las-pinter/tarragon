@@ -1547,7 +1547,7 @@ def test_clear_resets_tag_state(qapp: Any) -> None:  # noqa: ARG001
 
 
 def test_tri_state_full_opacity_when_all_files_have_tag(qapp: Any) -> None:  # noqa: ARG001
-    """Tag pill has full opacity when all selected files have the tag."""
+    """Tag pill has full opacity (no effect) when all selected files have the tag."""
     panel = PreviewPanel()
     try:
         paths = ["/img1.jpg", "/img2.jpg"]
@@ -1556,14 +1556,16 @@ def test_tri_state_full_opacity_when_all_files_have_tag(qapp: Any) -> None:  # n
         panel._selected_paths = paths
 
         pill = panel._create_tag_pill({"id": 1, "name": "shared", "source": "user"})
-        # No opacity stylesheet = full opacity
-        assert pill.styleSheet() == ""
+        # No opacity effect = full opacity
+        assert pill.graphicsEffect() is None
     finally:
         panel.close()
 
 
 def test_tri_state_half_opacity_when_some_files_have_tag(qapp: Any) -> None:  # noqa: ARG001
-    """Tag pill has half opacity when only some selected files have the tag."""
+    """Tag pill has 0.5 opacity effect when only some selected files have the tag."""
+    from PySide6.QtWidgets import QGraphicsOpacityEffect
+
     panel = PreviewPanel()
     try:
         paths = ["/img1.jpg", "/img2.jpg"]
@@ -1572,13 +1574,17 @@ def test_tri_state_half_opacity_when_some_files_have_tag(qapp: Any) -> None:  # 
         panel._selected_paths = paths
 
         pill = panel._create_tag_pill({"id": 1, "name": "partial", "source": "user"})
-        assert "opacity: 0.5" in pill.styleSheet()
+        effect = pill.graphicsEffect()
+        assert isinstance(effect, QGraphicsOpacityEffect)
+        assert abs(effect.opacity() - 0.5) < 0.01
     finally:
         panel.close()
 
 
 def test_tri_state_low_opacity_when_no_files_have_tag(qapp: Any) -> None:  # noqa: ARG001
-    """Tag pill has low opacity when no selected files have the tag."""
+    """Tag pill has 0.3 opacity effect when no selected files have the tag."""
+    from PySide6.QtWidgets import QGraphicsOpacityEffect
+
     panel = PreviewPanel()
     try:
         paths = ["/img1.jpg", "/img2.jpg"]
@@ -1586,7 +1592,9 @@ def test_tri_state_low_opacity_when_no_files_have_tag(qapp: Any) -> None:  # noq
         panel._selected_paths = paths
 
         pill = panel._create_tag_pill({"id": 1, "name": "absent", "source": "user"})
-        assert "opacity: 0.3" in pill.styleSheet()
+        effect = pill.graphicsEffect()
+        assert isinstance(effect, QGraphicsOpacityEffect)
+        assert abs(effect.opacity() - 0.3) < 0.01
     finally:
         panel.close()
 
@@ -1600,8 +1608,8 @@ def test_tri_state_not_applied_for_single_selection(qapp: Any) -> None:  # noqa:
         panel._selected_paths = paths
 
         pill = panel._create_tag_pill({"id": 1, "name": "tag", "source": "user"})
-        # No opacity for single selection
-        assert pill.styleSheet() == ""
+        # No opacity effect for single selection
+        assert pill.graphicsEffect() is None
     finally:
         panel.close()
 
@@ -1935,5 +1943,23 @@ def test_tags_container_geometry_updates_on_clear(qapp: Any) -> None:  # noqa: A
 
         # Container should still have its minimum height (not collapsed)
         assert panel._tags_container.minimumHeight() > 0
+    finally:
+        panel.close()
+
+
+# ── Regression: Add Tag button full width ─────────────────────────────
+
+
+def test_add_tag_button_has_maximum_size_policy(qapp: Any) -> None:  # noqa: ARG001
+    """The '+ add' tag button uses Maximum size policy so it doesn't stretch.
+
+    Regression test: the button had no size constraint, causing it to expand
+    to fill the full width of the preview panel layout.
+    """
+    panel = PreviewPanel()
+    try:
+        policy = panel._add_tag_btn.sizePolicy()
+        assert policy.horizontalPolicy() == QSizePolicy.Policy.Maximum
+        assert policy.verticalPolicy() == QSizePolicy.Policy.Fixed
     finally:
         panel.close()

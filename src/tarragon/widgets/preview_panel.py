@@ -11,6 +11,7 @@ from PIL import Image, ImageOps
 from PySide6.QtCore import QRect, QSize, Qt, Signal
 from PySide6.QtGui import QImage, QPixmap, QResizeEvent
 from PySide6.QtWidgets import (
+    QGraphicsOpacityEffect,
     QGridLayout,
     QLabel,
     QLayout,
@@ -308,8 +309,9 @@ class PreviewPanel(QWidget):
 
         self._add_tag_btn = QPushButton("+ add")
         self._add_tag_btn.setObjectName("previewAddTagBtn")
+        self._add_tag_btn.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
         self._add_tag_btn.clicked.connect(self._on_add_tag_clicked)
-        layout.addWidget(self._add_tag_btn)
+        layout.addWidget(self._add_tag_btn, alignment=Qt.AlignmentFlag.AlignLeft)
 
         # Internal tracking for tag pill widgets
         self._tag_pills: list[QLabel] = []
@@ -669,10 +671,15 @@ class PreviewPanel(QWidget):
                 )
                 total = len(self._selected_paths)
                 if files_with_tag == 0:
-                    pill.setStyleSheet("opacity: 0.3;")
+                    effect = QGraphicsOpacityEffect(pill)
+                    effect.setOpacity(0.3)
+                    pill.setGraphicsEffect(effect)
                 elif files_with_tag < total:
-                    pill.setStyleSheet("opacity: 0.5;")
-                # else: full opacity (all files have tag) — default QSS
+                    effect = QGraphicsOpacityEffect(pill)
+                    effect.setOpacity(0.5)
+                    pill.setGraphicsEffect(effect)
+                else:
+                    pill.setGraphicsEffect(None)
 
         pill.setCursor(Qt.CursorShape.PointingHandCursor)
         pill.mousePressEvent = lambda _e, t=tag: self._on_tag_pill_clicked(t)  # type: ignore[assignment]

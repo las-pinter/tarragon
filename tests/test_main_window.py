@@ -285,11 +285,17 @@ def test_has_filters_includes_tag_filters(qapp: Any) -> None:  # noqa: ARG001
         window.close()
 
 
-# ── Bug 2 Regression: Race condition fallback ──────────────────────────
+# ── Bug 2 Regression: Race condition fallback removed ─────────────────
 
 
-def test_race_condition_fallback_when_filtered_empty(qapp: Any) -> None:  # noqa: ARG001
-    """If filtered query returns empty but thumbnails exist, fall back to unfiltered."""
+def test_filtered_query_returns_empty_when_no_match(qapp: Any) -> None:  # noqa: ARG001
+    """If filtered query returns empty, gallery shows 0 results (no fallback).
+
+    Previously a race-condition guard would fall back to showing all
+    unfiltered thumbnails when filters returned 0 results.  This made
+    filters appear broken.  The guard has been removed so that 0 filter
+    results correctly shows an empty gallery.
+    """
     from pathlib import Path
 
     from tarragon.db import Database
@@ -314,11 +320,10 @@ def test_race_condition_fallback_when_filtered_empty(qapp: Any) -> None:  # noqa
         window.tag_filter_bar._refresh_tags()
         window.tag_filter_bar._toggle_tag(tag_id)
 
-        # Filtered query should return empty, but fallback should show all thumbnails
+        # Filtered query should return 0 results — no fallback to unfiltered
         window._run_filtered_query()
 
-        # Should fall back to showing all thumbnails in the folder
-        assert window.thumbnail_model.rowCount() == 2
+        assert window.thumbnail_model.rowCount() == 0
     finally:
         window.close()
 

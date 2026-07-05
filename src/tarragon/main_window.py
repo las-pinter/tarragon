@@ -502,10 +502,6 @@ class MainWindow(QMainWindow):
         If no folder is currently selected (``_current_folder`` is empty)
         and we are NOT in global mode, the method returns without modifying
         the model to avoid clearing the gallery.
-
-        Race-condition guard: if the filtered query returns empty but the
-        folder contains files, we fall back to showing unfiltered results
-        and log a warning.
         """
         if not hasattr(self, "_query_service"):
             return
@@ -546,20 +542,6 @@ class MainWindow(QMainWindow):
             len(results),
             elapsed,
         )
-
-        # Race-condition guard: if filters are active but query returned empty,
-        # and we know files exist in the folder, fall back to unfiltered results
-        has_filters = bool(filename_filter or color_tags or tag_ids)
-        if has_filters and not results and self._current_folder:
-            thumbnails_in_folder = self._db.list_thumbnails_for_folder(self._current_folder)
-            if thumbnails_in_folder:
-                logger.warning(
-                    "Filtered query returned 0 results but %d thumbnails exist in %s — "
-                    "falling back to unfiltered results (possible race condition)",
-                    len(thumbnails_in_folder),
-                    self._current_folder,
-                )
-                results = [Path(t["path"]) for t in thumbnails_in_folder]
 
         self.thumbnail_model.set_paths(results)
 

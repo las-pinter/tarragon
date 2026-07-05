@@ -39,6 +39,12 @@ SURFACE_HOVER: QColor = QColor(_colors["surface_hover"])
 TEXT_PRIMARY: QColor = QColor(_colors["text_primary"])
 TEXT_SECONDARY: QColor = QColor(_colors["text_secondary"])
 TEXT_TERTIARY: QColor = QColor(_colors["text_tertiary"])
+TEXT_MUTED: QColor = QColor(_colors["text_muted"])
+
+# ── Border colors ────────────────────────────────────────────────────────────
+BORDER_SUBTLE: QColor = QColor(_colors["border_subtle"])
+BORDER_CARD: QColor = QColor(_colors["border_card"])
+BORDER_INTERACTIVE: QColor = QColor(_colors["border_interactive"])
 
 # ── Misc colors ──────────────────────────────────────────────────────────────
 BG_DISABLED: QColor = QColor(_colors["bg_disabled"])
@@ -56,7 +62,10 @@ __all__ = [
     "BG_PRIMARY",
     "BG_SECONDARY",
     "BG_TERTIARY",
+    "BORDER_CARD",
     "BORDER_DISABLED",
+    "BORDER_INTERACTIVE",
+    "BORDER_SUBTLE",
     "CORAL_DARK",
     "CORAL_MUTED",
     "CORAL_STRONG",
@@ -64,6 +73,7 @@ __all__ = [
     "SEPARATOR",
     "SURFACE_HIGHLIGHT",
     "SURFACE_HOVER",
+    "TEXT_MUTED",
     "TEXT_PRIMARY",
     "TEXT_SECONDARY",
     "TEXT_TERTIARY",

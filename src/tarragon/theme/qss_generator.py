@@ -95,6 +95,7 @@ def generate_qss(tokens: dict[str, Any]) -> str:
     r_sm = int(r["sm"])
     r_md = int(r["md"])
     r_lg = int(r["lg"])
+    r_xl = int(r["xl"])
 
     # Color shortcuts for readability.
     bg_primary = c["bg_primary"]
@@ -110,6 +111,9 @@ def generate_qss(tokens: dict[str, Any]) -> str:
     amber_dark = c["amber_dark"]
     text_primary = c["text_primary"]
     text_secondary = c["text_secondary"]
+    text_muted = c["text_muted"]
+    text_tertiary = c["text_tertiary"]
+    border_interactive = c["border_interactive"]
     bg_disabled = c["bg_disabled"]
     border_disabled = c["border_disabled"]
     bg_log_panel = c["bg_log_panel"]
@@ -191,7 +195,7 @@ QLabel[tagRole="primary"] {{
     background-color: {coral_dark};  /* dark tinted bg */
     color: {coral_strong};  /* coral text */
     padding: {xs - 1}px {sm}px;
-    border-radius: {r_lg}px;
+    border-radius: {r_xl}px;
     font-size: {small_px}px;
 }}
 
@@ -199,19 +203,19 @@ QLabel[tagRole="secondary"] {{
     background-color: {amber_dark};  /* dark tinted bg */
     color: {amber_accent};  /* amber text */
     padding: {xs - 1}px {sm}px;
-    border-radius: {r_lg}px;
+    border-radius: {r_xl}px;
     font-size: {small_px}px;
 }}
 
 /* ── Line edits (search boxes, text input) ──────────────────────── */
 QLineEdit {{
-    background-color: {bg_tertiary};
+    background-color: {bg_secondary};
     color: {text_primary};
     font-family: {ui_font};
-    font-size: {body_px}px;
+    font-size: 11px;
     border: none;
-    border-radius: {r_sm}px;
-    padding-left: {sm}px;
+    border-radius: {r_md}px;
+    padding-left: 28px;
     padding-right: {sm}px;
     padding-top: {xs}px;
     padding-bottom: {xs}px;
@@ -305,6 +309,57 @@ QTreeView::item:hover {{
 QListView::item:selected,
 QTreeView::item:selected {{
     background-color: {coral_muted};
+    color: {text_primary};
+}}
+
+/* ── Sidebar section headers ────────────────────────────────────── */
+QLabel#sidebarSectionHeader {{
+    color: {text_muted};
+    font-size: 11px;
+    margin: 0px 6px 6px 6px;
+}}
+
+/* ── Sidebar favorites list ─────────────────────────────────────── */
+QListView#sidebarFavorites {{
+    background-color: transparent;
+    color: {text_secondary};
+    font-size: {body_px}px;
+}}
+
+QListView#sidebarFavorites::item {{
+    padding: 5px 6px;
+    border-radius: {r_md}px;
+    color: {text_secondary};
+}}
+
+QListView#sidebarFavorites::item:hover {{
+    background-color: {surface_hover};
+    color: {text_primary};
+}}
+
+QListView#sidebarFavorites::item:selected {{
+    background-color: {bg_tertiary};
+    color: {text_primary};
+}}
+
+/* ── Sidebar folder tree ────────────────────────────────────────── */
+QTreeView#sidebarFolderTree {{
+    background-color: transparent;
+    color: {text_secondary};
+    font-size: {body_px}px;
+}}
+
+QTreeView#sidebarFolderTree::item {{
+    color: {text_secondary};
+}}
+
+QTreeView#sidebarFolderTree::item:hover {{
+    background-color: {surface_hover};
+    color: {text_primary};
+}}
+
+QTreeView#sidebarFolderTree::item:selected {{
+    background-color: {bg_tertiary};
     color: {text_primary};
 }}
 
@@ -430,6 +485,52 @@ QTabBar::tab:selected {{
 QTabBar::tab:hover {{
     background-color: {surface_highlight};
     color: {amber_accent};
+}}
+
+/* ── Gallery info bar ────────────────────────────────────────────── */
+QLabel#galleryInfoLabel {{
+    color: {text_muted};
+    font-size: 11px;
+}}
+
+QLabel#galleryActiveFiltersPill {{
+    background-color: {amber_dark};
+    color: {amber_accent};
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 11px;
+}}
+
+/* ── Preview panel section headers ────────────────────────────────── */
+QLabel#previewSectionHeader {{
+    color: {text_muted};
+    font-size: 11px;
+}}
+
+/* ── Preview panel metadata ───────────────────────────────────────── */
+QLabel#previewMetaLabel {{
+    color: {text_muted};
+    font-size: 11px;
+}}
+
+QLabel#previewMetaValue {{
+    color: {text_tertiary};
+    font-size: 11px;
+}}
+
+/* ── Preview panel add-tag button ─────────────────────────────────── */
+QPushButton#previewAddTagBtn {{
+    background-color: transparent;
+    color: {text_muted};
+    border: 1px solid {border_interactive};
+    border-radius: {r_xl}px;
+    padding: 3px 8px;
+    font-size: 11px;
+}}
+
+QPushButton#previewAddTagBtn:hover {{
+    background-color: {surface_highlight};
+    color: {text_secondary};
 }}
 """
 

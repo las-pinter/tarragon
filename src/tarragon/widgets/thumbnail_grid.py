@@ -17,7 +17,16 @@ from PySide6.QtCore import (
     QTimer,
     Signal,
 )
-from PySide6.QtGui import QAction, QContextMenuEvent, QHelpEvent, QMouseEvent, QPainter, QPen, QPixmap
+from PySide6.QtGui import (
+    QAction,
+    QContextMenuEvent,
+    QHelpEvent,
+    QMouseEvent,
+    QPainter,
+    QPainterPath,
+    QPen,
+    QPixmap,
+)
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QListView,
@@ -33,9 +42,11 @@ from tarragon.models.thumbnail_model import ThumbnailModel
 from tarragon.theme.colors import (
     BG_PRIMARY,
     BG_SECONDARY,
-    CORAL_STRONG,
-    TEXT_PRIMARY,
+    BORDER_SUBTLE,
+    CORAL_MUTED,
+    TEXT_MUTED,
 )
+from tarragon.theme.file_type_badge import get_badge_colors
 from tarragon.theme.tokens import get_token
 from tarragon.theme.typography import SMALL_SIZE
 
@@ -45,14 +56,18 @@ THUMBNAIL_SIZE: int = get_token("layout", "thumbnail_size")
 # breathing room around hover-scaled thumbnails (test enforces >= 12px).
 GRID_GAP: int = 14
 
-# ── PSD badge layout constants ────────────────────────────────────────────────
-PSD_BADGE_RIGHT_OFFSET = 30
-PSD_BADGE_TOP_OFFSET = 4
-PSD_BADGE_WIDTH = 26
-PSD_BADGE_HEIGHT = 14
+# ── File extension badge layout constants ─────────────────────────────────────
+BADGE_MARGIN = 4  # offset from top-left corner of thumbnail image
+BADGE_PAD_X = 5  # horizontal padding inside badge
+BADGE_PAD_Y = 1  # vertical padding inside badge
+BADGE_RADIUS = 4  # border-radius for badge rounded rect
+BADGE_FONT_SIZE = 9  # badge font size in points
 
 # ── Text area height in grid cell sizeHint ────────────────────────────────────
 TEXT_AREA_HEIGHT = 24
+
+# ── Thumbnail border-radius (from mockup spec) ────────────────────────────────
+THUMBNAIL_RADIUS = 8
 
 # Animation tokens (from tokens.json motion values)
 HOVER_SCALE_TARGET = 1.02
@@ -249,7 +264,7 @@ class ThumbnailDelegate(QStyledItemDelegate):
         option: QStyleOptionViewItem,
         index: QModelIndex | QPersistentModelIndex,
     ) -> None:
-        """Paint the thumbnail cell: background, image, name, PSD badge, selection border."""
+        """Paint the thumbnail cell: background, image, name, extension badge, selection border."""
         row = index.row()
         painter.save()
 
@@ -273,9 +288,21 @@ class ThumbnailDelegate(QStyledItemDelegate):
         is_hovered = row == self._hovered_row
         is_selected = bool(option.state & QStyle.StateFlag.State_Selected)
 
-        container_rect = option.rect.adjusted(
-            HOVER_MARGIN, HOVER_MARGIN, -HOVER_MARGIN, -HOVER_MARGIN
+        container_rect = option.rect.adjusted(HOVER_MARGIN, HOVER_MARGIN, -HOVER_MARGIN, -HOVER_MARGIN)
+
+        # Build rounded-rect path for clipping (8px border-radius)
+        clip_path = QPainterPath()
+        clip_path.addRoundedRect(
+            float(container_rect.x()),
+            float(container_rect.y()),
+            float(container_rect.width()),
+            float(container_rect.height()),
+            float(THUMBNAIL_RADIUS),
+            float(THUMBNAIL_RADIUS),
         )
+
+        # Clip to rounded rect so background + image respect border-radius
+        painter.setClipPath(clip_path)
 
         if is_selected:
             painter.fillRect(container_rect, BG_SECONDARY)
@@ -316,9 +343,12 @@ class ThumbnailDelegate(QStyledItemDelegate):
             y_offset = image_rect.y() + (image_size - scaled.height()) // 2
             painter.drawPixmap(x_offset, y_offset, scaled)
 
+        # Reset clipping so borders and text aren't clipped to rounded rect
+        painter.setClipping(False)
+
         # ── File basename text ───────────────────────────────────────
         name = index.data(Qt.ItemDataRole.DisplayRole) or ""
-        painter.setPen(TEXT_PRIMARY)
+        painter.setPen(TEXT_MUTED)
         font = painter.font()
         font.setPointSize(SMALL_SIZE)
         painter.setFont(font)
@@ -336,32 +366,64 @@ class ThumbnailDelegate(QStyledItemDelegate):
             elided_name,
         )
 
-        # ── PSD/PSB badge ────────────────────────────────────────────
+        # ── File extension badge (top-left corner) ───────────────────
         path_str = index.data(ThumbnailModel.PathRole) or ""
-        if path_str.lower().endswith((".psd", ".psb")):
-            badge_rect = QRect(
-                image_rect.right() - PSD_BADGE_RIGHT_OFFSET,
-                image_rect.top() + PSD_BADGE_TOP_OFFSET,
-                PSD_BADGE_WIDTH,
-                PSD_BADGE_HEIGHT,
-            )
-            painter.fillRect(badge_rect, CORAL_STRONG)
-            painter.setPen(Qt.GlobalColor.white)
-            small_font = painter.font()
-            # PSD badge: intentionally 7pt — too small for any design token
-            small_font.setPointSize(7)
-            small_font.setBold(True)
-            painter.setFont(small_font)
-            ext = path_str.rsplit(".", 1)[-1].upper()  # "PSD" or "PSB"
-            painter.drawText(badge_rect, Qt.AlignmentFlag.AlignCenter, ext)
+        if path_str:
+            ext = path_str.rsplit(".", 1)[-1] if "." in path_str else ""
+            if ext:
+                bg_color, text_color = get_badge_colors(ext)
+                badge_text = ext.upper()
 
-        # ── Selection border (coral_strong, 1.5px) ───────────────────
+                # Set up badge font: 9px bold
+                badge_font = painter.font()
+                badge_font.setPointSize(BADGE_FONT_SIZE)
+                badge_font.setBold(True)
+                painter.setFont(badge_font)
+
+                # Measure text and compute badge rect with padding
+                fm = painter.fontMetrics()
+                text_width = fm.horizontalAdvance(badge_text)
+                text_height = fm.height()
+
+                badge_w = text_width + BADGE_PAD_X * 2
+                badge_h = text_height + BADGE_PAD_Y * 2
+
+                # Position: top-LEFT corner of image_rect
+                badge_x = image_rect.left() + BADGE_MARGIN
+                badge_y = image_rect.top() + BADGE_MARGIN
+                badge_rect = QRect(badge_x, badge_y, badge_w, badge_h)
+
+                # Draw rounded background
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.setBrush(bg_color)
+                painter.drawRoundedRect(
+                    badge_rect,
+                    float(BADGE_RADIUS),
+                    float(BADGE_RADIUS),
+                )
+
+                # Draw extension text centered in badge
+                painter.setPen(text_color)
+                painter.drawText(
+                    badge_rect,
+                    Qt.AlignmentFlag.AlignCenter,
+                    badge_text,
+                )
+
+        # ── Borders (rounded, 8px radius) ────────────────────────────
+        border_rect = container_rect.adjusted(1, 1, -1, -1)
         if is_selected:
-            pen = QPen(CORAL_STRONG, 1.5)
+            # Selection border: 1.5px CORAL_MUTED
+            pen = QPen(CORAL_MUTED, 1.5)
             painter.setPen(pen)
             painter.setBrush(Qt.BrushStyle.NoBrush)
-            border_rect = container_rect.adjusted(1, 1, -1, -1)
-            painter.drawRect(border_rect)
+            painter.drawRoundedRect(border_rect, THUMBNAIL_RADIUS, THUMBNAIL_RADIUS)
+        else:
+            # Unselected border: 1px BORDER_SUBTLE
+            pen = QPen(BORDER_SUBTLE, 1.0)
+            painter.setPen(pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRoundedRect(container_rect, THUMBNAIL_RADIUS, THUMBNAIL_RADIUS)
 
         painter.restore()
 

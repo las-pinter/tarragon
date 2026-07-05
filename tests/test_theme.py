@@ -55,8 +55,12 @@ def test_tokens_colors_section() -> None:
         "text_primary",
         "text_secondary",
         "text_tertiary",
+        "text_muted",
         "bg_disabled",
         "border_disabled",
+        "border_subtle",
+        "border_card",
+        "border_interactive",
         "bg_log_panel",
         "highlight_disabled",
         "separator",
@@ -96,12 +100,12 @@ def test_tokens_spacing_section() -> None:
 
 
 def test_tokens_radius_section() -> None:
-    """The radius section contains none, sm, md, lg."""
+    """The radius section contains none, xs, sm, md, lg, xl."""
     from tarragon.theme.tokens import load_tokens
 
     tokens = load_tokens()
     radii = tokens["radius"]
-    for key in ("none", "sm", "md", "lg"):
+    for key in ("none", "xs", "sm", "md", "lg", "xl"):
         assert key in radii, f"Missing radius token: {key}"
 
 

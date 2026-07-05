@@ -8,7 +8,7 @@ from pathlib import Path
 
 from PIL import Image
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QAction
+from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import (
     QApplication,
     QDockWidget,
@@ -29,6 +29,7 @@ from tarragon.services.tag_service import TagService
 from tarragon.services.thumbnail_service import ThumbnailService
 from tarragon.settings import Settings
 from tarragon.widgets.filter_bar import FilterBar
+from tarragon.widgets.gallery_info_bar import GalleryInfoBar
 from tarragon.widgets.gallery_tabs import GalleryTabs
 from tarragon.widgets.log_panel import LogPanel, QtLogHandler, apply_debug_level
 from tarragon.widgets.preview_panel import PreviewPanel
@@ -203,9 +204,18 @@ class MainWindow(QMainWindow):
 
         # ── Search box (Deviation 4.5) ─────────────────────────────────
         self._search_edit = QLineEdit()
-        self._search_edit.setPlaceholderText("Search filenames…")
+        self._search_edit.setObjectName("searchEdit")
+        self._search_edit.setPlaceholderText("Search files and tags")
         self._search_edit.setClearButtonEnabled(True)
         self._search_edit.textChanged.connect(self._on_search_text_changed)
+
+        # Search icon on the left side (Tabler-style magnifying glass)
+        _search_icon_path = str(
+            Path(__file__).parent / "theme" / "icons" / "search.svg"
+        )
+        search_action = QAction(self._search_edit)
+        search_action.setIcon(QIcon(_search_icon_path))
+        self._search_edit.addAction(search_action, QLineEdit.ActionPosition.LeadingPosition)
 
         # ── Combined filter bar (colour + tag + folder filters) ────
         self.filter_bar = FilterBar(tag_service, db, parent=self)
@@ -220,12 +230,16 @@ class MainWindow(QMainWindow):
         self._gallery_tabs = GalleryTabs(parent=self)
         self._gallery_tabs.scope_changed.connect(self._on_scope_changed)
 
-        # Gallery container: tabs + search + combined filter bar + grid stacked vertically
+        # ── Gallery info bar (folder name + active filter pill) ────────
+        self._gallery_info_bar = GalleryInfoBar(parent=self)
+
+        # Gallery container: tabs + search + info bar + filter bar + grid stacked vertically
         gallery_container = QWidget()
         gallery_layout = QVBoxLayout(gallery_container)
         gallery_layout.setContentsMargins(0, 0, 0, 0)
         gallery_layout.addWidget(self._gallery_tabs)  # FIRST!
         gallery_layout.addWidget(self._search_edit)
+        gallery_layout.addWidget(self._gallery_info_bar)
         gallery_layout.addWidget(self.filter_bar)
         gallery_layout.addWidget(self.thumbnail_grid, stretch=1)
         self.grid_dock.setWidget(gallery_container)
@@ -397,6 +411,35 @@ class MainWindow(QMainWindow):
 
     # ── Filtered Query Helpers ─────────────────────────────────────────
 
+    def _update_gallery_info_bar(self) -> None:
+        """Update the gallery info bar with current folder name, file count, and filter count."""
+        if not hasattr(self, "_gallery_info_bar"):
+            return
+
+        is_global = hasattr(self, "_gallery_tabs") and self._gallery_tabs.is_global_scope()
+
+        # Determine folder display name
+        if is_global:
+            folder_name = "All Images"
+        elif self._current_folder:
+            folder_name = Path(self._current_folder).name or self._current_folder
+        else:
+            folder_name = ""
+
+        # File count from the model
+        file_count = self.thumbnail_model.rowCount() if hasattr(self, "thumbnail_model") else 0
+
+        self._gallery_info_bar.set_folder_info(folder_name, file_count)
+
+        # Active filter count: tag_ids + color_tags + folder_filters + filename_filter
+        active_count = (
+            len(self._filter_state.tag_ids)
+            + len(self._filter_state.color_tags)
+            + len(self._filter_state.folder_filters)
+            + (1 if self._filter_state.filename_filter else 0)
+        )
+        self._gallery_info_bar.set_active_filter_count(active_count)
+
     def _on_search_text_changed(self, text: str) -> None:
         """Restart the debounce timer when the search text changes."""
         logger.debug("Search text changed: %r", text)
@@ -431,6 +474,8 @@ class MainWindow(QMainWindow):
         self.tag_panel.set_global_scope(is_global)
         self.filter_bar.set_scope(is_global)
         self._run_filtered_query()
+        # Ensure info bar reflects new scope label even if query returned early
+        self._update_gallery_info_bar()
 
     def _run_filtered_query(self) -> None:
         """Execute a QueryService query combining all active filters.
@@ -505,6 +550,9 @@ class MainWindow(QMainWindow):
                 results = [Path(t["path"]) for t in thumbnails_in_folder]
 
         self.thumbnail_model.set_paths(results)
+
+        # Update gallery info bar with new file count
+        self._update_gallery_info_bar()
 
         # Dispatch thumbnail renders for cache population
         if hasattr(self, "_thumbnail_service"):
@@ -637,6 +685,8 @@ class MainWindow(QMainWindow):
         else:
             paths = [fi.path for fi in file_infos]
             self.thumbnail_model.set_paths(paths)
+            # Update info bar for unfiltered folder view
+            self._update_gallery_info_bar()
 
         # Dispatch thumbnail renders
         if hasattr(self, "_thumbnail_service"):

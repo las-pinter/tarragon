@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
 )
 
 from tarragon.models.thumbnail_model import ThumbnailModel
+from tarragon.theme.file_type_badge import BADGE_COLORS, DEFAULT_BADGE_COLORS, get_badge_colors
 from tarragon.widgets.thumbnail_grid import (
     BG_PRIMARY,
     BG_SECONDARY,
@@ -477,22 +478,19 @@ def test_rapid_hover_changes_via_mouse_events(grid_with_model: Any) -> None:
     assert delegate._hovered_row == -1
 
 
-# ── Edge Case: PSD/PSB Badge Painting ────────────────────────────────
+# ── Edge Case: File Extension Badge Painting ─────────────────────────
 
 
 def test_paint_psd_file_draws_badge(delegate: Any, mock_painter: Any, style_option: Any) -> None:
-    """Painting a .psd file draws the PSD badge overlay."""
+    """Painting a .psd file draws the PSD extension badge overlay."""
     model = ThumbnailModel()
     model.set_paths([Path("/fake/layer_composite.psd")])
     index = model.index(0)
 
     delegate.paint(mock_painter, style_option, index)
 
-    # There should be a fillRect call for the badge (PSD_BADGE_COLOR)
-    # and a drawText call with "PSD"
-    draw_text_calls = mock_painter.drawText.call_args_list
-
     # Badge text "PSD" should appear in one of the drawText calls
+    draw_text_calls = mock_painter.drawText.call_args_list
     assert any("PSD" in str(call) for call in draw_text_calls)
 
 
@@ -511,7 +509,7 @@ def test_paint_psb_file_draws_badge(delegate: Any, mock_painter: Any, style_opti
 
 
 def test_paint_psd_case_insensitive(delegate: Any, mock_painter: Any, style_option: Any) -> None:
-    """PSD badge is drawn regardless of file extension case (.PSD, .Psd)."""
+    """Extension badge is drawn regardless of file extension case (.PSD, .Psd)."""
     model = ThumbnailModel()
     model.set_paths([Path("/fake/UPPER.PSD")])
     index = model.index(0)
@@ -519,11 +517,69 @@ def test_paint_psd_case_insensitive(delegate: Any, mock_painter: Any, style_opti
     delegate.paint(mock_painter, style_option, index)
 
     draw_text_calls = mock_painter.drawText.call_args_list
+    # Badge text is always uppercase
     assert any("PSD" in str(call) for call in draw_text_calls)
 
 
-def test_paint_non_psd_file_no_badge(delegate: Any, mock_painter: Any, style_option: Any) -> None:
-    """Painting a .png file does NOT draw the PSD badge."""
+@pytest.mark.parametrize(
+    "filename,expected_badge",
+    [
+        pytest.param("photo.jpg", "JPG", id="jpg"),
+        pytest.param("photo.jpeg", "JPEG", id="jpeg"),
+        pytest.param("image.png", "PNG", id="png"),
+        pytest.param("scan.tiff", "TIFF", id="tiff"),
+        pytest.param("scan.tif", "TIF", id="tif"),
+        pytest.param("anim.gif", "GIF", id="gif"),
+        pytest.param("hero.webp", "WEBP", id="webp"),
+        pytest.param("old.bmp", "BMP", id="bmp"),
+    ],
+)
+def test_paint_various_extensions_draw_badge(
+    delegate: Any,
+    mock_painter: Any,
+    style_option: Any,
+    filename: str,
+    expected_badge: str,
+) -> None:
+    """Painting files with various extensions draws the correct uppercase badge."""
+    model = ThumbnailModel()
+    model.set_paths([Path(f"/fake/{filename}")])
+    index = model.index(0)
+
+    delegate.paint(mock_painter, style_option, index)
+
+    draw_text_calls = mock_painter.drawText.call_args_list
+    assert any(expected_badge in str(call) for call in draw_text_calls)
+
+
+def test_paint_unknown_extension_draws_badge(delegate: Any, mock_painter: Any, style_option: Any) -> None:
+    """Painting a file with an unknown extension still draws a badge with the extension text."""
+    model = ThumbnailModel()
+    model.set_paths([Path("/fake/raw_image.exr")])
+    index = model.index(0)
+
+    delegate.paint(mock_painter, style_option, index)
+
+    draw_text_calls = mock_painter.drawText.call_args_list
+    assert any("EXR" in str(call) for call in draw_text_calls)
+
+
+def test_paint_file_without_extension_no_badge(delegate: Any, mock_painter: Any, style_option: Any) -> None:
+    """Painting a file without an extension does NOT draw an extension badge."""
+    model = ThumbnailModel()
+    model.set_paths([Path("/fake/no_extension_file")])
+    index = model.index(0)
+
+    delegate.paint(mock_painter, style_option, index)
+
+    # Only the filename drawText call should exist, no badge text
+    draw_text_calls = mock_painter.drawText.call_args_list
+    # Should have exactly 1 drawText call (the filename), no badge
+    assert len(draw_text_calls) == 1
+
+
+def test_paint_png_file_draws_png_not_psd(delegate: Any, mock_painter: Any, style_option: Any) -> None:
+    """Painting a .png file draws a PNG badge, not a PSD badge."""
     model = ThumbnailModel()
     model.set_paths([Path("/fake/regular_image.png")])
     index = model.index(0)
@@ -531,8 +587,31 @@ def test_paint_non_psd_file_no_badge(delegate: Any, mock_painter: Any, style_opt
     delegate.paint(mock_painter, style_option, index)
 
     draw_text_calls = mock_painter.drawText.call_args_list
-    # "PSD" should NOT appear in any drawText call
+    # "PNG" should appear in badge
+    assert any("PNG" in str(call) for call in draw_text_calls)
+    # "PSD" should NOT appear
     assert not any("PSD" in str(call) for call in draw_text_calls)
+
+
+def test_paint_jpg_uses_green_badge_colors(delegate: Any, mock_painter: Any, style_option: Any) -> None:
+    """Painting a .jpg file uses the green badge color scheme."""
+    model = ThumbnailModel()
+    model.set_paths([Path("/fake/photo.jpg")])
+    index = model.index(0)
+
+    delegate.paint(mock_painter, style_option, index)
+
+    # Verify get_badge_colors returns the expected green palette for jpg
+    bg, text = get_badge_colors("jpg")
+    assert bg == BADGE_COLORS["jpg"][0]
+    assert text == BADGE_COLORS["jpg"][1]
+
+
+def test_paint_unknown_ext_uses_default_badge_colors(delegate: Any, mock_painter: Any, style_option: Any) -> None:
+    """Painting a file with unknown extension uses the default gray badge colors."""
+    bg, text = get_badge_colors("exr")
+    assert bg == DEFAULT_BADGE_COLORS[0]
+    assert text == DEFAULT_BADGE_COLORS[1]
 
 
 # ── Edge Case: Selection State Painting ──────────────────────────────
@@ -567,9 +646,9 @@ def test_paint_selected_item_draws_coral_border(delegate: Any, mock_painter: Any
 
     delegate.paint(mock_painter, style_option, index)
 
-    # setPen should be called with a QPen using CORAL_STRONG
-    # The border pen is set after the text pen — check for drawRect (border)
-    assert mock_painter.drawRect.called
+    # setPen should be called with a QPen using CORAL_MUTED
+    # The border pen is set after the text pen — check for drawRoundedRect (border)
+    assert mock_painter.drawRoundedRect.called
 
 
 def test_paint_hovered_item_uses_lighter_bg(delegate: Any, mock_painter: Any, style_option: Any) -> None:
@@ -980,9 +1059,7 @@ def test_paint_background_uses_inset_rect(delegate: Any, mock_painter: Any, styl
     bg_rect = fill_calls[0].args[0]
 
     # Background rect should be inset by HOVER_MARGIN on all sides
-    expected_rect = style_option.rect.adjusted(
-        HOVER_MARGIN, HOVER_MARGIN, -HOVER_MARGIN, -HOVER_MARGIN
-    )
+    expected_rect = style_option.rect.adjusted(HOVER_MARGIN, HOVER_MARGIN, -HOVER_MARGIN, -HOVER_MARGIN)
     assert bg_rect == expected_rect
 
 
@@ -1002,7 +1079,7 @@ def test_paint_background_rect_is_smaller_than_cell(delegate: Any, mock_painter:
 
 
 def test_paint_selection_border_uses_inset_rect(delegate: Any, mock_painter: Any, style_option: Any) -> None:
-    """Selection border drawRect uses the inset container rect, not the full cell."""
+    """Selection border drawRoundedRect uses the inset container rect, not the full cell."""
     model = ThumbnailModel()
     model.set_paths([Path("/fake/selected.png")])
     index = model.index(0)
@@ -1011,13 +1088,12 @@ def test_paint_selection_border_uses_inset_rect(delegate: Any, mock_painter: Any
 
     delegate.paint(mock_painter, style_option, index)
 
-    # The drawRect call for the selection border should use the inset rect
-    container_rect = style_option.rect.adjusted(
-        HOVER_MARGIN, HOVER_MARGIN, -HOVER_MARGIN, -HOVER_MARGIN
-    )
+    # The drawRoundedRect call for the selection border should use the inset rect.
+    # The badge also calls drawRoundedRect, so the border is the LAST call.
+    container_rect = style_option.rect.adjusted(HOVER_MARGIN, HOVER_MARGIN, -HOVER_MARGIN, -HOVER_MARGIN)
     expected_border_rect = container_rect.adjusted(1, 1, -1, -1)
 
-    draw_rect_calls = mock_painter.drawRect.call_args_list
-    assert len(draw_rect_calls) >= 1
-    border_rect = draw_rect_calls[0].args[0]
+    draw_rounded_calls = mock_painter.drawRoundedRect.call_args_list
+    assert len(draw_rounded_calls) >= 2  # badge + border
+    border_rect = draw_rounded_calls[-1].args[0]
     assert border_rect == expected_border_rect

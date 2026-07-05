@@ -5,11 +5,21 @@ from __future__ import annotations
 import logging
 import math
 from pathlib import Path
+from typing import Any
 
 from PIL import Image, ImageOps
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QRect, QSize, Qt
 from PySide6.QtGui import QImage, QPixmap, QResizeEvent
-from PySide6.QtWidgets import QLabel, QSizePolicy, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QGridLayout,
+    QLabel,
+    QLayout,
+    QLayoutItem,
+    QPushButton,
+    QSizePolicy,
+    QVBoxLayout,
+    QWidget,
+)
 
 from tarragon.theme.spacing import SM
 from tarragon.theme.tokens import get_token
@@ -25,7 +35,6 @@ BG_PRIMARY: str = get_token("colors", "bg_primary")
 BG_SECONDARY: str = get_token("colors", "bg_secondary")
 TEXT_PRIMARY: str = get_token("colors", "text_primary")
 TEXT_SECONDARY: str = get_token("colors", "text_secondary")
-CORAL_STRONG: str = get_token("colors", "coral_strong")
 
 
 def _apply_exif_from_original(image: Image.Image, original_path: Path) -> Image.Image:
@@ -83,6 +92,95 @@ def _transpose_for_orientation(image: Image.Image, orientation: int) -> Image.Im
     return image
 
 
+class _FlowLayout(QLayout):
+    """Simple left-to-right flow layout that wraps widgets to the next row.
+
+    Used for tag pills in the preview panel metadata area.
+    """
+
+    def __init__(self, parent: QWidget | None = None, spacing: int = 4) -> None:
+        super().__init__(parent)
+        self._items: list[QLayoutItem] = []
+        self._spacing = spacing
+
+    def addItem(self, item: QLayoutItem) -> None:  # noqa: N802
+        self._items.append(item)
+
+    def count(self) -> int:
+        return len(self._items)
+
+    def itemAt(self, index: int) -> QLayoutItem | None:  # noqa: N802
+        if 0 <= index < len(self._items):
+            return self._items[index]
+        return None
+
+    def takeAt(self, index: int) -> QLayoutItem | None:  # noqa: N802
+        if 0 <= index < len(self._items):
+            return self._items.pop(index)
+        return None
+
+    def expandingDirections(self) -> Qt.Orientation:  # noqa: N802
+        return Qt.Orientation(0)
+
+    def hasHeightForWidth(self) -> bool:  # noqa: N802
+        return True
+
+    def heightForWidth(self, width: int) -> int:  # noqa: N802
+        return self._do_layout(width, dry_run=True)
+
+    def sizeHint(self) -> QSize:  # noqa: N802
+        return self.minimumSizeHint()
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802
+        if not self._items:
+            return QSize(0, 0)
+        # At minimum, fit the widest single item
+        max_w = 0
+        for item in self._items:
+            wid = item.widget()
+            if wid is not None:
+                max_w = max(max_w, wid.sizeHint().width())
+        margins = self.contentsMargins()
+        total_h = self._do_layout(max_w + margins.left() + margins.right(), dry_run=True)
+        return QSize(max_w, total_h)
+
+    def setGeometry(self, rect: QRect) -> None:  # noqa: N802
+        super().setGeometry(rect)
+        self._do_layout(rect.width(), dry_run=False)
+
+    def _do_layout(self, width: int, dry_run: bool) -> int:
+        """Position items in rows, wrapping when *width* is exceeded.
+
+        Returns the total height needed for all rows.
+        """
+        margins = self.contentsMargins()
+        effective_width = width - margins.left() - margins.right()
+        x = 0
+        y = 0
+        row_height = 0
+
+        for item in self._items:
+            wid = item.widget()
+            if wid is None:
+                continue
+            hint = wid.sizeHint()
+            next_x = x + hint.width() + self._spacing
+
+            if next_x - self._spacing > effective_width and x > 0:
+                x = 0
+                y += row_height + self._spacing
+                row_height = 0
+                next_x = hint.width() + self._spacing
+
+            if not dry_run:
+                wid.move(margins.left() + x, margins.top() + y)
+
+            x = next_x
+            row_height = max(row_height, hint.height())
+
+        return y + row_height + margins.top() + margins.bottom()
+
+
 class PreviewPanel(QWidget):
     """Widget that displays a single image preview with metadata.
 
@@ -109,40 +207,81 @@ class PreviewPanel(QWidget):
         layout.setContentsMargins(SM, SM, SM, SM)
         layout.setSpacing(SM)
 
-        # Image label (centered, scaled)
+        # ── Image label (centered, scaled) ────────────────────────────
         self._image_label = QLabel()
         self._image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._image_label.setMinimumSize(200, 200)
-        self._image_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored)
+        self._image_label.setSizePolicy(
+            QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored,
+        )
         self._image_label.setText("No preview")
         self._image_label.setStyleSheet(
             f"QLabel {{"
             f"  background-color: {BG_SECONDARY};"
-            f"  border: 1px solid {CORAL_STRONG};"
-            f"  border-radius: 4px;"
+            f"  border: none;"
+            f"  border-radius: 8px;"
             f"  color: {TEXT_SECONDARY};"
             f"  font-size: {BODY_SIZE}px;"
             f"}}"
         )
         layout.addWidget(self._image_label, stretch=1)
 
-        # Metadata labels
+        # ── Metadata section ──────────────────────────────────────────
+        self._metadata_header = QLabel("Metadata")
+        self._metadata_header.setObjectName("previewSectionHeader")
+        layout.addWidget(self._metadata_header)
+
+        self._metadata_grid = QGridLayout()
+        self._metadata_grid.setHorizontalSpacing(SM)
+        self._metadata_grid.setVerticalSpacing(2)
+
+        # Key labels (left column — muted)
+        self._filename_key = QLabel("File")
+        self._filename_key.setObjectName("previewMetaLabel")
+        self._dimensions_key = QLabel("Dimensions")
+        self._dimensions_key.setObjectName("previewMetaLabel")
+        self._size_key = QLabel("Size")
+        self._size_key.setObjectName("previewMetaLabel")
+        self._format_key = QLabel("Format")
+        self._format_key.setObjectName("previewMetaLabel")
+
+        # Value labels (right column — tertiary)
         self._filename_label = QLabel()
-        self._filename_label.setStyleSheet(f"color: {TEXT_PRIMARY}; font-weight: bold;")
+        self._filename_label.setObjectName("previewMetaValue")
         self._filename_label.setWordWrap(True)
-        layout.addWidget(self._filename_label)
-
         self._dimensions_label = QLabel()
-        self._dimensions_label.setStyleSheet(f"color: {TEXT_SECONDARY};")
-        layout.addWidget(self._dimensions_label)
-
+        self._dimensions_label.setObjectName("previewMetaValue")
         self._size_label = QLabel()
-        self._size_label.setStyleSheet(f"color: {TEXT_SECONDARY};")
-        layout.addWidget(self._size_label)
-
+        self._size_label.setObjectName("previewMetaValue")
         self._format_label = QLabel()
-        self._format_label.setStyleSheet(f"color: {TEXT_SECONDARY};")
-        layout.addWidget(self._format_label)
+        self._format_label.setObjectName("previewMetaValue")
+
+        self._metadata_grid.addWidget(self._filename_key, 0, 0)
+        self._metadata_grid.addWidget(self._filename_label, 0, 1)
+        self._metadata_grid.addWidget(self._dimensions_key, 1, 0)
+        self._metadata_grid.addWidget(self._dimensions_label, 1, 1)
+        self._metadata_grid.addWidget(self._size_key, 2, 0)
+        self._metadata_grid.addWidget(self._size_label, 2, 1)
+        self._metadata_grid.addWidget(self._format_key, 3, 0)
+        self._metadata_grid.addWidget(self._format_label, 3, 1)
+        self._metadata_grid.setColumnStretch(1, 1)
+        layout.addLayout(self._metadata_grid)
+
+        # ── Tags section ──────────────────────────────────────────────
+        self._tags_header = QLabel("Tags")
+        self._tags_header.setObjectName("previewSectionHeader")
+        layout.addWidget(self._tags_header)
+
+        self._tags_container = QWidget()
+        self._tags_flow = _FlowLayout(self._tags_container, spacing=4)
+        layout.addWidget(self._tags_container)
+
+        self._add_tag_btn = QPushButton("+ add")
+        self._add_tag_btn.setObjectName("previewAddTagBtn")
+        layout.addWidget(self._add_tag_btn)
+
+        # Internal tracking for tag pill widgets
+        self._tag_pills: list[QLabel] = []
 
         layout.addStretch()
 
@@ -260,6 +399,7 @@ class PreviewPanel(QWidget):
         self._dimensions_label.clear()
         self._size_label.clear()
         self._format_label.clear()
+        self._clear_tag_pills()
 
     def set_multi_preview(
         self,
@@ -375,6 +515,15 @@ class PreviewPanel(QWidget):
         self._size_label.clear()
         self._format_label.clear()
 
+        # Hide key labels for multi-select (keys are self-explanatory)
+        for key_label in (
+            self._filename_key,
+            self._dimensions_key,
+            self._size_key,
+            self._format_key,
+        ):
+            key_label.hide()
+
         # Show caption if capped
         if total_selected > cap:
             self._format_label.setText(f"Showing {cap} of {total_selected} selected")
@@ -382,6 +531,16 @@ class PreviewPanel(QWidget):
     def _update_metadata(self, image: Image.Image, path: Path | None) -> None:
         """Update metadata labels with image info."""
         logger.debug("_update_metadata: path=%s, dimensions=%s", path, image.size)
+
+        # Show key labels for single-image view
+        for key_label in (
+            self._filename_key,
+            self._dimensions_key,
+            self._size_key,
+            self._format_key,
+        ):
+            key_label.show()
+
         if path:
             self._filename_label.setText(path.name)
             # File size
@@ -415,6 +574,42 @@ class PreviewPanel(QWidget):
         else:
             format_name = "Unknown"
         self._format_label.setText(f"Format: {format_name}")
+
+    # ── Tag display ───────────────────────────────────────────────────────
+
+    def set_tags(self, tags: list[dict[str, Any]]) -> None:
+        """Populate the tag pills area.
+
+        Args:
+            tags: List of tag dicts, each with at least ``{"name": str}``.
+                An optional ``"source"`` key (``"user"`` → primary pill,
+                anything else → secondary pill) controls the visual role.
+        """
+        self._clear_tag_pills()
+
+        for tag in tags:
+            pill = QLabel(str(tag.get("name", "")))
+            role = self._tag_role(tag)
+            pill.setProperty("tagRole", role)
+            self._tag_pills.append(pill)
+            self._tags_flow.addWidget(pill)
+
+    def _clear_tag_pills(self) -> None:
+        """Remove all tag pill widgets from the flow layout."""
+        for pill in self._tag_pills:
+            self._tags_flow.removeWidget(pill)
+            pill.deleteLater()
+        self._tag_pills.clear()
+
+    @staticmethod
+    def _tag_role(tag: dict[str, Any]) -> str:
+        """Determine the tag pill role from a tag dict.
+
+        Returns ``"primary"`` for user-created tags, ``"secondary"`` for
+        auto-generated tags (e.g. auto-color detection).
+        """
+        source = tag.get("source", "user")
+        return "primary" if source == "user" else "secondary"
 
     @staticmethod
     def _format_size(size_bytes: int) -> str:

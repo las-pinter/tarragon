@@ -38,8 +38,10 @@ def minimal_tokens() -> dict[str, Any]:
             "text_primary": "#ece9f2",
             "text_secondary": "#A09CA3",
             "text_tertiary": "#74707B",
+            "text_muted": "#5E5B63",
             "bg_disabled": "#1a1820",
             "border_disabled": "#3a3845",
+            "border_interactive": "rgba(255,255,255,0.12)",
             "bg_log_panel": "#1a1a2e",
         },
         "typography": {
@@ -54,7 +56,7 @@ def minimal_tokens() -> dict[str, Any]:
             "weight_semibold": 600,
         },
         "spacing": {"xs": 2, "sm": 6, "md": 10, "lg": 14, "xl": 20},
-        "radius": {"none": 0, "xs": 2, "sm": 4, "md": 6, "lg": 8},
+        "radius": {"none": 0, "xs": 2, "sm": 4, "md": 6, "lg": 8, "xl": 10},
     }
 
 
@@ -86,6 +88,7 @@ def test_generate_qss_contains_expected_color_tokens(tokens: dict[str, Any]) -> 
         "amber_dark",
         "text_primary",
         "text_secondary",
+        "text_muted",
         "bg_disabled",
         "border_disabled",
         "bg_log_panel",
@@ -110,6 +113,9 @@ def test_generate_qss_contains_all_selectors(tokens: dict[str, Any]) -> None:
         "QStatusBar",
         "QListView",
         "QTreeView",
+        "QLabel#sidebarSectionHeader",
+        "QListView#sidebarFavorites",
+        "QTreeView#sidebarFolderTree",
         "QGroupBox",
         "QCheckBox",
         "QRadioButton",
@@ -193,11 +199,11 @@ def test_generate_qss_uses_spacing_tokens(minimal_tokens: dict[str, Any]) -> Non
 def test_generate_qss_uses_radius_tokens(minimal_tokens: dict[str, Any]) -> None:
     """Radius values from tokens appear correctly in the generated QSS."""
     qss = generate_qss(minimal_tokens)
-    # xs=2, sm=4, md=6, lg=8 should appear as border-radius values
+    # xs=2, sm=4, md=6, lg=8, xl=10 should appear as border-radius values
     assert "border-radius: 2px" in qss  # r_xs
     assert "border-radius: 4px" in qss  # r_sm
     assert "border-radius: 6px" in qss  # r_md
-    assert "border-radius: 8px" in qss  # r_lg
+    assert "border-radius: 10px" in qss  # r_xl
 
 
 # ── Edge-case tests ─────────────────────────────────────────────────────

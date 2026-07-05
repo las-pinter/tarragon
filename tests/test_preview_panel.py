@@ -1385,3 +1385,429 @@ def test_set_multi_preview_multiple_images_all_preserve_ratio(qapp: Any) -> None
         assert bg_pixel_count > 0, "Expected some background pixels from aspect-ratio preservation"
     finally:
         panel.close()
+
+
+# ── Tag Management Tests ──────────────────────────────────────────────
+
+
+@pytest.fixture
+def mock_tag_service() -> Any:
+    """Create a mock TagService for testing tag management."""
+    from unittest.mock import MagicMock
+
+    # Create a mock that has the tagsChanged signal
+    service = MagicMock()
+    service.tagsChanged = MagicMock()
+    service.get_tags_for_file.return_value = []
+    service.get_all_tags.return_value = []
+    service.get_file_tag_ids_batch.return_value = {}
+    service.get_tag_name.return_value = None
+    return service
+
+
+def test_preview_panel_accepts_tag_service(qapp: Any) -> None:  # noqa: ARG001
+    """PreviewPanel can be created with a tag_service parameter."""
+    from unittest.mock import MagicMock
+
+    service = MagicMock()
+    panel = PreviewPanel(tag_service=service)
+    try:
+        assert panel._tag_service is service
+    finally:
+        panel.close()
+
+
+def test_preview_panel_works_without_tag_service(qapp: Any) -> None:  # noqa: ARG001
+    """PreviewPanel works without tag_service (display-only mode)."""
+    panel = PreviewPanel()
+    try:
+        assert panel._tag_service is None
+    finally:
+        panel.close()
+
+
+def test_set_tags_displays_pills(qapp: Any) -> None:  # noqa: ARG001
+    """set_tags creates tag pill labels for each tag."""
+    panel = PreviewPanel()
+    try:
+        tags = [
+            {"id": 1, "name": "landscape", "source": "user"},
+            {"id": 2, "name": "color:red", "source": "auto"},
+        ]
+        panel.set_tags(tags)
+        assert len(panel._tag_pills) == 2
+        assert panel._tag_pills[0].text() == "landscape"
+        assert panel._tag_pills[1].text() == "color:red"
+    finally:
+        panel.close()
+
+
+def test_set_tags_clears_previous_pills(qapp: Any) -> None:  # noqa: ARG001
+    """set_tags replaces previous pills, not appending."""
+    panel = PreviewPanel()
+    try:
+        panel.set_tags([{"id": 1, "name": "old_tag", "source": "user"}])
+        assert len(panel._tag_pills) == 1
+
+        panel.set_tags([
+            {"id": 2, "name": "new_tag1", "source": "user"},
+            {"id": 3, "name": "new_tag2", "source": "user"},
+        ])
+        assert len(panel._tag_pills) == 2
+        assert panel._tag_pills[0].text() == "new_tag1"
+    finally:
+        panel.close()
+
+
+def test_set_tags_empty_clears_pills(qapp: Any) -> None:  # noqa: ARG001
+    """set_tags with empty list removes all pills."""
+    panel = PreviewPanel()
+    try:
+        panel.set_tags([{"id": 1, "name": "tag", "source": "user"}])
+        assert len(panel._tag_pills) == 1
+
+        panel.set_tags([])
+        assert len(panel._tag_pills) == 0
+    finally:
+        panel.close()
+
+
+def test_set_tags_stores_current_tags(qapp: Any) -> None:  # noqa: ARG001
+    """set_tags stores the tag list for later reference."""
+    panel = PreviewPanel()
+    try:
+        tags = [{"id": 1, "name": "test", "source": "user"}]
+        panel.set_tags(tags)
+        assert panel._current_tags == tags
+    finally:
+        panel.close()
+
+
+def test_set_tags_stores_selected_paths(qapp: Any) -> None:  # noqa: ARG001
+    """set_tags stores selected_paths when provided."""
+    panel = PreviewPanel()
+    try:
+        paths = ["/path/to/img1.jpg", "/path/to/img2.jpg"]
+        panel.set_tags([], selected_paths=paths)
+        assert panel._selected_paths == paths
+    finally:
+        panel.close()
+
+
+def test_tag_pill_has_pointing_hand_cursor(qapp: Any) -> None:  # noqa: ARG001
+    """Tag pills have PointingHandCursor to indicate clickability."""
+    from PySide6.QtCore import Qt
+
+    panel = PreviewPanel()
+    try:
+        panel.set_tags([{"id": 1, "name": "clickable", "source": "user"}])
+        assert panel._tag_pills[0].cursor().shape() == Qt.CursorShape.PointingHandCursor
+    finally:
+        panel.close()
+
+
+def test_tag_pill_role_primary_for_user_tags(qapp: Any) -> None:  # noqa: ARG001
+    """User-created tags get 'primary' role."""
+    panel = PreviewPanel()
+    try:
+        panel.set_tags([{"id": 1, "name": "manual", "source": "user"}])
+        assert panel._tag_pills[0].property("tagRole") == "primary"
+    finally:
+        panel.close()
+
+
+def test_tag_pill_role_secondary_for_auto_tags(qapp: Any) -> None:  # noqa: ARG001
+    """Auto-generated tags get 'secondary' role."""
+    panel = PreviewPanel()
+    try:
+        panel.set_tags([{"id": 1, "name": "color:red", "source": "auto"}])
+        assert panel._tag_pills[0].property("tagRole") == "secondary"
+    finally:
+        panel.close()
+
+
+def test_clear_resets_tag_state(qapp: Any) -> None:  # noqa: ARG001
+    """clear() resets all tag-related state."""
+    panel = PreviewPanel()
+    try:
+        panel.set_tags(
+            [{"id": 1, "name": "tag", "source": "user"}],
+            selected_paths=["/path/img.jpg"],
+        )
+        assert len(panel._current_tags) == 1
+        assert len(panel._selected_paths) == 1
+
+        panel.clear()
+        assert panel._current_tags == []
+        assert panel._selected_paths == []
+        assert panel._cached_file_tags == {}
+        assert len(panel._tag_pills) == 0
+    finally:
+        panel.close()
+
+
+def test_tri_state_full_opacity_when_all_files_have_tag(qapp: Any) -> None:  # noqa: ARG001
+    """Tag pill has full opacity when all selected files have the tag."""
+    panel = PreviewPanel()
+    try:
+        paths = ["/img1.jpg", "/img2.jpg"]
+        # Both files have tag 1
+        panel._cached_file_tags = {"/img1.jpg": {1}, "/img2.jpg": {1}}
+        panel._selected_paths = paths
+
+        pill = panel._create_tag_pill({"id": 1, "name": "shared", "source": "user"})
+        # No opacity stylesheet = full opacity
+        assert pill.styleSheet() == ""
+    finally:
+        panel.close()
+
+
+def test_tri_state_half_opacity_when_some_files_have_tag(qapp: Any) -> None:  # noqa: ARG001
+    """Tag pill has half opacity when only some selected files have the tag."""
+    panel = PreviewPanel()
+    try:
+        paths = ["/img1.jpg", "/img2.jpg"]
+        # Only first file has tag 1
+        panel._cached_file_tags = {"/img1.jpg": {1}, "/img2.jpg": set()}
+        panel._selected_paths = paths
+
+        pill = panel._create_tag_pill({"id": 1, "name": "partial", "source": "user"})
+        assert "opacity: 0.5" in pill.styleSheet()
+    finally:
+        panel.close()
+
+
+def test_tri_state_low_opacity_when_no_files_have_tag(qapp: Any) -> None:  # noqa: ARG001
+    """Tag pill has low opacity when no selected files have the tag."""
+    panel = PreviewPanel()
+    try:
+        paths = ["/img1.jpg", "/img2.jpg"]
+        panel._cached_file_tags = {"/img1.jpg": set(), "/img2.jpg": set()}
+        panel._selected_paths = paths
+
+        pill = panel._create_tag_pill({"id": 1, "name": "absent", "source": "user"})
+        assert "opacity: 0.3" in pill.styleSheet()
+    finally:
+        panel.close()
+
+
+def test_tri_state_not_applied_for_single_selection(qapp: Any) -> None:  # noqa: ARG001
+    """Tri-state opacity is not applied for single file selection."""
+    panel = PreviewPanel()
+    try:
+        paths = ["/img1.jpg"]
+        panel._cached_file_tags = {"/img1.jpg": {1}}
+        panel._selected_paths = paths
+
+        pill = panel._create_tag_pill({"id": 1, "name": "tag", "source": "user"})
+        # No opacity for single selection
+        assert pill.styleSheet() == ""
+    finally:
+        panel.close()
+
+
+def test_tag_pill_clicked_removes_tag_when_all_have_it(
+    qapp: Any, mock_tag_service: Any,  # noqa: ARG001
+) -> None:
+    """Clicking a tag pill removes the tag when all selected files have it."""
+    service = mock_tag_service
+    panel = PreviewPanel(tag_service=service)
+    try:
+        paths = ["/img1.jpg", "/img2.jpg"]
+        panel._selected_paths = paths
+        panel._cached_file_tags = {"/img1.jpg": {1}, "/img2.jpg": {1}}
+
+        panel._on_tag_pill_clicked({"id": 1, "name": "tag", "source": "user"})
+        service.remove_tags_from_files.assert_called_once_with(paths, {1})
+        service.add_tags_to_files.assert_not_called()
+    finally:
+        panel.close()
+
+
+def test_tag_pill_clicked_adds_tag_when_not_all_have_it(
+    qapp: Any, mock_tag_service: Any,  # noqa: ARG001
+) -> None:
+    """Clicking a tag pill adds the tag when not all selected files have it."""
+    service = mock_tag_service
+    panel = PreviewPanel(tag_service=service)
+    try:
+        paths = ["/img1.jpg", "/img2.jpg"]
+        panel._selected_paths = paths
+        panel._cached_file_tags = {"/img1.jpg": {1}, "/img2.jpg": set()}
+
+        panel._on_tag_pill_clicked({"id": 1, "name": "tag", "source": "user"})
+        service.add_tags_to_files.assert_called_once_with(paths, ["tag"])
+        service.remove_tags_from_files.assert_not_called()
+    finally:
+        panel.close()
+
+
+def test_tag_pill_clicked_noop_without_selection(
+    qapp: Any, mock_tag_service: Any,  # noqa: ARG001
+) -> None:
+    """Clicking a tag pill does nothing when no files are selected."""
+    service = mock_tag_service
+    panel = PreviewPanel(tag_service=service)
+    try:
+        panel._selected_paths = []
+        panel._on_tag_pill_clicked({"id": 1, "name": "tag", "source": "user"})
+        service.add_tags_to_files.assert_not_called()
+        service.remove_tags_from_files.assert_not_called()
+    finally:
+        panel.close()
+
+
+def test_tag_pill_clicked_noop_without_tag_service(qapp: Any) -> None:  # noqa: ARG001
+    """Clicking a tag pill does nothing when no tag_service is set."""
+    panel = PreviewPanel()  # No tag_service
+    try:
+        panel._selected_paths = ["/img1.jpg"]
+        # Should not raise
+        panel._on_tag_pill_clicked({"id": 1, "name": "tag", "source": "user"})
+    finally:
+        panel.close()
+
+
+def test_inline_tag_input_creation(qapp: Any, mock_tag_service: Any) -> None:  # noqa: ARG001
+    """_show_inline_tag_input creates a QLineEdit and hides the add button."""
+    from PySide6.QtWidgets import QLineEdit
+
+    service = mock_tag_service
+    panel = PreviewPanel(tag_service=service)
+    try:
+        panel._selected_paths = ["/img1.jpg"]
+        assert not panel._add_tag_btn.isHidden()
+
+        panel._show_inline_tag_input()
+        assert panel._add_tag_btn.isHidden()
+        assert panel._tag_input is not None
+        assert isinstance(panel._tag_input, QLineEdit)
+        assert panel._tag_input.placeholderText() == "Tag name..."
+    finally:
+        if panel._tag_input is not None:
+            panel._tag_input.deleteLater()
+        panel.close()
+
+
+def test_inline_tag_input_submitted_creates_tag(
+    qapp: Any, mock_tag_service: Any,  # noqa: ARG001
+) -> None:
+    """Submitting inline input creates the tag and adds it to files."""
+    service = mock_tag_service
+    panel = PreviewPanel(tag_service=service)
+    try:
+        panel._selected_paths = ["/img1.jpg"]
+        panel._show_inline_tag_input()
+        panel._tag_input.setText("new_tag")
+
+        panel._on_tag_input_submitted()
+        service.add_tags_to_files.assert_called_once_with(["/img1.jpg"], ["new_tag"])
+    finally:
+        if panel._tag_input is not None:
+            panel._tag_input.deleteLater()
+        panel.close()
+
+
+def test_inline_tag_input_finished_restores_button(
+    qapp: Any, mock_tag_service: Any,  # noqa: ARG001
+) -> None:
+    """Finishing inline input removes the input and shows the add button."""
+    service = mock_tag_service
+    panel = PreviewPanel(tag_service=service)
+    try:
+        panel._selected_paths = ["/img1.jpg"]
+        panel._show_inline_tag_input()
+        assert panel._add_tag_btn.isHidden()
+
+        panel._on_tag_input_finished()
+        assert not panel._add_tag_btn.isHidden()
+        assert panel._tag_input is None
+    finally:
+        panel.close()
+
+
+def test_inline_tag_input_empty_does_not_create_tag(
+    qapp: Any, mock_tag_service: Any,  # noqa: ARG001
+) -> None:
+    """Submitting empty inline input does not create a tag."""
+    service = mock_tag_service
+    panel = PreviewPanel(tag_service=service)
+    try:
+        panel._selected_paths = ["/img1.jpg"]
+        panel._show_inline_tag_input()
+        panel._tag_input.setText("")
+
+        panel._on_tag_input_submitted()
+        service.add_tags_to_files.assert_not_called()
+    finally:
+        if panel._tag_input is not None:
+            panel._tag_input.deleteLater()
+        panel.close()
+
+
+def test_get_union_tags_combines_tags_from_multiple_files(
+    qapp: Any, mock_tag_service: Any,  # noqa: ARG001
+) -> None:
+    """_get_union_tags returns the union of tags from all paths."""
+    service = mock_tag_service
+    service.get_tags_for_file.side_effect = lambda path: {
+        "/img1.jpg": [{"id": 1, "name": "shared", "source": "user"}],
+        "/img2.jpg": [
+            {"id": 1, "name": "shared", "source": "user"},
+            {"id": 2, "name": "unique", "source": "user"},
+        ],
+    }[path]
+    service.get_tag_name.side_effect = lambda tid: {1: "shared", 2: "unique"}.get(tid)
+
+    panel = PreviewPanel(tag_service=service)
+    try:
+        union = panel._get_union_tags(["/img1.jpg", "/img2.jpg"])
+        assert len(union) == 2
+        tag_ids = {t["id"] for t in union}
+        assert tag_ids == {1, 2}
+    finally:
+        panel.close()
+
+
+def test_get_union_tags_without_tag_service_returns_empty(qapp: Any) -> None:  # noqa: ARG001
+    """_get_union_tags returns empty list when no tag_service."""
+    panel = PreviewPanel()
+    try:
+        union = panel._get_union_tags(["/img1.jpg"])
+        assert union == []
+    finally:
+        panel.close()
+
+
+def test_tags_changed_signal_emitted_on_external_change(
+    qapp: Any, mock_tag_service: Any,  # noqa: ARG001
+) -> None:
+    """tags_changed signal is emitted when external tags change."""
+    service = mock_tag_service
+    service.get_tags_for_file.return_value = []
+
+    panel = PreviewPanel(tag_service=service)
+    try:
+        signal_received = []
+        panel.tags_changed.connect(lambda: signal_received.append(True))
+
+        panel._selected_paths = ["/img1.jpg"]
+        panel._on_external_tags_changed()
+        assert len(signal_received) == 1
+    finally:
+        panel.close()
+
+
+def test_add_button_disabled_without_selection(
+    qapp: Any, mock_tag_service: Any,  # noqa: ARG001
+) -> None:
+    """Add tag button does nothing when no files are selected."""
+    service = mock_tag_service
+    panel = PreviewPanel(tag_service=service)
+    try:
+        panel._selected_paths = []
+        # Should not raise or show menu
+        panel._on_add_tag_clicked()
+        service.get_all_tags.assert_not_called()
+    finally:
+        panel.close()

@@ -6,8 +6,8 @@ This module is the **single source of truth** for:
 * The representative hex color for each bucket (:data:`BUCKET_HEX_COLORS`).
 * The hue ranges used to classify pixels into buckets (:data:`COLOR_BUCKETS`).
 
-These maps were previously duplicated across ``color_tagger.py``,
-``tag_panel.py``, and ``color_filter_bar.py``.
+These maps were previously duplicated across ``color_tagger.py``
+and ``color_filter_bar.py``.
 """
 
 from __future__ import annotations

@@ -1,4 +1,4 @@
-"""Preview panel widget — displays single image preview with metadata and mosaic multi-preview."""
+"""Preview panel widget — displays single image preview with metadata, mosaic multi-preview, and tag management."""
 
 from __future__ import annotations
 
@@ -8,19 +8,22 @@ from pathlib import Path
 from typing import Any
 
 from PIL import Image, ImageOps
-from PySide6.QtCore import QRect, QSize, Qt
+from PySide6.QtCore import QRect, QSize, Qt, Signal
 from PySide6.QtGui import QImage, QPixmap, QResizeEvent
 from PySide6.QtWidgets import (
     QGridLayout,
     QLabel,
     QLayout,
     QLayoutItem,
+    QLineEdit,
+    QMenu,
     QPushButton,
     QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
 
+from tarragon.services.tag_service import TagService
 from tarragon.theme.spacing import SM
 from tarragon.theme.tokens import get_token
 from tarragon.theme.typography import BODY_SIZE
@@ -182,7 +185,7 @@ class _FlowLayout(QLayout):
 
 
 class PreviewPanel(QWidget):
-    """Widget that displays a single image preview with metadata.
+    """Widget that displays a single image preview with metadata and tag management.
 
     Shows:
     - Scaled image (maintains aspect ratio, fits panel)
@@ -190,16 +193,40 @@ class PreviewPanel(QWidget):
     - Dimensions (width × height)
     - File size (formatted)
     - Format (JPEG, PNG, PSD, etc.)
+    - Tag pills (clickable to toggle, with add/dropdown/create-new)
     """
 
-    def __init__(self, parent: QWidget | None = None) -> None:
+    #: Emitted when tags change on the selected files (triggers gallery refresh).
+    tags_changed = Signal()
+
+    def __init__(
+        self,
+        tag_service: TagService | None = None,
+        parent: QWidget | None = None,
+    ) -> None:
+        """Initialize the preview panel.
+
+        Args:
+            tag_service: TagService for tag CRUD operations. When None, tag
+                management features are disabled (display-only mode).
+            parent: Optional parent widget.
+        """
         super().__init__(parent)
+        self._tag_service = tag_service
+        self._current_tags: list[dict[str, Any]] = []
+        self._selected_paths: list[str] = []
+        self._cached_file_tags: dict[str, set[int]] = {}
+        self._tag_input: QLineEdit | None = None
         self._setup_ui()
         self._current_image: Image.Image | None = None
         self._current_path: Path | None = None
         self._cached_pixmap: QPixmap | None = None
         self._original_width: int | None = None
         self._original_height: int | None = None
+
+        # React to external tag changes (e.g. from thumbnail auto-color)
+        if self._tag_service is not None:
+            self._tag_service.tagsChanged.connect(self._on_external_tags_changed)
 
     def _setup_ui(self) -> None:
         """Build the UI layout."""
@@ -212,7 +239,8 @@ class PreviewPanel(QWidget):
         self._image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._image_label.setMinimumSize(200, 200)
         self._image_label.setSizePolicy(
-            QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored,
+            QSizePolicy.Policy.Ignored,
+            QSizePolicy.Policy.Ignored,
         )
         self._image_label.setText("No preview")
         self._image_label.setStyleSheet(
@@ -278,6 +306,7 @@ class PreviewPanel(QWidget):
 
         self._add_tag_btn = QPushButton("+ add")
         self._add_tag_btn.setObjectName("previewAddTagBtn")
+        self._add_tag_btn.clicked.connect(self._on_add_tag_clicked)
         layout.addWidget(self._add_tag_btn)
 
         # Internal tracking for tag pill widgets
@@ -393,6 +422,9 @@ class PreviewPanel(QWidget):
         self._cached_pixmap = None
         self._original_width = None
         self._original_height = None
+        self._current_tags = []
+        self._selected_paths = []
+        self._cached_file_tags = {}
         self._image_label.clear()
         self._image_label.setText("No preview")
         self._filename_label.clear()
@@ -575,24 +607,243 @@ class PreviewPanel(QWidget):
             format_name = "Unknown"
         self._format_label.setText(f"Format: {format_name}")
 
-    # ── Tag display ───────────────────────────────────────────────────────
+    # ── Tag display & management ────────────────────────────────────────────
 
-    def set_tags(self, tags: list[dict[str, Any]]) -> None:
-        """Populate the tag pills area.
+    def set_tags(
+        self,
+        tags: list[dict[str, Any]],
+        selected_paths: list[str] | None = None,
+    ) -> None:
+        """Populate the tag pills area with interactive tag display.
 
         Args:
-            tags: List of tag dicts, each with at least ``{"name": str}``.
+            tags: List of tag dicts, each with at least ``{"id": int, "name": str}``.
                 An optional ``"source"`` key (``"user"`` → primary pill,
                 anything else → secondary pill) controls the visual role.
+            selected_paths: Currently selected file paths. When provided with
+                multiple paths, tri-state opacity is applied to pills based on
+                how many selected files carry each tag.
         """
+        self._current_tags = tags
+        if selected_paths is not None:
+            self._selected_paths = selected_paths
+            # Batch-fetch tag IDs for tri-state calculation
+            if self._tag_service is not None and len(selected_paths) > 1:
+                self._cached_file_tags = self._tag_service.get_file_tag_ids_batch(
+                    selected_paths,
+                )
+            else:
+                self._cached_file_tags = {}
         self._clear_tag_pills()
 
         for tag in tags:
-            pill = QLabel(str(tag.get("name", "")))
-            role = self._tag_role(tag)
-            pill.setProperty("tagRole", role)
+            pill = self._create_tag_pill(tag)
             self._tag_pills.append(pill)
             self._tags_flow.addWidget(pill)
+
+    def _create_tag_pill(self, tag: dict[str, Any]) -> QLabel:
+        """Create a clickable tag pill label with tri-state opacity support.
+
+        Args:
+            tag: Tag dict with ``"id"``, ``"name"``, and optional ``"source"``.
+
+        Returns:
+            A QLabel styled as a tag pill. For multi-selection, partial tags
+            are shown at half opacity.
+        """
+        pill = QLabel(str(tag.get("name", "")))
+        role = self._tag_role(tag)
+        pill.setProperty("tagRole", role)
+
+        # Tri-state opacity for multi-selection
+        if len(self._selected_paths) > 1 and self._cached_file_tags:
+            tag_id = tag.get("id")
+            if tag_id is not None:
+                files_with_tag = sum(
+                    1 for path in self._selected_paths if tag_id in self._cached_file_tags.get(path, set())
+                )
+                total = len(self._selected_paths)
+                if files_with_tag == 0:
+                    pill.setStyleSheet("opacity: 0.3;")
+                elif files_with_tag < total:
+                    pill.setStyleSheet("opacity: 0.5;")
+                # else: full opacity (all files have tag) — default QSS
+
+        pill.setCursor(Qt.CursorShape.PointingHandCursor)
+        pill.mousePressEvent = lambda _e, t=tag: self._on_tag_pill_clicked(t)  # type: ignore[assignment]
+        return pill
+
+    def _on_tag_pill_clicked(self, tag: dict[str, Any]) -> None:
+        """Handle click on a tag pill — toggle tag on/off for selected files.
+
+        If all selected files have the tag, remove it from all.
+        Otherwise, add it to all selected files.
+
+        Args:
+            tag: The tag dict that was clicked.
+        """
+        if not self._selected_paths or self._tag_service is None:
+            return
+
+        tag_id = tag.get("id")
+        if tag_id is None:
+            return
+
+        # Check if all selected files have this tag
+        all_have_tag = all(tag_id in self._cached_file_tags.get(path, set()) for path in self._selected_paths)
+
+        if all_have_tag:
+            # Remove tag from all selected files
+            self._tag_service.remove_tags_from_files(
+                self._selected_paths,
+                {tag_id},
+            )
+        else:
+            # Add tag to all selected files
+            tag_name = tag.get("name", "")
+            if tag_name:
+                self._tag_service.add_tags_to_files(
+                    self._selected_paths,
+                    [tag_name],
+                )
+        # tagsChanged signal from service triggers _on_external_tags_changed
+
+    def _on_add_tag_clicked(self) -> None:
+        """Show dropdown menu of existing tags + 'Create new...' option."""
+        if self._tag_service is None or not self._selected_paths:
+            return
+
+        all_tags = self._tag_service.get_all_tags(folder_path=None)
+        existing_tag_ids = {t["id"] for t in self._current_tags}
+
+        menu = QMenu(self)
+
+        # Add existing tags not already on the selected files
+        has_addable = False
+        for tag in all_tags:
+            if tag["id"] not in existing_tag_ids:
+                action = menu.addAction(tag["name"])
+                action.setData(tag)
+                has_addable = True
+
+        if has_addable:
+            menu.addSeparator()
+
+        # "Create new..." option
+        create_action = menu.addAction("Create new...")
+        create_action.setData("create_new")
+
+        # Show menu below the add button
+        action = menu.exec(
+            self._add_tag_btn.mapToGlobal(
+                self._add_tag_btn.rect().bottomLeft(),
+            ),
+        )
+
+        if action is None:
+            return
+
+        if action.data() == "create_new":
+            self._show_inline_tag_input()
+        elif action.data() is not None:
+            # Add selected tag to files
+            tag_data = action.data()
+            tag_name = tag_data.get("name", "") if isinstance(tag_data, dict) else ""
+            if tag_name:
+                self._tag_service.add_tags_to_files(
+                    self._selected_paths,
+                    [tag_name],
+                )
+
+    def _show_inline_tag_input(self) -> None:
+        """Replace the add button with an inline text input for new tag creation."""
+        self._add_tag_btn.hide()
+
+        self._tag_input = QLineEdit()
+        self._tag_input.setObjectName("previewTagInput")
+        self._tag_input.setPlaceholderText("Tag name...")
+        self._tag_input.returnPressed.connect(self._on_tag_input_submitted)
+        self._tag_input.editingFinished.connect(self._on_tag_input_finished)
+
+        # Add input to layout (appears where add button was, before the stretch)
+        main_layout = self.layout()
+        if isinstance(main_layout, QVBoxLayout):
+            # Insert before the stretch (last item)
+            count = main_layout.count()
+            main_layout.insertWidget(max(0, count - 1), self._tag_input)
+        elif main_layout is not None:
+            main_layout.addWidget(self._tag_input)
+
+        self._tag_input.setFocus()
+
+    def _on_tag_input_submitted(self) -> None:
+        """Handle Enter in the inline tag input — create tag and add to files."""
+        if self._tag_input is None:
+            return
+        tag_name = self._tag_input.text().strip()
+        if tag_name and self._selected_paths and self._tag_service is not None:
+            self._tag_service.add_tags_to_files(self._selected_paths, [tag_name])
+        self._on_tag_input_finished()
+
+    def _on_tag_input_finished(self) -> None:
+        """Remove the inline input and restore the add button."""
+        if self._tag_input is None:
+            return
+        main_layout = self.layout()
+        if main_layout is not None:
+            main_layout.removeWidget(self._tag_input)
+        self._tag_input.deleteLater()
+        self._tag_input = None
+        self._add_tag_btn.show()
+
+    def _on_external_tags_changed(self) -> None:
+        """Refresh tag display when tags change externally (e.g. auto-color)."""
+        if self._selected_paths and self._tag_service is not None:
+            # Re-fetch tags for the current selection
+            if len(self._selected_paths) == 1:
+                tags = self._tag_service.get_tags_for_file(self._selected_paths[0])
+            else:
+                tags = self._get_union_tags(self._selected_paths)
+            self.set_tags(tags, selected_paths=self._selected_paths)
+        elif not self._selected_paths:
+            self._clear_tag_pills()
+            self._current_tags = []
+        # Emit signal so main window can refresh gallery if needed
+        self.tags_changed.emit()
+
+    def _get_union_tags(self, paths: list[str]) -> list[dict[str, Any]]:
+        """Get the union of tags across multiple file paths.
+
+        Args:
+            paths: List of file paths to get tags for.
+
+        Returns:
+            List of unique tag dicts from all paths.
+        """
+        if self._tag_service is None:
+            return []
+        all_tag_ids: set[int] = set()
+        for path in paths:
+            tags = self._tag_service.get_tags_for_file(path)
+            all_tag_ids.update(t["id"] for t in tags)
+
+        union_tags: list[dict[str, Any]] = []
+        for tag_id in sorted(all_tag_ids):
+            tag_name = self._tag_service.get_tag_name(tag_id)
+            if tag_name:
+                # Determine source from any file that has this tag
+                source = "user"
+                for path in paths:
+                    file_tags = self._tag_service.get_tags_for_file(path)
+                    for ft in file_tags:
+                        if ft["id"] == tag_id:
+                            source = ft.get("source", "user")
+                            break
+                    else:
+                        continue
+                    break
+                union_tags.append({"id": tag_id, "name": tag_name, "source": source})
+        return union_tags
 
     def _clear_tag_pills(self) -> None:
         """Remove all tag pill widgets from the flow layout."""

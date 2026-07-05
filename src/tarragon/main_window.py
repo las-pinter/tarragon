@@ -1,10 +1,11 @@
-"""Main application window with dock panels (Library, Gallery, Preview, Tags, Log)."""
+"""Main application window with dock panels (Library, Gallery, Preview, Log)."""
 
 from __future__ import annotations
 
 import logging
 import time
 from pathlib import Path
+from typing import Any
 
 from PIL import Image
 from PySide6.QtCore import Qt, QTimer
@@ -39,13 +40,12 @@ logger = logging.getLogger(__name__)
 
 
 class MainWindow(QMainWindow):
-    """Main application window with five dockable panels.
+    """Main application window with four dockable panels.
 
     Docks:
-        - sidebar_dock : "Library"  — left panel (top) for library/navigation
+        - sidebar_dock : "Library"  — left panel for library/navigation
         - grid_dock    : "Gallery"  — central panel for thumbnail gallery
-        - preview_dock : "Preview"  — right panel for image preview
-        - tags_dock    : "Tags"     — left panel (bottom, below Library) for tag management
+        - preview_dock : "Preview"  — right panel for image preview + tag management
         - log_dock     : "Log"      — bottom panel for application log output
 
     Menu actions (current milestone):
@@ -73,7 +73,6 @@ class MainWindow(QMainWindow):
         self.sidebar_dock: QDockWidget
         self.grid_dock: QDockWidget
         self.preview_dock: QDockWidget
-        self.tags_dock: QDockWidget
         self.log_dock: QDockWidget
         self._create_docks()
 
@@ -95,8 +94,7 @@ class MainWindow(QMainWindow):
             +----------+-------------------+----------+
             | Library  |                   | Preview  |
             |          |     Gallery       |          |
-            +----------+                   |          |
-            | Tags     |                   |          |
+            |          |                   |          |
             |          |                   |          |
             +----------+-------------------+----------+
 
@@ -120,9 +118,6 @@ class MainWindow(QMainWindow):
         self.preview_dock = QDockWidget("Preview", self)
         self.preview_dock.setAllowedAreas(Qt.DockWidgetArea.LeftDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea)
 
-        self.tags_dock = QDockWidget("Tags", self)
-        self.tags_dock.setAllowedAreas(Qt.DockWidgetArea.LeftDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea)
-
         self.log_dock = QDockWidget("Log", self)
         self.log_dock.setAllowedAreas(
             Qt.DockWidgetArea.LeftDockWidgetArea
@@ -137,13 +132,10 @@ class MainWindow(QMainWindow):
         # 2. Library on the left
         self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.sidebar_dock)
 
-        # 3. Split Library vertically - Tags goes below Library
-        self.splitDockWidget(self.sidebar_dock, self.tags_dock, Qt.Orientation.Vertical)
-
-        # 4. Preview on the right
+        # 3. Preview on the right
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.preview_dock)
 
-        # 5. Log at the bottom (hidden by default)
+        # 4. Log at the bottom (hidden by default)
         self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self.log_dock)
 
         # Set initial dock sizes — preview panel should be roughly half the
@@ -163,14 +155,14 @@ class MainWindow(QMainWindow):
 
         Args:
             db: Database instance for sidebar favorites.
-            tag_service: TagService instance for tag panel.
+            tag_service: TagService instance for tag management in preview panel.
         """
         from tarragon.models.thumbnail_model import ThumbnailModel
         from tarragon.widgets.sidebar import SidebarWidget
-        from tarragon.widgets.tag_panel import TagPanel
 
         # Store db for editor launch and preview cache lookups
         self._db = db
+        self._tag_service = tag_service
 
         # Query service for filtered gallery queries
         self._query_service = QueryService(db)
@@ -185,9 +177,11 @@ class MainWindow(QMainWindow):
         self.sidebar_widget.folder_navigated.connect(self._on_folder_navigated)
         self.sidebar_widget.favorite_clicked.connect(self._on_favorite_clicked)
 
-        # Preview panel
-        self.preview_panel = PreviewPanel(parent=self)
+        # Preview panel (wiv tag management)
+        self.preview_panel = PreviewPanel(tag_service=tag_service, parent=self)
         self.preview_dock.setWidget(self.preview_panel)
+        # When tags change via preview panel, refresh the gallery query
+        self.preview_panel.tags_changed.connect(self._on_preview_tags_changed)
 
         # Thumbnail model and grid
         self.thumbnail_model = ThumbnailModel(parent=self)
@@ -210,9 +204,7 @@ class MainWindow(QMainWindow):
         self._search_edit.textChanged.connect(self._on_search_text_changed)
 
         # Search icon on the left side (Tabler-style magnifying glass)
-        _search_icon_path = str(
-            Path(__file__).parent / "theme" / "icons" / "search.svg"
-        )
+        _search_icon_path = str(Path(__file__).parent / "theme" / "icons" / "search.svg")
         search_action = QAction(self._search_edit)
         search_action.setIcon(QIcon(_search_icon_path))
         self._search_edit.addAction(search_action, QLineEdit.ActionPosition.LeadingPosition)
@@ -243,10 +235,6 @@ class MainWindow(QMainWindow):
         gallery_layout.addWidget(self.filter_bar)
         gallery_layout.addWidget(self.thumbnail_grid, stretch=1)
         self.grid_dock.setWidget(gallery_container)
-
-        # Tag panel — added to dedicated Tags dock (Deviation 4.4)
-        self.tag_panel = TagPanel(tag_service, parent=self)
-        self.tags_dock.setWidget(self.tag_panel)
 
         # Log panel — application log output in dedicated dock
         self.log_panel = LogPanel(parent=self)
@@ -308,7 +296,7 @@ class MainWindow(QMainWindow):
     def _on_selection_changed(self, paths: list[str]) -> None:
         """Handle thumbnail grid selection changes.
 
-        Updates the preview panel (single image or mosaic) and tag panel
+        Updates the preview panel (single image or mosaic) and tag display
         based on the current selection.
 
         For single selections, prefers the cached master image (Deviation 1.3)
@@ -346,9 +334,35 @@ class MainWindow(QMainWindow):
                     logger.debug("Failed to load preview for multi-select: %s", p, exc_info=True)
             self.preview_panel.set_multi_preview(images, len(paths), cap)
 
-        # Update tag panel
-        if hasattr(self, "tag_panel"):
-            self.tag_panel.set_selection(paths)
+        # Update tags in preview panel
+        self._update_preview_tags(paths)
+
+    def _update_preview_tags(self, paths: list[str]) -> None:
+        """Fetch and display tags for the current selection in the preview panel.
+
+        For single selection, shows that file's tags.
+        For multi-selection, shows the union of all files' tags with tri-state opacity.
+        For no selection, clears tags.
+
+        Args:
+            paths: Currently selected file paths.
+        """
+        if not paths:
+            self.preview_panel.set_tags([], selected_paths=[])
+            return
+
+        if len(paths) == 1:
+            tags = self._tag_service.get_tags_for_file(paths[0])
+            self.preview_panel.set_tags(tags, selected_paths=paths)
+        else:
+            # Multi-selection: get union of all tags
+            union_tags = self.preview_panel._get_union_tags(paths)
+            self.preview_panel.set_tags(union_tags, selected_paths=paths)
+
+    def _on_preview_tags_changed(self) -> None:
+        """Handle tag changes from the preview panel — refresh gallery query."""
+        logger.debug("Tags changed via preview panel, refreshing gallery")
+        self._run_filtered_query()
 
     def _load_preview_image(self, path: Path) -> tuple[Image.Image, int | None, int | None]:
         """Load a preview image, preferring the 1024px cached preview when available.
@@ -467,11 +481,9 @@ class MainWindow(QMainWindow):
     def _on_scope_changed(self, is_global: bool) -> None:  # noqa: FBT001
         """Handle gallery tab scope change.
 
-        Updates the tag panel scope, the filter bar visibility, and re-runs
-        the filtered query.
+        Updates the filter bar scope and re-runs the filtered query.
         """
         logger.debug("Scope changed: %s", "global" if is_global else "local")
-        self.tag_panel.set_global_scope(is_global)
         self.filter_bar.set_scope(is_global)
         self._run_filtered_query()
         # Ensure info bar reflects new scope label even if query returned early
@@ -594,7 +606,7 @@ class MainWindow(QMainWindow):
         view_menu: QMenu = menubar.addMenu("&View")
 
         # Add toggle actions for each dock widget
-        for dock in (self.sidebar_dock, self.grid_dock, self.preview_dock, self.tags_dock, self.log_dock):
+        for dock in (self.sidebar_dock, self.grid_dock, self.preview_dock, self.log_dock):
             action = dock.toggleViewAction()
             view_menu.addAction(action)
 
@@ -661,10 +673,6 @@ class MainWindow(QMainWindow):
 
         # Store current folder for filtered queries
         self._current_folder = str(folder_path)
-
-        # Update tag panel folder scope for local counts
-        if hasattr(self, "tag_panel"):
-            self.tag_panel.set_folder_path(str(folder_path))
 
         # Scan folder for images
         file_infos = scan_folder(folder_path)

@@ -351,7 +351,6 @@ def test_global_scope_queries_entire_db(qapp: Any) -> None:  # noqa: ARG001
 
         # Set folder to /folder_a/ only
         window._current_folder = "/folder_a/"
-        window.tag_panel.set_folder_path("/folder_a/")
 
         # Activate tag filter via tag_filter_bar's toggle API
         window.tag_filter_bar._toggle_tag(tag_id)

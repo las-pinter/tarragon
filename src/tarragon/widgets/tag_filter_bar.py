@@ -44,7 +44,12 @@ class TagFilterBar(QWidget):
 
         # ── Layout ──────────────────────────────────────────────────────
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(SM, XS, SM, XS)
+        # No vertical margins — the parent FlowLayout handles vertical
+        # centering of items with different heights.  Keeping vertical
+        # margins here would push the Add Tag+ button below the baseline
+        # of sibling widgets (e.g. the Add Folder+ button) that have no
+        # such internal padding.
+        layout.setContentsMargins(SM, 0, SM, 0)
         layout.setSpacing(XS)
 
         # "Add Tag+" button — always visible, opens tag menu on click

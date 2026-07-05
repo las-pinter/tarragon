@@ -95,6 +95,9 @@ class FlowLayout(QLayout):
     def _do_layout(self, rect: QRect, *, test_only: bool) -> int:
         """Arrange items within *rect*.
 
+        Items are placed left-to-right and **vertically centered** within
+        each line so that widgets of different heights align neatly.
+
         When *test_only* is ``True``, no geometry is applied — the method
         merely calculates and returns the total height required.
 
@@ -107,21 +110,54 @@ class FlowLayout(QLayout):
         y = effective_rect.y()
         line_height = 0
 
+        # Two-pass approach: collect items per line, then position them
+        # with vertical centering.  This avoids the misalignment that
+        # occurs when items of different heights share a top-aligned line.
+        line_items: list[tuple[QLayoutItem, QSize]] = []
+
         for item in self._item_list:
             item_size = item.sizeHint()
             next_x = x + item_size.width() + self._spacing
 
             # Wrap to next line if this item would overflow
             if next_x - self._spacing > effective_rect.right() and line_height > 0:
+                # Position the completed line
+                if not test_only:
+                    self._position_line(line_items, effective_rect.x(), y, line_height)
                 x = effective_rect.x()
                 y = y + line_height + self._spacing
                 next_x = x + item_size.width() + self._spacing
                 line_height = 0
-
-            if not test_only:
-                item.setGeometry(QRect(QPoint(x, y), item_size))
+                line_items = []
 
             x = next_x
             line_height = max(line_height, item_size.height())
+            line_items.append((item, item_size))
+
+        # Position the final line
+        if not test_only and line_items:
+            self._position_line(line_items, effective_rect.x(), y, line_height)
 
         return y + line_height - rect.y() + self._margin
+
+    @staticmethod
+    def _position_line(
+        items: list[tuple[QLayoutItem, QSize]],
+        line_x: int,
+        line_y: int,
+        line_height: int,
+    ) -> None:
+        """Place all *items* on a single line, vertically centered.
+
+        Args:
+            items: Layout items and their pre-computed sizes for this line.
+            line_x: The starting x-coordinate for the line.
+            line_y: The starting y-coordinate for the line.
+            line_height: The maximum item height on this line.
+        """
+        current_x = line_x
+        for item, item_size in items:
+            # Vertically center the item within the line height
+            offset_y = (line_height - item_size.height()) // 2
+            item.setGeometry(QRect(QPoint(current_x, line_y + offset_y), item_size))
+            current_x += item_size.width()

@@ -15,6 +15,23 @@ logger = logging.getLogger(__name__)
 #: Acceptable SQLite parameter types (any sequence thereof).
 SqlParams = Sequence[str | int | float | bytes | None]
 
+
+def _normalize_path(path: str) -> str:
+    """Normalize path separators to forward slashes for cross-platform consistency.
+
+    SQLite LIKE patterns use ``/`` as the separator.  On Windows,
+    ``str(Path(...))`` produces backslash-separated paths which do not
+    match ``/%`` LIKE patterns.  Normalizing everything to forward slashes
+    at the database boundary ensures consistent behaviour on all platforms.
+    """
+    if not path:
+        return path
+    return path.replace("\\", "/")
+
+
+#: Public alias for use by other modules.
+normalize_path = _normalize_path
+
 INITIAL_SCHEMA = """
 CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS thumbnails (
@@ -188,6 +205,7 @@ class Database:
         full_cache_path: str | None = None,
     ) -> None:
         """Insert or update a thumbnail record."""
+        path = _normalize_path(path)
         logger.debug("upsert_thumbnail: path=%s, mtime=%d, size=%d", path, mtime, size)
         self._execute(
             """
@@ -213,20 +231,59 @@ class Database:
         )
         self._commit()
 
+    def bulk_upsert_stubs(self, files: list[tuple[str, int, int]]) -> None:
+        """Batch-insert minimal thumbnail records for files discovered during a scan.
+
+        Inserts path, mtime, and size with placeholder values for width/height
+        (0) and cache fields (None/empty).  This ensures the database has records
+        for the current folder *before* async thumbnail rendering completes, so
+        that filtered queries return results immediately.
+
+        When rendering later calls ``upsert_thumbnail()`` with real dimensions
+        and cache paths, the ``ON CONFLICT`` clause updates the stub in place.
+
+        Parameters
+        ----------
+        files:
+            List of ``(path, mtime, size)`` tuples.
+        """
+        if not files:
+            return
+        logger.debug("bulk_upsert_stubs: %d files", len(files))
+        # Normalize path separators to forward slashes for cross-platform consistency
+        normalized = [(_normalize_path(path), mtime, size) for path, mtime, size in files]
+        self._executemany(
+            """
+            INSERT INTO thumbnails (
+                path, mtime, size, width, height,
+                cache_uuid, thumbnail_cache_path, preview_cache_path, full_cache_path
+            )
+            VALUES (?, ?, ?, 0, 0, '', NULL, NULL, NULL)
+            ON CONFLICT(path) DO UPDATE SET
+                mtime=excluded.mtime,
+                size=excluded.size
+            """,
+            normalized,
+        )
+        self._commit()
+
     def delete_thumbnail(self, path: str) -> None:
         """Remove a thumbnail record by path."""
+        path = _normalize_path(path)
         logger.debug("delete_thumbnail: path=%s", path)
         self._execute("DELETE FROM thumbnails WHERE path = ?", (path,))
         self._commit()
 
     def get_thumbnail(self, path: str) -> dict[str, Any] | None:
         """Fetch a single thumbnail record as a dict, or None if absent."""
+        path = _normalize_path(path)
         logger.debug("get_thumbnail: path=%s", path)
         row = self._execute("SELECT * FROM thumbnails WHERE path = ?", (path,)).fetchone()
         return _row_to_dict(row) if row else None
 
     def list_thumbnails_for_folder(self, folder_path: str) -> list[dict[str, Any]]:
         """List all thumbnail records whose path starts with folder_path."""
+        folder_path = _normalize_path(folder_path)
         logger.debug("list_thumbnails_for_folder: folder_path=%s", folder_path)
         cursor = self._execute("SELECT * FROM thumbnails WHERE path LIKE ?", (f"{folder_path.rstrip('/')}/%",))
         return [_row_to_dict(row) for row in cursor.fetchall()]
@@ -241,6 +298,7 @@ class Database:
             this value (followed by ``/``) are deleted.
         """
         logger.debug("delete_thumbnails_by_folder: folder_path=%s", folder_path)
+        folder_path = _normalize_path(folder_path)
         self._execute(
             "DELETE FROM thumbnails WHERE path LIKE ?",
             (f"{folder_path.rstrip('/')}/%",),
@@ -263,22 +321,24 @@ class Database:
         logger.debug("add_file_tags: %d paths, tag_id=%d, source=%s", len(paths), tag_id, source)
         self._executemany(
             "INSERT OR IGNORE INTO file_tags (path, tag_id, source) VALUES (?, ?, ?)",
-            [(p, tag_id, source) for p in paths],
+            [(_normalize_path(p), tag_id, source) for p in paths],
         )
         self._commit()
 
     def remove_file_tags(self, paths: list[str], tag_id: int) -> None:
         """Remove file-tag associations for the given paths and tag."""
         logger.debug("remove_file_tags: %d paths, tag_id=%d", len(paths), tag_id)
-        placeholders = ",".join("?" * len(paths))
+        normalized = [_normalize_path(p) for p in paths]
+        placeholders = ",".join("?" * len(normalized))
         self._execute(
             f"DELETE FROM file_tags WHERE path IN ({placeholders}) AND tag_id = ?",
-            (*paths, tag_id),
+            (*normalized, tag_id),
         )
         self._commit()
 
     def get_file_tag_ids(self, path: str) -> set[int]:
         """Return the set of tag ids associated with a given path."""
+        path = _normalize_path(path)
         logger.debug("get_file_tag_ids: path=%s", path)
         cursor = self._execute("SELECT tag_id FROM file_tags WHERE path = ?", (path,))
         return {row["tag_id"] for row in cursor.fetchall()}
@@ -297,6 +357,7 @@ class Database:
             List of dicts with keys: ``id``, ``name``, ``source``.
         """
         logger.debug("get_tags_for_file: path=%s", path)
+        path = _normalize_path(path)
         return self.fetch_all(
             """SELECT t.id, t.name, ft.source
                FROM tags t
@@ -325,13 +386,14 @@ class Database:
         if not paths:
             return {}
 
-        placeholders = ", ".join("?" * len(paths))
+        normalized = [_normalize_path(p) for p in paths]
+        placeholders = ", ".join("?" * len(normalized))
         rows = self.fetch_all(
             f"SELECT path, tag_id FROM file_tags WHERE path IN ({placeholders})",
-            tuple(paths),
+            tuple(normalized),
         )
 
-        result: dict[str, set[int]] = {path: set() for path in paths}
+        result: dict[str, set[int]] = {path: set() for path in normalized}
         for row in rows:
             result[row["path"]].add(row["tag_id"])
         return result
@@ -356,6 +418,7 @@ class Database:
 
     def replace_auto_color_tags(self, path: str, tags: list[str]) -> None:
         """Delete old auto_color tags for a path and insert new ones."""
+        path = _normalize_path(path)
         logger.debug("replace_auto_color_tags: path=%s, tags=%d", path, len(tags))
         self._execute(
             "DELETE FROM file_tags WHERE path = ? AND source = 'auto_color'",
@@ -394,6 +457,7 @@ class Database:
         """
         logger.debug("get_all_tags_with_counts: folder_path=%s", folder_path)
         if folder_path:
+            folder_path = _normalize_path(folder_path)
             return self.fetch_all(
                 """SELECT t.id, t.name, COUNT(ft.path) AS usage_count
                    FROM tags t
@@ -420,6 +484,7 @@ class Database:
         sort_order: int = 0,
     ) -> None:
         """Add a file to favorites."""
+        path = _normalize_path(path)
         logger.debug("add_favorite: path=%s, label=%s", path, label)
         self._execute(
             "INSERT OR IGNORE INTO favorites (path, label, sort_order) VALUES (?, ?, ?)",
@@ -429,6 +494,7 @@ class Database:
 
     def remove_favorite(self, path: str) -> None:
         """Remove a file from favorites."""
+        path = _normalize_path(path)
         logger.debug("remove_favorite: path=%s", path)
         self._execute("DELETE FROM favorites WHERE path = ?", (path,))
         self._commit()
@@ -486,6 +552,7 @@ class Database:
 
     def get_folder_uuid(self, folder_path: str) -> str | None:
         """Return the cache UUID for a source folder, or None if not mapped."""
+        folder_path = _normalize_path(folder_path)
         logger.debug("get_folder_uuid: folder_path=%s", folder_path)
         row = self._execute(
             "SELECT cache_uuid FROM folder_cache_uuids WHERE folder_path = ?",
@@ -495,6 +562,7 @@ class Database:
 
     def upsert_folder_uuid(self, folder_path: str, cache_uuid: str) -> None:
         """Insert or update the cache UUID for a source folder."""
+        folder_path = _normalize_path(folder_path)
         logger.debug("upsert_folder_uuid: folder_path=%s", folder_path)
         self._execute(
             "INSERT INTO folder_cache_uuids (folder_path, cache_uuid) VALUES (?, ?) "
@@ -511,6 +579,7 @@ class Database:
         read-then-write race.  The actual stored UUID is always read back
         to guarantee consistency.
         """
+        folder_path = _normalize_path(folder_path)
         logger.debug("get_or_create_folder_uuid: folder_path=%s", folder_path)
         with self._lock:
             self._conn.execute(
@@ -564,7 +633,11 @@ class Database:
         cursor = self._execute("SELECT path FROM thumbnails WHERE path != ''")
         folders: set[str] = set()
         for row in cursor.fetchall():
-            parent = str(Path(row["path"]).parent)
+            # Paths are stored with forward slashes; use PurePosixPath to
+            # extract the parent without converting separators on Windows.
+            raw_path: str = row["path"]
+            last_sep = raw_path.rfind("/")
+            parent = raw_path[:last_sep] if last_sep > 0 else ""
             if parent and parent != ".":
                 folders.add(parent)
         return sorted(folders)

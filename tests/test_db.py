@@ -578,3 +578,118 @@ class TestListDistinctFolders:
         folders = db.list_distinct_folders()
         assert "" not in folders
         assert "/valid" in folders
+
+
+# ── Windows Path Normalization ─────────────────────────────────
+
+
+class TestWindowsPathNormalization:
+    """Verify that backslash paths (Windows-style) are normalized to forward slashes."""
+
+    def test_upsert_normalizes_backslashes(self, db: Database) -> None:
+        """upsert_thumbnail stores paths with forward slashes even when given backslashes."""
+        db.upsert_thumbnail(
+            "D:\\Dropbox\\Art\\image.png",
+            mtime=1, size=100, width=10, height=10, cache_uuid="u1",
+        )
+        result = db.get_thumbnail("D:/Dropbox/Art/image.png")
+        assert result is not None
+        assert result["path"] == "D:/Dropbox/Art/image.png"
+
+    def test_get_thumbnail_normalizes_backslashes(self, db: Database) -> None:
+        """get_thumbnail finds records regardless of the separator used in the query."""
+        db.upsert_thumbnail(
+            "D:/Dropbox/Art/image.png",
+            mtime=1, size=100, width=10, height=10, cache_uuid="u1",
+        )
+        # Query with backslashes should still find the record
+        result = db.get_thumbnail("D:\\Dropbox\\Art\\image.png")
+        assert result is not None
+
+    def test_bulk_upsert_normalizes_backslashes(self, db: Database) -> None:
+        """bulk_upsert_stubs normalizes backslash paths to forward slashes."""
+        files = [
+            ("D:\\Dropbox\\Art\\a.png", 1, 100),
+            ("D:\\Dropbox\\Art\\b.png", 2, 200),
+        ]
+        db.bulk_upsert_stubs(files)
+
+        # Should be findable with forward-slash paths
+        assert db.get_thumbnail("D:/Dropbox/Art/a.png") is not None
+        assert db.get_thumbnail("D:/Dropbox/Art/b.png") is not None
+
+    def test_list_thumbnails_for_folder_with_backslashes(self, db: Database) -> None:
+        """list_thumbnails_for_folder works when folder_path uses backslashes."""
+        db.upsert_thumbnail(
+            "D:/Dropbox/Art/a.png",
+            mtime=1, size=100, width=10, height=10, cache_uuid="u1",
+        )
+        db.upsert_thumbnail(
+            "D:/Dropbox/Art/b.png",
+            mtime=2, size=200, width=10, height=10, cache_uuid="u2",
+        )
+        # Query with backslash separator — this was the original bug
+        results = db.list_thumbnails_for_folder("D:\\Dropbox\\Art")
+        assert len(results) == 2
+
+    def test_delete_thumbnails_by_folder_with_backslashes(self, db: Database) -> None:
+        """delete_thumbnails_by_folder works when folder_path uses backslashes."""
+        db.upsert_thumbnail(
+            "D:/Dropbox/Art/a.png",
+            mtime=1, size=100, width=10, height=10, cache_uuid="u1",
+        )
+        db.delete_thumbnails_by_folder("D:\\Dropbox\\Art")
+        assert db.get_thumbnail("D:/Dropbox/Art/a.png") is None
+
+    def test_list_distinct_folders_uses_forward_slashes(self, db: Database) -> None:
+        """list_distinct_folders returns paths with forward slashes."""
+        db.upsert_thumbnail(
+            "D:/Dropbox/Art/a.png",
+            mtime=1, size=100, width=10, height=10, cache_uuid="u1",
+        )
+        folders = db.list_distinct_folders()
+        assert folders == ["D:/Dropbox/Art"]
+        # Ensure no backslashes in the output
+        for f in folders:
+            assert "\\" not in f
+
+    def test_add_file_tags_normalizes_paths(self, db: Database) -> None:
+        """add_file_tags normalizes backslash paths."""
+        tag_id = db.ensure_tag("test")
+        db.add_file_tags(["D:\\Art\\file.png"], tag_id)
+        # Should be retrievable with forward-slash path
+        assert db.get_file_tag_ids("D:/Art/file.png") == {tag_id}
+
+    def test_favorites_normalize_paths(self, db: Database) -> None:
+        """add_favorite and remove_favorite normalize backslash paths."""
+        db.add_favorite("D:\\Art\\fav.png", label="test")
+        favs = db.list_favorites()
+        assert len(favs) == 1
+        assert favs[0]["path"] == "D:/Art/fav.png"
+
+        # Remove with backslash path should still work
+        db.remove_favorite("D:\\Art\\fav.png")
+        assert len(db.list_favorites()) == 0
+
+    def test_folder_uuid_normalizes_paths(self, db: Database) -> None:
+        """Folder UUID methods normalize backslash paths."""
+        db.upsert_folder_uuid("D:\\Dropbox\\Art", "uuid-123")
+        # Retrieve with forward slashes
+        assert db.get_folder_uuid("D:/Dropbox/Art") == "uuid-123"
+        # Retrieve with backslashes
+        assert db.get_folder_uuid("D:\\Dropbox\\Art") == "uuid-123"
+
+    def test_get_all_tags_with_counts_backslash_folder(self, db: Database) -> None:
+        """get_all_tags_with_counts works with backslash folder paths."""
+        tag_id = db.ensure_tag("nature")
+        db.upsert_thumbnail(
+            "D:/Dropbox/Art/a.png",
+            mtime=1, size=100, width=10, height=10, cache_uuid="u1",
+        )
+        db.add_file_tags(["D:/Dropbox/Art/a.png"], tag_id)
+
+        # Query with backslash folder path
+        result = db.get_all_tags_with_counts("D:\\Dropbox\\Art")
+        assert len(result) == 1
+        assert result[0]["name"] == "nature"
+        assert result[0]["usage_count"] == 1

@@ -534,3 +534,124 @@ def test_scope_change_shows_folder_button(qapp: Any) -> None:  # noqa: ARG001
         assert folder_btn.isHidden()
     finally:
         window.close()
+
+
+# ── Bug Regression: Filters return results immediately after folder open ──
+
+
+def test_filters_return_results_immediately_after_folder_open(
+    qapp: Any, tmp_path: Path  # noqa: ARG001
+) -> None:
+    """After opening a folder, filtered queries return results without waiting for renders.
+
+    Regression test: previously, opening a folder scanned files from the filesystem
+    but only populated the database after async thumbnail rendering completed.
+    If a user applied a filter before rendering finished, the query returned zero
+    results because the database was empty.
+    """
+    from tarragon.db import Database
+    from tarragon.services.tag_service import TagService
+
+    window = MainWindow()
+    try:
+        db = Database(Path(":memory:"))
+        db.init_schema()
+
+        # Create a real folder with image files the scanner can find
+        folder = tmp_path / "test_images"
+        folder.mkdir()
+        (folder / "alpha.png").write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 100)
+        (folder / "beta.jpg").write_bytes(b"\xff\xd8\xff\xe0" + b"\x00" * 100)
+        (folder / "gamma.png").write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 100)
+
+        tag_service = TagService(db=db)
+        window.setup_widgets(db, tag_service)
+
+        # Navigate to the folder — this should populate the database immediately
+        window._navigate_to_folder(folder)
+
+        # Verify: database has records for all 3 files (stubs populated before render)
+        records = db.list_thumbnails_for_folder(str(folder))
+        assert len(records) == 3, f"Expected 3 DB records, got {len(records)}"
+
+        # Verify: filtered query returns results immediately (no async render needed)
+        window._run_filtered_query()
+        assert window.thumbnail_model.rowCount() == 3
+
+        # Verify: filename filter works immediately
+        window._search_edit.setText("alpha")
+        window._run_filtered_query()
+        assert window.thumbnail_model.rowCount() == 1
+
+        # Clean up filter state
+        window._search_edit.setText("")
+    finally:
+        window.close()
+
+
+def test_bulk_upsert_stubs_inserts_and_updates(qapp: Any) -> None:  # noqa: ARG001
+    """bulk_upsert_stubs inserts new records and updates existing ones."""
+    from tarragon.db import Database
+
+    db = Database(Path(":memory:"))
+    db.init_schema()
+    try:
+        # Insert stubs
+        db.bulk_upsert_stubs([
+            ("/test/a.png", 100, 500),
+            ("/test/b.png", 200, 600),
+        ])
+
+        # Verify stubs were inserted with placeholder values
+        rec_a = db.get_thumbnail("/test/a.png")
+        assert rec_a is not None
+        assert rec_a["mtime"] == 100
+        assert rec_a["size"] == 500
+        assert rec_a["width"] == 0
+        assert rec_a["height"] == 0
+        assert rec_a["cache_uuid"] == ""
+        assert rec_a["thumbnail_cache_path"] is None
+
+        # Update stubs (simulating a re-scan with new mtime/size)
+        db.bulk_upsert_stubs([
+            ("/test/a.png", 999, 777),
+        ])
+        rec_a_updated = db.get_thumbnail("/test/a.png")
+        assert rec_a_updated is not None
+        assert rec_a_updated["mtime"] == 999
+        assert rec_a_updated["size"] == 777
+
+        # Verify upsert_thumbnail (from render) overwrites stub correctly
+        db.upsert_thumbnail(
+            path="/test/a.png",
+            mtime=999,
+            size=777,
+            width=1920,
+            height=1080,
+            cache_uuid="real-uuid",
+            thumbnail_cache_path="/cache/thumb.png",
+            preview_cache_path="/cache/preview.png",
+            full_cache_path="/cache/full.png",
+        )
+        rec_a_final = db.get_thumbnail("/test/a.png")
+        assert rec_a_final is not None
+        assert rec_a_final["width"] == 1920
+        assert rec_a_final["height"] == 1080
+        assert rec_a_final["cache_uuid"] == "real-uuid"
+        assert rec_a_final["thumbnail_cache_path"] == "/cache/thumb.png"
+    finally:
+        db.close()
+
+
+def test_bulk_upsert_stubs_empty_list_is_noop(qapp: Any) -> None:  # noqa: ARG001
+    """bulk_upsert_stubs with empty list does nothing and doesn't error."""
+    from tarragon.db import Database
+
+    db = Database(Path(":memory:"))
+    db.init_schema()
+    try:
+        db.bulk_upsert_stubs([])
+        # No error, no records
+        assert db.fetch_all("SELECT COUNT(*) as cnt FROM thumbnails")[0]["cnt"] == 0
+    finally:
+        db.close()

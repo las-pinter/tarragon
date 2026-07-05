@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import sqlite3
 import time
 from pathlib import Path
 from typing import Any
@@ -662,6 +663,15 @@ class MainWindow(QMainWindow):
             logger.warning("No images found in %s", folder_path)
             self.thumbnail_model.set_paths([])
             return
+
+        # Populate database immediately so filtered queries return results
+        # before async thumbnail rendering completes (fixes zero-results bug)
+        if hasattr(self, "_db"):
+            stubs = [(str(fi.path), int(fi.mtime), fi.size) for fi in file_infos]
+            try:
+                self._db.bulk_upsert_stubs(stubs)
+            except sqlite3.Error:
+                logger.warning("Failed to populate DB stubs for %s", folder_path, exc_info=True)
 
         # Update thumbnail model — use query service if any filters are active,
         # otherwise load all paths directly.

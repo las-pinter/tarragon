@@ -378,3 +378,56 @@ class TestQueryService:
         result = svc.query(folder_filters={"/photos"})
         paths = {str(p) for p in result}
         assert paths == {"/photos/img.png"}
+
+    # ── Windows path separator normalization ──────────────────────
+
+    def test_folder_filter_with_backslash_paths(self, db: Database) -> None:
+        """Folder filter works when both stored paths and filter use backslashes.
+
+        This reproduces the original bug: on Windows, paths stored as
+        ``D:\\Dropbox\\...\\image.jpg`` were not matched by a LIKE pattern
+        ``D:\\Dropbox\\.../%`` because ``/`` != ``\\``.
+        """
+        svc = QueryService(db)
+        # Simulate Windows-style paths being stored (they get normalized to '/')
+        db.upsert_thumbnail(
+            "D:/Dropbox/Art/Speedpaintings/img1.jpg",
+            mtime=1, size=100, width=10, height=10, cache_uuid="w1",
+        )
+        db.upsert_thumbnail(
+            "D:/Dropbox/Art/Speedpaintings/img2.jpg",
+            mtime=2, size=200, width=10, height=10, cache_uuid="w2",
+        )
+        db.upsert_thumbnail(
+            "D:/Dropbox/Art/Other/img3.jpg",
+            mtime=3, size=300, width=10, height=10, cache_uuid="w3",
+        )
+
+        # Query with backslash folder path — this was the bug
+        result = svc.query(folder_filters={"D:\\Dropbox\\Art\\Speedpaintings"})
+        paths = {str(p) for p in result}
+        assert paths == {
+            "D:/Dropbox/Art/Speedpaintings/img1.jpg",
+            "D:/Dropbox/Art/Speedpaintings/img2.jpg",
+        }
+
+    def test_folder_filter_mixed_separators(self, db: Database) -> None:
+        """Folder filter works with mixed forward and backslash paths."""
+        svc = QueryService(db)
+        db.upsert_thumbnail(
+            "D:/Dropbox/Mixed/test_mixed.png",
+            mtime=1, size=100, width=10, height=10, cache_uuid="mix1",
+        )
+
+        # Forward slash query should find forward-slash stored paths
+        result_fwd = svc.query(folder_filters={"D:/Dropbox/Mixed"})
+        fwd_paths = {str(p) for p in result_fwd}
+        assert "D:/Dropbox/Mixed/test_mixed.png" in fwd_paths
+
+        # Backslash query should also find them
+        result_bwd = svc.query(folder_filters={"D:\\Dropbox\\Mixed"})
+        bwd_paths = {str(p) for p in result_bwd}
+        assert "D:/Dropbox/Mixed/test_mixed.png" in bwd_paths
+
+        # Both queries should return the same results
+        assert fwd_paths == bwd_paths

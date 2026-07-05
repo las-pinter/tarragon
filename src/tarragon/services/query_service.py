@@ -12,7 +12,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from tarragon.db import Database
+from tarragon.db import Database, normalize_path
 
 logger = logging.getLogger(__name__)
 
@@ -77,8 +77,11 @@ class QueryService:
         if folder_filters:
             folder_conds: list[str] = []
             for folder in sorted(folder_filters):
+                # Normalize to forward slashes so the LIKE pattern matches
+                # paths stored in the database (also normalized to '/').
+                normalized = normalize_path(folder)
                 folder_conds.append("path LIKE ?")
-                params.append(f"{folder.rstrip('/')}/%")
+                params.append(f"{normalized.rstrip('/')}/%")
             conditions.append(f"({' OR '.join(folder_conds)})")
 
         # ── Filename filter (applied to basename via %/%) ──────────

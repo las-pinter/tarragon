@@ -97,8 +97,14 @@ class FilterBar(QWidget):
         layout.addWidget(self._folder_chips_container)
 
         # ── Forward child signals ────────────────────────────────────
-        self._color_filter_bar.color_filter_changed.connect(self.color_filter_changed.emit)
-        self._tag_filter_bar.tag_filter_changed.connect(self.tag_filter_changed.emit)
+        # Use lambda wrappers instead of connecting directly to .emit,
+        # which is an unreliable pattern in PySide6.
+        self._color_filter_bar.color_filter_changed.connect(
+            lambda colors: self.color_filter_changed.emit(colors)
+        )
+        self._tag_filter_bar.tag_filter_changed.connect(
+            lambda tag_ids: self.tag_filter_changed.emit(tag_ids)
+        )
 
         # ── Initial state: folder widgets hidden (local/folder mode) ─
         self._add_folder_btn.hide()

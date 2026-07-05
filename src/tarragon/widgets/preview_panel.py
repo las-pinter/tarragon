@@ -136,7 +136,8 @@ class _FlowLayout(QLayout):
 
     def minimumSizeHint(self) -> QSize:  # noqa: N802
         if not self._items:
-            return QSize(0, 0)
+            # Return a size for one row so the container doesn't collapse to zero
+            return QSize(0, 36)
         # At minimum, fit the widest single item
         max_w = 0
         for item in self._items:
@@ -301,6 +302,7 @@ class PreviewPanel(QWidget):
         layout.addWidget(self._tags_header)
 
         self._tags_container = QWidget()
+        self._tags_container.setMinimumHeight(36)  # ensure visible even when empty (one row of pills)
         self._tags_flow = _FlowLayout(self._tags_container, spacing=4)
         layout.addWidget(self._tags_container)
 
@@ -641,6 +643,9 @@ class PreviewPanel(QWidget):
             self._tag_pills.append(pill)
             self._tags_flow.addWidget(pill)
 
+        # Force layout recalculation so the tags container resizes to fit
+        self._tags_container.updateGeometry()
+
     def _create_tag_pill(self, tag: dict[str, Any]) -> QLabel:
         """Create a clickable tag pill label with tri-state opacity support.
 
@@ -851,6 +856,8 @@ class PreviewPanel(QWidget):
             self._tags_flow.removeWidget(pill)
             pill.deleteLater()
         self._tag_pills.clear()
+        # Force layout recalculation so the tags container shrinks back
+        self._tags_container.updateGeometry()
 
     @staticmethod
     def _tag_role(tag: dict[str, Any]) -> str:

@@ -1811,3 +1811,129 @@ def test_add_button_disabled_without_selection(
         service.get_all_tags.assert_not_called()
     finally:
         panel.close()
+
+
+# ── Regression: Tags not visible in preview panel ─────────────────────
+
+
+def test_tags_container_has_minimum_height_when_empty(qapp: Any) -> None:  # noqa: ARG001
+    """Tags container has a minimum height even when no tags are present.
+
+    Regression test: the _tags_container collapsed to zero height when empty
+    because _FlowLayout.minimumSizeHint() returned QSize(0, 0), making tags
+    invisible even after they were added.
+    """
+    panel = PreviewPanel()
+    try:
+        assert panel._tags_container.minimumHeight() > 0, (
+            "Tags container should have a minimum height to remain visible when empty"
+        )
+    finally:
+        panel.close()
+
+
+def test_tags_container_nonzero_height_after_set_tags(qapp: Any) -> None:  # noqa: ARG001
+    """After set_tags() with tags, the tags container has non-zero height.
+
+    Regression test: set_tags() added pills but never called updateGeometry(),
+    so the layout never recalculated and the container stayed at zero height.
+    """
+    panel = PreviewPanel()
+    try:
+        panel.show()
+        tags = [
+            {"id": 1, "name": "landscape", "source": "user"},
+            {"id": 2, "name": "portrait", "source": "user"},
+        ]
+        panel.set_tags(tags)
+
+        # The container must have non-zero height after tags are added
+        assert panel._tags_container.height() > 0, (
+            "Tags container should have non-zero height after set_tags()"
+        )
+    finally:
+        panel.close()
+
+
+def test_tag_pills_have_nonzero_size_after_set_tags(qapp: Any) -> None:  # noqa: ARG001
+    """Tag pills have non-zero size after set_tags().
+
+    Regression test: pills were created but the flow layout didn't position
+    them because minimumSizeHint() returned (0, 0) and no geometry update
+    was triggered.
+    """
+    panel = PreviewPanel()
+    try:
+        panel.show()
+        tags = [
+            {"id": 1, "name": "landscape", "source": "user"},
+            {"id": 2, "name": "color:red", "source": "auto"},
+        ]
+        panel.set_tags(tags)
+
+        for i, pill in enumerate(panel._tag_pills):
+            assert pill.width() > 0, f"Pill {i} ('{pill.text()}') has zero width"
+            assert pill.height() > 0, f"Pill {i} ('{pill.text()}') has zero height"
+    finally:
+        panel.close()
+
+
+def test_flow_layout_minimum_size_hint_with_items(qapp: Any) -> None:  # noqa: ARG001
+    """_FlowLayout.minimumSizeHint() returns proper size when items exist."""
+    from tarragon.widgets.preview_panel import _FlowLayout
+
+    panel = PreviewPanel()
+    try:
+        panel.show()
+        tags = [{"id": 1, "name": "test_tag", "source": "user"}]
+        panel.set_tags(tags)
+
+        hint = panel._tags_flow.minimumSizeHint()
+        assert hint.height() > 0, (
+            f"FlowLayout minimumSizeHint height should be > 0 with items, got {hint.height()}"
+        )
+    finally:
+        panel.close()
+
+
+def test_flow_layout_minimum_size_hint_empty_returns_nonzero_height(qapp: Any) -> None:  # noqa: ARG001
+    """_FlowLayout.minimumSizeHint() returns nonzero height when empty.
+
+    This prevents the tags container from collapsing to zero height.
+    """
+    from tarragon.widgets.preview_panel import _FlowLayout
+
+    panel = PreviewPanel()
+    try:
+        hint = panel._tags_flow.minimumSizeHint()
+        assert hint.height() > 0, (
+            f"FlowLayout minimumSizeHint height should be > 0 even when empty, got {hint.height()}"
+        )
+    finally:
+        panel.close()
+
+
+def test_tags_container_geometry_updates_on_clear(qapp: Any) -> None:  # noqa: ARG001
+    """Tags container geometry updates properly after clearing tags.
+
+    Regression test: _clear_tag_pills() didn't call updateGeometry(),
+    so the container could remain at its expanded size after clearing.
+    """
+    panel = PreviewPanel()
+    try:
+        panel.show()
+        # Add tags
+        panel.set_tags([
+            {"id": 1, "name": "tag1", "source": "user"},
+            {"id": 2, "name": "tag2", "source": "user"},
+        ])
+        assert len(panel._tag_pills) == 2
+
+        # Clear tags
+        panel.set_tags([])
+        assert len(panel._tag_pills) == 0
+
+        # Container should still have its minimum height (not collapsed)
+        assert panel._tags_container.minimumHeight() > 0
+    finally:
+        panel.close()

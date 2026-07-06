@@ -212,24 +212,6 @@ class SidebarWidget(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        # ── Favorites (FIRST section per mockup) ────────────────
-        fav_header = QLabel("Favorites")
-        fav_header.setObjectName("sidebarSectionHeader")
-        layout.addWidget(fav_header)
-
-        # List view
-        self._list_view = QListView()
-        self._list_view.setObjectName("sidebarFavorites")
-        self._list_view.setModel(self._model)
-        self._list_view.setItemDelegate(
-            SidebarItemDelegate(coral_color, muted_color, parent=self._list_view),
-        )
-        self._list_view.clicked.connect(self._on_favorite_clicked)
-        layout.addWidget(self._list_view, stretch=1)
-
-        # Spacing between sections (Folders header needs 14px top margin)
-        layout.addSpacing(14)
-
         # ── Folder tree (SECOND section per mockup) ─────────────
         tree_header = QLabel("Folders")
         tree_header.setObjectName("sidebarSectionHeader")
@@ -251,6 +233,24 @@ class SidebarWidget(QWidget):
         )
         self._folder_tree.clicked.connect(self._on_folder_clicked)
         layout.addWidget(self._folder_tree, stretch=1)
+
+        # Spacing between sections (Folders header needs 14px top margin)
+        layout.addSpacing(14)
+
+        # ── Favorites (FIRST section per mockup) ────────────────
+        fav_header = QLabel("Favorites")
+        fav_header.setObjectName("sidebarSectionHeader")
+        layout.addWidget(fav_header)
+
+        # List view
+        self._list_view = QListView()
+        self._list_view.setObjectName("sidebarFavorites")
+        self._list_view.setModel(self._model)
+        self._list_view.setItemDelegate(
+            SidebarItemDelegate(coral_color, muted_color, parent=self._list_view),
+        )
+        self._list_view.clicked.connect(self._on_favorite_clicked)
+        layout.addWidget(self._list_view, stretch=1)
 
         # Buttons
         button_layout = QHBoxLayout()

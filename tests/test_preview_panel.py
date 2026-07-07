@@ -1427,17 +1427,17 @@ def test_preview_panel_works_without_tag_service(qapp: Any) -> None:  # noqa: AR
 
 
 def test_set_tags_displays_pills(qapp: Any) -> None:  # noqa: ARG001
-    """set_tags creates tag pill labels for each tag."""
+    """set_tags creates tag pill widgets for user tags only."""
     panel = PreviewPanel()
     try:
         tags = [
             {"id": 1, "name": "landscape", "source": "user"},
-            {"id": 2, "name": "color:red", "source": "auto"},
+            {"id": 2, "name": "color:red", "source": "auto_color"},
         ]
         panel.set_tags(tags)
-        assert len(panel._tag_pills) == 2
+        # Only user tags create pills; auto_color tags update color squares
+        assert len(panel._tag_pills) == 1
         assert panel._tag_pills[0].text() == "landscape"
-        assert panel._tag_pills[1].text() == "color:red"
     finally:
         panel.close()
 
@@ -1494,6 +1494,17 @@ def test_set_tags_stores_selected_paths(qapp: Any) -> None:  # noqa: ARG001
         panel.close()
 
 
+def test_set_tags_normalizes_backslash_paths(qapp: Any) -> None:  # noqa: ARG001
+    """Verify that backslash paths (Windows) are normalized to forward slashes."""
+    panel = PreviewPanel()
+    try:
+        paths = ["D:\\Art\\img1.jpg", "D:\\Art\\img2.jpg"]
+        panel.set_tags([], selected_paths=paths)
+        assert panel._selected_paths == ["D:/Art/img1.jpg", "D:/Art/img2.jpg"]
+    finally:
+        panel.close()
+
+
 def test_tag_pill_has_pointing_hand_cursor(qapp: Any) -> None:  # noqa: ARG001
     """Tag pills have PointingHandCursor to indicate clickability."""
     from PySide6.QtCore import Qt
@@ -1517,11 +1528,19 @@ def test_tag_pill_role_primary_for_user_tags(qapp: Any) -> None:  # noqa: ARG001
 
 
 def test_tag_pill_role_secondary_for_auto_tags(qapp: Any) -> None:  # noqa: ARG001
-    """Auto-generated tags get 'secondary' role."""
+    """Auto-color tags update color squares instead of creating pills."""
+    from PySide6.QtWidgets import QGraphicsOpacityEffect
+
     panel = PreviewPanel()
     try:
-        panel.set_tags([{"id": 1, "name": "color:red", "source": "auto"}])
-        assert panel._tag_pills[0].property("tagRole") == "secondary"
+        panel.set_tags([{"id": 1, "name": "color:red", "source": "auto_color"}])
+        # auto_color tags should NOT create pills
+        assert len(panel._tag_pills) == 0
+        # The red color square should be at full opacity (active)
+        red_btn = panel._color_square_buttons["red"]
+        effect = red_btn.graphicsEffect()
+        assert isinstance(effect, QGraphicsOpacityEffect)
+        assert abs(effect.opacity() - 1.0) < 0.01
     finally:
         panel.close()
 
@@ -1875,7 +1894,7 @@ def test_tag_pills_have_nonzero_size_after_set_tags(qapp: Any) -> None:  # noqa:
         panel.show()
         tags = [
             {"id": 1, "name": "landscape", "source": "user"},
-            {"id": 2, "name": "color:red", "source": "auto"},
+            {"id": 2, "name": "portrait", "source": "user"},
         ]
         panel.set_tags(tags)
 
@@ -1961,5 +1980,304 @@ def test_add_tag_button_has_maximum_size_policy(qapp: Any) -> None:  # noqa: ARG
         policy = panel._add_tag_btn.sizePolicy()
         assert policy.horizontalPolicy() == QSizePolicy.Policy.Maximum
         assert policy.verticalPolicy() == QSizePolicy.Policy.Fixed
+    finally:
+        panel.close()
+
+
+# ── Color Squares Tests ─────────────────────────────────────────────────
+
+
+def test_color_squares_container_exists(qapp: Any) -> None:  # noqa: ARG001
+    """Preview panel has a color squares container with 10 buttons."""
+    from tarragon.theme.color_buckets import BUCKET_COLORS
+
+    panel = PreviewPanel()
+    try:
+        assert hasattr(panel, "_color_squares_container")
+        assert len(panel._color_square_buttons) == len(BUCKET_COLORS)
+        for name in BUCKET_COLORS:
+            assert name in panel._color_square_buttons
+    finally:
+        panel.close()
+
+
+def test_color_squares_all_inactive_by_default(qapp: Any) -> None:  # noqa: ARG001
+    """All color squares start at low opacity (0.3) when no tags are set."""
+    from PySide6.QtWidgets import QGraphicsOpacityEffect
+
+    panel = PreviewPanel()
+    try:
+        panel.set_tags([])
+        for name, btn in panel._color_square_buttons.items():
+            effect = btn.graphicsEffect()
+            assert isinstance(effect, QGraphicsOpacityEffect), f"Square '{name}' has no opacity effect"
+            assert abs(effect.opacity() - 0.3) < 0.01, f"Square '{name}' opacity is {effect.opacity()}, expected 0.3"
+    finally:
+        panel.close()
+
+
+def test_color_squares_active_when_tag_present(qapp: Any) -> None:  # noqa: ARG001
+    """Color square is at full opacity when its tag is present on the file."""
+    from PySide6.QtWidgets import QGraphicsOpacityEffect
+
+    panel = PreviewPanel()
+    try:
+        panel.set_tags([{"id": 1, "name": "color:red", "source": "auto_color"}])
+        red_btn = panel._color_square_buttons["red"]
+        effect = red_btn.graphicsEffect()
+        assert isinstance(effect, QGraphicsOpacityEffect)
+        assert abs(effect.opacity() - 1.0) < 0.01
+        # Other squares should still be inactive
+        blue_btn = panel._color_square_buttons["blue"]
+        effect_blue = blue_btn.graphicsEffect()
+        assert isinstance(effect_blue, QGraphicsOpacityEffect)
+        assert abs(effect_blue.opacity() - 0.3) < 0.01
+    finally:
+        panel.close()
+
+
+def test_color_squares_tri_state_multi_selection(qapp: Any) -> None:  # noqa: ARG001
+    """Color squares use tri-state opacity for multi-selection."""
+    from PySide6.QtWidgets import QGraphicsOpacityEffect
+
+    panel = PreviewPanel()
+    try:
+        paths = ["/img1.jpg", "/img2.jpg"]
+        panel._selected_paths = paths
+        # Both files have color:red (tag id=1)
+        panel._cached_file_tags = {"/img1.jpg": {1}, "/img2.jpg": {1}}
+        panel._current_tags = [{"id": 1, "name": "color:red", "source": "auto_color"}]
+
+        # Call _update_color_squares directly (as set_tags would)
+        panel._update_color_squares({"red"})
+        red_btn = panel._color_square_buttons["red"]
+        effect = red_btn.graphicsEffect()
+        assert isinstance(effect, QGraphicsOpacityEffect)
+        assert abs(effect.opacity() - 1.0) < 0.01  # all have it
+    finally:
+        panel.close()
+
+
+def test_color_squares_partial_opacity_multi_selection(qapp: Any) -> None:  # noqa: ARG001
+    """Color square has 0.5 opacity when only some files have the color."""
+    from PySide6.QtWidgets import QGraphicsOpacityEffect
+
+    panel = PreviewPanel()
+    try:
+        paths = ["/img1.jpg", "/img2.jpg"]
+        panel._selected_paths = paths
+        # Only first file has color:red (tag id=1)
+        panel._cached_file_tags = {"/img1.jpg": {1}, "/img2.jpg": set()}
+        panel._current_tags = [{"id": 1, "name": "color:red", "source": "auto_color"}]
+
+        panel._update_color_squares({"red"})
+        red_btn = panel._color_square_buttons["red"]
+        effect = red_btn.graphicsEffect()
+        assert isinstance(effect, QGraphicsOpacityEffect)
+        assert abs(effect.opacity() - 0.5) < 0.01  # some have it
+    finally:
+        panel.close()
+
+
+def test_color_square_button_has_pointing_hand_cursor(qapp: Any) -> None:  # noqa: ARG001
+    """Color square buttons have PointingHandCursor."""
+    from PySide6.QtCore import Qt
+
+    panel = PreviewPanel()
+    try:
+        for name, btn in panel._color_square_buttons.items():
+            assert btn.cursor().shape() == Qt.CursorShape.PointingHandCursor, (
+                f"Color square '{name}' should have PointingHandCursor"
+            )
+    finally:
+        panel.close()
+
+
+def test_color_square_button_has_color_square_property(qapp: Any) -> None:  # noqa: ARG001
+    """Color square buttons have the 'colorSquare' property set for QSS targeting."""
+    panel = PreviewPanel()
+    try:
+        for name, btn in panel._color_square_buttons.items():
+            assert btn.property("colorSquare") is True, (
+                f"Color square '{name}' should have colorSquare=True property"
+            )
+    finally:
+        panel.close()
+
+
+def test_color_square_clicked_adds_tag(
+    qapp: Any, mock_tag_service: Any,  # noqa: ARG001
+) -> None:
+    """Clicking a color square adds the color tag when not all files have it."""
+    service = mock_tag_service
+    panel = PreviewPanel(tag_service=service)
+    try:
+        paths = ["/img1.jpg"]
+        panel._selected_paths = paths
+        panel._cached_file_tags = {"/img1.jpg": set()}
+        panel._current_tags = []
+
+        panel._on_color_square_clicked("red")
+        service.add_tags_to_files.assert_called_once_with(paths, ["color:red"], source="auto_color")
+        service.remove_tags_from_files.assert_not_called()
+    finally:
+        panel.close()
+
+
+def test_color_square_clicked_removes_tag(
+    qapp: Any, mock_tag_service: Any,  # noqa: ARG001
+) -> None:
+    """Clicking a color square removes the color tag when all files have it."""
+    service = mock_tag_service
+    panel = PreviewPanel(tag_service=service)
+    try:
+        paths = ["/img1.jpg"]
+        panel._selected_paths = paths
+        panel._cached_file_tags = {"/img1.jpg": {1}}
+        panel._current_tags = [{"id": 1, "name": "color:red", "source": "auto_color"}]
+
+        panel._on_color_square_clicked("red")
+        service.remove_tags_from_files.assert_called_once_with(paths, {1})
+        service.add_tags_to_files.assert_not_called()
+    finally:
+        panel.close()
+
+
+def test_clear_resets_color_squares(qapp: Any) -> None:  # noqa: ARG001
+    """clear() resets all color squares to inactive opacity."""
+    from PySide6.QtWidgets import QGraphicsOpacityEffect
+
+    panel = PreviewPanel()
+    try:
+        panel.set_tags([{"id": 1, "name": "color:red", "source": "auto_color"}])
+        red_btn = panel._color_square_buttons["red"]
+        effect = red_btn.graphicsEffect()
+        assert isinstance(effect, QGraphicsOpacityEffect)
+        assert abs(effect.opacity() - 1.0) < 0.01
+
+        panel.clear()
+        effect = red_btn.graphicsEffect()
+        assert isinstance(effect, QGraphicsOpacityEffect)
+        assert abs(effect.opacity() - 0.3) < 0.01
+    finally:
+        panel.close()
+
+
+# ── Hover-X (Tag Pill Remove Button) Tests ────────────────────────────────
+
+
+def test_tag_pill_has_remove_button(qapp: Any) -> None:  # noqa: ARG001
+    """Tag pill widgets contain a remove (×) button."""
+    panel = PreviewPanel()
+    try:
+        panel.set_tags([{"id": 1, "name": "test_tag", "source": "user"}])
+        pill = panel._tag_pills[0]
+        assert hasattr(pill, "_remove_btn")
+        assert pill._remove_btn.text() == "×"
+    finally:
+        panel.close()
+
+
+def test_tag_pill_remove_button_hidden_by_default(qapp: Any) -> None:  # noqa: ARG001
+    """The remove (×) button is hidden by default."""
+    panel = PreviewPanel()
+    try:
+        panel.set_tags([{"id": 1, "name": "test_tag", "source": "user"}])
+        pill = panel._tag_pills[0]
+        assert pill._remove_btn.isHidden()
+    finally:
+        panel.close()
+
+
+def test_tag_pill_remove_button_has_object_name(qapp: Any) -> None:  # noqa: ARG001
+    """The remove button has 'tagPillRemoveBtn' objectName for QSS targeting."""
+    panel = PreviewPanel()
+    try:
+        panel.set_tags([{"id": 1, "name": "test_tag", "source": "user"}])
+        pill = panel._tag_pills[0]
+        assert pill._remove_btn.objectName() == "tagPillRemoveBtn"
+    finally:
+        panel.close()
+
+
+def test_tag_pill_remove_clicked_calls_service(
+    qapp: Any, mock_tag_service: Any,  # noqa: ARG001
+) -> None:
+    """Clicking the × button removes the tag from files."""
+    service = mock_tag_service
+    panel = PreviewPanel(tag_service=service)
+    try:
+        paths = ["/img1.jpg"]
+        panel._selected_paths = paths
+        panel._cached_file_tags = {"/img1.jpg": {1}}
+
+        panel._on_tag_remove_clicked({"id": 1, "name": "test_tag", "source": "user"})
+        service.remove_tags_from_files.assert_called_once_with(paths, {1})
+    finally:
+        panel.close()
+
+
+def test_tag_pill_remove_noop_without_selection(
+    qapp: Any, mock_tag_service: Any,  # noqa: ARG001
+) -> None:
+    """Clicking × does nothing when no files are selected."""
+    service = mock_tag_service
+    panel = PreviewPanel(tag_service=service)
+    try:
+        panel._selected_paths = []
+        panel._on_tag_remove_clicked({"id": 1, "name": "test_tag", "source": "user"})
+        service.remove_tags_from_files.assert_not_called()
+    finally:
+        panel.close()
+
+
+# ── Filtered +Add Dropdown Tests ──────────────────────────────────────────
+
+
+def test_add_tag_dropdown_filters_color_tags(
+    qapp: Any, mock_tag_service: Any,  # noqa: ARG001
+) -> None:
+    """The +Add dropdown excludes color: tags from the list.
+
+    We verify the filtering logic by patching QMenu.exec to prevent blocking,
+    then checking that only non-color tags were added to the menu.
+    """
+    from unittest.mock import MagicMock, patch
+
+    service = mock_tag_service
+    service.get_all_tags.return_value = [
+        {"id": 1, "name": "landscape", "usage_count": 5},
+        {"id": 2, "name": "color:red", "usage_count": 3},
+        {"id": 3, "name": "portrait", "usage_count": 2},
+        {"id": 4, "name": "color:blue", "usage_count": 1},
+    ]
+    panel = PreviewPanel(tag_service=service)
+    try:
+        panel._selected_paths = ["/img1.jpg"]
+        panel._current_tags = []
+
+        # Patch QMenu.exec to return None (no selection) and capture menu actions
+        added_actions: list[str] = []
+        original_add_action = None
+
+        with patch("tarragon.widgets.preview_panel.QMenu") as MockMenu:
+            mock_menu = MagicMock()
+            MockMenu.return_value = mock_menu
+
+            def fake_add_action(name):
+                added_actions.append(name)
+                action = MagicMock()
+                return action
+
+            mock_menu.addAction.side_effect = fake_add_action
+            mock_menu.exec.return_value = None  # no selection
+
+            panel._on_add_tag_clicked()
+
+        # Only custom (non-color) tags should be in the menu
+        assert "landscape" in added_actions
+        assert "portrait" in added_actions
+        assert "color:red" not in added_actions
+        assert "color:blue" not in added_actions
     finally:
         panel.close()

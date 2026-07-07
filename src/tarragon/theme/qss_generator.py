@@ -501,6 +501,11 @@ QLabel#galleryActiveFiltersPill {{
     font-size: 11px;
 }}
 
+/* ── Preview panel background ──────────────────────────────────────── */
+QWidget#previewPanel {{
+    background-color: {bg_primary};
+}}
+
 /* ── Preview panel section headers ────────────────────────────────── */
 QLabel#previewSectionHeader {{
     color: {text_muted};
@@ -531,6 +536,30 @@ QPushButton#previewAddTagBtn {{
 QPushButton#previewAddTagBtn:hover {{
     background-color: {surface_highlight};
     color: {text_secondary};
+}}
+
+/* ── Color square buttons (preview panel) ─────────────────────────── */
+QPushButton[colorSquare="true"] {{
+    border: none;
+    border-radius: 4px;
+}}
+
+QPushButton[colorSquare="true"]:hover {{
+    border: 1px solid {text_primary};
+}}
+
+/* ── Tag pill remove button (hover ×) ─────────────────────────────── */
+QPushButton#tagPillRemoveBtn {{
+    color: {coral_muted};
+    border: none;
+    background: transparent;
+    font-weight: bold;
+    padding: 0;
+    font-size: {small_px}px;
+}}
+
+QPushButton#tagPillRemoveBtn:hover {{
+    color: {coral_strong};
 }}
 """
 

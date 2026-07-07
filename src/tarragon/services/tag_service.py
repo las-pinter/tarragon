@@ -32,7 +32,9 @@ class TagService(QObject):
         """Return the id of *name*, creating the tag if it doesn't exist."""
         return self._db.ensure_tag(name)
 
-    def add_tags_to_files(self, paths: list[str], tag_names: list[str]) -> None:
+    def add_tags_to_files(
+        self, paths: list[str], tag_names: list[str], source: str = "user"
+    ) -> None:
         """Add *tag_names* to every path in *paths*.
 
         Tags are created on-the-fly if they don't already exist.
@@ -40,7 +42,7 @@ class TagService(QObject):
         """
         for tag_name in tag_names:
             tag_id = self.get_or_create_tag(tag_name)
-            self._db.add_file_tags(paths, tag_id, source="user")
+            self._db.add_file_tags(paths, tag_id, source=source)
         self.tagsChanged.emit()
 
     def remove_tags_from_files(self, paths: list[str], tag_ids: set[int]) -> None:

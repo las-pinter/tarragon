@@ -4,15 +4,17 @@ from __future__ import annotations
 
 import logging
 import math
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 from PIL import Image, ImageOps
-from PySide6.QtCore import QRect, QSize, Qt, Signal
-from PySide6.QtGui import QImage, QPixmap, QResizeEvent
+from PySide6.QtCore import QEvent, QRect, QSize, Qt, Signal
+from PySide6.QtGui import QEnterEvent, QImage, QPixmap, QResizeEvent
 from PySide6.QtWidgets import (
     QGraphicsOpacityEffect,
     QGridLayout,
+    QHBoxLayout,
     QLabel,
     QLayout,
     QLayoutItem,
@@ -24,8 +26,10 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from tarragon.db import normalize_path
 from tarragon.services.tag_service import TagService
-from tarragon.theme.spacing import SM
+from tarragon.theme.color_buckets import BUCKET_COLORS, BUCKET_HEX_COLORS
+from tarragon.theme.spacing import SM, XS
 from tarragon.theme.tokens import get_token
 from tarragon.theme.typography import BODY_SIZE
 
@@ -35,7 +39,6 @@ logger = logging.getLogger(__name__)
 _EXIF_ORIENTATION_TAG = 0x0112
 
 # Theme tokens (coral-amber dark palette) — sourced from centralized theme system
-BG_PRIMARY: str = get_token("colors", "bg_primary")
 BG_SECONDARY: str = get_token("colors", "bg_secondary")
 TEXT_PRIMARY: str = get_token("colors", "text_primary")
 TEXT_SECONDARY: str = get_token("colors", "text_secondary")
@@ -130,7 +133,7 @@ class _FlowLayout(QLayout):
         return True
 
     def heightForWidth(self, width: int) -> int:  # noqa: N802
-        return self._do_layout(width, dry_run=True)
+        return self._do_layout(QRect(0, 0, width, 0), dry_run=True)
 
     def sizeHint(self) -> QSize:  # noqa: N802
         return self.minimumSizeHint()
@@ -146,19 +149,22 @@ class _FlowLayout(QLayout):
             if wid is not None:
                 max_w = max(max_w, wid.sizeHint().width())
         margins = self.contentsMargins()
-        total_h = self._do_layout(max_w + margins.left() + margins.right(), dry_run=True)
+        total_h = self._do_layout(QRect(0, 0, max_w + margins.left() + margins.right(), 0), dry_run=True)
         return QSize(max_w, total_h)
 
     def setGeometry(self, rect: QRect) -> None:  # noqa: N802
         super().setGeometry(rect)
-        self._do_layout(rect.width(), dry_run=False)
+        self._do_layout(rect, dry_run=False)
 
-    def _do_layout(self, width: int, dry_run: bool) -> int:
+    def _do_layout(self, rect: QRect, dry_run: bool) -> int:
         """Position items in rows, wrapping when *width* is exceeded.
 
         Returns the total height needed for all rows.
         """
         margins = self.contentsMargins()
+        x_offset = rect.x()
+        y_offset = rect.y()
+        width = rect.width()
         effective_width = width - margins.left() - margins.right()
         x = 0
         y = 0
@@ -178,12 +184,74 @@ class _FlowLayout(QLayout):
                 next_x = hint.width() + self._spacing
 
             if not dry_run:
-                wid.move(margins.left() + x, margins.top() + y)
+                wid.setGeometry(
+                    x_offset + margins.left() + x,
+                    y_offset + margins.top() + y,
+                    hint.width(),
+                    hint.height(),
+                )
 
             x = next_x
             row_height = max(row_height, hint.height())
 
         return y + row_height + margins.top() + margins.bottom()
+
+
+class _TagPillWidget(QWidget):
+    """A tag pill widget with a hover-revealed remove (×) button.
+
+    Contains a QLabel for the tag name and a small QPushButton ("×") that
+    is hidden by default and shown when the mouse enters the widget.
+    Clicking the × button removes the tag; clicking the pill body toggles it.
+    """
+
+    def __init__(
+        self,
+        tag_name: str,
+        on_remove: Callable[[], None],
+        on_toggle: Callable[[], None],
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self._tag_name = tag_name
+        self._on_remove = on_remove
+        self._on_toggle = on_toggle
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(2)
+
+        self._label = QLabel(tag_name)
+        self._label.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._label.mousePressEvent = lambda _e: self._on_toggle()  # type: ignore[assignment]
+        layout.addWidget(self._label)
+
+        self._remove_btn = QPushButton("×")
+        self._remove_btn.setFixedSize(16, 16)
+        self._remove_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._remove_btn.setObjectName("tagPillRemoveBtn")
+        self._remove_btn.hide()
+        self._remove_btn.clicked.connect(lambda _checked=False: self._on_remove())
+        layout.addWidget(self._remove_btn)
+
+        self.setMouseTracking(True)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._label.setMouseTracking(True)
+        self._remove_btn.setMouseTracking(True)
+
+    def text(self) -> str:
+        """Return the tag name displayed by this pill."""
+        return self._tag_name
+
+    def enterEvent(self, event: QEnterEvent) -> None:  # noqa: N802
+        """Show the remove button on hover."""
+        self._remove_btn.show()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event: QEvent) -> None:  # noqa: N802
+        """Hide the remove button when mouse leaves."""
+        self._remove_btn.hide()
+        super().leaveEvent(event)
 
 
 class PreviewPanel(QWidget):
@@ -302,6 +370,20 @@ class PreviewPanel(QWidget):
         self._tags_header.setObjectName("previewSectionHeader")
         layout.addWidget(self._tags_header)
 
+        # Color squares row — 10 colored squares, always visible
+        self._color_squares_container = QWidget()
+        self._color_squares_layout = QHBoxLayout(self._color_squares_container)
+        self._color_squares_layout.setContentsMargins(0, 0, 0, 0)
+        self._color_squares_layout.setSpacing(XS)
+        self._color_square_buttons: dict[str, QPushButton] = {}
+        for bucket_name in BUCKET_COLORS:
+            btn = self._create_color_square_button(bucket_name)
+            self._color_square_buttons[bucket_name] = btn
+            self._color_squares_layout.addWidget(btn)
+        self._color_squares_layout.addStretch()
+        self._color_squares_container.setMinimumHeight(self._COLOR_SQUARE_SIZE)
+        layout.addWidget(self._color_squares_container)
+
         self._tags_container = QWidget()
         self._tags_container.setMinimumHeight(36)  # ensure visible even when empty (one row of pills)
         self._tags_flow = _FlowLayout(self._tags_container, spacing=4)
@@ -314,11 +396,11 @@ class PreviewPanel(QWidget):
         layout.addWidget(self._add_tag_btn, alignment=Qt.AlignmentFlag.AlignLeft)
 
         # Internal tracking for tag pill widgets
-        self._tag_pills: list[QLabel] = []
+        self._tag_pills: list[_TagPillWidget] = []
 
         layout.addStretch()
 
-        self.setStyleSheet(f"background-color: {BG_PRIMARY};")
+        self.setObjectName("previewPanel")
 
     def set_image(
         self,
@@ -436,6 +518,8 @@ class PreviewPanel(QWidget):
         self._size_label.clear()
         self._format_label.clear()
         self._clear_tag_pills()
+        # Reset all color squares to inactive
+        self._update_color_squares(set())
 
     def set_multi_preview(
         self,
@@ -622,45 +706,66 @@ class PreviewPanel(QWidget):
 
         Args:
             tags: List of tag dicts, each with at least ``{"id": int, "name": str}``.
-                An optional ``"source"`` key (``"user"`` → primary pill,
-                anything else → secondary pill) controls the visual role.
+                Tags with ``source == "auto_color"`` update the color squares row.
+                Tags with ``source == "user"`` create pills in the flow layout.
             selected_paths: Currently selected file paths. When provided with
-                multiple paths, tri-state opacity is applied to pills based on
-                how many selected files carry each tag.
+                multiple paths, tri-state opacity is applied to pills and color
+                squares based on how many selected files carry each tag.
         """
         self._current_tags = tags
         if selected_paths is not None:
-            self._selected_paths = selected_paths
+            # Normalize path separators so lookups in _cached_file_tags
+            # (keyed by forward-slash paths from the DB) match consistently.
+            self._selected_paths = [normalize_path(p) for p in selected_paths]
             # Batch-fetch tag IDs for tri-state calculation
-            if self._tag_service is not None and len(selected_paths) > 1:
+            if self._tag_service is not None:
                 self._cached_file_tags = self._tag_service.get_file_tag_ids_batch(
-                    selected_paths,
+                    self._selected_paths,
                 )
             else:
                 self._cached_file_tags = {}
         self._clear_tag_pills()
 
+        # Split tags by source: color tags → squares, user tags → pills
+        color_tag_names: set[str] = set()
         for tag in tags:
-            pill = self._create_tag_pill(tag)
-            self._tag_pills.append(pill)
-            self._tags_flow.addWidget(pill)
+            source = tag.get("source", "user")
+            if source == "auto_color":
+                # Extract bare bucket name from "color:<name>"
+                tag_name = tag.get("name", "")
+                bare_name = tag_name.removeprefix("color:") if tag_name.startswith("color:") else tag_name
+                color_tag_names.add(bare_name)
+            else:
+                pill = self._create_tag_pill(tag)
+                self._tag_pills.append(pill)
+                self._tags_flow.addWidget(pill)
+
+        # Update color squares (always show all 10, with appropriate opacity)
+        self._update_color_squares(color_tag_names)
 
         # Force layout recalculation so the tags container resizes to fit
         self._tags_container.updateGeometry()
 
-    def _create_tag_pill(self, tag: dict[str, Any]) -> QLabel:
-        """Create a clickable tag pill label with tri-state opacity support.
+    def _create_tag_pill(self, tag: dict[str, Any]) -> _TagPillWidget:
+        """Create a clickable tag pill widget with tri-state opacity support.
 
         Args:
             tag: Tag dict with ``"id"``, ``"name"``, and optional ``"source"``.
 
         Returns:
-            A QLabel styled as a tag pill. For multi-selection, partial tags
-            are shown at half opacity.
+            A _TagPillWidget styled as a tag pill with hover-X removal.
+            For multi-selection, partial tags are shown at half opacity.
         """
-        pill = QLabel(str(tag.get("name", "")))
-        role = self._tag_role(tag)
-        pill.setProperty("tagRole", role)
+        tag_name = str(tag.get("name", ""))
+
+        pill = _TagPillWidget(
+            tag_name=tag_name,
+            on_remove=lambda t=tag: self._on_tag_remove_clicked(t),
+            on_toggle=lambda t=tag: self._on_tag_pill_clicked(t),
+        )
+        # All pills in the flow layout are user-created (primary role)
+        pill.setProperty("tagRole", "primary")
+        pill._label.setProperty("tagRole", "primary")  # noqa: SLF001 — styling the inner label
 
         # Tri-state opacity for multi-selection
         if len(self._selected_paths) > 1 and self._cached_file_tags:
@@ -681,8 +786,6 @@ class PreviewPanel(QWidget):
                 else:
                     pill.setGraphicsEffect(None)
 
-        pill.setCursor(Qt.CursorShape.PointingHandCursor)
-        pill.mousePressEvent = lambda _e, t=tag: self._on_tag_pill_clicked(t)  # type: ignore[assignment]
         return pill
 
     def _on_tag_pill_clicked(self, tag: dict[str, Any]) -> None:
@@ -720,8 +823,167 @@ class PreviewPanel(QWidget):
                 )
         # tagsChanged signal from service triggers _on_external_tags_changed
 
+    def _on_tag_remove_clicked(self, tag: dict[str, Any]) -> None:
+        """Handle click on the × button of a tag pill — remove tag from files.
+
+        Args:
+            tag: The tag dict to remove.
+        """
+        if not self._selected_paths or self._tag_service is None:
+            return
+
+        tag_id = tag.get("id")
+        if tag_id is None:
+            return
+
+        self._tag_service.remove_tags_from_files(
+            self._selected_paths,
+            {tag_id},
+        )
+        # tagsChanged signal from service triggers _on_external_tags_changed
+
+    # ── Color squares ────────────────────────────────────────────────────────
+
+    _COLOR_SQUARE_SIZE = 24
+
+    def _create_color_square_button(self, bucket_name: str) -> QPushButton:
+        """Create a single color square button for a color bucket.
+
+        Args:
+            bucket_name: The color bucket name (e.g. "red", "blue").
+
+        Returns:
+            A QPushButton styled as a colored square.
+        """
+        hex_color = BUCKET_HEX_COLORS[bucket_name]
+        btn = QPushButton()
+        btn.setFixedSize(self._COLOR_SQUARE_SIZE, self._COLOR_SQUARE_SIZE)
+        btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn.setProperty("colorSquare", True)
+        btn.setToolTip(f"color:{bucket_name}")
+        btn.setStyleSheet(
+            f"QPushButton {{"
+            f"  background-color: {hex_color};"
+            f"  border: none;"
+            f"  border-radius: 4px;"
+            f"}}"
+            f"QPushButton:hover {{"
+            f"  border: 1px solid {TEXT_PRIMARY};"
+            f"}}"
+        )
+        btn.clicked.connect(
+            lambda _checked=False, name=bucket_name: self._on_color_square_clicked(name),
+        )
+        # Start inactive (low opacity)
+        effect = QGraphicsOpacityEffect(btn)
+        effect.setOpacity(0.3)
+        btn.setGraphicsEffect(effect)
+        return btn
+
+    def _update_color_squares(self, active_color_names: set[str]) -> None:
+        """Update the opacity of color squares based on which colors are active.
+
+        Uses tri-state logic for multi-selection:
+        - All files have the color → opacity 1.0
+        - Some files have the color → opacity 0.5
+        - No files have the color → opacity 0.3
+
+        Args:
+            active_color_names: Set of bare bucket names (e.g. {"red", "blue"})
+                that are present on the current file(s).
+        """
+        for bucket_name, btn in self._color_square_buttons.items():
+            if len(self._selected_paths) > 1 and self._cached_file_tags:
+                # Tri-state for multi-selection
+                color_tag_name = f"color:{bucket_name}"
+                # Find the tag ID for this color tag
+                color_tag_id: int | None = None
+                for tag in self._current_tags:
+                    if tag.get("name") == color_tag_name:
+                        color_tag_id = tag.get("id")
+                        break
+
+                if color_tag_id is not None:
+                    files_with_tag = sum(
+                        1
+                        for path in self._selected_paths
+                        if color_tag_id in self._cached_file_tags.get(path, set())
+                    )
+                    total = len(self._selected_paths)
+                    if files_with_tag == total:
+                        opacity = 1.0
+                    elif files_with_tag > 0:
+                        opacity = 0.5
+                    else:
+                        opacity = 0.3
+                else:
+                    opacity = 0.3
+            elif bucket_name in active_color_names:
+                opacity = 1.0
+            else:
+                opacity = 0.3
+
+            effect = btn.graphicsEffect()
+            if not isinstance(effect, QGraphicsOpacityEffect):
+                effect = QGraphicsOpacityEffect(btn)
+                btn.setGraphicsEffect(effect)
+            effect.setOpacity(opacity)
+
+        # Force all buttons to repaint to invalidate QGraphicsOpacityEffect caches,
+        # which otherwise cause buttons to render at stale positions after resize.
+        self._color_squares_container.updateGeometry()
+        for btn in self._color_square_buttons.values():
+            btn.update()
+
+    def _on_color_square_clicked(self, bucket_name: str) -> None:
+        """Handle click on a color square — toggle the color tag on/off.
+
+        If all selected files have the color tag, remove it from all.
+        Otherwise, add it to all selected files.
+
+        Args:
+            bucket_name: The color bucket name (e.g. "red").
+        """
+        logger.debug("Color square clicked: bucket=%s, paths=%d", bucket_name, len(self._selected_paths))
+
+        if not self._selected_paths or self._tag_service is None:
+            return
+
+        color_tag_name = f"color:{bucket_name}"
+
+        # Find the tag ID for this color tag
+        color_tag_id: int | None = None
+        for tag in self._current_tags:
+            if tag.get("name") == color_tag_name:
+                color_tag_id = tag.get("id")
+                break
+
+        # Check if all selected files have this color tag
+        all_have_tag = False
+        if color_tag_id is not None:
+            all_have_tag = all(
+                color_tag_id in self._cached_file_tags.get(path, set())
+                for path in self._selected_paths
+            )
+
+        if all_have_tag and color_tag_id is not None:
+            self._tag_service.remove_tags_from_files(
+                self._selected_paths,
+                {color_tag_id},
+            )
+        else:
+            self._tag_service.add_tags_to_files(
+                self._selected_paths,
+                [color_tag_name],
+                source="auto_color",
+            )
+        # tagsChanged signal from service triggers _on_external_tags_changed
+
     def _on_add_tag_clicked(self) -> None:
-        """Show dropdown menu of existing tags + 'Create new...' option."""
+        """Show dropdown menu of existing custom tags + 'Create new...' option.
+
+        Color tags (name starting with 'color:') are excluded from the dropdown.
+        """
         if self._tag_service is None or not self._selected_paths:
             return
 
@@ -730,10 +992,11 @@ class PreviewPanel(QWidget):
 
         menu = QMenu(self)
 
-        # Add existing tags not already on the selected files
+        # Add existing custom tags not already on the selected files
+        # (filter out color tags — they're managed via the color squares)
         has_addable = False
         for tag in all_tags:
-            if tag["id"] not in existing_tag_ids:
+            if tag["id"] not in existing_tag_ids and not tag["name"].startswith("color:"):
                 action = menu.addAction(tag["name"])
                 action.setData(tag)
                 has_addable = True
@@ -865,16 +1128,6 @@ class PreviewPanel(QWidget):
         self._tag_pills.clear()
         # Force layout recalculation so the tags container shrinks back
         self._tags_container.updateGeometry()
-
-    @staticmethod
-    def _tag_role(tag: dict[str, Any]) -> str:
-        """Determine the tag pill role from a tag dict.
-
-        Returns ``"primary"`` for user-created tags, ``"secondary"`` for
-        auto-generated tags (e.g. auto-color detection).
-        """
-        source = tag.get("source", "user")
-        return "primary" if source == "user" else "secondary"
 
     @staticmethod
     def _format_size(size_bytes: int) -> str:

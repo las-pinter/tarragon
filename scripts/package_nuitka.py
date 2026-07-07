@@ -71,6 +71,7 @@ def build(onefile: bool = True) -> None:
         "--include-package=PIL",
         "--include-package=platformdirs",
         "--include-package=psutil",
+        "--include-package-data=tarragon.theme",
         f"--output-dir={project_root / 'dist'}",
     ]
 

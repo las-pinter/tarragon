@@ -78,7 +78,7 @@ def test_get_badge_colors_case_insensitive() -> None:
 
 def test_badge_colors_has_expected_keys() -> None:
     """BADGE_COLORS contains all specified file extensions."""
-    expected_keys = {"psd", "psb", "jpg", "jpeg", "png", "tiff", "tif", "gif", "webp", "bmp"}
+    expected_keys = {"psd", "psb", "jpg", "jpeg", "png", "tiff", "tif", "gif", "webp", "bmp", "clip"}
     assert set(BADGE_COLORS.keys()) == expected_keys
 
 

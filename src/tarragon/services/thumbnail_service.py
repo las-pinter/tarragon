@@ -25,6 +25,7 @@ from tarragon.thumbnail import (
     generate_cache_paths,
     generate_cache_uuid,
     invalidate_cache_files,
+    render_clip_image,
     render_plain_image,
     render_psd_image,
     save_to_cache,
@@ -365,6 +366,8 @@ class ThumbnailService(QObject):
                 target_size=RESOLUTION_FULL,
                 cancel_event=self._cancel_event,
             )
+        elif file_info.extension.lower() == ".clip":
+            full_img = render_clip_image(file_info.path, target_size=RESOLUTION_FULL)
         else:
             full_img = render_plain_image(file_info.path, target_size=RESOLUTION_FULL)
 

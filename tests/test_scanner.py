@@ -9,8 +9,8 @@ def test_only_supported_extensions_returned(tmp_path: Path) -> None:
     """Only files with extensions in SUPPORTED_EXTENSIONS appear in results."""
     from tarragon.scanner import SUPPORTED_EXTENSIONS, scan_folder
 
-    # Create supported files — all 8 extensions
-    for ext in {".jpg", ".jpeg", ".png", ".webp", ".tiff", ".tif", ".psd", ".psb"}:
+    # Create supported files — all 9 extensions
+    for ext in {".jpg", ".jpeg", ".png", ".webp", ".tiff", ".tif", ".psd", ".psb", ".clip"}:
         (tmp_path / f"image{ext}").write_text("fake-image-data")
 
     # Create unsupported files
@@ -20,7 +20,7 @@ def test_only_supported_extensions_returned(tmp_path: Path) -> None:
 
     results = scan_folder(tmp_path)
 
-    assert len(results) == 8
+    assert len(results) == 9
     for info in results:
         assert info.extension in SUPPORTED_EXTENSIONS
         assert info.path.suffix.lower() == info.extension
@@ -202,3 +202,21 @@ def test_hidden_files_are_included(tmp_path: Path) -> None:
     assert len(results) == 2
     names = {r.path.name for r in results}
     assert names == {".hidden.png", "visible.jpg"}
+
+
+def test_clip_files_are_discovered(tmp_path: Path) -> None:
+    """.clip files are included in scan results as a supported extension."""
+    from tarragon.scanner import SUPPORTED_EXTENSIONS, scan_folder
+
+    assert ".clip" in SUPPORTED_EXTENSIONS
+
+    (tmp_path / "illustration.clip").write_text("fake-clip-data")
+    (tmp_path / "photo.jpg").write_text("data")
+    (tmp_path / "notes.txt").write_text("data")
+
+    results = scan_folder(tmp_path)
+
+    assert len(results) == 2
+    clip_results = [r for r in results if r.extension == ".clip"]
+    assert len(clip_results) == 1
+    assert clip_results[0].path.name == "illustration.clip"

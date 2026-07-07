@@ -18,6 +18,7 @@ SUPPORTED_EXTENSIONS = {
     ".tif",
     ".psd",
     ".psb",
+    ".clip",
 }
 
 

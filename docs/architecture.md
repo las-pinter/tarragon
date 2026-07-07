@@ -108,7 +108,7 @@ SQLite-backed repository using WAL journal mode for concurrent read/write access
 
 ### Scanner (`scanner.py`)
 
-Walks a directory tree, filters files by supported extensions (`.jpg`, `.jpeg`, `.png`, `.webp`, `.tiff`, `.tif`, `.psd`, `.psb`), and returns a sorted list of `FileInfo` dataclass instances containing path, mtime, size, and extension.
+Walks a directory tree, filters files by supported extensions (`.jpg`, `.jpeg`, `.png`, `.webp`, `.tiff`, `.tif`, `.psd`, `.psb`, `.clip`), and returns a sorted list of `FileInfo` dataclass instances containing path, mtime, size, and extension.
 
 ## Rendering Pipeline
 
@@ -129,6 +129,14 @@ Walks a directory tree, filters files by supported extensions (`.jpg`, `.jpeg`, 
 5. Resize result to master long edge, return as PNG bytes.
 6. Main process deserializes PNG bytes back to a PIL Image.
 7. 2-minute timeout on the future; returns `None` on failure.
+
+### CLIP (`thumbnail.py` — `render_clip_image`)
+
+1. Read the .clip file and locate the embedded SQLite3 database by scanning for the SQLite header.
+2. Write the SQLite portion to a temporary file and query the `CanvasPreview` table for the `ImageData` blob.
+3. Extract the PNG from the blob by locating the PNG signature and IEND chunk boundary.
+4. Decode the PNG via Pillow, convert to RGB/RGBA, and optionally resize.
+5. Clean up the temporary SQLite file. Returns `None` on any failure.
 
 See [rendering-pipeline.md](rendering-pipeline.md) for full details.
 

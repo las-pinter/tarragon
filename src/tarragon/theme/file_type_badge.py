@@ -21,6 +21,7 @@ BADGE_COLORS: dict[str, tuple[QColor, QColor]] = {
     "gif": (QColor("#2A1A3A"), QColor("#A87BC8")),
     "webp": (QColor("#1A3A3A"), QColor("#7BC8C8")),
     "bmp": (QColor("#3A3A1A"), QColor("#C8C87B")),
+    "clip": (QColor("#2E86AB"), QColor("#D4EEF7")),
 }
 
 # Default fallback colors

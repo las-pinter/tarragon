@@ -352,6 +352,25 @@ class TestCheckAndRender:
             service.check_and_render(file_info)
             mock_render.assert_called_once_with(file_info)
 
+    def test_check_and_render_clip(
+        self,
+        tmp_path: Path,
+        service: ThumbnailService,
+        db_mock: MagicMock,
+    ) -> None:
+        """.clip extension → calls _render_all_resolutions (which handles CLIP internally)."""
+        file_info = FileInfo(
+            path=tmp_path / "illustration.clip",
+            mtime=1000.0,
+            size=500,
+            extension=".clip",
+        )
+        db_mock.get_thumbnail.return_value = None
+
+        with patch.object(service, "_render_all_resolutions") as mock_render:
+            service.check_and_render(file_info)
+            mock_render.assert_called_once_with(file_info)
+
 
 # =========================================================================
 # Callback handlers
@@ -902,6 +921,48 @@ class TestRenderAllResolutionsCancellation:
         mock_psd.assert_called_once()
         call_kwargs = mock_psd.call_args.kwargs
         assert call_kwargs.get("cancel_event") is service._cancel_event
+
+    def test_render_all_calls_render_clip_image_for_clip_files(
+        self,
+        tmp_path: Path,
+        service: ThumbnailService,
+    ) -> None:
+        """_render_all_resolutions calls render_clip_image (not render_plain_image) for .clip files."""
+        file_info = FileInfo(
+            path=tmp_path / "illustration.clip",
+            mtime=1000.0,
+            size=500,
+            extension=".clip",
+        )
+
+        mock_img = MagicMock(spec=Image.Image)
+        mock_img.width = 100
+        mock_img.height = 80
+
+        with (
+            patch(
+                "tarragon.services.thumbnail_service.render_clip_image",
+                return_value=mock_img,
+            ) as mock_clip,
+            patch("tarragon.services.thumbnail_service.render_plain_image") as mock_plain,
+            patch("tarragon.services.thumbnail_service.render_psd_image") as mock_psd,
+            patch("tarragon.services.thumbnail_service.generate_cache_uuid", return_value="test-uuid"),
+            patch("tarragon.services.thumbnail_service.generate_cache_paths") as mock_paths,
+            patch("tarragon.services.thumbnail_service.save_to_cache"),
+            patch("tarragon.services.thumbnail_service.derive_smaller_sizes", return_value={}),
+        ):
+            mock_paths.return_value = {
+                str(RESOLUTION_THUMBNAIL): tmp_path / "cache" / "256.png",
+                str(RESOLUTION_PREVIEW): tmp_path / "cache" / "1024.png",
+                "full": tmp_path / "cache" / "full.png",
+            }
+            service._render_all_resolutions(file_info)
+
+        # render_clip_image should have been called with the file path and RESOLUTION_FULL
+        mock_clip.assert_called_once_with(file_info.path, target_size=RESOLUTION_FULL)
+        # render_plain_image and render_psd_image should NOT have been called
+        mock_plain.assert_not_called()
+        mock_psd.assert_not_called()
 
 
 # =========================================================================

@@ -81,7 +81,7 @@ def build(dev_mode: bool = False) -> None:
                   for fast iteration builds. Output goes to dist-dev/.
     """
     check_dependencies()
-    ccache_path = _find_ccache()
+    _find_ccache()  # prints helpful message about ccache status
 
     project_root = Path(__file__).resolve().parent.parent
     entry_point = project_root / "src" / "tarragon" / "main.py"

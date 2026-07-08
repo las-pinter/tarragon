@@ -28,6 +28,7 @@ SURFACE_HIGHLIGHT: QColor = QColor(_colors["surface_highlight"])
 CORAL_STRONG: QColor = QColor(_colors["coral_strong"])
 CORAL_MUTED: QColor = QColor(_colors["coral_muted"])
 CORAL_DARK: QColor = QColor(_colors["coral_dark"])
+CORAL_BRIGHT: QColor = QColor(_colors["coral_bright"])
 AMBER_ACCENT: QColor = QColor(_colors["amber_accent"])
 AMBER_LIGHT: QColor = QColor(_colors["amber_light"])
 AMBER_DARK: QColor = QColor(_colors["amber_dark"])
@@ -66,6 +67,7 @@ __all__ = [
     "BORDER_DISABLED",
     "BORDER_INTERACTIVE",
     "BORDER_SUBTLE",
+    "CORAL_BRIGHT",
     "CORAL_DARK",
     "CORAL_MUTED",
     "CORAL_STRONG",

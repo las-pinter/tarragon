@@ -49,6 +49,7 @@ def test_tokens_colors_section() -> None:
         "coral_strong",
         "coral_muted",
         "coral_dark",
+        "coral_bright",
         "amber_accent",
         "amber_light",
         "amber_dark",
@@ -81,6 +82,7 @@ def test_tokens_typography_section() -> None:
         "heading_size",
         "small_size",
         "log_size",
+        "caption_size",
         "weight_regular",
         "weight_medium",
         "weight_semibold",
@@ -154,7 +156,7 @@ def test_coral_and_amber_accent_colors_present() -> None:
 
 
 def test_qss_file_exists_and_is_readable() -> None:
-    """app.qss exists in the theme package and can be read as text."""
+    """Generated QSS is a non-empty string."""
     from tarragon.theme.loader import ThemeLoader
 
     loader = ThemeLoader()

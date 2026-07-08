@@ -37,6 +37,9 @@ SMALL_SIZE: int = int(_typo["small_size"])
 #: Log / monospace text size in points.
 LOG_SIZE: int = int(_typo["log_size"])
 
+#: Caption text size in points.
+CAPTION_SIZE: int = int(_typo["caption_size"])
+
 #: Regular font weight (400).
 WEIGHT_REGULAR: int = int(_typo["weight_regular"])
 
@@ -104,6 +107,7 @@ def small_font(*, weight: int | None = None) -> QFont:
 
 __all__ = [
     "BODY_SIZE",
+    "CAPTION_SIZE",
     "FONT_FAMILY",
     "HEADING_SIZE",
     "LOG_SIZE",

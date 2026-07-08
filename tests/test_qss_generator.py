@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
 import pytest
@@ -32,6 +31,7 @@ def minimal_tokens() -> dict[str, Any]:
             "coral_strong": "#F0997B",
             "coral_muted": "#D85A30",
             "coral_dark": "#4A1B0C",
+            "coral_bright": "#E06540",
             "amber_accent": "#FAC775",
             "amber_light": "#FFD480",
             "amber_dark": "#412402",
@@ -51,6 +51,7 @@ def minimal_tokens() -> dict[str, Any]:
             "heading_size": 18,
             "small_size": 11,
             "log_size": 12,
+            "caption_size": 11,
             "weight_regular": 400,
             "weight_medium": 500,
             "weight_semibold": 600,
@@ -83,6 +84,7 @@ def test_generate_qss_contains_expected_color_tokens(tokens: dict[str, Any]) -> 
         "coral_strong",
         "coral_muted",
         "coral_dark",
+        "coral_bright",
         "amber_accent",
         "amber_light",
         "amber_dark",
@@ -133,16 +135,6 @@ def test_generate_qss_contains_pseudo_states(tokens: dict[str, Any]) -> None:
     for pseudo in [":hover", ":pressed", ":focus", ":selected", ":checked", ":disabled"]:
         assert pseudo in qss, f"Pseudo-state '{pseudo}' missing from generated QSS"
 
-
-def test_generate_qss_matches_original_app_qss(tokens: dict[str, Any]) -> None:
-    """Generated QSS is identical to the reference app.qss file (ignoring deprecation header)."""
-    qss = generate_qss(tokens)
-    qss_path = Path(__file__).resolve().parent.parent / "src" / "tarragon" / "theme" / "app.qss"
-    original = qss_path.read_text(encoding="utf-8")
-    # Strip the deprecation header if present — it is not part of generated QSS.
-    if original.startswith("/* DEPRECATED:"):
-        original = original.split("*/\n", 1)[1].lstrip("\n")
-    assert qss == original, "Generated QSS must match the reference app.qss exactly"
 
 
 def test_generate_qss_no_gradients(tokens: dict[str, Any]) -> None:

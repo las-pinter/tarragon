@@ -33,7 +33,6 @@ main.py
         │     ├── file_type_badge.py    — File extension badge colors for thumbnail grid
         │     ├── qss_generator.py      — Builds application QSS stylesheet from design tokens
         │     ├── loader.py             — Theme loader (reads QSS + tokens, generates final QSS)
-        │     ├── app.qss               — Base QSS stylesheet (hand-written reference)
         │     └── icons/
         │           └── search.svg      — Search icon for the search box
         ├── services/
@@ -178,7 +177,6 @@ The theme is driven by design tokens stored in `tokens.json` and exposed through
 - **`file_type_badge.py`** — Maps file extensions to `(background, text)` QColor pairs for thumbnail badges.
 - **`qss_generator.py`** — Generates the full application QSS stylesheet from tokens.
 - **`loader.py`** — Entry point for theme initialization; calls `load_and_generate_qss()` to produce the final stylesheet.
-- **`app.qss`** — Hand-written reference QSS (functionally identical to generator output).
 - **`icons/`** — SVG icon assets (currently `search.svg`).
 
 ## Data Layer

@@ -208,7 +208,6 @@ tarragon/
 │       ├── color_buckets.py      # Color bucket definitions
 │       ├── typography.py         # Typography settings
 │       ├── spacing.py            # Spacing constants
-│       ├── app.qss               # Qt stylesheet
 │       ├── qss_generator.py      # QSS generation utilities
 │       ├── file_type_badge.py    # File type badge rendering
 │       ├── loader.py             # Theme loader

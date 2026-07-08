@@ -1,8 +1,8 @@
 """QSS generator — builds the application stylesheet from design tokens.
 
 Reads ``tokens.json`` (via :func:`~tarragon.theme.tokens.load_tokens`) and
-produces a deterministic QSS string that is functionally identical to the
-hand-written ``app.qss``.  Changing token values in ``tokens.json`` and
+produces a deterministic QSS string from the design tokens.
+Changing token values in ``tokens.json`` and
 re-running the generator updates the entire theme.
 
 Example::
@@ -84,6 +84,7 @@ def generate_qss(tokens: dict[str, Any]) -> str:
     body_px = int(t["body_size"])
     small_px = int(t["small_size"])
     log_px = int(t["log_size"])
+    caption_px = int(t["caption_size"])
     weight_semibold = int(t["weight_semibold"])
 
     xs = int(s["xs"])
@@ -106,6 +107,7 @@ def generate_qss(tokens: dict[str, Any]) -> str:
     coral_strong = c["coral_strong"]
     coral_muted = c["coral_muted"]
     coral_dark = c["coral_dark"]
+    coral_bright = c["coral_bright"]
     amber_accent = c["amber_accent"]
     amber_light = c["amber_light"]
     amber_dark = c["amber_dark"]
@@ -117,9 +119,6 @@ def generate_qss(tokens: dict[str, Any]) -> str:
     bg_disabled = c["bg_disabled"]
     border_disabled = c["border_disabled"]
     bg_log_panel = c["bg_log_panel"]
-
-    # NOTE: #E06540 (checkbox checked:hover bg) has no matching color token —
-    # it's a brighter pressed-coral used only for hover feedback in QSS.
 
     return f"""\
 /* Tarragon Theme — Dark Coral-Amber Aesthetic */
@@ -212,7 +211,7 @@ QLineEdit {{
     background-color: {bg_secondary};
     color: {text_primary};
     font-family: {ui_font};
-    font-size: 11px;
+    font-size: {caption_px}px;
     border: none;
     border-radius: {r_md}px;
     padding-left: 28px;
@@ -315,7 +314,7 @@ QTreeView::item:selected {{
 /* ── Sidebar section headers ────────────────────────────────────── */
 QLabel#sidebarSectionHeader {{
     color: {text_muted};
-    font-size: 11px;
+    font-size: {caption_px}px;
     margin: 0px 6px 6px 6px;
 }}
 
@@ -413,7 +412,7 @@ QCheckBox::indicator:checked, QGroupBox::indicator:checked {{
 }}
 
 QCheckBox::indicator:checked:hover, QGroupBox::indicator:checked:hover {{
-    background-color: #E06540;
+    background-color: {coral_bright};
 }}
 
 QCheckBox::indicator:disabled, QGroupBox::indicator:disabled {{
@@ -490,7 +489,7 @@ QTabBar::tab:hover {{
 /* ── Gallery info bar ────────────────────────────────────────────── */
 QLabel#galleryInfoLabel {{
     color: {text_muted};
-    font-size: 11px;
+    font-size: {caption_px}px;
 }}
 
 QLabel#galleryActiveFiltersPill {{
@@ -498,7 +497,7 @@ QLabel#galleryActiveFiltersPill {{
     color: {amber_accent};
     padding: 3px 8px;
     border-radius: 6px;
-    font-size: 11px;
+    font-size: {caption_px}px;
 }}
 
 /* ── Preview panel background ──────────────────────────────────────── */
@@ -509,18 +508,18 @@ QWidget#previewPanel {{
 /* ── Preview panel section headers ────────────────────────────────── */
 QLabel#previewSectionHeader {{
     color: {text_muted};
-    font-size: 11px;
+    font-size: {caption_px}px;
 }}
 
 /* ── Preview panel metadata ───────────────────────────────────────── */
 QLabel#previewMetaLabel {{
     color: {text_muted};
-    font-size: 11px;
+    font-size: {caption_px}px;
 }}
 
 QLabel#previewMetaValue {{
     color: {text_tertiary};
-    font-size: 11px;
+    font-size: {caption_px}px;
 }}
 
 /* ── Preview panel add-tag button ─────────────────────────────────── */
@@ -530,7 +529,7 @@ QPushButton#previewAddTagBtn {{
     border: 1px solid {border_interactive};
     border-radius: {r_xl}px;
     padding: 3px 8px;
-    font-size: 11px;
+    font-size: {caption_px}px;
 }}
 
 QPushButton#previewAddTagBtn:hover {{

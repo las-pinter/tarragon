@@ -5,8 +5,8 @@ REM Build script for Tarragon Viewer (Windows)
 REM Creates a virtual environment, installs dependencies, and runs the Nuitka build.
 REM
 REM Usage:
-REM   scripts\build.bat              Build onefile binary
-REM   scripts\build.bat --standalone Build standalone directory
+REM   scripts\build.bat              Build release onefile binary
+REM   scripts\build.bat --dev        Build dev mode (fast iteration)
 
 set "SCRIPT_DIR=%~dp0"
 set "PROJECT_ROOT=%SCRIPT_DIR%.."
@@ -38,10 +38,32 @@ pip install -r requirements.txt --quiet
 echo ==^> Installing build dependencies...
 pip install -r requirements-build.txt --quiet
 
-REM Run build
-echo ==^> Starting Nuitka build...
-python scripts\package_nuitka.py %*
+REM Check for ccache (dramatically speeds up repeat builds)
+where ccache >nul 2>&1
+if %errorlevel% equ 0 (
+    echo ==^> ccache detected — repeat builds will be fast
+) else (
+    echo ==^> ccache not found — install from https://ccache.dev/
+    echo     This will dramatically speed up repeat builds
+)
 
-echo ==^> Build complete! Check dist\ directory for output.
+REM Determine build mode
+set "BUILD_MODE=release"
+if "%1"=="--dev" set "BUILD_MODE=dev"
+
+REM Run build
+if "%BUILD_MODE%"=="dev" (
+    echo ==^> Building DEV mode (fast iteration)...
+    python scripts\package_nuitka.py --dev
+) else (
+    echo ==^> Building RELEASE mode (full build)...
+    python scripts\package_nuitka.py --release
+)
+
+if "%BUILD_MODE%"=="dev" (
+    echo ==^> Dev build complete! Check dist-dev\ directory for output.
+) else (
+    echo ==^> Release build complete! Check dist\ directory for output.
+)
 
 endlocal

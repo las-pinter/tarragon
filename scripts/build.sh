@@ -5,8 +5,8 @@ set -e
 # Creates a virtual environment, installs dependencies, and runs the Nuitka build.
 #
 # Usage:
-#   ./scripts/build.sh              # Build onefile binary
-#   ./scripts/build.sh --standalone # Build standalone directory
+#   ./scripts/build.sh              # Build release onefile binary
+#   ./scripts/build.sh --dev        # Build dev mode (fast iteration)
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -46,8 +46,29 @@ pip install -r requirements.txt --quiet
 echo "==> Installing build dependencies..."
 pip install -r requirements-build.txt --quiet
 
-# Run build
-echo "==> Starting Nuitka build..."
-python scripts/package_nuitka.py "$@"
+# Check for ccache (dramatically speeds up repeat builds)
+if command -v ccache &>/dev/null; then
+    echo "==> ccache detected — repeat builds will be fast"
+else
+    echo "==> ccache not found — install with: sudo apt-get install ccache"
+    echo "    This will dramatically speed up repeat builds"
+fi
 
-echo "==> Build complete! Check dist/ directory for output."
+# Determine build mode
+BUILD_MODE="release"
+if [ "$1" = "--dev" ]; then BUILD_MODE="dev"; fi
+
+# Run build
+if [ "$BUILD_MODE" = "dev" ]; then
+    echo "==> Building DEV mode (fast iteration)..."
+    python scripts/package_nuitka.py --dev
+else
+    echo "==> Building RELEASE mode (full build)..."
+    python scripts/package_nuitka.py --release
+fi
+
+if [ "$BUILD_MODE" = "dev" ]; then
+    echo "==> Dev build complete! Check dist-dev/ directory for output."
+else
+    echo "==> Release build complete! Check dist/ directory for output."
+fi

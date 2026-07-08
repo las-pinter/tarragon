@@ -59,16 +59,7 @@ BUILD_MODE="release"
 if [ "$1" = "--dev" ]; then BUILD_MODE="dev"; fi
 
 # Run build
-if [ "$BUILD_MODE" = "dev" ]; then
-    echo "==> Building DEV mode (fast iteration)..."
-    python scripts/package_nuitka.py --dev
-else
-    echo "==> Building RELEASE mode (full build)..."
-    python scripts/package_nuitka.py --release
-fi
+echo "==> Building RELEASE mode (full build)..."
+python scripts/package_nuitka.py --release
 
-if [ "$BUILD_MODE" = "dev" ]; then
-    echo "==> Dev build complete! Check dist-dev/ directory for output."
-else
-    echo "==> Release build complete! Check dist/ directory for output."
-fi
+echo "==> Release build complete! Check dist/ directory for output."

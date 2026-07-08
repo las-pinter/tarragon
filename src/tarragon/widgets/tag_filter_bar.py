@@ -13,17 +13,15 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
-    QFrame,
     QHBoxLayout,
-    QLabel,
     QMenu,
     QPushButton,
     QWidget,
 )
 
 from tarragon.services.tag_service import TagService
-from tarragon.theme.colors import AMBER_ACCENT, CORAL_MUTED, SURFACE_HOVER
 from tarragon.theme.spacing import SM, XS
+from tarragon.widgets._chip_utils import create_removable_chip
 
 
 class TagFilterBar(QWidget):
@@ -156,6 +154,8 @@ class TagFilterBar(QWidget):
     def _create_chip(self, tag_id: int, tag_name: str) -> QWidget:
         """Create a removable tag chip widget.
 
+        Delegates to the shared chip factory for consistent styling.
+
         Parameters
         ----------
         tag_id:
@@ -167,38 +167,7 @@ class TagFilterBar(QWidget):
         -------
             A QWidget containing the tag name label and a remove button.
         """
-        chip = QFrame()
-        chip.setStyleSheet(
-            f"QFrame {{  background-color: {SURFACE_HOVER.name()};  "
-            f"border: 1px solid {AMBER_ACCENT.name()};  "
-            f"border-radius: 10px;  padding: 2px 6px;}}"
+        return create_removable_chip(
+            label_text=tag_name,
+            on_remove=lambda tid=tag_id: self._remove_tag(tid),
         )
-
-        chip_layout = QHBoxLayout(chip)
-        chip_layout.setContentsMargins(XS, XS, XS, XS)
-        chip_layout.setSpacing(XS)
-
-        label = QLabel(tag_name)
-        label.setStyleSheet(f"QLabel {{ color: {AMBER_ACCENT.name()}; border: none; background: transparent; }}")
-        chip_layout.addWidget(label)
-
-        remove_btn = QPushButton("\u00d7")
-        remove_btn.setFixedSize(16, 16)
-        remove_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        remove_btn.setStyleSheet(
-            f"QPushButton {{"
-            f"  color: {CORAL_MUTED.name()};"
-            f"  border: none;"
-            f"  background: transparent;"
-            f"  font-weight: bold;"
-            f"  padding: 0;"
-            f"}}"
-            f"QPushButton:hover {{"
-            # TODO: #FF6B40 has no matching color token — brighter coral for hover feedback.
-            f"  color: #FF6B40;"
-            f"}}"
-        )
-        remove_btn.clicked.connect(lambda _checked=False, tid=tag_id: self._remove_tag(tid))
-        chip_layout.addWidget(remove_btn)
-
-        return chip

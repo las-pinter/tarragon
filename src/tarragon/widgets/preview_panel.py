@@ -10,7 +10,7 @@ from typing import Any
 
 from PIL import Image, ImageOps
 from PySide6.QtCore import QEvent, QRect, QSize, Qt, Signal
-from PySide6.QtGui import QEnterEvent, QImage, QPixmap, QResizeEvent
+from PySide6.QtGui import QEnterEvent, QImage, QMouseEvent, QPixmap, QResizeEvent
 from PySide6.QtWidgets import (
     QGraphicsOpacityEffect,
     QGridLayout,
@@ -51,6 +51,14 @@ def _apply_exif_from_original(image: Image.Image, original_path: Path) -> Image.
     *original* source file and applies the corresponding geometric
     transformation to *image* so that old caches still display correctly.
 
+    WHY NOT ``ImageOps.exif_transpose()``?
+    That function reads the orientation tag from the image object itself.
+    Here we need to apply orientation from a *different* file (the original
+    source) to a cached thumbnail dat has no EXIF data.  There is no way to
+    tell ``exif_transpose()`` "use dis orientation value" — it only looks at
+    the image's own EXIF.  Injecting EXIF into the cached image just to call
+    it would be more complex and error-prone dan da manual mapping below.
+
     Parameters
     ----------
     image:
@@ -80,6 +88,13 @@ def _transpose_for_orientation(image: Image.Image, orientation: int) -> Image.Im
 
     Mirrors the logic of :func:`PIL.ImageOps.exif_transpose` for orientation
     values 2–8.  Orientation 1 (normal) is handled by the caller.
+
+    NOTE: This manual implementation exists because ``ImageOps.exif_transpose()``
+    reads the orientation tag from the image *itself*, but we need to apply
+    orientation read from a *different* file (the original source) to a cached
+    thumbnail that has no EXIF data.  We cannot inject EXIF into the cached
+    image and call ``exif_transpose()`` — that would be more complex and fragile
+    than this straightforward mapping.  Do NOT replace dis wiv ``exif_transpose``.
     """
     if orientation == 2:
         return image.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
@@ -96,6 +111,21 @@ def _transpose_for_orientation(image: Image.Image, orientation: int) -> Image.Im
     if orientation == 8:
         return image.transpose(Image.Transpose.ROTATE_90)
     return image
+
+
+class _ClickableLabel(QLabel):
+    """A QLabel subclass dat emits a ``clicked`` signal on mouse press.
+
+    Replaces da monkey-patched ``mousePressEvent`` approach wiv a proper
+    Qt event-chain override, avoiding fragile instance-level patching.
+    """
+
+    clicked = Signal()
+
+    def mousePressEvent(self, event: QMouseEvent) -> None:  # noqa: N802
+        """Emit ``clicked`` an' propagate da event up da Qt chain."""
+        self.clicked.emit()
+        super().mousePressEvent(event)
 
 
 class _TagPillWidget(QWidget):
@@ -122,9 +152,9 @@ class _TagPillWidget(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(2)
 
-        self._label = QLabel(tag_name)
+        self._label = _ClickableLabel(tag_name)
         self._label.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._label.mousePressEvent = lambda _e: self._on_toggle()  # type: ignore[assignment]
+        self._label.clicked.connect(self._on_toggle)
         layout.addWidget(self._label)
 
         self._remove_btn = QPushButton("×")
@@ -998,27 +1028,33 @@ class PreviewPanel(QWidget):
         """
         if self._tag_service is None:
             return []
-        all_tag_ids: set[int] = set()
+
+        # Single pass: query each file once and cache tag info (id → name/source).
+        # This avoids the previous O(n²) pattern where get_tags_for_file was
+        # called again in the inner loop to find the source for each tag_id.
+        tag_info: dict[int, dict[str, Any]] = {}
         for path in paths:
             tags = self._tag_service.get_tags_for_file(path)
-            all_tag_ids.update(t["id"] for t in tags)
+            for t in tags:
+                tid = t["id"]
+                if tid not in tag_info:
+                    tag_info[tid] = {
+                        "name": t.get("name", ""),
+                        "source": t.get("source", "user"),
+                    }
 
         union_tags: list[dict[str, Any]] = []
-        for tag_id in sorted(all_tag_ids):
-            tag_name = self._tag_service.get_tag_name(tag_id)
-            if tag_name:
-                # Determine source from any file that has this tag
-                source = "user"
-                for path in paths:
-                    file_tags = self._tag_service.get_tags_for_file(path)
-                    for ft in file_tags:
-                        if ft["id"] == tag_id:
-                            source = ft.get("source", "user")
-                            break
-                    else:
-                        continue
-                    break
-                union_tags.append({"id": tag_id, "name": tag_name, "source": source})
+        for tag_id in sorted(tag_info):
+            name = tag_info[tag_id]["name"]
+            if not name:
+                # Fall back to service lookup when name wasn't in the tag dict
+                name = self._tag_service.get_tag_name(tag_id)
+            if name:
+                union_tags.append({
+                    "id": tag_id,
+                    "name": name,
+                    "source": tag_info[tag_id]["source"],
+                })
         return union_tags
 
     def _clear_tag_pills(self) -> None:

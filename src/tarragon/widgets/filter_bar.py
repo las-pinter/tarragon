@@ -17,9 +17,7 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
-    QFrame,
     QHBoxLayout,
-    QLabel,
     QMenu,
     QPushButton,
     QWidget,
@@ -27,8 +25,8 @@ from PySide6.QtWidgets import (
 
 from tarragon.db import Database
 from tarragon.services.tag_service import TagService
-from tarragon.theme.colors import AMBER_ACCENT, CORAL_MUTED, SURFACE_HOVER
 from tarragon.theme.spacing import XS
+from tarragon.widgets._chip_utils import create_removable_chip
 from tarragon.widgets.color_filter_bar import ColorFilterBar
 from tarragon.widgets.flow_layout import FlowLayout
 from tarragon.widgets.tag_filter_bar import TagFilterBar
@@ -201,7 +199,7 @@ class FilterBar(QWidget):
     def _create_folder_chip(self, folder_path: str) -> QWidget:
         """Create a removable folder chip widget.
 
-        Uses the same amber styling as tag chips for visual consistency.
+        Delegates to the shared chip factory for consistent styling.
 
         Args:
             folder_path: Full folder path for the chip.
@@ -209,43 +207,12 @@ class FilterBar(QWidget):
         Returns:
             A QWidget containing the folder name label and a remove button.
         """
-        chip = QFrame()
-        chip.setStyleSheet(
-            f"QFrame {{  background-color: {SURFACE_HOVER.name()};  "
-            f"border: 1px solid {AMBER_ACCENT.name()};  "
-            f"border-radius: 10px;  padding: 2px 6px;}}"
-        )
-
-        chip_layout = QHBoxLayout(chip)
-        chip_layout.setContentsMargins(XS, XS, XS, XS)
-        chip_layout.setSpacing(XS)
-
         display_name = _short_folder_name(folder_path)
-        label = QLabel(display_name)
-        label.setToolTip(folder_path)
-        label.setStyleSheet(f"QLabel {{ color: {AMBER_ACCENT.name()}; border: none; background: transparent; }}")
-        chip_layout.addWidget(label)
-
-        remove_btn = QPushButton("\u00d7")
-        remove_btn.setFixedSize(16, 16)
-        remove_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        remove_btn.setStyleSheet(
-            f"QPushButton {{"
-            f"  color: {CORAL_MUTED.name()};"
-            f"  border: none;"
-            f"  background: transparent;"
-            f"  font-weight: bold;"
-            f"  padding: 0;"
-            f"}}"
-            f"QPushButton:hover {{"
-            # TODO: #FF6B40 has no matching color token — brighter coral for hover feedback.
-            f"  color: #FF6B40;"
-            f"}}"
+        return create_removable_chip(
+            label_text=display_name,
+            on_remove=lambda fp=folder_path: self._remove_folder_chip(fp),
+            tooltip=folder_path,
         )
-        remove_btn.clicked.connect(lambda _checked=False, fp=folder_path: self._remove_folder_chip(fp))
-        chip_layout.addWidget(remove_btn)
-
-        return chip
 
     def _update_folder_chips_visibility(self) -> None:
         """Show or hide the folder chips container based on selection."""

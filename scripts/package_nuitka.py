@@ -91,6 +91,7 @@ def build(dev_mode: bool = False) -> None:
         "-m",
         "nuitka",
         "--standalone",
+        "--windows-console-mode=disable",
         "--static-libpython=no",
         "--enable-plugin=pyside6",
         "--include-package=tarragon",

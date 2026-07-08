@@ -16,8 +16,6 @@ from PySide6.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
     QLabel,
-    QLayout,
-    QLayoutItem,
     QLineEdit,
     QMenu,
     QPushButton,
@@ -28,6 +26,7 @@ from PySide6.QtWidgets import (
 
 from tarragon.db import normalize_path
 from tarragon.services.tag_service import TagService
+from tarragon.widgets.flow_layout import FlowLayout
 from tarragon.theme.color_buckets import BUCKET_COLORS, BUCKET_HEX_COLORS
 from tarragon.theme.spacing import SM, XS
 from tarragon.theme.tokens import get_token
@@ -97,104 +96,6 @@ def _transpose_for_orientation(image: Image.Image, orientation: int) -> Image.Im
     if orientation == 8:
         return image.transpose(Image.Transpose.ROTATE_90)
     return image
-
-
-class _FlowLayout(QLayout):
-    """Simple left-to-right flow layout that wraps widgets to the next row.
-
-    Used for tag pills in the preview panel metadata area.
-    """
-
-    def __init__(self, parent: QWidget | None = None, spacing: int = 4) -> None:
-        super().__init__(parent)
-        self._items: list[QLayoutItem] = []
-        self._spacing = spacing
-
-    def addItem(self, item: QLayoutItem) -> None:  # noqa: N802
-        self._items.append(item)
-
-    def count(self) -> int:
-        return len(self._items)
-
-    def itemAt(self, index: int) -> QLayoutItem | None:  # noqa: N802
-        if 0 <= index < len(self._items):
-            return self._items[index]
-        return None
-
-    def takeAt(self, index: int) -> QLayoutItem | None:  # noqa: N802
-        if 0 <= index < len(self._items):
-            return self._items.pop(index)
-        return None
-
-    def expandingDirections(self) -> Qt.Orientation:  # noqa: N802
-        return Qt.Orientation(0)
-
-    def hasHeightForWidth(self) -> bool:  # noqa: N802
-        return True
-
-    def heightForWidth(self, width: int) -> int:  # noqa: N802
-        return self._do_layout(QRect(0, 0, width, 0), dry_run=True)
-
-    def sizeHint(self) -> QSize:  # noqa: N802
-        return self.minimumSizeHint()
-
-    def minimumSizeHint(self) -> QSize:  # noqa: N802
-        if not self._items:
-            # Return a size for one row so the container doesn't collapse to zero
-            return QSize(0, 36)
-        # At minimum, fit the widest single item
-        max_w = 0
-        for item in self._items:
-            wid = item.widget()
-            if wid is not None:
-                max_w = max(max_w, wid.sizeHint().width())
-        margins = self.contentsMargins()
-        total_h = self._do_layout(QRect(0, 0, max_w + margins.left() + margins.right(), 0), dry_run=True)
-        return QSize(max_w, total_h)
-
-    def setGeometry(self, rect: QRect) -> None:  # noqa: N802
-        super().setGeometry(rect)
-        self._do_layout(rect, dry_run=False)
-
-    def _do_layout(self, rect: QRect, dry_run: bool) -> int:
-        """Position items in rows, wrapping when *width* is exceeded.
-
-        Returns the total height needed for all rows.
-        """
-        margins = self.contentsMargins()
-        x_offset = rect.x()
-        y_offset = rect.y()
-        width = rect.width()
-        effective_width = width - margins.left() - margins.right()
-        x = 0
-        y = 0
-        row_height = 0
-
-        for item in self._items:
-            wid = item.widget()
-            if wid is None:
-                continue
-            hint = wid.sizeHint()
-            next_x = x + hint.width() + self._spacing
-
-            if next_x - self._spacing > effective_width and x > 0:
-                x = 0
-                y += row_height + self._spacing
-                row_height = 0
-                next_x = hint.width() + self._spacing
-
-            if not dry_run:
-                wid.setGeometry(
-                    x_offset + margins.left() + x,
-                    y_offset + margins.top() + y,
-                    hint.width(),
-                    hint.height(),
-                )
-
-            x = next_x
-            row_height = max(row_height, hint.height())
-
-        return y + row_height + margins.top() + margins.bottom()
 
 
 class _TagPillWidget(QWidget):
@@ -386,7 +287,7 @@ class PreviewPanel(QWidget):
 
         self._tags_container = QWidget()
         self._tags_container.setMinimumHeight(36)  # ensure visible even when empty (one row of pills)
-        self._tags_flow = _FlowLayout(self._tags_container, spacing=4)
+        self._tags_flow = FlowLayout(self._tags_container, spacing=4)
         layout.addWidget(self._tags_container)
 
         self._add_tag_btn = QPushButton("+ add")
@@ -1078,7 +979,7 @@ class PreviewPanel(QWidget):
             if len(self._selected_paths) == 1:
                 tags = self._tag_service.get_tags_for_file(self._selected_paths[0])
             else:
-                tags = self._get_union_tags(self._selected_paths)
+                tags = self.get_union_tags(self._selected_paths)
             self.set_tags(tags, selected_paths=self._selected_paths)
         elif not self._selected_paths:
             self._clear_tag_pills()
@@ -1086,7 +987,7 @@ class PreviewPanel(QWidget):
         # Emit signal so main window can refresh gallery if needed
         self.tags_changed.emit()
 
-    def _get_union_tags(self, paths: list[str]) -> list[dict[str, Any]]:
+    def get_union_tags(self, paths: list[str]) -> list[dict[str, Any]]:
         """Get the union of tags across multiple file paths.
 
         Args:

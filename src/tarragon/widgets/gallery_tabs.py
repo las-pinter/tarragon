@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Signal
-from PySide6.QtWidgets import QTabWidget, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QTabWidget, QWidget
 
 
-class GalleryTabs(QWidget):
+class GalleryTabs(QTabWidget):
     """Tab widget for switching between folder-scoped and global image view."""
 
     scope_changed = Signal(bool)  # True = global (All Images), False = folder
@@ -18,16 +18,9 @@ class GalleryTabs(QWidget):
             parent: Optional parent widget.
         """
         super().__init__(parent)
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-
-        self._tab_widget = QTabWidget()
-        self._tab_widget.addTab(QWidget(), "Folder")
-        self._tab_widget.addTab(QWidget(), "All Images")
-        self._tab_widget.currentChanged.connect(self._on_tab_changed)
-
-        layout.addWidget(self._tab_widget)
+        self.addTab(QWidget(), "Folder")
+        self.addTab(QWidget(), "All Images")
+        self.currentChanged.connect(self._on_tab_changed)
 
     def _on_tab_changed(self, index: int) -> None:
         """Emit scope_changed signal when tab changes.
@@ -35,9 +28,8 @@ class GalleryTabs(QWidget):
         Args:
             index: The newly selected tab index.
         """
-        is_global = index == 1  # "All Images" is index 1
-        self.scope_changed.emit(is_global)
+        self.scope_changed.emit(index == 1)  # "All Images" is index 1
 
     def is_global_scope(self) -> bool:
         """Return True if 'All Images' tab is active."""
-        return self._tab_widget.currentIndex() == 1
+        return self.currentIndex() == 1

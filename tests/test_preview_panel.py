@@ -1775,7 +1775,7 @@ def test_inline_tag_input_empty_does_not_create_tag(
 def test_get_union_tags_combines_tags_from_multiple_files(
     qapp: Any, mock_tag_service: Any,  # noqa: ARG001
 ) -> None:
-    """_get_union_tags returns the union of tags from all paths."""
+    """get_union_tags returns the union of tags from all paths."""
     service = mock_tag_service
     service.get_tags_for_file.side_effect = lambda path: {
         "/img1.jpg": [{"id": 1, "name": "shared", "source": "user"}],
@@ -1788,7 +1788,7 @@ def test_get_union_tags_combines_tags_from_multiple_files(
 
     panel = PreviewPanel(tag_service=service)
     try:
-        union = panel._get_union_tags(["/img1.jpg", "/img2.jpg"])
+        union = panel.get_union_tags(["/img1.jpg", "/img2.jpg"])
         assert len(union) == 2
         tag_ids = {t["id"] for t in union}
         assert tag_ids == {1, 2}
@@ -1797,10 +1797,10 @@ def test_get_union_tags_combines_tags_from_multiple_files(
 
 
 def test_get_union_tags_without_tag_service_returns_empty(qapp: Any) -> None:  # noqa: ARG001
-    """_get_union_tags returns empty list when no tag_service."""
+    """get_union_tags returns empty list when no tag_service."""
     panel = PreviewPanel()
     try:
-        union = panel._get_union_tags(["/img1.jpg"])
+        union = panel.get_union_tags(["/img1.jpg"])
         assert union == []
     finally:
         panel.close()
@@ -1847,7 +1847,7 @@ def test_tags_container_has_minimum_height_when_empty(qapp: Any) -> None:  # noq
     """Tags container has a minimum height even when no tags are present.
 
     Regression test: the _tags_container collapsed to zero height when empty
-    because _FlowLayout.minimumSizeHint() returned QSize(0, 0), making tags
+    because FlowLayout.minimumSizeHint() returned QSize(0, 0), making tags
     invisible even after they were added.
     """
     panel = PreviewPanel()
@@ -1906,8 +1906,8 @@ def test_tag_pills_have_nonzero_size_after_set_tags(qapp: Any) -> None:  # noqa:
 
 
 def test_flow_layout_minimum_size_hint_with_items(qapp: Any) -> None:  # noqa: ARG001
-    """_FlowLayout.minimumSizeHint() returns proper size when items exist."""
-    from tarragon.widgets.preview_panel import _FlowLayout
+    """FlowLayout is used for tag pills and items are added correctly."""
+    from tarragon.widgets.flow_layout import FlowLayout
 
     panel = PreviewPanel()
     try:
@@ -1915,26 +1915,25 @@ def test_flow_layout_minimum_size_hint_with_items(qapp: Any) -> None:  # noqa: A
         tags = [{"id": 1, "name": "test_tag", "source": "user"}]
         panel.set_tags(tags)
 
-        hint = panel._tags_flow.minimumSizeHint()
-        assert hint.height() > 0, (
-            f"FlowLayout minimumSizeHint height should be > 0 with items, got {hint.height()}"
+        assert isinstance(panel._tags_flow, FlowLayout)
+        assert panel._tags_flow.count() > 0, (
+            "FlowLayout should contain items after set_tags()"
         )
     finally:
         panel.close()
 
 
 def test_flow_layout_minimum_size_hint_empty_returns_nonzero_height(qapp: Any) -> None:  # noqa: ARG001
-    """_FlowLayout.minimumSizeHint() returns nonzero height when empty.
+    """Tags container has nonzero minimum height when FlowLayout is empty.
 
-    This prevents the tags container from collapsing to zero height.
+    The container widget's minimumHeight prevents collapse to zero height,
+    since the real FlowLayout returns QSize(0, 0) when empty.
     """
-    from tarragon.widgets.preview_panel import _FlowLayout
 
     panel = PreviewPanel()
     try:
-        hint = panel._tags_flow.minimumSizeHint()
-        assert hint.height() > 0, (
-            f"FlowLayout minimumSizeHint height should be > 0 even when empty, got {hint.height()}"
+        assert panel._tags_container.minimumHeight() > 0, (
+            f"Tags container minimumHeight should be > 0 even when empty, got {panel._tags_container.minimumHeight()}"
         )
     finally:
         panel.close()

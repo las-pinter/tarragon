@@ -365,7 +365,7 @@ def test_global_scope_queries_entire_db(qapp: Any) -> None:  # noqa: ARG001
         assert window.thumbnail_model.rowCount() == 1
 
         # Switch to global mode via gallery tabs
-        window._gallery_tabs._tab_widget.setCurrentIndex(1)  # "All Images"
+        window._gallery_tabs.setCurrentIndex(1)  # "All Images"
 
         # Now should return files from both folders
         window._run_filtered_query()
@@ -448,7 +448,7 @@ def test_folder_filter_in_global_mode(qapp: Any) -> None:  # noqa: ARG001
         window._current_folder = "/folder_a/"
 
         # Switch to global mode ("All Images" tab)
-        window._gallery_tabs._tab_widget.setCurrentIndex(1)
+        window._gallery_tabs.setCurrentIndex(1)
 
         # Without folder filter, should show all 3 thumbnails
         window._run_filtered_query()
@@ -526,11 +526,11 @@ def test_scope_change_shows_folder_button(qapp: Any) -> None:  # noqa: ARG001
         assert folder_btn.isHidden()
 
         # Switch to global mode
-        window._gallery_tabs._tab_widget.setCurrentIndex(1)
+        window._gallery_tabs.setCurrentIndex(1)
         assert not folder_btn.isHidden()
 
         # Switch back to local mode
-        window._gallery_tabs._tab_widget.setCurrentIndex(0)
+        window._gallery_tabs.setCurrentIndex(0)
         assert folder_btn.isHidden()
     finally:
         window.close()

@@ -34,6 +34,7 @@ from PySide6.QtWidgets import (
 )
 
 from tarragon.db import Database
+from tarragon.theme.colors import CORAL_STRONG, TEXT_SECONDARY
 
 
 class SidebarItemDelegate(QStyledItemDelegate):
@@ -204,8 +205,8 @@ class SidebarWidget(QWidget):
         self._model = FavoritesModel(db, parent=self)
 
         # Colours for the sidebar icon delegate
-        coral_color = QColor("#F0997B")  # coral_strong — selected icon
-        muted_color = QColor("#8d8a98")  # text_secondary — unselected icon
+        coral_color = CORAL_STRONG  # selected icon
+        muted_color = TEXT_SECONDARY  # unselected icon
 
         # ── Layout ──────────────────────────────────────────────
         layout = QVBoxLayout(self)

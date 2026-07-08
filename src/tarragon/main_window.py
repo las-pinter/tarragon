@@ -357,7 +357,7 @@ class MainWindow(QMainWindow):
             self.preview_panel.set_tags(tags, selected_paths=paths)
         else:
             # Multi-selection: get union of all tags
-            union_tags = self.preview_panel._get_union_tags(paths)
+            union_tags = self.preview_panel.get_union_tags(paths)
             self.preview_panel.set_tags(union_tags, selected_paths=paths)
 
     def _on_preview_tags_changed(self) -> None:

@@ -120,7 +120,13 @@ class ColorFilterBar(QWidget):
 
     @staticmethod
     def _apply_swatch_style(btn: QPushButton, hex_color: str, *, active: bool) -> None:
-        """Apply the appropriate stylesheet to a swatch button."""
+        """Apply the appropriate stylesheet to a swatch button.
+
+        This MUST remain inline because:
+        - ``background-color`` is unique per bucket (dynamic hex_color).
+        - ``border`` changes between active/inactive states at runtime.
+        Neither property can be expressed as a static QSS rule.
+        """
         border_color = _ACTIVE_BORDER_COLOR if active else _INACTIVE_BORDER_COLOR
         border_width = _ACTIVE_BORDER_WIDTH if active else _INACTIVE_BORDER_WIDTH
         btn.setStyleSheet(

@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from PIL import Image, ImageOps
-from PySide6.QtCore import QEvent, QRect, QSize, Qt, Signal
+from PySide6.QtCore import QEvent, QSize, Qt, Signal
 from PySide6.QtGui import QEnterEvent, QImage, QMouseEvent, QPixmap, QResizeEvent
 from PySide6.QtWidgets import (
     QGraphicsOpacityEffect,
@@ -30,7 +30,6 @@ from tarragon.widgets.flow_layout import FlowLayout
 from tarragon.theme.color_buckets import BUCKET_COLORS, BUCKET_HEX_COLORS
 from tarragon.theme.spacing import SM, XS
 from tarragon.theme.tokens import get_token
-from tarragon.theme.typography import BODY_SIZE
 
 logger = logging.getLogger(__name__)
 
@@ -39,8 +38,6 @@ _EXIF_ORIENTATION_TAG = 0x0112
 
 # Theme tokens (coral-amber dark palette) — sourced from centralized theme system
 BG_SECONDARY: str = get_token("colors", "bg_secondary")
-TEXT_PRIMARY: str = get_token("colors", "text_primary")
-TEXT_SECONDARY: str = get_token("colors", "text_secondary")
 
 
 def _apply_exif_from_original(image: Image.Image, original_path: Path) -> Image.Image:
@@ -244,15 +241,7 @@ class PreviewPanel(QWidget):
             QSizePolicy.Policy.Ignored,
         )
         self._image_label.setText("No preview")
-        self._image_label.setStyleSheet(
-            f"QLabel {{"
-            f"  background-color: {BG_SECONDARY};"
-            f"  border: none;"
-            f"  border-radius: 8px;"
-            f"  color: {TEXT_SECONDARY};"
-            f"  font-size: {BODY_SIZE}px;"
-            f"}}"
-        )
+        self._image_label.setObjectName("previewImageLabel")
         layout.addWidget(self._image_label, stretch=1)
 
         # ── Metadata section ──────────────────────────────────────────
@@ -792,15 +781,11 @@ class PreviewPanel(QWidget):
         btn.setCursor(Qt.CursorShape.PointingHandCursor)
         btn.setProperty("colorSquare", True)
         btn.setToolTip(f"color:{bucket_name}")
+        # background-color is dynamic (unique per color bucket) and cannot be
+        # expressed as a QSS rule.  Border, border-radius, and hover styles are
+        # handled by the QSS rule for QPushButton[colorSquare="true"].
         btn.setStyleSheet(
-            f"QPushButton {{"
-            f"  background-color: {hex_color};"
-            f"  border: none;"
-            f"  border-radius: 4px;"
-            f"}}"
-            f"QPushButton:hover {{"
-            f"  border: 1px solid {TEXT_PRIMARY};"
-            f"}}"
+            f"QPushButton {{ background-color: {hex_color}; }}"
         )
         btn.clicked.connect(
             lambda _checked=False, name=bucket_name: self._on_color_square_clicked(name),

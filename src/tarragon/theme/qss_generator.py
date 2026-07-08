@@ -560,6 +560,42 @@ QPushButton#tagPillRemoveBtn {{
 QPushButton#tagPillRemoveBtn:hover {{
     color: {coral_strong};
 }}
+
+/* ── Filter chips (tag/filter bar) ──────────────────────────────────────── */
+QFrame#filterChip {{
+    background-color: {surface_hover};
+    border: 1px solid {amber_accent};
+    border-radius: {r_xl}px;
+    padding: 2px 6px;
+}}
+
+QLabel#filterChipLabel {{
+    color: {amber_accent};
+    border: none;
+    background: transparent;
+}}
+
+QPushButton#filterChipRemoveBtn {{
+    color: {coral_muted};
+    border: none;
+    background: transparent;
+    font-weight: bold;
+    padding: 0;
+    font-size: {small_px}px;
+}}
+
+QPushButton#filterChipRemoveBtn:hover {{
+    color: {coral_strong};
+}}
+
+/* ── Preview panel image label ──────────────────────────────────────────── */
+QLabel#previewImageLabel {{
+    background-color: {bg_secondary};
+    border: none;
+    border-radius: {r_lg}px;
+    color: {text_secondary};
+    font-size: {body_px}px;
+}}
 """
 
 

@@ -24,17 +24,21 @@ from PySide6.QtWidgets import (
 
 from tarragon.db import Database
 from tarragon.models import FilterState
+from tarragon.models.thumbnail_model import ThumbnailModel
 from tarragon.scanner import FileInfo
 from tarragon.services.query_service import QueryService
 from tarragon.services.settings_service import SettingsService
 from tarragon.services.tag_service import TagService
 from tarragon.services.thumbnail_service import ThumbnailService
 from tarragon.settings import Settings
+from tarragon.widgets.color_filter_bar import ColorFilterBar
 from tarragon.widgets.filter_bar import FilterBar
 from tarragon.widgets.gallery_info_bar import GalleryInfoBar
 from tarragon.widgets.gallery_tabs import GalleryTabs
 from tarragon.widgets.log_panel import LogPanel, QtLogHandler, apply_debug_level
 from tarragon.widgets.preview_panel import PreviewPanel
+from tarragon.widgets.sidebar import SidebarWidget
+from tarragon.widgets.tag_filter_bar import TagFilterBar
 from tarragon.widgets.thumbnail_grid import ThumbnailGrid
 
 logger = logging.getLogger(__name__)
@@ -69,6 +73,29 @@ class MainWindow(QMainWindow):
         self._settings_service = SettingsService(settings) if settings else None
         self.setWindowTitle("Tarragon")
         self.resize(self.DEFAULT_WIDTH, self.DEFAULT_HEIGHT)
+
+        # ── Attributes created later in setup_widgets() ─────────────────
+        # Initialized to None so methods can safely check `is not None`
+        # even if called before setup_widgets() has run.
+        self._db: Database | None = None
+        self._tag_service: TagService | None = None
+        self._query_service: QueryService | None = None
+        self._filter_state: FilterState | None = None
+        self._thumbnail_service: ThumbnailService | None = None
+        self._search_edit: QLineEdit | None = None
+        self._current_folder: str = ""
+        self.filter_bar: FilterBar | None = None
+        self.color_filter_bar: ColorFilterBar | None = None
+        self.tag_filter_bar: TagFilterBar | None = None
+        self._gallery_tabs: GalleryTabs | None = None
+        self._gallery_info_bar: GalleryInfoBar | None = None
+        self.thumbnail_model: ThumbnailModel | None = None
+        self.thumbnail_grid: ThumbnailGrid | None = None
+        self.sidebar_widget: SidebarWidget | None = None
+        self.preview_panel: PreviewPanel | None = None
+        self.log_panel: LogPanel | None = None
+        self._log_handler: QtLogHandler | None = None
+        self._search_timer: QTimer | None = None
 
         # ── Dock panels (created before actions so they're valid widgets) ──
         self.sidebar_dock: QDockWidget
@@ -158,9 +185,6 @@ class MainWindow(QMainWindow):
             db: Database instance for sidebar favorites.
             tag_service: TagService instance for tag management in preview panel.
         """
-        from tarragon.models.thumbnail_model import ThumbnailModel
-        from tarragon.widgets.sidebar import SidebarWidget
-
         # Store db for editor launch and preview cache lookups
         self._db = db
         self._tag_service = tag_service
@@ -420,7 +444,7 @@ class MainWindow(QMainWindow):
     def _on_regenerate_requested(self, file_path: str) -> None:
         """Handle 'Regenerate Thumbnail' context menu action."""
         path = Path(file_path)
-        if hasattr(self, "_thumbnail_service"):
+        if self._thumbnail_service is not None:
             logger.info("Regenerating thumbnail for %s", path.name)
             self._thumbnail_service.invalidate_and_render(path)
 
@@ -428,10 +452,10 @@ class MainWindow(QMainWindow):
 
     def _update_gallery_info_bar(self) -> None:
         """Update the gallery info bar with current folder name, file count, and filter count."""
-        if not hasattr(self, "_gallery_info_bar"):
+        if self._gallery_info_bar is None:
             return
 
-        is_global = hasattr(self, "_gallery_tabs") and self._gallery_tabs.is_global_scope()
+        is_global = self._gallery_tabs is not None and self._gallery_tabs.is_global_scope()
 
         # Determine folder display name
         if is_global:
@@ -442,7 +466,7 @@ class MainWindow(QMainWindow):
             folder_name = ""
 
         # File count from the model
-        file_count = self.thumbnail_model.rowCount() if hasattr(self, "thumbnail_model") else 0
+        file_count = self.thumbnail_model.rowCount() if self.thumbnail_model is not None else 0
 
         self._gallery_info_bar.set_folder_info(folder_name, file_count)
 
@@ -504,13 +528,13 @@ class MainWindow(QMainWindow):
         and we are NOT in global mode, the method returns without modifying
         the model to avoid clearing the gallery.
         """
-        if not hasattr(self, "_query_service"):
+        if self._query_service is None:
             return
 
         start = time.perf_counter()
 
         # Determine browser scope based on gallery tabs
-        is_global = hasattr(self, "_gallery_tabs") and self._gallery_tabs.is_global_scope()
+        is_global = self._gallery_tabs is not None and self._gallery_tabs.is_global_scope()
 
         # Don't clear the gallery if no folder is selected and not in global mode
         if not self._current_folder and not is_global:
@@ -550,7 +574,7 @@ class MainWindow(QMainWindow):
         self._update_gallery_info_bar()
 
         # Dispatch thumbnail renders for cache population
-        if hasattr(self, "_thumbnail_service"):
+        if self._thumbnail_service is not None:
             for path in results:
                 # Skip if already cached in model
                 if str(path) in self.thumbnail_model._thumbnails:
@@ -650,7 +674,7 @@ class MainWindow(QMainWindow):
 
         # Cancel pending thumbnail generation from the previous folder
         # before scanning the new one, then reset the cancel flag.
-        if hasattr(self, "_thumbnail_service"):
+        if self._thumbnail_service is not None:
             self._thumbnail_service.cancel_pending()
             self._thumbnail_service.reset_cancel()
 
@@ -666,7 +690,7 @@ class MainWindow(QMainWindow):
 
         # Populate database immediately so filtered queries return results
         # before async thumbnail rendering completes (fixes zero-results bug)
-        if hasattr(self, "_db"):
+        if self._db is not None:
             stubs = [(str(fi.path), int(fi.mtime), fi.size) for fi in file_infos]
             try:
                 self._db.bulk_upsert_stubs(stubs)
@@ -676,11 +700,11 @@ class MainWindow(QMainWindow):
         # Update thumbnail model — use query service if any filters are active,
         # otherwise load all paths directly.
         has_filters = (
-            (hasattr(self, "_search_edit") and self._search_edit.text())
-            or (hasattr(self, "color_filter_bar") and self.color_filter_bar.get_active_colors())
-            or (hasattr(self, "tag_filter_bar") and self.tag_filter_bar.has_active_filters())
+            (self._search_edit is not None and self._search_edit.text())
+            or (self.color_filter_bar is not None and self.color_filter_bar.get_active_colors())
+            or (self.tag_filter_bar is not None and self.tag_filter_bar.has_active_filters())
         )
-        if has_filters and hasattr(self, "_query_service"):
+        if has_filters and self._query_service is not None:
             self._run_filtered_query()
         else:
             paths = [fi.path for fi in file_infos]
@@ -689,7 +713,7 @@ class MainWindow(QMainWindow):
             self._update_gallery_info_bar()
 
         # Dispatch thumbnail renders
-        if hasattr(self, "_thumbnail_service"):
+        if self._thumbnail_service is not None:
             statuses: dict[str, int] = {"cached": 0, "queued": 0, "derived": 0}
             for fi in file_infos:
                 status = self._thumbnail_service.check_and_render(fi)
@@ -704,11 +728,11 @@ class MainWindow(QMainWindow):
             )
 
         # Update sidebar with current folder
-        if hasattr(self, "sidebar_widget"):
+        if self.sidebar_widget is not None:
             self.sidebar_widget.set_current_folder(str(folder_path))
 
         # Refresh folder dropdown in the filter bar (new folders may have been scanned)
-        if hasattr(self, "filter_bar"):
+        if self.filter_bar is not None:
             self.filter_bar.refresh_folders()
 
     def _on_favorite_clicked(self, folder_path: str) -> None:

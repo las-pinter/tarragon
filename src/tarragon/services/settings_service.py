@@ -79,9 +79,20 @@ class SettingsService:
         self._settings.set("large_canvas_threshold_mp", clamped)
 
     # ── tile_grid_size ───────────────────────────────────────────────────────
+    # Asymmetric validation: the getter is lenient — returning a safe default
+    # ("2x2") for corrupt or legacy config values — so that application startup
+    # is never blocked by bad persisted data.  The setter is strict, raising
+    # ``ValueError`` on invalid input to prevent bad data from entering the
+    # store in the first place.
 
     def get_tile_grid_size(self) -> str:
-        """Get tile grid size string (e.g. '2x2')."""
+        """Get tile grid size string (e.g. '2x2').
+
+        Returns the stored value when it matches ``'NxN'`` format; otherwise
+        falls back to ``'2x2'``.  This lenient behaviour ensures the application
+        can start even when the persisted config is corrupt or was written by an
+        older version with a different format.
+        """
         value = str(self._settings.get("tile_grid_size"))
         if not _TILE_GRID_PATTERN.match(value):
             return "2x2"
@@ -91,7 +102,9 @@ class SettingsService:
         """Set tile grid size string.
 
         Must match the format ``'NxN'`` where N is a positive integer.
-        Raises ``ValueError`` for invalid formats.
+        Raises ``ValueError`` for invalid formats.  The setter is intentionally
+        strict — unlike the getter — to prevent invalid data from being
+        persisted.
         """
         if not _TILE_GRID_PATTERN.match(str(value)):
             raise ValueError(f"Invalid tile_grid_size: {value!r}. Expected format 'NxN' (e.g. '2x2').")
@@ -144,9 +157,19 @@ class SettingsService:
         self._settings.set("color_tag_neutral_s_threshold", clamped)
 
     # ── cache_format ─────────────────────────────────────────────────────────
+    # Asymmetric validation: the getter is lenient — returning a safe default
+    # ("png") for unrecognised values — so that corrupt or legacy config does
+    # not prevent startup.  The setter is strict, raising ``ValueError`` on
+    # unsupported formats to prevent invalid data from being stored.
 
     def get_cache_format(self) -> str:
-        """Get cache format ('png' or 'jpeg')."""
+        """Get cache format ('png' or 'jpeg').
+
+        Returns the stored value when it is one of the recognised formats;
+        otherwise falls back to ``'png'``.  This lenient behaviour ensures the
+        application can start even when the persisted config contains an
+        unrecognised or legacy format string.
+        """
         value = str(self._settings.get("cache_format"))
         if value not in _VALID_CACHE_FORMATS:
             return "png"
@@ -155,7 +178,9 @@ class SettingsService:
     def set_cache_format(self, value: str) -> None:
         """Set cache format. Must be 'png' or 'jpeg'.
 
-        Raises ``ValueError`` for unsupported formats.
+        Raises ``ValueError`` for unsupported formats.  The setter is
+        intentionally strict — unlike the getter — to prevent invalid data
+        from being persisted.
         """
         if str(value) not in _VALID_CACHE_FORMATS:
             raise ValueError(f"Invalid cache_format: {value!r}. Expected one of {_VALID_CACHE_FORMATS}.")

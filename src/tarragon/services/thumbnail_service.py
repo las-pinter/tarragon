@@ -11,8 +11,6 @@ from typing import Any, Callable
 from PIL import Image
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal, Slot
 
-logger = logging.getLogger(__name__)
-
 from tarragon.db import Database
 from tarragon.scanner import FileInfo
 from tarragon.services.settings_service import SettingsService
@@ -31,6 +29,8 @@ from tarragon.thumbnail import (
     save_to_cache,
 )
 
+logger = logging.getLogger(__name__)
+
 
 class _RenderAllTask(QRunnable):
     """Runs multi-resolution rendering in a QThreadPool worker thread."""
@@ -40,12 +40,10 @@ class _RenderAllTask(QRunnable):
         file_info: FileInfo,
         on_error: Callable[..., Any],
         render_func: Callable[..., Any],
-        on_done: Callable[..., Any] | None = None,
         cancel_event: threading.Event | None = None,
     ) -> None:
         super().__init__()
         self._file_info = file_info
-        self._on_done = on_done
         self._on_error = on_error
         self._render_func = render_func
         self._cancel_event = cancel_event
@@ -58,8 +56,6 @@ class _RenderAllTask(QRunnable):
             return
         try:
             self._render_func(self._file_info)
-            if self._on_done is not None:
-                self._on_done(self._file_info)
         except Exception as exc:
             self._on_error(self._file_info, str(exc))
 
@@ -116,17 +112,12 @@ class ThumbnailService(QObject):
         self.cancel_pending()
         # Shut down the ProcessPoolExecutor first to cancel any pending PSD renders.
         # This prevents worker processes from blocking on queue.get() indefinitely.
+        # Deferred import to avoid circular dependency
         from tarragon.thumbnail import _shutdown_executor
 
         _shutdown_executor()
         self._threadpool.waitForDone(timeout_ms)
         logger.debug("ThumbnailService shutdown complete")
-
-    def set_cache_format(self, fmt: str) -> None:
-        """Update the cache format setting."""
-        if fmt not in ("png", "jpeg"):
-            raise ValueError(f"Unknown cache_format: {fmt!r}. Expected one of ['png', 'jpeg']")
-        self._cache_format = fmt
 
     @Slot(FileInfo)
     def check_and_render(self, file_info: FileInfo) -> str:
@@ -239,6 +230,24 @@ class ThumbnailService(QObject):
                         "Corrupt cache file, skipping resolution %s: %s", resolution_size, cache_path, exc_info=True
                     )
 
+    def _save_and_record(
+        self,
+        img: Image.Image,
+        file_info: FileInfo,
+        resolution_size: int,
+        cache_path: Path,
+    ) -> str:
+        """Save *img* to cache, emit thumbnailReady, and return the path string.
+
+        Shared helper used by both :meth:`_derive_missing_resolutions` and
+        :meth:`_render_all_resolutions` to avoid duplicating the
+        save → emit → record pattern.
+        """
+        save_to_cache(img, cache_path, self._cache_format)
+        path_str = str(cache_path)
+        self.thumbnailReady.emit(str(file_info.path), img, resolution_size, path_str)
+        return path_str
+
     def _derive_missing_resolutions(self, file_info: FileInfo, cached: dict[str, Any]) -> str:
         """Derive missing smaller resolutions from the largest available cached image.
 
@@ -296,9 +305,9 @@ class ThumbnailService(QObject):
             else:
                 # Source is smaller than RESOLUTION_THUMBNAIL — include as-is
                 thumb_img = source_image.copy()
-            save_to_cache(thumb_img, cache_paths[str(RESOLUTION_THUMBNAIL)], "png")
-            final_thumb_path = str(cache_paths[str(RESOLUTION_THUMBNAIL)])
-            self.thumbnailReady.emit(str(file_info.path), thumb_img, RESOLUTION_THUMBNAIL, final_thumb_path)
+            final_thumb_path = self._save_and_record(
+                thumb_img, file_info, RESOLUTION_THUMBNAIL, cache_paths[str(RESOLUTION_THUMBNAIL)]
+            )
 
         # Save missing preview (RESOLUTION_PREVIEW) — only if source is full resolution
         if source_resolution == RESOLUTION_FULL and (
@@ -310,9 +319,9 @@ class ThumbnailService(QObject):
             else:
                 # Source is smaller than RESOLUTION_PREVIEW — include as-is
                 preview_img = source_image.copy()
-            save_to_cache(preview_img, cache_paths[str(RESOLUTION_PREVIEW)], "png")
-            final_preview_path = str(cache_paths[str(RESOLUTION_PREVIEW)])
-            self.thumbnailReady.emit(str(file_info.path), preview_img, RESOLUTION_PREVIEW, final_preview_path)
+            final_preview_path = self._save_and_record(
+                preview_img, file_info, RESOLUTION_PREVIEW, cache_paths[str(RESOLUTION_PREVIEW)]
+            )
 
         # Emit signals for already-cached resolutions (BUG #3 fix)
         self._emit_cached_thumbnails(file_info, cached)
@@ -382,8 +391,7 @@ class ThumbnailService(QObject):
             return
 
         # Save full resolution
-        save_to_cache(full_img, cache_paths["full"], "png")
-        self.thumbnailReady.emit(str(file_info.path), full_img, RESOLUTION_FULL, str(cache_paths["full"]))
+        self._save_and_record(full_img, file_info, RESOLUTION_FULL, cache_paths["full"])
 
         # Derive and save smaller resolutions
         smaller_sizes = derive_smaller_sizes(full_img, [RESOLUTION_THUMBNAIL, RESOLUTION_PREVIEW])
@@ -399,17 +407,16 @@ class ThumbnailService(QObject):
                 return
 
             resolution_key = str(RESOLUTION_THUMBNAIL) if size == RESOLUTION_THUMBNAIL else str(RESOLUTION_PREVIEW)
-            save_to_cache(img, cache_paths[resolution_key], "png")
-            cache_path_str = str(cache_paths[resolution_key])
+            cache_path_str = self._save_and_record(img, file_info, size, cache_paths[resolution_key])
             if size == RESOLUTION_THUMBNAIL:
                 thumb_path = cache_path_str
             elif size == RESOLUTION_PREVIEW:
                 preview_path = cache_path_str
-            self.thumbnailReady.emit(str(file_info.path), img, size, cache_path_str)
 
         # Extract and persist dominant color tags (from full resolution)
         if self._settings_service.get_color_tag_enabled():
             try:
+                # Deferred import to avoid circular dependency
                 from tarragon.color_tagger import extract_dominant_color_tags
 
                 tags = extract_dominant_color_tags(
@@ -420,7 +427,7 @@ class ThumbnailService(QObject):
                 )
                 self._db.replace_auto_color_tags(str(file_info.path), tags)
                 self.tagsUpdated.emit()
-            except Exception:
+            except (ImportError, OSError, RuntimeError, ValueError):
                 logger.warning("Color tagging failed for %s", file_info.path, exc_info=True)
 
         # Update database with only the paths that were actually saved (BUG #4 fix)

@@ -316,7 +316,7 @@ def test_filtered_query_returns_empty_when_no_match(qapp: Any) -> None:  # noqa:
         window._current_folder = "/test/photos/"
 
         # Create a tag and activate filter (but no files have it)
-        tag_id = tag_service.get_or_create_tag("nonexistent")
+        tag_id = tag_service._get_or_create_tag("nonexistent")
         window.tag_filter_bar._refresh_tags()
         window.tag_filter_bar._toggle_tag(tag_id)
 

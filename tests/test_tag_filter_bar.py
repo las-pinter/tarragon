@@ -86,9 +86,9 @@ class TestAutoColorFiltering:
 
     def test_color_tags_excluded(self, service: TagService, bar: TagFilterBar) -> None:
         """Tags starting with 'color:' are filtered out of available tags."""
-        service.get_or_create_tag("color:red")
-        service.get_or_create_tag("color:blue")
-        service.get_or_create_tag("landscape")
+        service._get_or_create_tag("color:red")
+        service._get_or_create_tag("color:blue")
+        service._get_or_create_tag("landscape")
         bar._refresh_tags()
 
         assert "landscape" in bar._available_tags.values()
@@ -97,15 +97,15 @@ class TestAutoColorFiltering:
 
     def test_only_color_tags(self, service: TagService, bar: TagFilterBar) -> None:
         """When only auto-color tags exist, available_tags is empty."""
-        service.get_or_create_tag("color:green")
+        service._get_or_create_tag("color:green")
         bar._refresh_tags()
 
         assert len(bar._available_tags) == 0
 
     def test_color_tag_not_in_menu(self, service: TagService, bar: TagFilterBar) -> None:
         """Auto-color tags do not appear in the tag menu."""
-        service.get_or_create_tag("color:yellow")
-        service.get_or_create_tag("portrait")
+        service._get_or_create_tag("color:yellow")
+        service._get_or_create_tag("portrait")
         bar._refresh_tags()
 
         bar._show_tag_menu()
@@ -126,8 +126,8 @@ class TestTagMenu:
 
     def test_menu_populated_with_tags(self, service: TagService, bar: TagFilterBar) -> None:
         """Menu contains an action for each available tag."""
-        service.get_or_create_tag("alpha")
-        service.get_or_create_tag("beta")
+        service._get_or_create_tag("alpha")
+        service._get_or_create_tag("beta")
         bar._refresh_tags()
 
         bar._show_tag_menu()
@@ -138,7 +138,7 @@ class TestTagMenu:
 
     def test_menu_actions_are_checkable(self, service: TagService, bar: TagFilterBar) -> None:
         """Each menu action is checkable."""
-        service.get_or_create_tag("test-tag")
+        service._get_or_create_tag("test-tag")
         bar._refresh_tags()
 
         bar._show_tag_menu()
@@ -147,7 +147,7 @@ class TestTagMenu:
 
     def test_active_tag_shows_checked_in_menu(self, service: TagService, bar: TagFilterBar) -> None:
         """An active tag appears checked in the menu."""
-        tag_id = service.get_or_create_tag("active-tag")
+        tag_id = service._get_or_create_tag("active-tag")
         bar._refresh_tags()
         bar._toggle_tag(tag_id)
 
@@ -158,9 +158,9 @@ class TestTagMenu:
 
     def test_menu_sorted_alphabetically(self, service: TagService, bar: TagFilterBar) -> None:
         """Menu actions are sorted alphabetically by tag name."""
-        service.get_or_create_tag("zebra")
-        service.get_or_create_tag("apple")
-        service.get_or_create_tag("mango")
+        service._get_or_create_tag("zebra")
+        service._get_or_create_tag("apple")
+        service._get_or_create_tag("mango")
         bar._refresh_tags()
 
         bar._show_tag_menu()
@@ -178,7 +178,7 @@ class TestTagFiltering:
 
     def test_toggle_tag_adds_to_active(self, service: TagService, bar: TagFilterBar) -> None:
         """Toggling a tag adds its ID to the active set."""
-        tag_id = service.get_or_create_tag("filter-me")
+        tag_id = service._get_or_create_tag("filter-me")
         bar._refresh_tags()
 
         bar._toggle_tag(tag_id)
@@ -186,7 +186,7 @@ class TestTagFiltering:
 
     def test_toggle_tag_removes_from_active(self, service: TagService, bar: TagFilterBar) -> None:
         """Toggling an active tag removes it from the active set."""
-        tag_id = service.get_or_create_tag("remove-me")
+        tag_id = service._get_or_create_tag("remove-me")
         bar._refresh_tags()
 
         bar._toggle_tag(tag_id)
@@ -197,7 +197,7 @@ class TestTagFiltering:
 
     def test_remove_tag(self, service: TagService, bar: TagFilterBar) -> None:
         """_remove_tag discards a tag from the active set."""
-        tag_id = service.get_or_create_tag("discard-me")
+        tag_id = service._get_or_create_tag("discard-me")
         bar._refresh_tags()
 
         bar._toggle_tag(tag_id)
@@ -213,8 +213,8 @@ class TestTagFiltering:
 
     def test_multiple_tags(self, service: TagService, bar: TagFilterBar) -> None:
         """Multiple tags can be active simultaneously."""
-        id1 = service.get_or_create_tag("alpha")
-        id2 = service.get_or_create_tag("beta")
+        id1 = service._get_or_create_tag("alpha")
+        id2 = service._get_or_create_tag("beta")
         bar._refresh_tags()
 
         bar._toggle_tag(id1)
@@ -232,7 +232,7 @@ class TestSignalEmission:
 
     def test_signal_on_toggle_on(self, service: TagService, bar: TagFilterBar) -> None:
         """Toggling a tag on emits tag_filter_changed with the tag ID."""
-        tag_id = service.get_or_create_tag("signal-tag")
+        tag_id = service._get_or_create_tag("signal-tag")
         bar._refresh_tags()
 
         captured: list[set[int]] = []
@@ -245,7 +245,7 @@ class TestSignalEmission:
 
     def test_signal_on_toggle_off(self, service: TagService, bar: TagFilterBar) -> None:
         """Toggling a tag off emits tag_filter_changed without the tag ID."""
-        tag_id = service.get_or_create_tag("uncheck-signal")
+        tag_id = service._get_or_create_tag("uncheck-signal")
         bar._refresh_tags()
 
         bar._toggle_tag(tag_id)  # Turn on first
@@ -260,7 +260,7 @@ class TestSignalEmission:
 
     def test_signal_on_remove(self, service: TagService, bar: TagFilterBar) -> None:
         """Removing a tag emits tag_filter_changed without the tag ID."""
-        tag_id = service.get_or_create_tag("remove-signal")
+        tag_id = service._get_or_create_tag("remove-signal")
         bar._refresh_tags()
 
         bar._toggle_tag(tag_id)  # Activate first
@@ -298,15 +298,15 @@ class TestPublicAPI:
 
     def test_has_active_filters_true_when_active(self, service: TagService, bar: TagFilterBar) -> None:
         """has_active_filters() is True when a tag is active."""
-        tag_id = service.get_or_create_tag("active")
+        tag_id = service._get_or_create_tag("active")
         bar._refresh_tags()
         bar._toggle_tag(tag_id)
         assert bar.has_active_filters() is True
 
     def test_clear_filters(self, service: TagService, bar: TagFilterBar) -> None:
         """clear_filters() removes all active tags and emits empty set."""
-        id1 = service.get_or_create_tag("one")
-        id2 = service.get_or_create_tag("two")
+        id1 = service._get_or_create_tag("one")
+        id2 = service._get_or_create_tag("two")
         bar._refresh_tags()
 
         bar._toggle_tag(id1)
@@ -345,7 +345,7 @@ class TestChipDisplay:
 
     def test_chip_appears_on_toggle(self, service: TagService, bar: TagFilterBar) -> None:
         """A chip appears when a tag is toggled on."""
-        tag_id = service.get_or_create_tag("chip-tag")
+        tag_id = service._get_or_create_tag("chip-tag")
         bar._refresh_tags()
 
         assert bar._chips_layout.count() == 0
@@ -355,7 +355,7 @@ class TestChipDisplay:
 
     def test_chip_disappears_on_remove(self, service: TagService, bar: TagFilterBar) -> None:
         """A chip disappears when its tag is removed."""
-        tag_id = service.get_or_create_tag("removable-chip")
+        tag_id = service._get_or_create_tag("removable-chip")
         bar._refresh_tags()
 
         bar._toggle_tag(tag_id)
@@ -366,7 +366,7 @@ class TestChipDisplay:
 
     def test_chip_shows_tag_name(self, service: TagService, bar: TagFilterBar) -> None:
         """Each chip displays the correct tag name."""
-        tag_id = service.get_or_create_tag("my-special-tag")
+        tag_id = service._get_or_create_tag("my-special-tag")
         bar._refresh_tags()
         bar._toggle_tag(tag_id)
 
@@ -380,7 +380,7 @@ class TestChipDisplay:
 
     def test_chip_has_remove_button(self, service: TagService, bar: TagFilterBar) -> None:
         """Each chip has a remove button with '×' text."""
-        tag_id = service.get_or_create_tag("has-btn")
+        tag_id = service._get_or_create_tag("has-btn")
         bar._refresh_tags()
         bar._toggle_tag(tag_id)
 
@@ -393,9 +393,9 @@ class TestChipDisplay:
 
     def test_multiple_chips(self, service: TagService, bar: TagFilterBar) -> None:
         """Multiple active tags produce multiple chips."""
-        id1 = service.get_or_create_tag("first")
-        id2 = service.get_or_create_tag("second")
-        id3 = service.get_or_create_tag("third")
+        id1 = service._get_or_create_tag("first")
+        id2 = service._get_or_create_tag("second")
+        id3 = service._get_or_create_tag("third")
         bar._refresh_tags()
 
         bar._toggle_tag(id1)
@@ -406,8 +406,8 @@ class TestChipDisplay:
 
     def test_clear_filters_removes_chips(self, service: TagService, bar: TagFilterBar) -> None:
         """clear_filters() removes all chips."""
-        id1 = service.get_or_create_tag("a")
-        id2 = service.get_or_create_tag("b")
+        id1 = service._get_or_create_tag("a")
+        id2 = service._get_or_create_tag("b")
         bar._refresh_tags()
 
         bar._toggle_tag(id1)
@@ -428,7 +428,7 @@ class TestRefreshPreservesSelection:
 
     def test_active_tags_survive_refresh(self, service: TagService, bar: TagFilterBar) -> None:
         """Active tag IDs are preserved when the tag list is refreshed."""
-        tag_id = service.get_or_create_tag("persistent")
+        tag_id = service._get_or_create_tag("persistent")
         bar._refresh_tags()
 
         bar._toggle_tag(tag_id)
@@ -442,7 +442,7 @@ class TestRefreshPreservesSelection:
 
     def test_deleted_tags_removed_from_active(self, service: TagService, bar: TagFilterBar) -> None:
         """If a tag no longer exists after refresh, it's removed from active."""
-        tag_id = service.get_or_create_tag("temporary")
+        tag_id = service._get_or_create_tag("temporary")
         bar._refresh_tags()
 
         bar._toggle_tag(tag_id)

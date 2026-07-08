@@ -97,17 +97,8 @@ class TestInstantiation:
         assert hasattr(service, "thumbnailReady")
         assert hasattr(service, "errorOccurred")
 
-    def test_set_cache_format(self, service: ThumbnailService) -> None:
-        """set_cache_format updates the internal cache_format."""
-        assert service._cache_format == "png"
-        service.set_cache_format("jpeg")
-        assert service._cache_format == "jpeg"
-
-    def test_set_cache_format_invalid_raises(self, service: ThumbnailService) -> None:
-        """set_cache_format with invalid format raises ValueError."""
-        with pytest.raises(ValueError, match="Unknown cache_format: 'gif'.*"):
-            service.set_cache_format("gif")
-        # Internal format should remain unchanged
+    def test_cache_format_from_settings(self, service: ThumbnailService) -> None:
+        """_cache_format is initialised from settings_service."""
         assert service._cache_format == "png"
 
 
@@ -459,7 +450,7 @@ class TestCheckAndRenderEdgeCases:
         service: ThumbnailService,
         db_mock: MagicMock,
     ) -> None:
-        """After set_cache_format, a cache miss still calls _render_all_resolutions."""
+        """After changing _cache_format, a cache miss still calls _render_all_resolutions."""
         file_info = FileInfo(
             path=tmp_path / "source.png",
             mtime=1000.0,
@@ -468,7 +459,7 @@ class TestCheckAndRenderEdgeCases:
         )
         db_mock.get_thumbnail.return_value = None
 
-        service.set_cache_format("jpeg")
+        service._cache_format = "jpeg"
 
         with patch.object(service, "_render_all_resolutions") as mock_render:
             service.check_and_render(file_info)
@@ -726,7 +717,6 @@ class TestRenderAllTaskCancellation:
             size=500,
             extension=".png",
         )
-        on_done = MagicMock()
         on_error = MagicMock()
         render_func = MagicMock()
 
@@ -735,7 +725,6 @@ class TestRenderAllTaskCancellation:
 
         task = _RenderAllTask(
             file_info=file_info,
-            on_done=on_done,
             on_error=on_error,
             render_func=render_func,
             cancel_event=cancel_event,
@@ -744,7 +733,6 @@ class TestRenderAllTaskCancellation:
         task.run()
 
         render_func.assert_not_called()
-        on_done.assert_not_called()
         on_error.assert_not_called()
 
     def test_render_all_task_runs_when_not_cancelled(
@@ -762,7 +750,6 @@ class TestRenderAllTaskCancellation:
             size=500,
             extension=".png",
         )
-        on_done = MagicMock()
         on_error = MagicMock()
         render_func = MagicMock()
 
@@ -770,7 +757,6 @@ class TestRenderAllTaskCancellation:
 
         task = _RenderAllTask(
             file_info=file_info,
-            on_done=on_done,
             on_error=on_error,
             render_func=render_func,
             cancel_event=cancel_event,
@@ -779,7 +765,6 @@ class TestRenderAllTaskCancellation:
         task.run()
 
         render_func.assert_called_once_with(file_info)
-        on_done.assert_called_once_with(file_info)
         on_error.assert_not_called()
 
     def test_render_all_task_works_without_cancel_event(
@@ -795,13 +780,11 @@ class TestRenderAllTaskCancellation:
             size=500,
             extension=".png",
         )
-        on_done = MagicMock()
         on_error = MagicMock()
         render_func = MagicMock()
 
         task = _RenderAllTask(
             file_info=file_info,
-            on_done=on_done,
             on_error=on_error,
             render_func=render_func,
             # cancel_event omitted (None)
@@ -810,7 +793,6 @@ class TestRenderAllTaskCancellation:
         task.run()
 
         render_func.assert_called_once_with(file_info)
-        on_done.assert_called_once_with(file_info)
 
 
 # =========================================================================
@@ -1633,19 +1615,6 @@ class TestThumbnailServiceEdgeCases:
     ) -> None:
         """Each signal is a distinct Qt signal object."""
         assert service.thumbnailReady is not service.errorOccurred
-
-    def test_cache_format_round_trip_changes(
-        self,
-        service: ThumbnailService,
-    ) -> None:
-        """set_cache_format to jpeg and back to png works correctly."""
-        assert service._cache_format == "png"
-        service.set_cache_format("jpeg")
-        assert service._cache_format == "jpeg"
-        service.set_cache_format("png")
-        assert service._cache_format == "png"
-        service.set_cache_format("jpeg")
-        assert service._cache_format == "jpeg"
 
 
 # =========================================================================

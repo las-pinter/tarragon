@@ -105,7 +105,7 @@ class TestSignalForwarding:
 
     def test_tag_filter_changed_forwarded(self, bar: FilterBar, tag_service: TagService) -> None:
         """tag_filter_changed signal is forwarded from TagFilterBar."""
-        tag_id = tag_service.get_or_create_tag("test-tag")
+        tag_id = tag_service._get_or_create_tag("test-tag")
         bar.tag_filter_bar._refresh_tags()
 
         captured: list[set[int]] = []

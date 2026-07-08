@@ -6,11 +6,14 @@ with Qt signals for UI reactivity.
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
-from PySide6.QtCore import QObject, Qt, Signal
+from PySide6.QtCore import QObject, Signal
 
 from tarragon.db import Database
+
+logger = logging.getLogger(__name__)
 
 
 class TagService(QObject):
@@ -28,7 +31,7 @@ class TagService(QObject):
 
     # ── Tag CRUD ────────────────────────────────────────────────────────────
 
-    def get_or_create_tag(self, name: str) -> int:
+    def _get_or_create_tag(self, name: str) -> int:
         """Return the id of *name*, creating the tag if it doesn't exist."""
         return self._db.ensure_tag(name)
 
@@ -41,8 +44,9 @@ class TagService(QObject):
         Emits ``tagsChanged`` when done.
         """
         for tag_name in tag_names:
-            tag_id = self.get_or_create_tag(tag_name)
+            tag_id = self._get_or_create_tag(tag_name)
             self._db.add_file_tags(paths, tag_id, source=source)
+        logger.debug("Added tags %s to %s", tag_names, paths)
         self.tagsChanged.emit()
 
     def remove_tags_from_files(self, paths: list[str], tag_ids: set[int]) -> None:
@@ -52,14 +56,7 @@ class TagService(QObject):
         """
         for tag_id in tag_ids:
             self._db.remove_file_tags(paths, tag_id)
-        self.tagsChanged.emit()
-
-    def delete_tag(self, tag_id: int) -> None:
-        """Delete a tag and emit tagsChanged signal.
-
-        The underlying database CASCADE-deletes all file-tag associations.
-        """
-        self._db.delete_tag(tag_id)
+        logger.debug("Removed tags %s from %s", tag_ids, paths)
         self.tagsChanged.emit()
 
     def get_tag_name(self, tag_id: int) -> str | None:
@@ -85,43 +82,6 @@ class TagService(QObject):
             an empty set.
         """
         return self._db.get_file_tag_ids_batch(paths)
-
-    def resolve_tri_state(
-        self,
-        paths: list[str],
-        tag_id: int,
-        cached_tags: dict[str, set[int]] | None = None,
-    ) -> Qt.CheckState:
-        """Determine the checked-state of *tag_id* across *paths*.
-
-        Returns ``Qt.Checked`` when all files have the tag,
-        ``Qt.PartiallyChecked`` when some do, and ``Qt.Unchecked``
-        when none do.
-
-        Parameters
-        ----------
-        cached_tags:
-            Optional pre-fetched mapping of path → tag_ids (as returned
-            by :meth:`get_file_tag_ids_batch`).  When provided, the
-            database is **not** queried, avoiding redundant round-trips.
-        """
-        if not paths:
-            return Qt.CheckState.Unchecked
-
-        tagged = 0
-        for path in paths:
-            if cached_tags is not None:
-                if tag_id in cached_tags.get(path, set()):
-                    tagged += 1
-            else:
-                if tag_id in self._db.get_file_tag_ids(path):
-                    tagged += 1
-
-        if tagged == len(paths):
-            return Qt.CheckState.Checked
-        if tagged > 0:
-            return Qt.CheckState.PartiallyChecked
-        return Qt.CheckState.Unchecked
 
     def get_all_tags(self, folder_path: str | None = None) -> list[dict[str, Any]]:
         """Return every tag with its usage count.

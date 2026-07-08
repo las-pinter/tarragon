@@ -46,7 +46,7 @@ python -c "import tarragon; print('OK')"
 python -m tarragon.main
 ```
 
-This launches the Tarragon GUI. On first run, it creates the data directory and database at the platform-specific location (see [architecture.md](architecture.md) for paths).
+This launches the Tarragon GUI. On first run, it creates the data directory and database at the platform-specific location (see [Architecture](docs/architecture.md) for paths).
 
 ## Running Tests
 
@@ -153,6 +153,11 @@ tarragon/
 ├── pyproject.toml              # Project metadata, dependencies, tool config
 ├── requirements.txt            # Runtime dependencies (pinned)
 ├── requirements-build.txt      # Build dependencies (Nuitka)
+├── requirements-dev.txt        # Development dependencies (pinned)
+├── README.md                   # Project overview
+├── LICENSE                     # MIT license
+├── .editorconfig               # Editor settings
+├── .pre-commit-config.yaml     # Pre-commit hook definitions
 ├── scripts/
 │   ├── build.sh                # Linux/macOS build script
 │   ├── build.bat               # Windows build script
@@ -171,52 +176,56 @@ tarragon/
 │   ├── color_tagger.py         # Dominant color extraction algorithm
 │   ├── settings.py             # Typed key-value settings store
 │   ├── editors.py              # External editor launching
+│   ├── py.typed                # PEP 561 marker
 │   ├── models/
+│   │   ├── __init__.py
 │   │   ├── thumbnail_model.py  # Data model for thumbnail grid
 │   │   └── filter_state.py     # Filter state management
 │   ├── services/
+│   │   ├── __init__.py
 │   │   ├── thumbnail_service.py  # Async thumbnail orchestration
 │   │   ├── query_service.py      # SQL filter composition
 │   │   ├── tag_service.py        # Tag CRUD with Qt signals
 │   │   └── settings_service.py   # Typed settings validation
 │   ├── widgets/
+│   │   ├── __init__.py
 │   │   ├── sidebar.py            # Library panel
 │   │   ├── thumbnail_grid.py     # Gallery panel
-│   │   ├── preview_panel.py      # Preview panel
-│   │   ├── tag_panel.py          # Tags panel
-│   │   └── color_filter_bar.py   # Color filter swatches
+│   │   ├── preview_panel.py      # Preview panel with tag management
+│   │   ├── filter_bar.py         # Base filter bar widget
+│   │   ├── color_filter_bar.py   # Color filter swatches
+│   │   ├── tag_filter_bar.py     # Tag filter bar
+│   │   ├── gallery_info_bar.py   # Gallery info display
+│   │   ├── gallery_tabs.py       # Gallery tab widget
+│   │   ├── log_panel.py          # Log output panel
+│   │   ├── settings_dialog.py    # Settings dialog
+│   │   └── flow_layout.py        # Custom flow layout
 │   └── theme/
+│       ├── __init__.py
 │       ├── tokens.json           # Design token definitions
 │       ├── tokens.py             # Token loader
+│       ├── colors.py             # Color utilities
+│       ├── color_buckets.py      # Color bucket definitions
+│       ├── typography.py         # Typography settings
+│       ├── spacing.py            # Spacing constants
 │       ├── app.qss               # Qt stylesheet
-│       └── loader.py             # Theme loader
+│       ├── qss_generator.py      # QSS generation utilities
+│       ├── file_type_badge.py    # File type badge rendering
+│       ├── loader.py             # Theme loader
+│       └── icons/
+│           └── search.svg
 ├── tests/                        # Test suite
 └── docs/                         # Documentation
     ├── architecture.md
     ├── database.md
     ├── rendering-pipeline.md
     ├── color-tagging.md
-    ├── contributor-guide.md
     └── release.md
 ```
 
 ## Architecture Overview
 
-Tarragon follows a layered architecture:
-
-1. **UI Layer** (`widgets/`, `main_window.py`) — PySide6 widgets and dock panels.
-2. **Service Layer** (`services/`) — Business logic, Qt signal integration, query composition.
-3. **Data Layer** (`db.py`, `migrations.py`, `scanner.py`) — SQLite persistence, schema management, file discovery.
-4. **Rendering** (`thumbnail.py`, `color_tagger.py`) — Image processing pipelines.
-
-Key design decisions:
-- Single Python process compiled via Nuitka.
-- SQLite with WAL mode for concurrent access.
-- QThreadPool for plain image renders, ProcessPoolExecutor for PSD compositing.
-- SHA-1 of absolute path for cache keys.
-- Master resolution of 2048px long edge for all cached images.
-
-See [architecture.md](architecture.md) for full details.
+Tarragon follows a layered architecture with a UI layer (PySide6 widgets and dock panels), a service layer (business logic and Qt signal integration), a data layer (SQLite persistence and file discovery), and a rendering layer (image processing pipelines). See [Architecture](docs/architecture.md) for full details.
 
 ## Key Dependencies
 
@@ -230,7 +239,7 @@ See [architecture.md](architecture.md) for full details.
 
 ## Building a Release
 
-See [release.md](release.md) for the full release process. Quick summary:
+See [Release](docs/release.md) for the full release process. Quick summary:
 
 ```bash
 # Linux/macOS

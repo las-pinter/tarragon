@@ -82,77 +82,11 @@ Standalone binaries for Windows, macOS, and Linux are coming soon. These won't r
 
 ### Build Your Own Binary
 
-Want to compile Tarragon yourself? Use the build scripts, which set up a virtual environment automatically:
-
-```bash
-# Linux/macOS
-./scripts/build.sh
-
-# Windows
-scripts\build.bat
-
-# Or build as standalone directory (faster builds, larger output)
-./scripts/build.sh --standalone
-```
-
-The build scripts will:
-1. Create a `.venv` virtual environment (if it doesn't exist)
-2. Install all runtime and build dependencies
-3. Run the Nuitka build
-
-Output goes to `dist/` directory. On Linux you'll get `tarragon-viewer`, on Windows `tarragon-viewer.exe`.
-
-**System dependencies:**
-- Linux: `sudo apt-get install python3-dev patchelf`
-- Windows: Visual Studio Build Tools (MSVC compiler)
-
-**Requirements:**
-- Python 3.12+
-- C compiler (GCC on Linux, MSVC on Windows)
-- ~500MB free disk space
-- ~5-10 minutes build time
+See [Release Build Instructions](docs/release.md) for how to build a standalone binary.
 
 ## For Developers
 
-<details>
-<summary>Technical details (click to expand)</summary>
-
-| Component | Technology |
-|-----------|------------|
-| UI Framework | PySide6 (Qt for Python) |
-| Image Decoding | Pillow, psd-tools |
-| Thumbnail Cache | SHA-1 keyed, configurable PNG/JPEG |
-| Platform Support | Linux, macOS, Windows |
-
-### Development Setup
-
-```bash
-# Option A: Use the build script (creates venv automatically)
-./scripts/build.sh          # Linux/macOS
-scripts\build.bat           # Windows
-
-# Option B: Manual setup
-python3 -m venv .venv
-source .venv/bin/activate   # Linux/macOS
-# or: .venv\Scripts\activate  # Windows
-
-pip install -r requirements.txt
-pip install -r requirements-dev.txt
-
-# Lint
-ruff check .
-
-# Format
-ruff format .
-
-# Test
-pytest
-
-# Pre-commit hooks
-pre-commit install
-```
-
-</details>
+See [CONTRIBUTING.md](CONTRIBUTING.md) for developer setup, project architecture, and contribution guidelines.
 
 ## Screenshots
 

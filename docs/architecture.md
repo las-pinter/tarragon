@@ -12,11 +12,30 @@ The application follows a layered architecture with clear separation between UI,
 main.py
   └── main_window.py
         ├── widgets/
-        │     ├── sidebar.py            — Library panel (folder navigation, favorites)
-        │     ├── thumbnail_grid.py     — Gallery panel (thumbnail display, selection)
-        │     ├── preview_panel.py      — Preview panel (single/multi-image preview)
-        │     ├── tag_panel.py          — Tags panel (tag management, filtering)
-        │     └── color_filter_bar.py   — Color filter swatches for gallery filtering
+        │     ├── sidebar.py            — Library panel (folder tree + favorites)
+        │     ├── thumbnail_grid.py     — Gallery grid (icon-mode QListView, custom delegate)
+        │     ├── preview_panel.py      — Preview panel (single/multi-image preview + tag management)
+        │     ├── filter_bar.py         — Combined filter row (color + tag + folder filters)
+        │     ├── color_filter_bar.py   — Color bucket swatches for gallery filtering
+        │     ├── tag_filter_bar.py     — Inline tag filter (Add Tag+ button + removable chips)
+        │     ├── gallery_tabs.py       — Scope tabs (Folder / All Images)
+        │     ├── gallery_info_bar.py   — Folder name, file count, active filter pill
+        │     ├── log_panel.py          — Dockable log viewer with color-coded severity
+        │     ├── settings_dialog.py    — Modal preferences dialog for all settings
+        │     └── flow_layout.py        — Wrapping layout (items flow left-to-right, wrap on overflow)
+        ├── theme/
+        │     ├── tokens.json           — Design token definitions (colors, spacing, typography)
+        │     ├── tokens.py             — Token loader (reads tokens.json from package resources)
+        │     ├── colors.py             — Typed QColor constants derived from tokens.json
+        │     ├── color_buckets.py      — Color-bucket definitions (display order, hex colors, hue ranges)
+        │     ├── spacing.py            — Spacing constants (XS, SM, MD, etc.) from tokens.json
+        │     ├── typography.py         — Typography constants and QFont helpers from tokens.json
+        │     ├── file_type_badge.py    — File extension badge colors for thumbnail grid
+        │     ├── qss_generator.py      — Builds application QSS stylesheet from design tokens
+        │     ├── loader.py             — Theme loader (reads QSS + tokens, generates final QSS)
+        │     ├── app.qss               — Base QSS stylesheet (hand-written reference)
+        │     └── icons/
+        │           └── search.svg      — Search icon for the search box
         ├── services/
         │     ├── thumbnail_service.py  — Async thumbnail generation orchestration
         │     ├── query_service.py      — SQL filter composition for gallery queries
@@ -52,11 +71,61 @@ main.py
 | Dock | Title | Widget | Position |
 |------|-------|--------|----------|
 | `sidebar_dock` | Library | `SidebarWidget` | Left |
-| `grid_dock` | Gallery | `ThumbnailGrid` + search + color filter | Top |
-| `preview_dock` | Preview | `PreviewPanel` | Bottom |
-| `tags_dock` | Tags | `TagPanel` | Right |
+| `grid_dock` | Gallery | Gallery container (see below) | Central |
+| `preview_dock` | Preview | `PreviewPanel` | Right |
+| `log_dock` | Log | `LogPanel` | Bottom (hidden by default) |
 
-The gallery dock contains a vertical stack: search box (`QLineEdit`), color filter bar (`ColorFilterBar`), and the thumbnail grid (`ThumbnailGrid`).
+The gallery dock contains a vertical stack:
+
+1. `GalleryTabs` — scope tabs (Folder / All Images)
+2. `QLineEdit` — filename search box with debounce
+3. `GalleryInfoBar` — folder name, file count, active filter pill
+4. `FilterBar` — combined color + tag + folder filter row
+5. `ThumbnailGrid` — thumbnail gallery (stretches to fill remaining space)
+
+## Widget Layer
+
+### SidebarWidget (`sidebar.py`)
+
+Folder tree navigation using `QTreeView` backed by `QFileSystemModel`, plus a favorites list backed by a custom `QAbstractListModel`. Emits `folder_navigated` and `favorite_clicked` signals.
+
+### ThumbnailGrid (`thumbnail_grid.py`)
+
+Icon-mode `QListView` with a custom `ThumbnailDelegate` for cell rendering. Supports single and multi-selection, double-click to launch editor, right-click context menu (regenerate thumbnail), and hover tooltips. Emits `selection_changed`, `file_double_clicked`, and `regenerate_requested` signals.
+
+### PreviewPanel (`preview_panel.py`)
+
+Displays a single image preview with metadata (dimensions, file size, path) or a mosaic of multiple selected images. Includes inline tag management: shows tags for the current selection with checkboxes for toggling, supports tri-state display for multi-selection. Emits `tags_changed` when tags are modified.
+
+### FilterBar (`filter_bar.py`)
+
+Composite filter widget hosting three sub-components in a single wrapping row (via `FlowLayout`):
+
+- **ColorFilterBar** — clickable color bucket swatches
+- **TagFilterBar** — "Add Tag+" button with removable filter chips
+- **Folder chips** — "Add Folder+" button with removable chips (visible only in "All Images" global scope)
+
+Forwards child signals as `color_filter_changed`, `tag_filter_changed`, and `folder_filter_changed`.
+
+### GalleryTabs (`gallery_tabs.py`)
+
+Tab widget for switching between folder-scoped and global image view. Emits `scope_changed(bool)` where `True` = global (All Images).
+
+### GalleryInfoBar (`gallery_info_bar.py`)
+
+Horizontal bar showing `"{folder_name} · {file_count} files"` on the left and an active filter count pill on the right (hidden when no filters are active).
+
+### LogPanel (`log_panel.py`)
+
+Dockable log viewer with color-coded severity levels (DEBUG through CRITICAL). Includes a Clear button and Debug toggle checkbox. `QtLogHandler` bridges Python's `logging` module to the panel via Qt signals for thread-safe delivery.
+
+### SettingsDialog (`settings_dialog.py`)
+
+Modal preferences dialog organized into sections: Performance (PSD workers, multi-preview cap, large canvas threshold), Grid & Layout (tile grid size), Color Tagging (enable, palette size, min share, neutral threshold), Cache (directory, format), and Debug (logging toggle). Settings are persisted via `SettingsService` on OK.
+
+### FlowLayout (`flow_layout.py`)
+
+Custom `QLayout` that arranges items left-to-right, wrapping to the next line when width is exceeded. Items are vertically centered within each line. Used by `FilterBar` for responsive filter layout.
 
 ## Service Layer
 
@@ -67,8 +136,8 @@ Services sit between the UI widgets and the data layer, providing business logic
 `services/thumbnail_service.py` — Coordinates thumbnail generation, caching, and UI signal emission.
 
 - Inherits `QObject` to emit Qt signals (`thumbnailReady`, `errorOccurred`).
-- Uses a `QThreadPool` for plain image renders (worker threads via `_RenderTask`).
-- Delegates PSD/PSB compositing to the module-level `ProcessPoolExecutor` (via `_RenderPSDTask`).
+- Uses a `QThreadPool` for all render tasks (`_RenderAllTask`), covering plain image renders, PSD dispatch wrappers, and CLIP extraction.
+- Delegates PSD/PSB compositing to the module-level `ProcessPoolExecutor` (called from within `_RenderAllTask`).
 - On render completion, persists thumbnail metadata to the database and optionally extracts color tags.
 - Checks cache validity (mtime + size) before dispatching renders.
 
@@ -96,6 +165,22 @@ Services sit between the UI widgets and the data layer, providing business logic
 - Validates string formats (e.g., tile grid size must match `NxN`).
 - Prevents invalid state from reaching the persistence layer.
 
+## Theme System
+
+The theme is driven by design tokens stored in `tokens.json` and exposed through typed Python modules:
+
+- **`tokens.json`** — Single source of truth for colors, spacing, and typography values.
+- **`tokens.py`** — Loads and parses `tokens.json` from package resources.
+- **`colors.py`** — Exports each color token as a `QColor` constant (e.g., `BG_PRIMARY`, `CORAL_STRONG`).
+- **`color_buckets.py`** — Defines the 10 color buckets (display order, hex colors, hue ranges) used by the color tagger and filter UI.
+- **`spacing.py`** — Exports spacing tokens as integer constants (`XS`, `SM`, `MD`, `LG`, `XL`).
+- **`typography.py`** — Exports font size constants and `QFont` factory functions (`body_font()`, `heading_font()`).
+- **`file_type_badge.py`** — Maps file extensions to `(background, text)` QColor pairs for thumbnail badges.
+- **`qss_generator.py`** — Generates the full application QSS stylesheet from tokens.
+- **`loader.py`** — Entry point for theme initialization; calls `load_and_generate_qss()` to produce the final stylesheet.
+- **`app.qss`** — Hand-written reference QSS (functionally identical to generator output).
+- **`icons/`** — SVG icon assets (currently `search.svg`).
+
 ## Data Layer
 
 ### Database (`db.py`)
@@ -118,7 +203,7 @@ Walks a directory tree, filters files by supported extensions (`.jpg`, `.jpeg`, 
 2. Apply EXIF rotation via `ImageOps.exif_transpose`.
 3. Convert non-RGB/RGBA modes to RGBA.
 4. Resize to master long edge (2048px) using Lanczos resampling.
-5. Save to cache as PNG (default) or JPEG.
+5. Return the PIL Image, or `None` on failure. (Cache persistence is handled by `ThumbnailService._render_all_resolutions()`.)
 
 ### PSD/PSB (`thumbnail.py` — `render_psd_image`)
 
@@ -128,7 +213,8 @@ Walks a directory tree, filters files by supported extensions (`.jpg`, `.jpeg`, 
 4. Large canvases (above threshold): tiled 2x2 composite with per-tile error isolation.
 5. Resize result to master long edge, return as PNG bytes.
 6. Main process deserializes PNG bytes back to a PIL Image.
-7. 2-minute timeout on the future; returns `None` on failure.
+7. Return the deserialized PIL Image, or `None` on cancellation or failure.
+   Cache persistence and color tag extraction are handled by `ThumbnailService._render_all_resolutions()`.
 
 ### CLIP (`thumbnail.py` — `render_clip_image`)
 
@@ -147,49 +233,11 @@ Tarragon uses three concurrency mechanisms, each with a specific role:
 | Mechanism | Purpose | Thread Safety |
 |-----------|---------|---------------|
 | **Main thread** | Qt UI event loop, user interaction | Single-threaded |
-| **QThreadPool** | Plain image renders (`_RenderTask`), PSD dispatch wrappers (`_RenderPSDTask`) | Worker threads; results marshalled back via signals |
+| **QThreadPool** | All render tasks (`_RenderAllTask`) — plain, PSD dispatch, CLIP | Worker threads; results marshalled back via signals |
 | **ProcessPoolExecutor** | PSD/PSB compositing (`_composite_psd_in_process`) | Isolated subprocesses; communicate via pickled arguments and PNG byte results |
 
 The `ProcessPoolExecutor` is a shared singleton (`_shared_executor`) with double-checked locking. Worker count is adaptive based on available RAM (default 3, clamped to [1, 8]) or user-configured via `max_psd_workers` setting.
 
 ## Cache Strategy
 
-### Cache Key
-
-The cache filename is derived from a **SHA-1 hash of the source file's absolute path**:
-
-```python
-sha = hashlib.sha1(str(file_abs_path.resolve()).encode()).hexdigest()
-```
-
-This makes the cache deterministic and unique per file path.
-
-### Cache Location
-
-```
-<platformdirs.user_data_dir("tarragon")>/cache/previews/<sha1>.png
-```
-
-Platform-specific paths:
-- Linux: `~/.local/share/tarragon/cache/previews/`
-- macOS: `~/Library/Application Support/tarragon/cache/previews/`
-- Windows: `%APPDATA%\tarragon\cache\previews\`
-
-### Master Resolution
-
-All cached images are resized to a maximum long edge of **2048 pixels** (`MASTER_LONG_EDGE`), preserving aspect ratio. This provides sufficient resolution for preview and color analysis while keeping memory usage manageable.
-
-### Cache Invalidation
-
-Cache entries are validated by comparing two fields stored in the `thumbnails` database table:
-
-- **mtime**: File modification time (integer).
-- **size**: File size in bytes.
-
-If either value differs from the current file's stat, the cache entry is considered stale and the image is re-rendered. Corrupt cache files (failed `Image.open`) also trigger re-rendering.
-
-### Cache Format
-
-Configurable via the `cache_format` setting:
-- **PNG** (default): Lossless, supports RGBA natively.
-- **JPEG**: Smaller file sizes; RGBA images are flattened onto a white background before saving. Quality set to 90.
+Cache entries are organized by per-folder UUID under `<user_data_dir>/cache/{resolution}/{folder_name}_{uuid}/`, with three resolution tiers (256, 1024, full). Cache validity is checked by comparing `mtime` and `size` against the database record. Cache format (PNG or JPEG) is configurable via settings. See [Rendering Pipeline](rendering-pipeline.md) for full cache details.

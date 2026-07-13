@@ -151,3 +151,6 @@ temp/
 .settings/
 *.sublime-project
 *.sublime-workspace
+
+# Ruff cache
+.ruff_cache

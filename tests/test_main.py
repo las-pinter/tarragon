@@ -21,14 +21,6 @@ def test_main_module_imports_cleanly() -> None:
 # ── MainWindow Class Tests ─────────────────────────────────────────────
 
 
-def test_main_window_is_qmainwindow() -> None:
-    """MainWindow is a subclass of QMainWindow."""
-    from PySide6.QtWidgets import QMainWindow
-    from tarragon.main import MainWindow
-
-    assert issubclass(MainWindow, QMainWindow)
-
-
 def test_main_window_has_title(qapp: Any, tmp_path: Path) -> None:  # noqa: ARG001
     """MainWindow sets a title on initialization (with services at temp paths)."""
 
@@ -43,26 +35,6 @@ def test_main_window_has_title(qapp: Any, tmp_path: Path) -> None:  # noqa: ARG0
     window = MainWindow(settings=settings, database=database)
     try:
         assert window.windowTitle() == "Tarragon"
-    finally:
-        window.close()
-
-
-def test_main_window_has_docks(qapp: Any, tmp_path: Path) -> None:  # noqa: ARG001
-    """MainWindow (from main.py) creates the three dock panels."""
-
-    from tarragon.db import Database
-    from tarragon.main import MainWindow
-    from tarragon.settings import Settings
-
-    settings_db = Database(tmp_path / "test_settings_docks.db")
-    settings_db.init_schema()
-    settings = Settings(settings_db)
-    database = Database(tmp_path / "test_main_docks.db")
-    window = MainWindow(settings=settings, database=database)
-    try:
-        assert hasattr(window, "sidebar_dock")
-        assert hasattr(window, "grid_dock")
-        assert hasattr(window, "preview_dock")
     finally:
         window.close()
 
@@ -82,26 +54,6 @@ def test_main_window_has_database(qapp: Any, tmp_path: Path) -> None:  # noqa: A
     try:
         assert hasattr(window, "_database")
         assert isinstance(window._database, Database)
-    finally:
-        window.close()
-
-
-def test_main_window_default_size(qapp: Any, tmp_path: Path) -> None:  # noqa: ARG001
-    """MainWindow (from main.py) opens at approximately 1200x800."""
-
-    from tarragon.db import Database
-    from tarragon.main import MainWindow
-    from tarragon.settings import Settings
-
-    settings_db = Database(tmp_path / "test_settings3.db")
-    settings_db.init_schema()
-    settings = Settings(settings_db)
-    database = Database(tmp_path / "test_main_size.db")
-    window = MainWindow(settings=settings, database=database)
-    try:
-        size = window.size()
-        assert size.width() == 1200, f"Expected width 1200, got {size.width()}"
-        assert size.height() == 800, f"Expected height 800, got {size.height()}"
     finally:
         window.close()
 

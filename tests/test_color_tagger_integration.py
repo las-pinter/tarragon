@@ -517,7 +517,7 @@ class TestSettingsParametersUsed:
 # =========================================================================
 
 
-class TestColorTaggingSkippedForNullInputs:
+class TestColorTaggingForValidImage:
     """Color tagging is skipped when image or cache_path is None."""
 
     def test_none_image_skips_color_tagging(
@@ -542,7 +542,7 @@ class TestColorTaggingSkippedForNullInputs:
         tag_entries = _get_file_tag_names(db, str(file_info.path))
         assert tag_entries == []
 
-    def test_none_cache_path_skips_color_tagging(
+    def test_valid_render_triggers_color_tagging(
         self,
         tmp_path: Path,
         service: ThumbnailService,

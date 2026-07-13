@@ -548,7 +548,7 @@ class TestCheckAndRenderEdgeCases:
             "size": 0,
             "width": 64,
             "height": 64,
-            "master_cache_path": str(cache_path),
+            "thumbnail_cache_path": str(cache_path),
         }
 
         emitted: list[tuple[str, object]] = []

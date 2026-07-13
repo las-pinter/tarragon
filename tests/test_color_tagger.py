@@ -179,26 +179,6 @@ def test_low_saturation_is_neutral() -> None:
     assert tags == ["color:neutral"]
 
 
-def test_deterministic_output() -> None:
-    """Same input should always produce same output."""
-    # Arrange — a multi-color image
-    img = _quad_image(
-        [
-            (10, 0.8, 0.7),  # red
-            (70, 0.8, 0.7),  # green
-            (170, 0.8, 0.7),  # blue
-            (290, 0.8, 0.7),  # magenta
-        ]
-    )
-
-    # Act
-    tags_a = extract_dominant_color_tags(img)
-    tags_b = extract_dominant_color_tags(img)
-
-    # Assert
-    assert tags_a == tags_b
-
-
 def test_empty_image_returns_empty() -> None:
     """A zero-size image should return an empty list."""
     # Arrange

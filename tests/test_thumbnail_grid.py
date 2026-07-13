@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from PySide6.QtCore import (
     QEvent,
+    QItemSelection,
     QModelIndex,
     QPoint,
     QPointF,
@@ -60,7 +61,9 @@ def grid_with_model(grid: Any) -> Any:
         [
             Path("/fake/images/photo_001.png"),
             Path("/fake/images/photo_002.jpg"),
-            Path("/fake/images/layer_comp.psd"),
+            Path("/fake/images/photo_003.png"),
+            Path("/fake/images/photo_004.jpg"),
+            Path("/fake/images/photo_005.png"),
         ]
     )
     grid.set_model(model)
@@ -1097,3 +1100,87 @@ def test_paint_selection_border_uses_inset_rect(delegate: Any, mock_painter: Any
     assert len(draw_rounded_calls) >= 2  # badge + border
     border_rect = draw_rounded_calls[-1].args[0]
     assert border_rect == expected_border_rect
+
+
+# ── Selection Changed Signal Tests ────────────────────────────────────
+
+
+class TestSelectionChangedSignalSingle:
+    """test_selection_changed_signal_single — Single selection emits signal with 1 path."""
+
+    def test_single_selection_emits_one_path(
+        self, grid_with_model: tuple[ThumbnailGrid, ThumbnailModel]
+    ) -> None:
+        """Selecting one item emits selection_changed with a list of 1 path."""
+        grid, model = grid_with_model
+
+        # Arrange: capture signal emissions
+        emitted = []
+        grid.selection_changed.connect(lambda paths: emitted.append(paths))
+
+        # Act: select first item
+        index = model.index(0)
+        selection = QItemSelection(index, index)
+        grid.selectionModel().select(selection, grid.selectionModel().SelectionFlag.ClearAndSelect)
+
+        # Assert
+        assert len(emitted) >= 1
+        last_emission = emitted[-1]
+        assert len(last_emission) == 1
+        assert last_emission[0] == str(Path("/fake/images/photo_001.png"))
+
+
+class TestSelectionChangedSignalMulti:
+    """test_selection_changed_signal_multi — Multi selection emits signal with multiple paths."""
+
+    def test_multi_selection_emits_multiple_paths(
+        self, grid_with_model: tuple[ThumbnailGrid, ThumbnailModel]
+    ) -> None:
+        """Selecting multiple items emits selection_changed with all selected paths."""
+        grid, model = grid_with_model
+
+        # Arrange: capture signal emissions
+        emitted = []
+        grid.selection_changed.connect(lambda paths: emitted.append(paths))
+
+        # Act: select first 3 items
+        sel_model = grid.selectionModel()
+        for row in range(3):
+            index = model.index(row)
+            selection = QItemSelection(index, index)
+            sel_model.select(selection, sel_model.SelectionFlag.Select)
+
+        # Assert
+        assert len(emitted) >= 1
+        last_emission = emitted[-1]
+        assert len(last_emission) == 3
+        assert str(Path("/fake/images/photo_001.png")) in last_emission
+        assert str(Path("/fake/images/photo_002.jpg")) in last_emission
+        assert str(Path("/fake/images/photo_003.png")) in last_emission
+
+
+class TestSelectionChangedSignalEmpty:
+    """test_selection_changed_signal_empty — No selection emits empty list."""
+
+    def test_no_selection_emits_empty_list(
+        self, grid_with_model: tuple[ThumbnailGrid, ThumbnailModel]
+    ) -> None:
+        """Clearing selection emits selection_changed with an empty list."""
+        grid, model = grid_with_model
+
+        # Arrange: first select something
+        index = model.index(0)
+        selection = QItemSelection(index, index)
+        grid.selectionModel().select(selection, grid.selectionModel().SelectionFlag.ClearAndSelect)
+
+        # Capture signal emissions
+        emitted = []
+        grid.selection_changed.connect(lambda paths: emitted.append(paths))
+
+        # Act: clear selection
+        grid.selectionModel().clear()
+
+        # Assert
+        assert len(emitted) >= 1
+        last_emission = emitted[-1]
+        assert last_emission == []

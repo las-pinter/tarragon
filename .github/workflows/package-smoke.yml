@@ -34,8 +34,8 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: |
-          python -c "import tarragon_viewer; print('tarragon_viewer OK')"
-          python -c "import tarragon_viewer.main; print('tarragon_viewer.main OK')"
+          python -c "import tarragon; print('tarragon OK')"
+          python -c "import tarragon.main; print('tarragon.main OK')"
 
   nuitka-smoke:
     runs-on: ubuntu-latest
@@ -65,4 +65,4 @@ jobs:
             --enable-plugin=pyside6 \
             --output-filename=tarragon-smoke.bin \
             --remove-output \
-            tarragon_viewer/main.py || echo "Nuitka build failed — import smoke is the gatekeeper"
+            tarragon/main.py || echo "Nuitka build failed — import smoke is the gatekeeper"

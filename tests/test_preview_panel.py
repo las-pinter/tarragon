@@ -924,7 +924,7 @@ def test_set_image_exif_recovery_handles_missing_original(qapp: Any, tmp_path: A
 
 def test_apply_exif_from_original_orientation_6(tmp_path: Any) -> None:
     """_apply_exif_from_original rotates 90° CW for orientation 6."""
-    from tarragon.widgets.preview_panel import _apply_exif_from_original
+    from tarragon.image_utils import _apply_exif_from_original
 
     # Create original wiv orientation 6
     orig = Image.new("RGB", (200, 100), color="red")
@@ -942,7 +942,7 @@ def test_apply_exif_from_original_orientation_6(tmp_path: Any) -> None:
 
 def test_apply_exif_from_original_orientation_3(tmp_path: Any) -> None:
     """_apply_exif_from_original rotates 180° for orientation 3."""
-    from tarragon.widgets.preview_panel import _apply_exif_from_original
+    from tarragon.image_utils import _apply_exif_from_original
 
     orig = Image.new("RGB", (200, 100), color="blue")
     exif = orig.getexif()
@@ -959,7 +959,7 @@ def test_apply_exif_from_original_orientation_3(tmp_path: Any) -> None:
 
 def test_apply_exif_from_original_orientation_8(tmp_path: Any) -> None:
     """_apply_exif_from_original rotates 90° CCW for orientation 8."""
-    from tarragon.widgets.preview_panel import _apply_exif_from_original
+    from tarragon.image_utils import _apply_exif_from_original
 
     orig = Image.new("RGB", (200, 100), color="green")
     exif = orig.getexif()
@@ -975,7 +975,7 @@ def test_apply_exif_from_original_orientation_8(tmp_path: Any) -> None:
 
 def test_apply_exif_from_original_no_orientation_tag(tmp_path: Any) -> None:
     """_apply_exif_from_original is a no-op when no orientation tag exists."""
-    from tarragon.widgets.preview_panel import _apply_exif_from_original
+    from tarragon.image_utils import _apply_exif_from_original
 
     orig = Image.new("RGB", (200, 100), color="white")
     orig_path = tmp_path / "test.jpg"
@@ -989,7 +989,7 @@ def test_apply_exif_from_original_no_orientation_tag(tmp_path: Any) -> None:
 
 def test_apply_exif_from_original_missing_file(tmp_path: Any) -> None:
     """_apply_exif_from_original returns image unchanged for missing file."""
-    from tarragon.widgets.preview_panel import _apply_exif_from_original
+    from tarragon.image_utils import _apply_exif_from_original
 
     cached = Image.new("RGB", (200, 100), color="red")
     fake_path = tmp_path / "nonexistent.jpg"
@@ -1000,7 +1000,7 @@ def test_apply_exif_from_original_missing_file(tmp_path: Any) -> None:
 
 def test_transpose_for_orientation_all_values() -> None:
     """_transpose_for_orientation handles all EXIF orientation values 2-8."""
-    from tarragon.widgets.preview_panel import _transpose_for_orientation
+    from tarragon.image_utils import _transpose_for_orientation
 
     # Use an asymmetric image so rotations are detectable
     base = Image.new("RGB", (200, 100), color="red")
@@ -1047,7 +1047,7 @@ def test_transpose_for_orientation_pixel_content_5_and_7() -> None:
     dimensions the same way, but produce mirror-image pixel layouts.
     Uses an asymmetric pixel pattern so any mismatch is detectable.
     """
-    from tarragon.widgets.preview_panel import _transpose_for_orientation
+    from tarragon.image_utils import _transpose_for_orientation
 
     # Create asymmetric test image — each pixel has a unique-ish value
     base = Image.new("RGB", (6, 4))

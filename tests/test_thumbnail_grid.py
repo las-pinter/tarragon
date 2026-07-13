@@ -27,16 +27,15 @@ from PySide6.QtWidgets import (
 )
 
 from tarragon.models.thumbnail_model import ThumbnailModel
+from tarragon.theme.colors import BG_PRIMARY, BG_SECONDARY
 from tarragon.theme.file_type_badge import BADGE_COLORS, DEFAULT_BADGE_COLORS, get_badge_colors
-from tarragon.widgets.thumbnail_grid import (
-    BG_PRIMARY,
-    BG_SECONDARY,
+from tarragon.widgets.thumbnail_delegate import (
     GRID_GAP,
     HOVER_MARGIN,
     THUMBNAIL_SIZE,
     ThumbnailDelegate,
-    ThumbnailGrid,
 )
+from tarragon.widgets.thumbnail_grid import ThumbnailGrid
 
 
 @pytest.fixture()
@@ -915,7 +914,7 @@ def test_help_event_delegates_non_tooltip(delegate: Any) -> None:
     with patch.object(QToolTip, "showText") as mock_show:
         # super().helpEvent requires real Qt types, so we patch it out
         with patch(
-            "tarragon.widgets.thumbnail_grid.QStyledItemDelegate.helpEvent",
+            "tarragon.widgets.thumbnail_delegate.QStyledItemDelegate.helpEvent",
             return_value=False,
         ):
             result = delegate.helpEvent(event, view, option, index)

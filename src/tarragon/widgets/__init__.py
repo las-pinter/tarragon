@@ -7,7 +7,9 @@ from .preview_panel import PreviewPanel
 from .settings_dialog import SettingsDialog
 from .sidebar import FavoritesModel, SidebarWidget
 from .tag_filter_bar import TagFilterBar
-from .thumbnail_grid import ThumbnailDelegate, ThumbnailGrid
+from .thumbnail_animator import ThumbnailAnimator
+from .thumbnail_delegate import ThumbnailDelegate
+from .thumbnail_grid import ThumbnailGrid
 
 __all__ = [
     "FavoritesModel",
@@ -19,6 +21,7 @@ __all__ = [
     "SettingsDialog",
     "SidebarWidget",
     "TagFilterBar",
+    "ThumbnailAnimator",
     "ThumbnailDelegate",
     "ThumbnailGrid",
 ]

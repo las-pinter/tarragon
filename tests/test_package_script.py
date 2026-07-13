@@ -88,7 +88,7 @@ def test_build_function_exists(package_module: Any) -> None:
 def test_build_command_includes_pyside6_plugin(package_module: Any) -> None:
     """The Nuitka command must include the PySide6 plugin flag."""
     with patch.object(package_module, "check_dependencies"), patch("subprocess.run") as mock_run:
-        package_module.build(onefile=True)
+        package_module.build(target_platform="linux")
 
     mock_run.assert_called_once()
     cmd = mock_run.call_args[0][0]
@@ -98,7 +98,7 @@ def test_build_command_includes_pyside6_plugin(package_module: Any) -> None:
 def test_build_command_includes_entry_point(package_module: Any) -> None:
     """The Nuitka command must reference the main.py entry point."""
     with patch.object(package_module, "check_dependencies"), patch("subprocess.run") as mock_run:
-        package_module.build(onefile=True)
+        package_module.build(target_platform="linux")
 
     mock_run.assert_called_once()
     cmd = mock_run.call_args[0][0]
@@ -113,7 +113,7 @@ def test_build_command_includes_entry_point(package_module: Any) -> None:
 def test_build_command_includes_tarragon_package(package_module: Any) -> None:
     """The Nuitka command must include the tarragon package."""
     with patch.object(package_module, "check_dependencies"), patch("subprocess.run") as mock_run:
-        package_module.build(onefile=True)
+        package_module.build(target_platform="linux")
 
     mock_run.assert_called_once()
     cmd = mock_run.call_args[0][0]
@@ -125,7 +125,7 @@ def test_build_command_includes_tarragon_package(package_module: Any) -> None:
 def test_build_command_includes_python_path(package_module: Any) -> None:
     """The Nuitka build must set PYTHONPATH environment variable to the src directory."""
     with patch.object(package_module, "check_dependencies"), patch("subprocess.run") as mock_run:
-        package_module.build(onefile=True)
+        package_module.build(target_platform="linux")
 
     mock_run.assert_called_once()
     call_kwargs = mock_run.call_args[1]

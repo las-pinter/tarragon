@@ -15,7 +15,7 @@ cd "$PROJECT_ROOT"
 # Detect if we're in a VirtualBox shared folder (symlinks don't work)
 REAL_PATH="$(pwd -P)"
 if [[ "$REAL_PATH" == /media/sf_* ]] || [[ "$REAL_PATH" == */VirtualBox* ]]; then
-    echo "==> Detected VirtualBox shared folder — using external venv location..."
+    echo "==> Detected VirtualBox shared folder - using external venv location..."
     VENV_DIR="$HOME/.tarragon-build-venv"
 else
     VENV_DIR=".venv"
@@ -39,17 +39,14 @@ source "$VENV_DIR/bin/activate"
 pip install --upgrade pip --quiet
 
 # Install dependencies
-echo "==> Installing runtime dependencies..."
-pip install -r requirements.txt --quiet
-
-echo "==> Installing build dependencies..."
-pip install -r requirements-build.txt --quiet
+echo "==> Installing dependencies..."
+pip install -e ".[build]" --quiet
 
 # Check for ccache (dramatically speeds up repeat builds)
 if command -v ccache &>/dev/null; then
-    echo "==> ccache detected — repeat builds will be fast"
+    echo "==> ccache detected - repeat builds will be fast"
 else
-    echo "==> ccache not found — install with: sudo apt-get install ccache"
+    echo "==> ccache not found - install with: sudo apt-get install ccache"
     echo "    This will dramatically speed up repeat builds"
 fi
 

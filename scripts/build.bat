@@ -31,18 +31,15 @@ REM Upgrade pip
 pip install --upgrade pip --quiet
 
 REM Install dependencies
-echo ==^> Installing runtime dependencies...
-pip install -r requirements.txt --quiet
-
-echo ==^> Installing build dependencies...
-pip install -r requirements-build.txt --quiet
+echo ==^> Installing dependencies...
+pip install -e ".[build]" --quiet
 
 REM Check for ccache (dramatically speeds up repeat builds)
 where ccache >nul 2>&1
 if %errorlevel% equ 0 (
-    echo ==^> ccache detected — repeat builds will be fast
+    echo ==^> ccache detected - repeat builds will be fast
 ) else (
-    echo ==^> ccache not found — install from https://ccache.dev/
+    echo ==^> ccache not found - install from https://ccache.dev/
     echo     This will dramatically speed up repeat builds
 )
 

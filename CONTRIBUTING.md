@@ -26,13 +26,8 @@ source .venv/bin/activate        # Linux/macOS
 ### 3. Install in Development Mode
 
 ```bash
-pip install -e ".[dev]"
+pip install -e .
 ```
-
-This installs Tarragon in editable mode along with development dependencies:
-- `pytest>=8.0` — Test runner
-- `ruff>=0.4` — Linter and formatter
-- `pre-commit>=3.6` — Git hook framework
 
 ### 4. Verify Installation
 
@@ -151,9 +146,6 @@ pre-commit run --all-files
 ```
 tarragon/
 ├── pyproject.toml              # Project metadata, dependencies, tool config
-├── requirements.txt            # Runtime dependencies (pinned)
-├── requirements-build.txt      # Build dependencies (Nuitka)
-├── requirements-dev.txt        # Development dependencies (pinned)
 ├── README.md                   # Project overview
 ├── LICENSE                     # MIT license
 ├── .editorconfig               # Editor settings

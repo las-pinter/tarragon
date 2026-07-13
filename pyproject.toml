@@ -32,10 +32,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = [
-    "pytest>=8.0",
-    "ruff>=0.4",
-    "pre-commit>=3.6",
+build = [
+    "nuitka>=2.0",
+    "patchelf; sys_platform == \"linux\"",
+    "zstandard>=0.20",
+    "ordered-set>=4.1",
 ]
 
 [project.urls]

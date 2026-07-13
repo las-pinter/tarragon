@@ -22,9 +22,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install dependencies
-        run: pip install -e .
-      - name: Install Nuitka and build tools
-        run: pip install nuitka patchelf zstandard
+        run: pip install -e ".[build]"
       - name: Build binary
         run: python scripts/package_nuitka.py
       - name: Rename binary

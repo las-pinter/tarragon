@@ -34,7 +34,7 @@ scripts\build.bat
 
 The build scripts will:
 1. Create a `.venv` virtual environment (if it doesn't exist)
-2. Install runtime and build dependencies from `requirements.txt` and `requirements-build.txt`
+2. Install runtime and build dependencies from `pyproject.toml`
 3. Run `scripts/package_nuitka.py`
 
 ### Manual Build (without build scripts)
@@ -42,8 +42,7 @@ The build scripts will:
 If you prefer to manage the environment yourself:
 
 ```bash
-pip install -r requirements.txt
-pip install -r requirements-build.txt
+pip install -e ".[build]"
 python scripts/package_nuitka.py
 ```
 

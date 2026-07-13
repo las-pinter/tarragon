@@ -6,7 +6,6 @@ set -e
 #
 # Usage:
 #   ./scripts/build.sh              # Build release onefile binary
-#   ./scripts/build.sh --dev        # Build dev mode (fast iteration)
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -54,12 +53,8 @@ else
     echo "    This will dramatically speed up repeat builds"
 fi
 
-# Determine build mode
-BUILD_MODE="release"
-if [ "$1" = "--dev" ]; then BUILD_MODE="dev"; fi
-
 # Run build
-echo "==> Building RELEASE mode (full build)..."
-python scripts/package_nuitka.py --release
+echo "==> Building..."
+python scripts/package_nuitka.py
 
-echo "==> Release build complete! Check dist/ directory for output."
+echo "==> Build complete! Check dist/ directory for output."

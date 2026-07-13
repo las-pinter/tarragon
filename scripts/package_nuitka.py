@@ -2,19 +2,7 @@
 """Build Tarragon as a Nuitka binary.
 
 Usage:
-    python scripts/package_nuitka.py [--dev|--release]
-
-    Or use the build scripts which set up a virtual environment automatically:
-        ./scripts/build.sh          # Linux/macOS (release build)
-        ./scripts/build.sh --dev    # Linux/macOS (dev build)
-        scripts\\build.bat          # Windows (release build)
-        scripts\\build.bat --dev    # Windows (dev build)
-
-Options:
-    --dev       Quick dev build: skip heavy packages (psd_tools, scipy, skimage,
-                IPython, matplotlib, pytest) for fast iteration.
-    --release   Full release build with all packages (default).
-                Output goes to dist/ as a single onefile binary.
+    python scripts/package_nuitka.py
 
 System dependencies:
     - Python packages: nuitka, patchelf, zstandard
@@ -73,13 +61,8 @@ def check_dependencies() -> None:
         sys.exit(1)
 
 
-def build(dev_mode: bool = False) -> None:
-    """Run Nuitka build with correct flags for PySide6 and dependencies.
-
-    Args:
-        dev_mode: If True, skip heavy packages (psd_tools, scipy, skimage)
-                  for fast iteration builds. Output goes to dist-dev/.
-    """
+def build() -> None:
+    """Run Nuitka build with correct flags for PySide6 and dependencies."""
     check_dependencies()
     _find_ccache()  # prints helpful message about ccache status
 
@@ -96,30 +79,14 @@ def build(dev_mode: bool = False) -> None:
         "--enable-plugin=pyside6",
         "--include-package=tarragon",
         "--include-package-data=tarragon.theme",
+        "--include-package=psd_tools",
+        "--include-package=PIL",
+        "--include-package=platformdirs",
+        "--include-package=psutil",
+        "--onefile",
+        f"--output-dir={project_root / 'dist'}",
+        "--output-filename=tarragon",
     ]
-
-    if dev_mode:
-        # Dev mode: skip heavy packages for fast iteration
-        cmd.extend([
-            "--nofollow-import-to=scipy",
-            "--nofollow-import-to=skimage",
-            "--nofollow-import-to=psd_tools",
-            "--nofollow-import-to=IPython",
-            "--nofollow-import-to=matplotlib",
-            "--nofollow-import-to=pytest",
-            f"--output-dir={project_root / 'dist-dev'}",
-        ])
-    else:
-        # Release mode: include everything, build single onefile binary
-        cmd.extend([
-            "--include-package=psd_tools",
-            "--include-package=PIL",
-            "--include-package=platformdirs",
-            "--include-package=psutil",
-            "--onefile",
-            f"--output-dir={project_root / 'dist'}",
-            "--output-filename=tarragon-viewer",
-        ])
 
     cmd.append(str(entry_point))
 
@@ -128,32 +95,14 @@ def build(dev_mode: bool = False) -> None:
     src_path = str(project_root / "src")
     env["PYTHONPATH"] = src_path + os.pathsep + env.get("PYTHONPATH", "")
 
-    if dev_mode:
-        print("\U0001F527 DEV MODE: Skipping: psd_tools, scipy, skimage, IPython, matplotlib, pytest")
-        print("   PSD files won't render correctly in dev builds")
-
     print(f"Running: {' '.join(cmd)}")
     print(f"PYTHONPATH: {env['PYTHONPATH']}")
     subprocess.run(cmd, check=True, cwd=str(project_root), env=env)
 
-    if dev_mode:
-        output_dir = project_root / "dist-dev" / "main.dist"
-        print(f"\n\u2705 DEV BUILD COMPLETE!")
-        print(f"   Output: {output_dir}")
-    else:
-        output_file = project_root / "dist" / "tarragon-viewer"
-        print(f"\n\u2705 RELEASE BUILD COMPLETE!")
-        print(f"   Output: {output_file}")
+    output_file = project_root / "dist" / "tarragon"
+    print(f"\n RELEASE BUILD COMPLETE!")
+    print(f"   Output: {output_file}")
 
 
 if __name__ == "__main__":
-    import argparse
-
-    parser = argparse.ArgumentParser(description="Build Tarragon with Nuitka")
-    group = parser.add_mutually_exclusive_group()
-    group.add_argument("--dev", action="store_true", help="Quick dev build (skip heavy packages)")
-    group.add_argument("--release", action="store_true", help="Full release build (default)")
-    args = parser.parse_args()
-
-    # --release is the default; --dev overrides it. No need to read args.release.
-    build(dev_mode=args.dev)
+    build()

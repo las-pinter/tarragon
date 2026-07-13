@@ -6,7 +6,6 @@ REM Creates a virtual environment, installs dependencies, and runs the Nuitka bu
 REM
 REM Usage:
 REM   scripts\build.bat              Build release onefile binary
-REM   scripts\build.bat --dev        Build dev mode (fast iteration)
 
 set "SCRIPT_DIR=%~dp0"
 set "PROJECT_ROOT=%SCRIPT_DIR%.."
@@ -47,14 +46,10 @@ if %errorlevel% equ 0 (
     echo     This will dramatically speed up repeat builds
 )
 
-REM Determine build mode
-set "BUILD_MODE=release"
-if "%1"=="--dev" set "BUILD_MODE=dev"
-
 REM Run build
-echo ==^> Building RELEASE mode (full build)...
-python scripts\package_nuitka.py --release
+echo ==^> Building...
+python scripts\package_nuitka.py
 
-echo ==^> Release build complete! Check dist\ directory for output.
+echo ==^> Build complete! Check dist\ directory for output.
 
 endlocal

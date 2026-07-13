@@ -10,9 +10,9 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            binary-name: tarragon-linux
+            binary-name: tarragon
           - os: windows-latest
-            binary-name: tarragon-windows.exe
+            binary-name: Tarragon.exe
 
     runs-on: ${{ matrix.os }}
 
@@ -31,9 +31,9 @@ jobs:
         shell: bash
         run: |
           if [ "$RUNNER_OS" == "Linux" ]; then
-            mv dist/tarragon-viewer dist/${{ matrix.binary-name }}
+            mv dist/tarragon dist/${{ matrix.binary-name }}
           else
-            mv dist/tarragon-viewer.exe dist/${{ matrix.binary-name }}
+            mv dist/tarragon.exe dist/${{ matrix.binary-name }}
           fi
       - name: Upload to release
         uses: softprops/action-gh-release@v2

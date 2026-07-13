@@ -1,4 +1,4 @@
-"""Tests for src/tarragon/editors.py — editor association resolution and launching."""
+"""Tests for src/tarragon/services/editors.py — editor association resolution and launching."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 import pytest
 from tarragon.db import Database
-from tarragon.editors import (
+from tarragon.services.editors import (
     launch_editor,
     resolve_editor_command,
     substitute_file_path,
@@ -90,7 +90,7 @@ def test_launch_editor_non_blocking(db: Database) -> None:
     """subprocess.Popen is called (not subprocess.call or .run)."""
     db.upsert_editor_association(".png", "gimp {file}")
 
-    with patch("tarragon.editors.subprocess.Popen") as mock_popen:
+    with patch("tarragon.services.editors.subprocess.Popen") as mock_popen:
         launch_editor(db, Path("/tmp/img.png"), ".png")
 
     mock_popen.assert_called_once_with(["gimp", "/tmp/img.png"], shell=False)
@@ -98,7 +98,7 @@ def test_launch_editor_non_blocking(db: Database) -> None:
 
 def test_launch_editor_fallback_to_os_default(db: Database) -> None:
     """No association triggers OS default handler (xdg-open on non-Windows)."""
-    with patch("tarragon.editors.sys") as mock_sys, patch("tarragon.editors.subprocess.Popen") as mock_popen:
+    with patch("tarragon.services.editors.sys") as mock_sys, patch("tarragon.services.editors.subprocess.Popen") as mock_popen:
         mock_sys.platform = "linux"
         launch_editor(db, Path("/tmp/img.png"), ".unknown")
 
@@ -108,8 +108,8 @@ def test_launch_editor_fallback_to_os_default(db: Database) -> None:
 def test_launch_editor_windows_uses_startfile(db: Database) -> None:
     """Windows fallback uses os.startfile."""
     with (
-        patch("tarragon.editors.sys") as mock_sys,
-        patch("tarragon.editors.os.startfile", create=True) as mock_startfile,
+        patch("tarragon.services.editors.sys") as mock_sys,
+        patch("tarragon.services.editors.os.startfile", create=True) as mock_startfile,
     ):
         mock_sys.platform = "win32"
         launch_editor(db, Path("C:\\img.png"), ".unknown")
@@ -119,7 +119,7 @@ def test_launch_editor_windows_uses_startfile(db: Database) -> None:
 
 def test_launch_editor_linux_uses_xdg_open(db: Database) -> None:
     """Linux fallback uses xdg-open."""
-    with patch("tarragon.editors.sys") as mock_sys, patch("tarragon.editors.subprocess.Popen") as mock_popen:
+    with patch("tarragon.services.editors.sys") as mock_sys, patch("tarragon.services.editors.subprocess.Popen") as mock_popen:
         mock_sys.platform = "linux"
         launch_editor(db, Path("/home/user/photo.jpg"), ".nope")
 

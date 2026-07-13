@@ -10,7 +10,8 @@ from PySide6.QtCore import QModelIndex, Qt
 from PySide6.QtWidgets import QApplication, QLabel, QListView, QPushButton, QTreeView
 
 from tarragon.db import Database
-from tarragon.widgets.sidebar import FavoritesModel, SidebarWidget
+from tarragon.models.favorites_model import FavoritesModel
+from tarragon.widgets.sidebar import SidebarWidget
 
 # ── Fixtures ──────────────────────────────────────────────────────────
 

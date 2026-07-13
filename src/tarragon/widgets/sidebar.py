@@ -1,7 +1,6 @@
 """SidebarWidget — Favorites sidebar with model/view separation.
 
-Provides a ``FavoritesModel`` (``QAbstractListModel``) backed by the database
-favorites repository, and a ``SidebarWidget`` that renders it with add/remove
+Provides a ``SidebarWidget`` that renders favorites with add/remove
 controls and emits a signal when a favorite is clicked.
 
 The sidebar also includes a navigable folder tree (``QTreeView`` backed by
@@ -9,14 +8,16 @@ The sidebar also includes a navigable folder tree (``QTreeView`` backed by
 
 A custom :class:`SidebarItemDelegate` paints folder icons with selection-aware
 colours (coral when selected, muted when not) to match the mockup aesthetic.
+
+``FavoritesModel`` has been moved to :mod:`tarragon.models.favorites_model`
+but is re-exported here for backward compatibility.
 """
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Any, override
+from typing import override
 
-from PySide6.QtCore import QAbstractListModel, QDir, QModelIndex, QPersistentModelIndex, QSize, Qt, Signal
+from PySide6.QtCore import QDir, QModelIndex, QPersistentModelIndex, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
@@ -34,6 +35,7 @@ from PySide6.QtWidgets import (
 )
 
 from tarragon.db import Database
+from tarragon.models.favorites_model import FavoritesModel  # noqa: F401 — re-exported
 from tarragon.theme.colors import CORAL_STRONG, TEXT_SECONDARY
 
 
@@ -113,72 +115,6 @@ class SidebarItemDelegate(QStyledItemDelegate):
             option.icon = QIcon(self._coral_pixmap)
         else:
             option.icon = QIcon(self._muted_pixmap)
-
-
-class FavoritesModel(QAbstractListModel):
-    """A list model backed by the database favorites table.
-
-    Provides two roles:
-        - ``DisplayRole``: the user-provided label (or file basename if unset)
-        - ``UserRole``:    the full path string
-    """
-
-    def __init__(self, db: Database, parent: QWidget | None = None) -> None:
-        """Initialise the model with a database reference and load existing data."""
-        super().__init__(parent)
-        self._db = db
-        self._favorites: list[dict[str, Any]] = []
-        self.load_from_db()
-
-    @override
-    def rowCount(self, parent: QModelIndex | QPersistentModelIndex = QPersistentModelIndex()) -> int:  # noqa: N802
-        """Return the number of favorite entries."""
-        return len(self._favorites)
-
-    @override
-    def data(self, index: QModelIndex | QPersistentModelIndex, role: int = Qt.ItemDataRole.DisplayRole) -> Any:  # noqa: N802
-        """Return data for *index* according to *role*.
-
-        * ``DisplayRole`` → user label, or file basename if label is ``None``
-        * ``UserRole``    → full path string
-        """
-        if not index.isValid() or not (0 <= index.row() < len(self._favorites)):
-            return None
-
-        fav = self._favorites[index.row()]
-
-        if role == Qt.ItemDataRole.DisplayRole:
-            label = fav.get("label")
-            if label:
-                return label
-            return Path(fav["path"]).name
-
-        if role == Qt.ItemDataRole.UserRole:
-            return fav["path"]
-
-        return None
-
-    # ── Mutators ────────────────────────────────────────────────
-
-    def add_favorite(self, path: str, label: str | None = None) -> None:
-        """Persist a new favorite via the database and refresh the model."""
-        self._db.add_favorite(path, label=label)
-        self.load_from_db()
-
-    def remove_favorite(self, path: str) -> None:
-        """Remove a favorite via the database and refresh the model."""
-        self._db.remove_favorite(path)
-        self.load_from_db()
-
-    def load_from_db(self) -> None:
-        """Reload all favorites from the database into the internal list."""
-        self.beginResetModel()
-        self._favorites = list(self._db.list_favorites())
-        self.endResetModel()
-
-    def favorite_paths(self) -> list[str]:
-        """Return a list of all stored favorite paths."""
-        return [fav["path"] for fav in self._favorites]
 
 
 class SidebarWidget(QWidget):

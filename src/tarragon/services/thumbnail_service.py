@@ -417,7 +417,7 @@ class ThumbnailService(QObject):
         if self._settings_service.get_color_tag_enabled():
             try:
                 # Deferred import to avoid circular dependency
-                from tarragon.color_tagger import extract_dominant_color_tags
+                from tarragon.services.color_tagger import extract_dominant_color_tags
 
                 tags = extract_dominant_color_tags(
                     full_img,

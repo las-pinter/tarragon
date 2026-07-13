@@ -144,7 +144,7 @@ def test_handler_calls_launch_editor(main_window: MainWindow) -> None:
     """_on_file_double_clicked calls launch_editor with db, path, and extension."""
     window = main_window
 
-    with patch("tarragon.editors.launch_editor") as mock_launch:
+    with patch("tarragon.services.editors.launch_editor") as mock_launch:
         window._on_file_double_clicked("/fake/images/photo_001.png")
 
     mock_launch.assert_called_once()
@@ -172,7 +172,7 @@ def test_handler_extracts_extension(main_window: MainWindow, path_str: str, expe
     """_on_file_double_clicked correctly extracts the file extension from the path."""
     window = main_window
 
-    with patch("tarragon.editors.launch_editor") as mock_launch:
+    with patch("tarragon.services.editors.launch_editor") as mock_launch:
         window._on_file_double_clicked(path_str)
 
     mock_launch.assert_called_once()

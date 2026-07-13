@@ -114,7 +114,7 @@ def _run_render_all_resolutions(
 
         if extract_return is not None:
             with patch(
-                "tarragon.color_tagger.extract_dominant_color_tags",
+                "tarragon.services.color_tagger.extract_dominant_color_tags",
                 return_value=extract_return,
             ):
                 service._render_all_resolutions(file_info)
@@ -297,7 +297,7 @@ class TestColorTaggingDisabled:
         svc.thumbnailReady.connect(lambda p, i, r: emitted.append((p, i, r)))
 
         # Act
-        with patch("tarragon.color_tagger.extract_dominant_color_tags") as mock_extract:
+        with patch("tarragon.services.color_tagger.extract_dominant_color_tags") as mock_extract:
             _run_render_all_resolutions(svc, file_info, img, tmp_path)
 
         # Assert — extract was never called
@@ -341,7 +341,7 @@ class TestColorTaggingFailureIsolated:
             patch("tarragon.services.thumbnail_service.save_to_cache"),
             patch("tarragon.services.thumbnail_service.derive_smaller_sizes", return_value={}),
             patch(
-                "tarragon.color_tagger.extract_dominant_color_tags",
+                "tarragon.services.color_tagger.extract_dominant_color_tags",
                 side_effect=RuntimeError("Color extraction exploded!"),
             ),
         ):
@@ -389,7 +389,7 @@ class TestColorTaggingFailureIsolated:
             patch("tarragon.services.thumbnail_service.save_to_cache"),
             patch("tarragon.services.thumbnail_service.derive_smaller_sizes", return_value={}),
             patch(
-                "tarragon.color_tagger.extract_dominant_color_tags",
+                "tarragon.services.color_tagger.extract_dominant_color_tags",
                 return_value=["color:red"],
             ),
             patch.object(
@@ -455,7 +455,7 @@ class TestSettingsParametersUsed:
             patch("tarragon.services.thumbnail_service.save_to_cache"),
             patch("tarragon.services.thumbnail_service.derive_smaller_sizes", return_value={}),
             patch(
-                "tarragon.color_tagger.extract_dominant_color_tags",
+                "tarragon.services.color_tagger.extract_dominant_color_tags",
                 return_value=["color:red"],
             ) as mock_extract,
         ):
@@ -492,7 +492,7 @@ class TestSettingsParametersUsed:
             patch("tarragon.services.thumbnail_service.save_to_cache"),
             patch("tarragon.services.thumbnail_service.derive_smaller_sizes", return_value={}),
             patch(
-                "tarragon.color_tagger.extract_dominant_color_tags",
+                "tarragon.services.color_tagger.extract_dominant_color_tags",
                 return_value=["color:red"],
             ) as mock_extract,
         ):
@@ -530,7 +530,7 @@ class TestColorTaggingForValidImage:
         # Arrange
         file_info = _make_file_info(tmp_path)
 
-        with patch("tarragon.color_tagger.extract_dominant_color_tags") as mock_extract:
+        with patch("tarragon.services.color_tagger.extract_dominant_color_tags") as mock_extract:
             with patch("tarragon.services.thumbnail_service.render_plain_image", return_value=None):
                 with patch("tarragon.services.thumbnail_service.generate_cache_uuid", return_value="test-uuid"):
                     with patch("tarragon.services.thumbnail_service.generate_cache_paths"):
@@ -565,7 +565,7 @@ class TestColorTaggingForValidImage:
             patch("tarragon.services.thumbnail_service.generate_cache_paths") as mock_paths,
             patch("tarragon.services.thumbnail_service.save_to_cache"),
             patch("tarragon.services.thumbnail_service.derive_smaller_sizes", return_value={}),
-            patch("tarragon.color_tagger.extract_dominant_color_tags", return_value=["color:red"]) as mock_extract,
+            patch("tarragon.services.color_tagger.extract_dominant_color_tags", return_value=["color:red"]) as mock_extract,
         ):
             mock_paths.return_value = {
                 str(RESOLUTION_THUMBNAIL): tmp_path / "cache" / "256.png",

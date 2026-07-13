@@ -257,7 +257,7 @@ def benchmark_psd_rendering(iterations: int, tmp_dir: Path) -> list[TimingResult
 
 def benchmark_color_tagging(iterations: int) -> list[TimingResult]:
     """Benchmark the color tagging algorithm on various image types."""
-    from tarragon.color_tagger import extract_dominant_color_tags
+    from tarragon.services.color_tagger import extract_dominant_color_tags
 
     results: list[TimingResult] = []
 

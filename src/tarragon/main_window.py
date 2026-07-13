@@ -366,7 +366,7 @@ class MainWindow(QMainWindow):
 
     def _on_file_double_clicked(self, path: str) -> None:
         """Handle double-click on a thumbnail — launch external editor."""
-        from tarragon.editors import launch_editor
+        from tarragon.services.editors import launch_editor
 
         file_path = Path(path)
         extension = file_path.suffix

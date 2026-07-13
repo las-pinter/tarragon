@@ -1,4 +1,4 @@
-"""Tests for tarragon.color_tagger — dominant color tag extraction.
+"""Tests for tarragon.services.color_tagger — dominant color tag extraction.
 
 WAAAGH! Wrenchbasha's torture chamber for da color tagger!
 Uses synthetic PIL images — no external files needed.
@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 from PIL import Image
-from tarragon.color_tagger import extract_dominant_color_tags
+from tarragon.services.color_tagger import extract_dominant_color_tags
 
 # =========================================================================
 # Test Helpers — synthetic image factories

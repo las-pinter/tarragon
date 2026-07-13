@@ -1278,7 +1278,7 @@ class TestAutoColorTagSignal:
             patch("tarragon.services.thumbnail_service.generate_cache_paths") as mock_paths,
             patch("tarragon.services.thumbnail_service.save_to_cache"),
             patch("tarragon.services.thumbnail_service.derive_smaller_sizes", return_value={}),
-            patch("tarragon.color_tagger.extract_dominant_color_tags", return_value=["red", "blue"]),
+            patch("tarragon.services.color_tagger.extract_dominant_color_tags", return_value=["red", "blue"]),
         ):
             mock_paths.return_value = {
                 str(RESOLUTION_THUMBNAIL): tmp_path / "cache" / "256.png",
@@ -1368,7 +1368,7 @@ class TestAutoColorTagSignal:
             patch("tarragon.services.thumbnail_service.save_to_cache"),
             patch("tarragon.services.thumbnail_service.derive_smaller_sizes", return_value={}),
             patch(
-                "tarragon.color_tagger.extract_dominant_color_tags",
+                "tarragon.services.color_tagger.extract_dominant_color_tags",
                 side_effect=RuntimeError("Color extraction failed"),
             ),
         ):

@@ -45,7 +45,7 @@ if %errorlevel% equ 0 (
 
 REM Run build
 echo ==^> Building...
-python scripts\package_nuitka.py
+python scripts\package_nuitka.py --platform windows
 
 echo ==^> Build complete! Check dist\ directory for output.
 

@@ -972,7 +972,7 @@ class TestRenderPsdImageCancellation:
         # Don't resolve the future — it should be cancelled before waiting
 
         with (
-            patch("tarragon.thumbnail._get_executor") as mock_exec,
+            patch("tarragon.renderers.psd._get_executor") as mock_exec,
         ):
             mock_executor = MagicMock()
             mock_executor.submit.return_value = mock_future
@@ -1012,7 +1012,7 @@ class TestRenderPsdImageCancellation:
         mock_future: Future[bytes | None] = Future()
         mock_future.set_result(png_bytes)
 
-        with patch("tarragon.thumbnail._get_executor") as mock_exec:
+        with patch("tarragon.renderers.psd._get_executor") as mock_exec:
             mock_executor = MagicMock()
             mock_executor.submit.return_value = mock_future
             mock_exec.return_value = mock_executor

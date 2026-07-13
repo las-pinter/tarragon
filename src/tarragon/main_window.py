@@ -4,11 +4,9 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-import time
 from pathlib import Path
 from typing import Any
 
-from PIL import Image
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import (
@@ -23,9 +21,9 @@ from PySide6.QtWidgets import (
 )
 
 from tarragon.db import Database
+from tarragon.gallery_controller import GalleryController
 from tarragon.models import FilterState
 from tarragon.models.thumbnail_model import ThumbnailModel
-from tarragon.scanner import FileInfo
 from tarragon.services.query_service import QueryService
 from tarragon.services.settings_service import SettingsService
 from tarragon.services.tag_service import TagService
@@ -56,6 +54,9 @@ class MainWindow(QMainWindow):
     Menu actions (current milestone):
         - File → Open Folder (wired in M3, placeholder in M2)
         - View → Toggle visibility of each dock panel
+
+    Gallery filter orchestration and selection handling are delegated to
+    :class:`~tarragon.gallery_controller.GalleryController`.
     """
 
     DEFAULT_WIDTH = 1200
@@ -83,7 +84,8 @@ class MainWindow(QMainWindow):
         self._filter_state: FilterState | None = None
         self._thumbnail_service: ThumbnailService | None = None
         self._search_edit: QLineEdit | None = None
-        self._current_folder: str = ""
+        self._current_folder_value: str = ""
+        self._gallery_controller: GalleryController | None = None
         self.filter_bar: FilterBar | None = None
         self.color_filter_bar: ColorFilterBar | None = None
         self.tag_filter_bar: TagFilterBar | None = None
@@ -111,6 +113,21 @@ class MainWindow(QMainWindow):
         # Cascades to all child widgets (including those created later in setup_widgets()).
         # Widget-level setStyleSheet() calls will override for specific widgets.
         self._apply_theme()
+
+    # ── Backward-Compatible Properties ──────────────────────────────────
+
+    @property
+    def _current_folder(self) -> str:  # noqa: N802
+        """Current folder path — delegates to GalleryController when available."""
+        if self._gallery_controller is not None:
+            return self._gallery_controller.current_folder
+        return self._current_folder_value
+
+    @_current_folder.setter
+    def _current_folder(self, value: str) -> None:  # noqa: N802
+        self._current_folder_value = value
+        if self._gallery_controller is not None:
+            self._gallery_controller.current_folder = value
 
     # ── Dock Widget Creation ───────────────────────────────────────────
 
@@ -192,7 +209,7 @@ class MainWindow(QMainWindow):
         # Query service for filtered gallery queries
         self._query_service = QueryService(db)
         self._filter_state = FilterState()
-        self._current_folder: str = ""
+        self._current_folder_value = ""
 
         # Sidebar
         self.sidebar_widget = SidebarWidget(db, parent=self)
@@ -205,8 +222,6 @@ class MainWindow(QMainWindow):
         # Preview panel (wiv tag management)
         self.preview_panel = PreviewPanel(tag_service=tag_service, parent=self)
         self.preview_dock.setWidget(self.preview_panel)
-        # When tags change via preview panel, refresh the gallery query
-        self.preview_panel.tags_changed.connect(self._on_preview_tags_changed)
 
         # Thumbnail model and grid
         self.thumbnail_model = ThumbnailModel(parent=self)
@@ -226,7 +241,6 @@ class MainWindow(QMainWindow):
         self._search_edit.setObjectName("searchEdit")
         self._search_edit.setPlaceholderText("Search files and tags")
         self._search_edit.setClearButtonEnabled(True)
-        self._search_edit.textChanged.connect(self._on_search_text_changed)
 
         # Search icon on the left side (Tabler-style magnifying glass)
         _search_icon_path = str(Path(__file__).parent / "theme" / "icons" / "search.svg")
@@ -239,13 +253,9 @@ class MainWindow(QMainWindow):
         # Backward-compatible references for existing code and tests
         self.color_filter_bar = self.filter_bar.color_filter_bar
         self.tag_filter_bar = self.filter_bar.tag_filter_bar
-        self.filter_bar.color_filter_changed.connect(self._on_color_filter_changed)
-        self.filter_bar.tag_filter_changed.connect(self._on_tag_filter_changed)
-        self.filter_bar.folder_filter_changed.connect(self._on_folder_filter_changed)
 
         # ── Gallery tabs (Folder / All Images) ─────────────────────────
         self._gallery_tabs = GalleryTabs(parent=self)
-        self._gallery_tabs.scope_changed.connect(self._on_scope_changed)
 
         # ── Gallery info bar (folder name + active filter pill) ────────
         self._gallery_info_bar = GalleryInfoBar(parent=self)
@@ -275,23 +285,45 @@ class MainWindow(QMainWindow):
         root_logger.addHandler(self._log_handler)
         apply_debug_level(self._settings_service.get_debug_mode() if self._settings_service else False)
 
-        # Wire gallery tabs scope to tag panel and re-run query
-        # (signal connected above when _gallery_tabs was created)
-
         # Debounce timer for filename search (Deviation 4.5)
         self._search_timer = QTimer()
         self._search_timer.setSingleShot(True)
         self._search_timer.setInterval(300)
-        self._search_timer.timeout.connect(self._run_filtered_query)
 
-        # Wire selection signal
-        self.thumbnail_grid.selection_changed.connect(self._on_selection_changed)
+        # ── Gallery Controller — filter orchestration & selection ───
+        # Compute multi-select cap from settings
+        multi_preview_cap = 9
+        if self._settings_service is not None:
+            setting_cap = self._settings_service.get_max_multi_preview()
+            if setting_cap is not None:
+                multi_preview_cap = setting_cap
+
+        self._gallery_controller = GalleryController(
+            query_service=self._query_service,
+            filter_state=self._filter_state,
+            thumbnail_model=self.thumbnail_model,
+            gallery_tabs=self._gallery_tabs,
+            gallery_info_bar=self._gallery_info_bar,
+            filter_bar=self.filter_bar,
+            search_edit=self._search_edit,
+            search_timer=self._search_timer,
+            preview_panel=self.preview_panel,
+            tag_service=tag_service,
+            db=db,
+            thumbnail_service=self._thumbnail_service,
+            max_multi_preview=multi_preview_cap,
+        )
+
+        # Wire selection signal to the controller
+        self.thumbnail_grid.selection_changed.connect(self._gallery_controller.on_selection_changed)
 
         # Wire double-click signal for editor launch
         self.thumbnail_grid.file_double_clicked.connect(self._on_file_double_clicked)
 
         # Wire regenerate signal for manual thumbnail regeneration
         self.thumbnail_grid.regenerate_requested.connect(self._on_regenerate_requested)
+
+    # ── Thumbnail Service Callbacks ─────────────────────────────────
 
     def _on_thumbnail_ready(
         self, source_path: str, img: object, resolution_size: int | None, cache_path: str | None
@@ -318,120 +350,19 @@ class MainWindow(QMainWindow):
         """Handle thumbnail render error."""
         logger.error("Thumbnail render failed for %s: %s", source_path, error_message)
 
-    def _on_selection_changed(self, paths: list[str]) -> None:
-        """Handle thumbnail grid selection changes.
+    # ── Delegation Wrappers (backward compat for tests / internal use) ─
 
-        Updates the preview panel (single image or mosaic) and tag display
-        based on the current selection.
+    def _run_filtered_query(self) -> None:
+        """Execute a filtered query — delegates to GalleryController."""
+        if self._gallery_controller is not None:
+            self._gallery_controller.run_filtered_query()
 
-        For single selections, prefers the cached master image (Deviation 1.3)
-        to avoid re-compositing PSDs on every click.
-        """
-        if len(paths) == 0:
-            self.preview_panel.clear()
-        elif len(paths) == 1:
-            # Single selection — load image and show
-            path = Path(paths[0])
-            try:
-                img, orig_w, orig_h = self._load_preview_image(path)
-                self.preview_panel.set_image(
-                    img,
-                    path,
-                    original_width=orig_w,
-                    original_height=orig_h,
-                )
-            except Exception:
-                logger.warning("Failed to load preview for %s", path, exc_info=True)
-                self.preview_panel.clear()
-        else:
-            # Multi-select — load multiple images for mosaic
-            # Read cap from settings instead of hardcoding (Deviation 4.2)
-            cap = self._settings_service.get_max_multi_preview() if self._settings_service else 9
-            if cap is None:
-                cap = 9
-            images_to_show = min(len(paths), cap)
-            images = []
-            for p in paths[:images_to_show]:
-                try:
-                    img, _orig_w, _orig_h = self._load_preview_image(Path(p))
-                    images.append(img)
-                except Exception:
-                    logger.debug("Failed to load preview for multi-select: %s", p, exc_info=True)
-            self.preview_panel.set_multi_preview(images, len(paths), cap)
+    def _update_gallery_info_bar(self) -> None:
+        """Update the gallery info bar — delegates to GalleryController."""
+        if self._gallery_controller is not None:
+            self._gallery_controller.update_gallery_info_bar()
 
-        # Update tags in preview panel
-        self._update_preview_tags(paths)
-
-    def _update_preview_tags(self, paths: list[str]) -> None:
-        """Fetch and display tags for the current selection in the preview panel.
-
-        For single selection, shows that file's tags.
-        For multi-selection, shows the union of all files' tags with tri-state opacity.
-        For no selection, clears tags.
-
-        Args:
-            paths: Currently selected file paths.
-        """
-        if not paths:
-            self.preview_panel.set_tags([], selected_paths=[])
-            return
-
-        if len(paths) == 1:
-            tags = self._tag_service.get_tags_for_file(paths[0])
-            self.preview_panel.set_tags(tags, selected_paths=paths)
-        else:
-            # Multi-selection: get union of all tags
-            union_tags = self.preview_panel.get_union_tags(paths)
-            self.preview_panel.set_tags(union_tags, selected_paths=paths)
-
-    def _on_preview_tags_changed(self) -> None:
-        """Handle tag changes from the preview panel — refresh gallery query."""
-        logger.debug("Tags changed via preview panel, refreshing gallery")
-        self._run_filtered_query()
-
-    def _load_preview_image(self, path: Path) -> tuple[Image.Image, int | None, int | None]:
-        """Load a preview image, preferring the 1024px cached preview when available.
-
-        Checks ``db.get_thumbnail(path)`` for a ``preview_cache_path`` (1024px).
-        If the cached file exists on disk it is opened directly (good quality,
-        fast).  Falls back to ``full_cache_path``, then to the original file.
-
-        Images loaded from cache are marked with ``_from_cache = True`` so that
-        ``PreviewPanel.set_image()`` can skip EXIF recovery from the original
-        file (the cache already has correct orientation).
-
-        Returns:
-            A tuple of ``(image, original_width, original_height)``.
-            ``original_width`` and ``original_height`` are extracted from the
-            database record when available, so the preview panel can display
-            the true dimensions even when showing a downscaled thumbnail.
-        """
-        thumb_record = self._db.get_thumbnail(str(path))
-
-        # Extract original dimensions from DB record (if available)
-        original_width: int | None = None
-        original_height: int | None = None
-        if thumb_record:
-            original_width = thumb_record.get("width")
-            original_height = thumb_record.get("height")
-
-        if thumb_record:
-            # Try 1024px preview first (good quality, fast)
-            preview_path = thumb_record.get("preview_cache_path")
-            if preview_path and Path(preview_path).is_file():
-                img = Image.open(preview_path)
-                img._from_cache = True
-                return img, original_width, original_height
-
-            # Fallback: full resolution cache
-            full_path = thumb_record.get("full_cache_path")
-            if full_path and Path(full_path).is_file():
-                img = Image.open(full_path)
-                img._from_cache = True
-                return img, original_width, original_height
-
-        # Fallback: open the original file directly
-        return Image.open(path), original_width, original_height
+    # ── Action Handlers (stay in MainWindow) ────────────────────────
 
     def _on_file_double_clicked(self, path: str) -> None:
         """Handle double-click on a thumbnail — launch external editor."""
@@ -447,149 +378,6 @@ class MainWindow(QMainWindow):
         if self._thumbnail_service is not None:
             logger.info("Regenerating thumbnail for %s", path.name)
             self._thumbnail_service.invalidate_and_render(path)
-
-    # ── Filtered Query Helpers ─────────────────────────────────────────
-
-    def _update_gallery_info_bar(self) -> None:
-        """Update the gallery info bar with current folder name, file count, and filter count."""
-        if self._gallery_info_bar is None:
-            return
-
-        is_global = self._gallery_tabs is not None and self._gallery_tabs.is_global_scope()
-
-        # Determine folder display name
-        if is_global:
-            folder_name = "All Images"
-        elif self._current_folder:
-            folder_name = Path(self._current_folder).name or self._current_folder
-        else:
-            folder_name = ""
-
-        # File count from the model
-        file_count = self.thumbnail_model.rowCount() if self.thumbnail_model is not None else 0
-
-        self._gallery_info_bar.set_folder_info(folder_name, file_count)
-
-        # Active filter count: tag_ids + color_tags + folder_filters + filename_filter
-        active_count = (
-            len(self._filter_state.tag_ids)
-            + len(self._filter_state.color_tags)
-            + len(self._filter_state.folder_filters)
-            + (1 if self._filter_state.filename_filter else 0)
-        )
-        self._gallery_info_bar.set_active_filter_count(active_count)
-
-    def _on_search_text_changed(self, text: str) -> None:
-        """Restart the debounce timer when the search text changes."""
-        logger.debug("Search text changed: %r", text)
-        self._filter_state.filename_filter = text
-        self._search_timer.start()
-
-    def _on_color_filter_changed(self, color_tags: set[str]) -> None:
-        """Re-run the filtered query when color filter swatches change."""
-        logger.debug("Color filter changed: %s", color_tags)
-        self._filter_state.color_tags = set(color_tags)
-        self._run_filtered_query()
-
-    def _on_tag_filter_changed(self, tag_ids: set[int]) -> None:
-        """Re-run the filtered query when tag filter checkboxes change."""
-        logger.debug("Tag filter changed: %s", tag_ids)
-        self._filter_state.tag_ids = set(tag_ids)
-        self._run_filtered_query()
-
-    def _on_folder_filter_changed(self, folder_paths: set[str]) -> None:
-        """Re-run the filtered query when the folder chip selection changes."""
-        logger.debug("Folder filter changed: %s", folder_paths)
-        self._filter_state.folder_filters = set(folder_paths)
-        self._run_filtered_query()
-
-    def _on_scope_changed(self, is_global: bool) -> None:  # noqa: FBT001
-        """Handle gallery tab scope change.
-
-        Updates the filter bar scope and re-runs the filtered query.
-        """
-        logger.debug("Scope changed: %s", "global" if is_global else "local")
-        self.filter_bar.set_scope(is_global)
-        self._run_filtered_query()
-        # Ensure info bar reflects new scope label even if query returned early
-        self._update_gallery_info_bar()
-
-    def _run_filtered_query(self) -> None:
-        """Execute a QueryService query combining all active filters.
-
-        Combines the current folder scope, filename search text, active
-        color-bucket set, and checked tag IDs into a single query, then
-        updates the ThumbnailModel with the results.
-
-        In global scope mode (gallery tabs set to All Images), the folder
-        constraint is removed so results span the entire database.
-
-        If no folder is currently selected (``_current_folder`` is empty)
-        and we are NOT in global mode, the method returns without modifying
-        the model to avoid clearing the gallery.
-        """
-        if self._query_service is None:
-            return
-
-        start = time.perf_counter()
-
-        # Determine browser scope based on gallery tabs
-        is_global = self._gallery_tabs is not None and self._gallery_tabs.is_global_scope()
-
-        # Don't clear the gallery if no folder is selected and not in global mode
-        if not self._current_folder and not is_global:
-            return
-
-        # In global mode, use the folder filter dropdown selection (may be empty set for all)
-        # In local mode, use the currently navigated folder
-        if is_global:
-            folder_filters = self._filter_state.folder_filters
-        else:
-            folder_filters = {self._current_folder} if self._current_folder else set()
-
-        filename_filter = self._filter_state.filename_filter
-        color_tags = self._filter_state.color_tags
-        tag_ids = self._filter_state.tag_ids
-
-        results = self._query_service.query(
-            folder_filters=folder_filters,
-            filename_filter=filename_filter,
-            tag_ids=tag_ids,
-            color_tags=color_tags,
-        )
-        elapsed = time.perf_counter() - start
-        logger.debug(
-            "Filtered query: folders=%s, filename=%r, colors=%s, tags=%s → %d results in %.3fs",
-            folder_filters,
-            filename_filter,
-            color_tags,
-            tag_ids,
-            len(results),
-            elapsed,
-        )
-
-        self.thumbnail_model.set_paths(results)
-
-        # Update gallery info bar with new file count
-        self._update_gallery_info_bar()
-
-        # Dispatch thumbnail renders for cache population
-        if self._thumbnail_service is not None:
-            for path in results:
-                # Skip if already cached in model
-                if str(path) in self.thumbnail_model._thumbnails:
-                    continue
-                try:
-                    stat = path.stat()
-                    fi = FileInfo(
-                        path=path,
-                        mtime=stat.st_mtime,
-                        size=stat.st_size,
-                        extension=path.suffix.lower(),
-                    )
-                    self._thumbnail_service.check_and_render(fi)
-                except OSError:
-                    logger.debug("Could not stat path: %s", path)
 
     # ── Menu Actions ───────────────────────────────────────────────────
 
@@ -647,6 +435,8 @@ class MainWindow(QMainWindow):
         if isinstance(app, QApplication):
             app.setStyleSheet(qss_content)
         logger.debug("Theme applied successfully")
+
+    # ── Folder Navigation ──────────────────────────────────────────────
 
     def _on_open_folder(self) -> None:
         """Callback for File → Open Folder — scan folder and populate grid."""

@@ -23,7 +23,7 @@ def test_cache_file_path_returns_deterministic_hash(tmp_path: Path) -> None:
     file_path = tmp_path / "some_image.jpg"
     file_path.write_text("dummy content so path resolves fine")
 
-    with patch("tarragon.thumbnail.cache_dir", return_value=tmp_path):
+    with patch("tarragon.renderers.cache.cache_dir", return_value=tmp_path):
         path_a, mime_a = _cache_file_path(file_path)
         path_b, mime_b = _cache_file_path(file_path)
 
@@ -38,7 +38,7 @@ def test_cache_file_path_default_extension_png(tmp_path: Path) -> None:
     file_path = tmp_path / "input.webp"
     file_path.write_text("dummy")
 
-    with patch("tarragon.thumbnail.cache_dir", return_value=tmp_path):
+    with patch("tarragon.renderers.cache.cache_dir", return_value=tmp_path):
         result, _ = _cache_file_path(file_path)
 
     assert result.suffix == ".png"
@@ -51,7 +51,7 @@ def test_cache_file_path_jpeg_extension(tmp_path: Path) -> None:
     file_path = tmp_path / "input.png"
     file_path.write_text("dummy")
 
-    with patch("tarragon.thumbnail.cache_dir", return_value=tmp_path):
+    with patch("tarragon.renderers.cache.cache_dir", return_value=tmp_path):
         result, _ = _cache_file_path(file_path, cache_format="jpeg")
 
     assert result.suffix == ".jpg"
@@ -71,7 +71,7 @@ def test_cache_file_path_mime_type(tmp_path: Path, cache_format: str, expected_e
     file_path = tmp_path / "test.tiff"
     file_path.write_text("dummy")
 
-    with patch("tarragon.thumbnail.cache_dir", return_value=tmp_path):
+    with patch("tarragon.renderers.cache.cache_dir", return_value=tmp_path):
         result, mime = _cache_file_path(file_path, cache_format=cache_format)
 
     assert result.suffix == expected_ext
@@ -89,7 +89,7 @@ def test_cache_file_path_hash_is_sha1_of_resolved_path(tmp_path: Path) -> None:
 
     expected_hash = hashlib.sha1(str(file_path.resolve()).encode()).hexdigest()
 
-    with patch("tarragon.thumbnail.cache_dir", return_value=tmp_path):
+    with patch("tarragon.renderers.cache.cache_dir", return_value=tmp_path):
         result, _ = _cache_file_path(file_path)
 
     assert result.stem == expected_hash
@@ -319,7 +319,7 @@ def test_cache_file_path_with_empty_string_resolves_to_cwd(tmp_path: Path) -> No
     # Path("") resolves to the current working directory
     empty_path = Path("")
 
-    with patch("tarragon.thumbnail.cache_dir", return_value=tmp_path):
+    with patch("tarragon.renderers.cache.cache_dir", return_value=tmp_path):
         result, mime = _cache_file_path(empty_path)
 
     # Should not crash — returns a deterministic hash path
@@ -337,7 +337,7 @@ def test_cache_file_path_with_relative_path_uses_resolved_path(tmp_path: Path) -
     rel_path = Path("relative_dir/some_image.jpg")
     expected_hash = hashlib.sha1(str(rel_path.resolve()).encode()).hexdigest()
 
-    with patch("tarragon.thumbnail.cache_dir", return_value=tmp_path):
+    with patch("tarragon.renderers.cache.cache_dir", return_value=tmp_path):
         result, _ = _cache_file_path(rel_path)
 
     assert result.stem == expected_hash
@@ -355,7 +355,7 @@ def test_cache_file_path_with_special_characters_in_path(tmp_path: Path) -> None
 
     expected_hash = hashlib.sha1(str(special_path.resolve()).encode()).hexdigest()
 
-    with patch("tarragon.thumbnail.cache_dir", return_value=tmp_path):
+    with patch("tarragon.renderers.cache.cache_dir", return_value=tmp_path):
         result, _ = _cache_file_path(special_path)
 
     assert result.stem == expected_hash
@@ -371,7 +371,7 @@ def test_cache_file_path_non_existent_path_still_hashes(tmp_path: Path) -> None:
     non_existent = tmp_path / "i_do_not_exist.jpg"
     expected_hash = hashlib.sha1(str(non_existent.resolve()).encode()).hexdigest()
 
-    with patch("tarragon.thumbnail.cache_dir", return_value=tmp_path):
+    with patch("tarragon.renderers.cache.cache_dir", return_value=tmp_path):
         result, _ = _cache_file_path(non_existent)
 
     # resolve() still works on non-existent paths
@@ -391,7 +391,7 @@ def test_cache_file_path_symlink_resolves_to_real_path(tmp_path: Path) -> None:
 
     expected_hash = hashlib.sha1(str(real.resolve()).encode()).hexdigest()
 
-    with patch("tarragon.thumbnail.cache_dir", return_value=tmp_path):
+    with patch("tarragon.renderers.cache.cache_dir", return_value=tmp_path):
         result, _ = _cache_file_path(link)
 
     assert result.stem == expected_hash
@@ -404,7 +404,7 @@ def test_cache_file_path_unknown_format_raises_value_error(tmp_path: Path) -> No
     file_path = tmp_path / "input.png"
     file_path.write_text("dummy")
 
-    with patch("tarragon.thumbnail.cache_dir", return_value=tmp_path):
+    with patch("tarragon.renderers.cache.cache_dir", return_value=tmp_path):
         with pytest.raises(ValueError, match="Unknown cache_format"):
             _cache_file_path(file_path, cache_format="gif")
 
@@ -763,7 +763,7 @@ def test_compute_worker_count_minimum_one() -> None:
 
     from tarragon.thumbnail import _compute_worker_count
 
-    with patch("tarragon.thumbnail.psutil.virtual_memory") as mock_vm:
+    with patch("tarragon.renderers.psd.psutil.virtual_memory") as mock_vm:
         mock_vm.return_value.available = 0
         assert _compute_worker_count() == 1
 
@@ -783,7 +783,7 @@ def test_render_psd_image_nonexistent_file(tmp_path: Path) -> None:
 
     from tarragon.thumbnail import render_psd_image
 
-    with patch("tarragon.thumbnail._get_executor") as mock_get_exec:
+    with patch("tarragon.renderers.psd._get_executor") as mock_get_exec:
         mock_exec = MagicMock()
         mock_get_exec.return_value = mock_exec
         mock_future = MagicMock()
@@ -801,7 +801,7 @@ def test_render_psd_image_corrupt_file(tmp_path: Path) -> None:
 
     from tarragon.thumbnail import render_psd_image
 
-    with patch("tarragon.thumbnail._get_executor") as mock_get_exec:
+    with patch("tarragon.renderers.psd._get_executor") as mock_get_exec:
         mock_exec = MagicMock()
         mock_get_exec.return_value = mock_exec
         mock_future = MagicMock()
@@ -837,7 +837,7 @@ def test_compute_worker_count_multiple_calls_reevaluates_ram() -> None:
 
     from tarragon.thumbnail import _compute_worker_count
 
-    with patch("tarragon.thumbnail.psutil.virtual_memory") as mock_vm:
+    with patch("tarragon.renderers.psd.psutil.virtual_memory") as mock_vm:
         # First call: 400 MB available → 400 // 200 = 2
         mock_vm.return_value.available = 400_000_000
         first = _compute_worker_count()
@@ -860,7 +860,7 @@ def test_compute_worker_count_max_ram_returns_at_most_8() -> None:
 
     from tarragon.thumbnail import _compute_worker_count
 
-    with patch("tarragon.thumbnail.psutil.virtual_memory") as mock_vm:
+    with patch("tarragon.renderers.psd.psutil.virtual_memory") as mock_vm:
         mock_vm.return_value.available = 100_000_000_000  # 100 GB
         assert _compute_worker_count() == 8
 
@@ -954,7 +954,7 @@ def test_composite_psd_in_process_large_canvas_uses_tiled_path() -> None:
 
 def test_get_executor_creates_executor_on_first_call() -> None:
     """_get_executor lazily creates the executor — it is None before first call."""
-    import tarragon.thumbnail as _tmod
+    import tarragon.renderers.psd as _tmod
 
     # Start clean
     saved = _tmod._shared_executor
@@ -973,7 +973,7 @@ def test_get_executor_creates_executor_on_first_call() -> None:
 
 def test_get_executor_after_shutdown_creates_new_instance() -> None:
     """_get_executor after _shutdown_executor creates a brand new executor."""
-    import tarragon.thumbnail as _tmod
+    import tarragon.renderers.psd as _tmod
 
     saved = _tmod._shared_executor
     _tmod._shared_executor = None
@@ -997,7 +997,7 @@ def test_get_executor_after_shutdown_creates_new_instance() -> None:
 
 def test_shutdown_executor_when_already_none_is_safe() -> None:
     """_shutdown_executor does not error when called with _shared_executor already None."""
-    import tarragon.thumbnail as _tmod
+    import tarragon.renderers.psd as _tmod
 
     saved = _tmod._shared_executor
     _tmod._shared_executor = None
@@ -1015,7 +1015,7 @@ def test_render_psd_image_timeout_returns_none() -> None:
     """render_psd_image returns None when the future does not complete within the timeout."""
     from tarragon.thumbnail import render_psd_image
 
-    with patch("tarragon.thumbnail._get_executor") as mock_get_exec:
+    with patch("tarragon.renderers.psd._get_executor") as mock_get_exec:
         mock_exec = MagicMock()
         mock_get_exec.return_value = mock_exec
         mock_future = MagicMock()
@@ -1038,7 +1038,7 @@ def test_render_psd_image_cancelled_future_returns_none() -> None:
     """render_psd_image returns None when the future is cancelled."""
     from tarragon.thumbnail import render_psd_image
 
-    with patch("tarragon.thumbnail._get_executor") as mock_get_exec:
+    with patch("tarragon.renderers.psd._get_executor") as mock_get_exec:
         mock_exec = MagicMock()
         mock_get_exec.return_value = mock_exec
         mock_future = MagicMock()
@@ -1057,7 +1057,7 @@ def test_render_psd_image_after_executor_shutdown_succeeds(tmp_path: Path) -> No
     """
     from tarragon.thumbnail import render_psd_image
 
-    with patch("tarragon.thumbnail._get_executor") as mock_get_exec:
+    with patch("tarragon.renderers.psd._get_executor") as mock_get_exec:
         # Simulate: first call returns an executor, shutdown sets it to None,
         # second call returns a new one
         first_exec = MagicMock()
@@ -1098,7 +1098,7 @@ def test_render_psd_image_concurrent_calls_are_safe(tmp_path: Path) -> None:
     barrier = threading.Barrier(5, timeout=5)
     results: list[Exception | object | None] = [None] * 5
 
-    with patch("tarragon.thumbnail._get_executor") as mock_get_exec:
+    with patch("tarragon.renderers.psd._get_executor") as mock_get_exec:
         mock_exec = MagicMock()
         mock_get_exec.return_value = mock_exec
 
@@ -1151,7 +1151,7 @@ def test_render_psd_image_worker_returns_valid_bytes(tmp_path: Path) -> None:
     dummy_img.save(buf, "PNG")
     png_bytes = buf.getvalue()
 
-    with patch("tarragon.thumbnail._get_executor") as mock_get_exec:
+    with patch("tarragon.renderers.psd._get_executor") as mock_get_exec:
         mock_exec = MagicMock()
         mock_get_exec.return_value = mock_exec
         mock_future = MagicMock()
@@ -1234,7 +1234,7 @@ def test_render_psd_image_invalid_path_in_subprocess(tmp_path: Path) -> None:
 
 def test_atexit_handler_not_crashing_when_executor_was_never_created() -> None:
     """_shutdown_executor (registered via atexit) is safe when executor never started."""
-    import tarragon.thumbnail as _tmod
+    import tarragon.renderers.psd as _tmod
 
     saved = _tmod._shared_executor
     _tmod._shared_executor = None
@@ -1279,7 +1279,7 @@ def test_generate_cache_paths_structure(tmp_path: Path) -> None:
 
     source = Path("/photos/vacation/sunset.jpg")
 
-    with patch("tarragon.thumbnail.cache_dir", return_value=tmp_path):
+    with patch("tarragon.renderers.cache.cache_dir", return_value=tmp_path):
         paths = generate_cache_paths(source, "abc12345")
 
     assert str(RESOLUTION_THUMBNAIL) in paths

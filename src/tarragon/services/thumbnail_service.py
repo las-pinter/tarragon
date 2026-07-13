@@ -14,11 +14,11 @@ from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal, Slot
 from tarragon.db import Database
 from tarragon.scanner import FileInfo
 from tarragon.services.settings_service import SettingsService
+from tarragon.renderers.psd import _get_executor
 from tarragon.thumbnail import (
     RESOLUTION_FULL,
     RESOLUTION_PREVIEW,
     RESOLUTION_THUMBNAIL,
-    _get_executor,
     derive_smaller_sizes,
     generate_cache_paths,
     generate_cache_uuid,
@@ -113,7 +113,7 @@ class ThumbnailService(QObject):
         # Shut down the ProcessPoolExecutor first to cancel any pending PSD renders.
         # This prevents worker processes from blocking on queue.get() indefinitely.
         # Deferred import to avoid circular dependency
-        from tarragon.thumbnail import _shutdown_executor
+        from tarragon.renderers.psd import _shutdown_executor
 
         _shutdown_executor()
         self._threadpool.waitForDone(timeout_ms)

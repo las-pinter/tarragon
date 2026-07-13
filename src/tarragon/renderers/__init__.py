@@ -1,15 +1,10 @@
-"""Image render pipeline — backward-compatible facade.
+"""Renderers — image rendering pipelines for thumbnail generation.
 
-All implementation has been moved to :mod:`tarragon.renderers` sub-modules.
-This module re-exports every public and private name so that existing
-``from tarragon.thumbnail import X`` statements continue to work.
+Re-exports all public names for backward compatibility with
+``from tarragon.renderers import <name>``.
 """
 
-from __future__ import annotations
-
-# Re-export everything from the renderers sub-packages so that
-# ``from tarragon.thumbnail import <name>`` keeps working.
-from tarragon.renderers.cache import (  # noqa: F401
+from tarragon.renderers.cache import (
     MASTER_LONG_EDGE,
     RESOLUTION_FULL,
     RESOLUTION_PREVIEW,
@@ -21,9 +16,9 @@ from tarragon.renderers.cache import (  # noqa: F401
     invalidate_cache_files,
     save_to_cache,
 )
-from tarragon.renderers.clip import render_clip_image  # noqa: F401
-from tarragon.renderers.plain import render_plain_image  # noqa: F401
-from tarragon.renderers.psd import (  # noqa: F401
+from tarragon.renderers.clip import render_clip_image
+from tarragon.renderers.plain import render_plain_image
+from tarragon.renderers.psd import (
     _compute_worker_count,
     _composite_psd_in_process,
     _get_executor,
@@ -36,6 +31,11 @@ __all__ = [
     "RESOLUTION_FULL",
     "RESOLUTION_PREVIEW",
     "RESOLUTION_THUMBNAIL",
+    "_cache_file_path",
+    "_compute_worker_count",
+    "_composite_psd_in_process",
+    "_get_executor",
+    "_shutdown_executor",
     "derive_smaller_sizes",
     "generate_cache_paths",
     "generate_cache_uuid",

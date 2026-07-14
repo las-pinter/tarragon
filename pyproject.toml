@@ -56,7 +56,7 @@ quote-style = "double"
 indent-style = "space"
 
 [tool.setuptools.package-data]
-tarragon = ["theme/*.json", "theme/*.qss"]
+tarragon = ["theme/*.qss"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

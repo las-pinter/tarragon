@@ -1,38 +1,26 @@
-"""Theme loader — reads QSS and tokens from package resources."""
+"""Theme loader — reads QSS from tokens and generates stylesheets."""
 
 from __future__ import annotations
 
-import json
 import logging
 from typing import Any
 
-try:
-    # Python 3.9+ preferred API for reading package files
-    from importlib import resources as importlib_resources
-except ImportError:  # pragma: no cover
-    import importlib_resources  # type: ignore[no-redef]
-
 from tarragon.theme.qss_generator import generate_qss
+from tarragon.theme.tokens import load_tokens
 
 logger = logging.getLogger(__name__)
 
 
 class ThemeLoader:
-    """Loads theme QSS stylesheets and design tokens from package resources.
-
-    Uses ``importlib.resources.files`` so the loader works whether the
-    package is installed in editable mode or as a built distribution.
-    """
-
-    PACKAGE = "tarragon.theme"
+    """Loads theme QSS stylesheets and design tokens from the tokens module."""
 
     def load_qss(self) -> str:
         """Generate the QSS stylesheet dynamically from design tokens.
 
-        Loads ``tokens.json`` and passes the tokens through
-        :func:`~tarragon.theme.qss_generator.generate_qss` to produce
-        a deterministic stylesheet.  Changing token values in ``tokens.json``
-        and re-calling this method updates the entire theme.
+        Loads tokens via :func:`~tarragon.theme.tokens.load_tokens` and
+        passes them through :func:`~tarragon.theme.qss_generator.generate_qss`
+        to produce a deterministic stylesheet.  Changing token values in the
+        tokens module and re-calling this method updates the entire theme.
 
         Returns:
             The generated QSS text content.
@@ -43,23 +31,19 @@ class ThemeLoader:
         return qss_content
 
     def load_tokens(self) -> dict[str, Any]:
-        """Read design tokens from *tokens.json* inside the theme package.
+        """Load design tokens from the tokens module.
 
         Returns:
-            Parsed JSON dictionary.
-
-        Raises:
-            FileNotFoundError: If ``tokens.json`` is missing from the package.
+            Dictionary of design tokens.
         """
-        files = importlib_resources.files(self.PACKAGE)
-        return dict(json.loads(files.joinpath("tokens.json").read_text(encoding="utf-8")))  # noqa: F405
+        return load_tokens()
 
 
 def load_and_generate_qss() -> str:
     """Load tokens and generate the QSS stylesheet in one call.
 
     Convenience function that creates a :class:`ThemeLoader`, reads
-    ``tokens.json``, and returns the generated QSS string.
+    tokens, and returns the generated QSS string.
 
     Returns:
         The generated QSS text ready for ``QApplication.setStyleSheet``.

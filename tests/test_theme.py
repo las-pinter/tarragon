@@ -1,36 +1,33 @@
-"""Tests for theme loading — tokens.json validity, QSS parsing, and MainWindow integration."""
+"""Tests for theme loading — token definitions, QSS parsing, and MainWindow integration."""
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
-from typing import Any, Generator
+from typing import Any
 
 import pytest
 
 # ── Fixtures ───────────────────────────────────────────────────────────
 
 
-# ── Tokens JSON Tests ──────────────────────────────────────────────────
+# ── Token Definition Tests ─────────────────────────────────────────────
 
 
-def test_tokens_json_is_valid() -> None:
-    """tokens.json can be parsed as valid JSON."""
-    tokens_path = Path(__file__).resolve().parent.parent / "src" / "tarragon" / "theme" / "tokens.json"
-    with open(tokens_path, encoding="utf-8") as fh:
-        data = json.load(fh)
-    assert isinstance(data, dict), "tokens.json must be a JSON object at the top level"
+def test_tokens_definitions_valid() -> None:
+    """load_tokens() returns a valid dict of design tokens."""
+    from tarragon.theme.tokens import load_tokens
+
+    data = load_tokens()
+    assert isinstance(data, dict), "tokens must be a dict"
 
 
-def test_tokens_json_has_all_sections() -> None:
-    """tokens.json contains every required section from the design system spec."""
-    tokens_path = Path(__file__).resolve().parent.parent / "src" / "tarragon" / "theme" / "tokens.json"
-    with open(tokens_path, encoding="utf-8") as fh:
-        data = json.load(fh)
+def test_tokens_has_all_sections() -> None:
+    """Token definitions contain every required section from the design system spec."""
+    from tarragon.theme.tokens import load_tokens
 
+    data = load_tokens()
     required_sections = {"colors", "typography", "spacing", "radius", "motion", "layout", "badge"}
     assert set(data.keys()) == required_sections, (
-        f"tokens.json sections {set(data.keys())} != expected {required_sections}"
+        f"token sections {set(data.keys())} != expected {required_sections}"
     )
 
 

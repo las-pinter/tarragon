@@ -9,23 +9,44 @@ from __future__ import annotations
 
 from PySide6.QtGui import QColor
 
+from tarragon.theme.colors import (
+    BADGE_BG_AZURE,
+    BADGE_BG_NAVY,
+    BADGE_BG_NEUTRAL,
+    BADGE_BG_OLIVE,
+    BADGE_BG_PLUM,
+    BADGE_BG_SAGE,
+    BADGE_BG_TEAL,
+    BADGE_BG_UMBER,
+    BADGE_BG_VINOUS,
+    BADGE_FG_AZURE,
+    BADGE_FG_NAVY,
+    BADGE_FG_NEUTRAL,
+    BADGE_FG_OLIVE,
+    BADGE_FG_PLUM,
+    BADGE_FG_SAGE,
+    BADGE_FG_TEAL,
+    BADGE_FG_UMBER,
+    BADGE_FG_VINOUS,
+)
+
 # Map of file extension -> (background_color, text_color)
 BADGE_COLORS: dict[str, tuple[QColor, QColor]] = {
-    "psd": (QColor("#4A1B0C"), QColor("#F0997B")),
-    "psb": (QColor("#4A1B0C"), QColor("#F0997B")),
-    "jpg": (QColor("#1A3A2A"), QColor("#7BC88F")),
-    "jpeg": (QColor("#1A3A2A"), QColor("#7BC88F")),
-    "png": (QColor("#1A2A3A"), QColor("#7BA8C8")),
-    "tiff": (QColor("#3A2A1A"), QColor("#C8A87B")),
-    "tif": (QColor("#3A2A1A"), QColor("#C8A87B")),
-    "gif": (QColor("#2A1A3A"), QColor("#A87BC8")),
-    "webp": (QColor("#1A3A3A"), QColor("#7BC8C8")),
-    "bmp": (QColor("#3A3A1A"), QColor("#C8C87B")),
-    "clip": (QColor("#2E86AB"), QColor("#D4EEF7")),
+    "psd": (BADGE_BG_VINOUS, BADGE_FG_VINOUS),
+    "psb": (BADGE_BG_VINOUS, BADGE_FG_VINOUS),
+    "jpg": (BADGE_BG_SAGE, BADGE_FG_SAGE),
+    "jpeg": (BADGE_BG_SAGE, BADGE_FG_SAGE),
+    "png": (BADGE_BG_NAVY, BADGE_FG_NAVY),
+    "tiff": (BADGE_BG_UMBER, BADGE_FG_UMBER),
+    "tif": (BADGE_BG_UMBER, BADGE_FG_UMBER),
+    "gif": (BADGE_BG_PLUM, BADGE_FG_PLUM),
+    "webp": (BADGE_BG_TEAL, BADGE_FG_TEAL),
+    "bmp": (BADGE_BG_OLIVE, BADGE_FG_OLIVE),
+    "clip": (BADGE_BG_AZURE, BADGE_FG_AZURE),
 }
 
 # Default fallback colors
-DEFAULT_BADGE_COLORS: tuple[QColor, QColor] = (QColor("#2A2A2A"), QColor("#A8A5B0"))
+DEFAULT_BADGE_COLORS: tuple[QColor, QColor] = (BADGE_BG_NEUTRAL, BADGE_FG_NEUTRAL)
 
 
 def get_badge_colors(extension: str) -> tuple[QColor, QColor]:

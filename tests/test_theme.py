@@ -28,7 +28,7 @@ def test_tokens_json_has_all_sections() -> None:
     with open(tokens_path, encoding="utf-8") as fh:
         data = json.load(fh)
 
-    required_sections = {"colors", "typography", "spacing", "radius", "motion", "layout"}
+    required_sections = {"colors", "typography", "spacing", "radius", "motion", "layout", "badge"}
     assert set(data.keys()) == required_sections, (
         f"tokens.json sections {set(data.keys())} != expected {required_sections}"
     )
@@ -122,13 +122,28 @@ def test_tokens_motion_section() -> None:
 
 
 def test_tokens_layout_section() -> None:
-    """The layout section contains thumbnail_size, grid_gap, dock_width_min, preview_height_min."""
+    """The layout section contains thumbnail_size, grid_gap, sidebar_width_px, multi_preview_max_default."""
     from tarragon.theme.tokens import load_tokens
 
     tokens = load_tokens()
     layout = tokens["layout"]
-    for key in ("thumbnail_size", "grid_gap", "dock_width_min", "preview_height_min"):
+    for key in ("thumbnail_size", "grid_gap", "sidebar_width_px", "multi_preview_max_default"):
         assert key in layout, f"Missing layout token: {key}"
+
+
+def test_tokens_badge_section() -> None:
+    """The badge section contains 9 bg/fg color pairs."""
+    from tarragon.theme.tokens import load_tokens
+
+    tokens = load_tokens()
+    badge = tokens["badge"]
+    hues = ("vinous", "sage", "navy", "umber", "plum", "teal", "olive", "azure", "neutral")
+    for hue in hues:
+        for prefix in ("bg_", "fg_"):
+            key = prefix + hue
+            assert key in badge, f"Missing badge token: {key}"
+            assert isinstance(badge[key], str), f"Badge value '{key}' must be a string color"
+    assert len(badge) == len(hues) * 2, f"Expected {len(hues) * 2} badge tokens, got {len(badge)}"
 
 
 def test_bg_primary_is_dark() -> None:
@@ -294,7 +309,7 @@ def test_theme_loader_loads_tokens() -> None:
     loader = ThemeLoader()
     tokens = loader.load_tokens()
     assert isinstance(tokens, dict)
-    required_sections = {"colors", "typography", "spacing", "radius", "motion", "layout"}
+    required_sections = {"colors", "typography", "spacing", "radius", "motion", "layout", "badge"}
     assert set(tokens.keys()) == required_sections
 
 
@@ -317,3 +332,165 @@ def test_theme_loader_is_singleton_safe() -> None:
     qss1 = loader1.load_qss()
     qss2 = loader2.load_qss()
     assert qss1 == qss2, "All loaders should return identical QSS content"
+
+
+# ── Motion Module Tests ────────────────────────────────────────────────
+
+
+def test_motion_duration_fast_value() -> None:
+    """DURATION_FAST matches the tokens.json motion.duration_fast value (150 ms)."""
+    from tarragon.theme.motion import DURATION_FAST
+
+    assert DURATION_FAST == 150
+
+
+def test_motion_duration_normal_value() -> None:
+    """DURATION_NORMAL matches the tokens.json motion.duration_normal value (200 ms)."""
+    from tarragon.theme.motion import DURATION_NORMAL
+
+    assert DURATION_NORMAL == 200
+
+
+def test_motion_easing_value() -> None:
+    """EASING matches the tokens.json motion.easing value."""
+    from tarragon.theme.motion import EASING
+
+    assert EASING == "ease-out"
+
+
+def test_motion_duration_fast_is_int() -> None:
+    """DURATION_FAST is an integer suitable for animation duration."""
+    from tarragon.theme.motion import DURATION_FAST
+
+    assert isinstance(DURATION_FAST, int)
+
+
+def test_motion_duration_normal_is_int() -> None:
+    """DURATION_NORMAL is an integer suitable for animation duration."""
+    from tarragon.theme.motion import DURATION_NORMAL
+
+    assert isinstance(DURATION_NORMAL, int)
+
+
+def test_motion_constants_match_tokens_json() -> None:
+    """Motion module constants are derived directly from tokens.json."""
+    from tarragon.theme.motion import DURATION_FAST, DURATION_NORMAL, EASING
+    from tarragon.theme.tokens import load_tokens
+
+    tokens = load_tokens()
+    motion = tokens["motion"]
+    assert DURATION_FAST == motion["duration_fast"]
+    assert DURATION_NORMAL == motion["duration_normal"]
+    assert EASING == motion["easing"]
+
+
+# ── Layout Module Tests ────────────────────────────────────────────────
+
+
+def test_layout_grid_gap_value() -> None:
+    """GRID_GAP matches the tokens.json layout.grid_gap value (14 px)."""
+    from tarragon.theme.layout import GRID_GAP
+
+    assert GRID_GAP == 14
+
+
+def test_layout_thumbnail_size_value() -> None:
+    """THUMBNAIL_SIZE matches the tokens.json layout.thumbnail_size value (160 px)."""
+    from tarragon.theme.layout import THUMBNAIL_SIZE
+
+    assert THUMBNAIL_SIZE == 160
+
+
+def test_layout_sidebar_width_px_value() -> None:
+    """SIDEBAR_WIDTH_PX matches the tokens.json layout.sidebar_width_px value (220 px)."""
+    from tarragon.theme.layout import SIDEBAR_WIDTH_PX
+
+    assert SIDEBAR_WIDTH_PX == 220
+
+
+def test_layout_multi_preview_max_default_value() -> None:
+    """MULTI_PREVIEW_MAX_DEFAULT matches the tokens.json value (9)."""
+    from tarragon.theme.layout import MULTI_PREVIEW_MAX_DEFAULT
+
+    assert MULTI_PREVIEW_MAX_DEFAULT == 9
+
+
+def test_layout_constants_are_int() -> None:
+    """All layout constants are integers suitable for pixel calculations."""
+    from tarragon.theme.layout import (
+        GRID_GAP,
+        MULTI_PREVIEW_MAX_DEFAULT,
+        SIDEBAR_WIDTH_PX,
+        THUMBNAIL_SIZE,
+    )
+
+    for name, value in [
+        ("GRID_GAP", GRID_GAP),
+        ("THUMBNAIL_SIZE", THUMBNAIL_SIZE),
+        ("SIDEBAR_WIDTH_PX", SIDEBAR_WIDTH_PX),
+        ("MULTI_PREVIEW_MAX_DEFAULT", MULTI_PREVIEW_MAX_DEFAULT),
+    ]:
+        assert isinstance(value, int), f"{name} must be an int, got {type(value).__name__}"
+
+
+def test_layout_constants_match_tokens_json() -> None:
+    """Layout module constants are derived directly from tokens.json."""
+    from tarragon.theme.layout import (
+        GRID_GAP,
+        MULTI_PREVIEW_MAX_DEFAULT,
+        SIDEBAR_WIDTH_PX,
+        THUMBNAIL_SIZE,
+    )
+    from tarragon.theme.tokens import load_tokens
+
+    tokens = load_tokens()
+    layout = tokens["layout"]
+    assert GRID_GAP == layout["grid_gap"]
+    assert THUMBNAIL_SIZE == layout["thumbnail_size"]
+    assert SIDEBAR_WIDTH_PX == layout["sidebar_width_px"]
+    assert MULTI_PREVIEW_MAX_DEFAULT == layout["multi_preview_max_default"]
+
+
+# ── Badge Color Constants Tests ────────────────────────────────────────
+
+
+def test_badge_color_constants_match_tokens_json() -> None:
+    """Badge color constants in colors.py match the badge section in tokens.json."""
+    from tarragon.theme.colors import (
+        BADGE_BG_VINOUS,
+        BADGE_FG_VINOUS,
+    )
+    from tarragon.theme.tokens import load_tokens
+
+    tokens = load_tokens()
+    badge = tokens["badge"]
+    assert BADGE_BG_VINOUS.name().upper() == badge["bg_vinous"].upper()
+    assert BADGE_FG_VINOUS.name().upper() == badge["fg_vinous"].upper()
+
+
+def test_all_badge_hue_colors_exist() -> None:
+    """Every badge hue (vinous, sage, navy, umber, plum, teal, olive, azure, neutral)
+    has both bg and fg QColor constants."""
+    from tarragon.theme import colors as color_mod
+
+    hues = ("vinous", "sage", "navy", "umber", "plum", "teal", "olive", "azure", "neutral")
+    for hue in hues:
+        bg_attr = f"BADGE_BG_{hue.upper()}"
+        fg_attr = f"BADGE_FG_{hue.upper()}"
+        assert hasattr(color_mod, bg_attr), f"Missing badge color constant: {bg_attr}"
+        assert hasattr(color_mod, fg_attr), f"Missing badge color constant: {fg_attr}"
+        bg_val = getattr(color_mod, bg_attr)
+        fg_val = getattr(color_mod, fg_attr)
+        assert bg_val.isValid(), f"{bg_attr} is not a valid QColor"
+        assert fg_val.isValid(), f"{fg_attr} is not a valid QColor"
+
+
+def test_badge_bg_and_fg_are_different() -> None:
+    """For each badge hue, background and foreground colors are distinct."""
+    from tarragon.theme import colors as color_mod
+
+    hues = ("vinous", "sage", "navy", "umber", "plum", "teal", "olive", "azure", "neutral")
+    for hue in hues:
+        bg = getattr(color_mod, f"BADGE_BG_{hue.upper()}")
+        fg = getattr(color_mod, f"BADGE_FG_{hue.upper()}")
+        assert bg != fg, f"Badge hue '{hue}' has identical bg and fg colors"

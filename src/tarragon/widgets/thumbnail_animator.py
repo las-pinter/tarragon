@@ -4,21 +4,21 @@ from __future__ import annotations
 
 from typing import Any
 
-from PySide6.QtCore import QTime, QTimer
+from PySide6.QtCore import QEasingCurve, QTime, QTimer
 from PySide6.QtWidgets import QListView
+
+from tarragon.theme.motion import DURATION_FAST, DURATION_NORMAL
 
 # Animation tokens (from tokens.json motion values)
 HOVER_SCALE_TARGET = 1.02
 # Extra pixels per cell to accommodate hover-scale growth without overlapping neighbors
 HOVER_MARGIN = 4
-HOVER_DURATION_MS = 150  # duration_fast
-FADE_DURATION_MS = 200  # fade_in_ms
+HOVER_DURATION_MS = DURATION_FAST
+FADE_DURATION_MS = DURATION_NORMAL
 ANIMATOR_INTERVAL_MS = 16  # ~60fps
 
-
-def _ease_out(t: float) -> float:
-    """Quadratic ease-out: fast start, slow finish."""
-    return t * (2.0 - t)
+# Easing curve mapped from the EASING token ("ease-out" → OutQuad).
+_EASING_CURVE = QEasingCurve(QEasingCurve.Type.OutQuad)
 
 
 class ThumbnailAnimator:
@@ -123,7 +123,7 @@ class ThumbnailAnimator:
         for row, anim in self._hover_anims.items():
             elapsed = anim["start_time"].msecsTo(now)
             progress = min(elapsed / HOVER_DURATION_MS, 1.0)
-            eased = _ease_out(progress)
+            eased = _EASING_CURVE.valueForProgress(progress)
             anim["current"] = anim["start_val"] + (anim["target"] - anim["start_val"]) * eased
 
             if progress >= 1.0:
@@ -144,7 +144,7 @@ class ThumbnailAnimator:
         for row, anim in self._fade_anims.items():
             elapsed = anim["start_time"].msecsTo(now)
             progress = min(elapsed / FADE_DURATION_MS, 1.0)
-            eased = _ease_out(progress)
+            eased = _EASING_CURVE.valueForProgress(progress)
             anim["current"] = eased
 
             if progress >= 1.0:

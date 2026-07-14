@@ -21,7 +21,7 @@ def load_tokens() -> dict[str, Any]:
     """Load and return the design tokens from tokens.json.
 
     Returns:
-        Dictionary with keys: colors, typography, spacing, radius, motion, layout.
+        Dictionary with keys: badge, colors, typography, spacing, radius, motion, layout.
     """
     content = _tokens_path().read_text(encoding="utf-8")
     return dict(json.loads(content))

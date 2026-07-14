@@ -29,6 +29,7 @@ from tarragon.services.tag_service import TagService
 from tarragon.widgets.flow_layout import FlowLayout
 from tarragon.widgets.tag_pill import _TagPillWidget
 from tarragon.theme.color_buckets import BUCKET_COLORS, BUCKET_HEX_COLORS
+from tarragon.theme.layout import MULTI_PREVIEW_MAX_DEFAULT
 from tarragon.theme.spacing import SM, XS
 from tarragon.theme.tokens import get_token
 
@@ -301,7 +302,7 @@ class PreviewPanel(QWidget):
         self,
         images: list[Image.Image],
         total_selected: int,
-        cap: int = 9,
+        cap: int = MULTI_PREVIEW_MAX_DEFAULT,
     ) -> None:
         """Render N-up mosaic when multiple files are selected.
 

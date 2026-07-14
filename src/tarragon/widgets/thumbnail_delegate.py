@@ -35,15 +35,9 @@ from tarragon.theme.colors import (
     TEXT_MUTED,
 )
 from tarragon.theme.file_type_badge import get_badge_colors
-from tarragon.theme.tokens import get_token
+from tarragon.theme.layout import GRID_GAP, THUMBNAIL_SIZE
 from tarragon.theme.typography import SMALL_SIZE
 from tarragon.widgets.thumbnail_animator import ThumbnailAnimator
-
-# ── Layout tokens (from tokens.json) ─────────────────────────────────────────
-THUMBNAIL_SIZE: int = get_token("layout", "thumbnail_size")
-# NOTE: tokens.json grid_gap=8, but 14px is used intentionally for visual
-# breathing room around hover-scaled thumbnails (test enforces >= 12px).
-GRID_GAP: int = 14
 
 # ── File extension badge layout constants ─────────────────────────────────────
 BADGE_MARGIN = 4  # offset from top-left corner of thumbnail image

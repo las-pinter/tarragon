@@ -29,6 +29,7 @@ from tarragon.services.settings_service import SettingsService
 from tarragon.services.tag_service import TagService
 from tarragon.services.thumbnail_service import ThumbnailService
 from tarragon.settings import Settings
+from tarragon.theme.layout import MULTI_PREVIEW_MAX_DEFAULT, SIDEBAR_WIDTH_PX
 from tarragon.widgets.color_filter_bar import ColorFilterBar
 from tarragon.widgets.filter_bar import FilterBar
 from tarragon.widgets.gallery_info_bar import GalleryInfoBar
@@ -185,7 +186,7 @@ class MainWindow(QMainWindow):
 
         # Set initial dock sizes — preview panel should be roughly half the
         # remaining width after the sidebar, matching the gallery area.
-        sidebar_width = 220
+        sidebar_width = SIDEBAR_WIDTH_PX
         preview_width = (self.width() - sidebar_width) // 2  # 490 at 1200px
         self.resizeDocks(
             [self.sidebar_dock, self.preview_dock],
@@ -292,7 +293,7 @@ class MainWindow(QMainWindow):
 
         # ── Gallery Controller — filter orchestration & selection ───
         # Compute multi-select cap from settings
-        multi_preview_cap = 9
+        multi_preview_cap = MULTI_PREVIEW_MAX_DEFAULT
         if self._settings_service is not None:
             setting_cap = self._settings_service.get_max_multi_preview()
             if setting_cap is not None:

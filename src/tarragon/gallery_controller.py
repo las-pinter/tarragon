@@ -22,6 +22,7 @@ from tarragon.scanner import FileInfo
 from tarragon.services.query_service import QueryService
 from tarragon.services.tag_service import TagService
 from tarragon.services.thumbnail_service import ThumbnailService
+from tarragon.theme.layout import MULTI_PREVIEW_MAX_DEFAULT
 from tarragon.widgets.filter_bar import FilterBar
 from tarragon.widgets.gallery_info_bar import GalleryInfoBar
 from tarragon.widgets.gallery_tabs import GalleryTabs
@@ -69,7 +70,7 @@ class GalleryController:
         tag_service: TagService,
         db: Database,
         thumbnail_service: ThumbnailService | None = None,
-        max_multi_preview: int = 9,
+        max_multi_preview: int = MULTI_PREVIEW_MAX_DEFAULT,
     ) -> None:
         self._query_service = query_service
         self._filter_state = filter_state

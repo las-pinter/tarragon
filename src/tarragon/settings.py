@@ -8,8 +8,10 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from tarragon.db import Database
 
+from tarragon.theme.layout import MULTI_PREVIEW_MAX_DEFAULT
+
 DEFAULTS: dict[str, Any] = {
-    "max_multi_preview": 9,
+    "max_multi_preview": MULTI_PREVIEW_MAX_DEFAULT,
     "large_canvas_threshold_mp": 20.0,
     "tile_grid_size": "2x2",
     "max_psd_workers": 3,

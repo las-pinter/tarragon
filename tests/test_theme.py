@@ -169,48 +169,43 @@ def test_coral_and_amber_accent_colors_present() -> None:
 
 def test_qss_file_exists_and_is_readable() -> None:
     """Generated QSS is a non-empty string."""
-    from tarragon.theme.loader import ThemeLoader
+    from tarragon.theme.qss_generator import load_and_generate_qss
 
-    loader = ThemeLoader()
-    qss = loader.load_qss()
+    qss = load_and_generate_qss()
     assert isinstance(qss, str), "QSS content must be a string"
     assert len(qss) > 0, "QSS file must not be empty"
 
 
 def test_qss_contains_dark_background() -> None:
     """The QSS stylesheet references the dark background color #16151A."""
-    from tarragon.theme.loader import ThemeLoader
+    from tarragon.theme.qss_generator import load_and_generate_qss
 
-    loader = ThemeLoader()
-    qss = loader.load_qss()
+    qss = load_and_generate_qss()
     assert "#16151A" in qss, "QSS must contain bg_primary color (#16151A)"
 
 
 def test_qss_contains_coral_accent_colors() -> None:
     """The QSS references coral accent colors for hover/select states."""
-    from tarragon.theme.loader import ThemeLoader
+    from tarragon.theme.qss_generator import load_and_generate_qss
 
-    loader = ThemeLoader()
-    qss = loader.load_qss()
+    qss = load_and_generate_qss()
     assert "#F0997B" in qss, "QSS must contain coral_strong (#F0997B)"
     assert "#D85A30" in qss, "QSS must contain coral_muted (#D85A30)"
 
 
 def test_qss_contains_amber_accent_color() -> None:
     """The QSS references amber accent color for highlights and focus states."""
-    from tarragon.theme.loader import ThemeLoader
+    from tarragon.theme.qss_generator import load_and_generate_qss
 
-    loader = ThemeLoader()
-    qss = loader.load_qss()
+    qss = load_and_generate_qss()
     assert "#FAC775" in qss, "QSS must contain amber_accent (#FAC775)"
 
 
 def test_qss_does_not_use_forbidden_properties() -> None:
     """The QSS does not use gradients or shadows (design constraint)."""
-    from tarragon.theme.loader import ThemeLoader
+    from tarragon.theme.qss_generator import load_and_generate_qss
 
-    loader = ThemeLoader()
-    qss = loader.load_qss().lower()
+    qss = load_and_generate_qss().lower()
     assert "qgradient" not in qss, "QSS must not contain Qt gradient syntax"
     assert "qdrawsvg" not in qss, "QSS must not use QDrawSvg"
 
@@ -299,36 +294,24 @@ def test_stylesheet_contains_amber_select_state(qapp: Any) -> None:  # noqa: ARG
         window.close()
 
 
-def test_theme_loader_loads_tokens() -> None:
-    """ThemeLoader.load_tokens() returns a valid dict with all sections."""
-    from tarragon.theme.loader import ThemeLoader
+def test_load_and_generate_qss_returns_valid_tokens() -> None:
+    """load_and_generate_qss() produces QSS from a valid token dict."""
+    from tarragon.theme.qss_generator import generate_qss, load_and_generate_qss
+    from tarragon.theme.tokens import load_tokens
 
-    loader = ThemeLoader()
-    tokens = loader.load_tokens()
-    assert isinstance(tokens, dict)
-    required_sections = {"colors", "typography", "spacing", "radius", "motion", "layout", "badge"}
-    assert set(tokens.keys()) == required_sections
-
-
-def test_theme_loader_loads_qss() -> None:
-    """ThemeLoader.load_qss() returns a non-empty string."""
-    from tarragon.theme.loader import ThemeLoader
-
-    loader = ThemeLoader()
-    qss = loader.load_qss()
+    qss = load_and_generate_qss()
     assert isinstance(qss, str)
     assert len(qss) > 0
+    assert qss == generate_qss(load_tokens())
 
 
-def test_theme_loader_is_singleton_safe() -> None:
-    """Multiple ThemeLoader instances can coexist without issue."""
-    from tarragon.theme.loader import ThemeLoader
+def test_load_and_generate_qss_returns_non_empty_string() -> None:
+    """load_and_generate_qss() returns a non-empty string."""
+    from tarragon.theme.qss_generator import load_and_generate_qss
 
-    loader1 = ThemeLoader()
-    loader2 = ThemeLoader()
-    qss1 = loader1.load_qss()
-    qss2 = loader2.load_qss()
-    assert qss1 == qss2, "All loaders should return identical QSS content"
+    qss = load_and_generate_qss()
+    assert isinstance(qss, str)
+    assert len(qss) > 0
 
 
 # ── Motion Module Tests ────────────────────────────────────────────────
@@ -336,49 +319,41 @@ def test_theme_loader_is_singleton_safe() -> None:
 
 def test_motion_duration_fast_value() -> None:
     """DURATION_FAST matches the tokens.json motion.duration_fast value (150 ms)."""
-    from tarragon.theme.motion import DURATION_FAST
+    from tarragon.theme.constants import DURATION_FAST
 
     assert DURATION_FAST == 150
 
 
 def test_motion_duration_normal_value() -> None:
     """DURATION_NORMAL matches the tokens.json motion.duration_normal value (200 ms)."""
-    from tarragon.theme.motion import DURATION_NORMAL
+    from tarragon.theme.constants import DURATION_NORMAL
 
     assert DURATION_NORMAL == 200
 
 
-def test_motion_easing_value() -> None:
-    """EASING matches the tokens.json motion.easing value."""
-    from tarragon.theme.motion import EASING
-
-    assert EASING == "ease-out"
-
-
 def test_motion_duration_fast_is_int() -> None:
     """DURATION_FAST is an integer suitable for animation duration."""
-    from tarragon.theme.motion import DURATION_FAST
+    from tarragon.theme.constants import DURATION_FAST
 
     assert isinstance(DURATION_FAST, int)
 
 
 def test_motion_duration_normal_is_int() -> None:
     """DURATION_NORMAL is an integer suitable for animation duration."""
-    from tarragon.theme.motion import DURATION_NORMAL
+    from tarragon.theme.constants import DURATION_NORMAL
 
     assert isinstance(DURATION_NORMAL, int)
 
 
 def test_motion_constants_match_tokens_json() -> None:
-    """Motion module constants are derived directly from tokens.json."""
-    from tarragon.theme.motion import DURATION_FAST, DURATION_NORMAL, EASING
+    """Motion constants in constants.py are derived directly from tokens.json."""
+    from tarragon.theme.constants import DURATION_FAST, DURATION_NORMAL
     from tarragon.theme.tokens import load_tokens
 
     tokens = load_tokens()
     motion = tokens["motion"]
     assert DURATION_FAST == motion["duration_fast"]
     assert DURATION_NORMAL == motion["duration_normal"]
-    assert EASING == motion["easing"]
 
 
 # ── Layout Module Tests ────────────────────────────────────────────────
@@ -386,35 +361,35 @@ def test_motion_constants_match_tokens_json() -> None:
 
 def test_layout_grid_gap_value() -> None:
     """GRID_GAP matches the tokens.json layout.grid_gap value (14 px)."""
-    from tarragon.theme.layout import GRID_GAP
+    from tarragon.theme.constants import GRID_GAP
 
     assert GRID_GAP == 14
 
 
 def test_layout_thumbnail_size_value() -> None:
     """THUMBNAIL_SIZE matches the tokens.json layout.thumbnail_size value (160 px)."""
-    from tarragon.theme.layout import THUMBNAIL_SIZE
+    from tarragon.theme.constants import THUMBNAIL_SIZE
 
     assert THUMBNAIL_SIZE == 160
 
 
 def test_layout_sidebar_width_px_value() -> None:
     """SIDEBAR_WIDTH_PX matches the tokens.json layout.sidebar_width_px value (220 px)."""
-    from tarragon.theme.layout import SIDEBAR_WIDTH_PX
+    from tarragon.theme.constants import SIDEBAR_WIDTH_PX
 
     assert SIDEBAR_WIDTH_PX == 220
 
 
 def test_layout_multi_preview_max_default_value() -> None:
     """MULTI_PREVIEW_MAX_DEFAULT matches the tokens.json value (9)."""
-    from tarragon.theme.layout import MULTI_PREVIEW_MAX_DEFAULT
+    from tarragon.theme.constants import MULTI_PREVIEW_MAX_DEFAULT
 
     assert MULTI_PREVIEW_MAX_DEFAULT == 9
 
 
 def test_layout_constants_are_int() -> None:
     """All layout constants are integers suitable for pixel calculations."""
-    from tarragon.theme.layout import (
+    from tarragon.theme.constants import (
         GRID_GAP,
         MULTI_PREVIEW_MAX_DEFAULT,
         SIDEBAR_WIDTH_PX,
@@ -431,8 +406,8 @@ def test_layout_constants_are_int() -> None:
 
 
 def test_layout_constants_match_tokens_json() -> None:
-    """Layout module constants are derived directly from tokens.json."""
-    from tarragon.theme.layout import (
+    """Layout constants in constants.py are derived directly from tokens.json."""
+    from tarragon.theme.constants import (
         GRID_GAP,
         MULTI_PREVIEW_MAX_DEFAULT,
         SIDEBAR_WIDTH_PX,

@@ -29,14 +29,10 @@ from tarragon.services.tag_service import TagService
 from tarragon.widgets.flow_layout import FlowLayout
 from tarragon.widgets.tag_pill import _TagPillWidget
 from tarragon.theme.color_buckets import BUCKET_COLORS, BUCKET_HEX_COLORS
-from tarragon.theme.layout import MULTI_PREVIEW_MAX_DEFAULT
-from tarragon.theme.spacing import SM, XS
-from tarragon.theme.tokens import get_token
+from tarragon.theme.colors import BG_SECONDARY
+from tarragon.theme.constants import MULTI_PREVIEW_MAX_DEFAULT, SM, XS
 
 logger = logging.getLogger(__name__)
-
-# Theme tokens (coral-amber dark palette) — sourced from centralized theme system
-BG_SECONDARY: str = get_token("colors", "bg_secondary")
 
 
 class PreviewPanel(QWidget):
@@ -245,7 +241,7 @@ class PreviewPanel(QWidget):
         # gray rendering in Qt's RGBA8888 format.  Composite onto the preview
         # background color so transparency is visually preserved.
         if image.mode == "RGBA":
-            background = Image.new("RGB", image.size, BG_SECONDARY)
+            background = Image.new("RGB", image.size, BG_SECONDARY.name())
             background.paste(image, mask=image.split()[3])  # alpha as mask
             image = background
         elif image.mode != "RGB":
@@ -350,7 +346,7 @@ class PreviewPanel(QWidget):
         cell_h = available_h // rows
 
         # Create the mosaic canvas (dark background)
-        mosaic = Image.new("RGB", (canvas_size, canvas_size), color=BG_SECONDARY)
+        mosaic = Image.new("RGB", (canvas_size, canvas_size), color=BG_SECONDARY.name())
 
         for idx, img in enumerate(display_images):
             row_i = idx // cols
@@ -363,7 +359,7 @@ class PreviewPanel(QWidget):
             cell_img = ImageOps.contain(cell_img, (cell_w, cell_h), Image.Resampling.LANCZOS)
 
             # Center the contained image on a cell-sized background
-            cell_bg = Image.new("RGB", (cell_w, cell_h), color=BG_SECONDARY)
+            cell_bg = Image.new("RGB", (cell_w, cell_h), color=BG_SECONDARY.name())
             if cell_img.mode == "RGBA":
                 cell_bg.paste(
                     cell_img,

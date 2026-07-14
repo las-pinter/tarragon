@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
 )
 
 from tarragon.services.tag_service import TagService
-from tarragon.theme.spacing import SM, XS
+from tarragon.theme.constants import SM, XS
 from tarragon.widgets._chip_utils import create_removable_chip
 
 

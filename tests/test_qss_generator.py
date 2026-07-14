@@ -233,22 +233,21 @@ def test_generate_qss_missing_radius_key_raises() -> None:
         generate_qss(bad_tokens)
 
 
-# ── Integration with ThemeLoader ────────────────────────────────────────
+# ── Integration with load_and_generate_qss ──────────────────────────────
 
 
-def test_theme_loader_load_qss_uses_generator() -> None:
-    """ThemeLoader.load_qss() returns generated QSS (not a static file)."""
-    from tarragon.theme.loader import ThemeLoader
+def test_load_and_generate_qss_uses_generator() -> None:
+    """load_and_generate_qss() returns generated QSS matching generate_qss()."""
+    from tarragon.theme.qss_generator import load_and_generate_qss
 
-    loader = ThemeLoader()
-    qss_from_loader = loader.load_qss()
+    qss_from_convenience = load_and_generate_qss()
     qss_from_generator = generate_qss(load_tokens())
-    assert qss_from_loader == qss_from_generator
+    assert qss_from_convenience == qss_from_generator
 
 
 def test_load_and_generate_qss_convenience_function() -> None:
     """load_and_generate_qss() returns the same QSS as the generator."""
-    from tarragon.theme.loader import load_and_generate_qss
+    from tarragon.theme.qss_generator import load_and_generate_qss
 
     qss = load_and_generate_qss()
     assert isinstance(qss, str)

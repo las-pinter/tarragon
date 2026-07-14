@@ -29,7 +29,7 @@ from tarragon.services.settings_service import SettingsService
 from tarragon.services.tag_service import TagService
 from tarragon.services.thumbnail_service import ThumbnailService
 from tarragon.settings import Settings
-from tarragon.theme.layout import MULTI_PREVIEW_MAX_DEFAULT, SIDEBAR_WIDTH_PX
+from tarragon.theme.constants import MULTI_PREVIEW_MAX_DEFAULT, SIDEBAR_WIDTH_PX
 from tarragon.widgets.color_filter_bar import ColorFilterBar
 from tarragon.widgets.filter_bar import FilterBar
 from tarragon.widgets.gallery_info_bar import GalleryInfoBar
@@ -429,7 +429,7 @@ class MainWindow(QMainWindow):
 
     def _apply_theme(self) -> None:
         """Generate and apply the QSS stylesheet from design tokens."""
-        from tarragon.theme.loader import load_and_generate_qss
+        from tarragon.theme.qss_generator import load_and_generate_qss
 
         qss_content = load_and_generate_qss()
         app = QApplication.instance()

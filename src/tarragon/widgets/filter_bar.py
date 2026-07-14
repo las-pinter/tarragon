@@ -25,7 +25,7 @@ from PySide6.QtWidgets import (
 
 from tarragon.db import Database
 from tarragon.services.tag_service import TagService
-from tarragon.theme.spacing import XS
+from tarragon.theme.constants import XS
 from tarragon.widgets._chip_utils import create_removable_chip
 from tarragon.widgets.color_filter_bar import ColorFilterBar
 from tarragon.widgets.flow_layout import FlowLayout

@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from tarragon.theme.spacing import XS
+from tarragon.theme.constants import XS
 
 
 def create_removable_chip(

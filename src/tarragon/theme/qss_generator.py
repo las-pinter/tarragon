@@ -599,4 +599,18 @@ QLabel#previewImageLabel {{
 """
 
 
-__all__ = ["generate_qss"]
+def load_and_generate_qss() -> str:
+    """Generate a complete QSS stylesheet from design tokens.
+
+    Convenience function that loads tokens and passes them through
+    :func:`generate_qss` to produce the stylesheet.
+
+    Returns:
+        The generated QSS text ready for ``QApplication.setStyleSheet``.
+    """
+    from tarragon.theme.tokens import load_tokens
+
+    return generate_qss(load_tokens())
+
+
+__all__ = ["generate_qss", "load_and_generate_qss"]

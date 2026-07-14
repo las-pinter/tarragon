@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from tarragon.db import Database
 
-from tarragon.theme.layout import MULTI_PREVIEW_MAX_DEFAULT
+from tarragon.theme.constants import MULTI_PREVIEW_MAX_DEFAULT
 
 DEFAULTS: dict[str, Any] = {
     "max_multi_preview": MULTI_PREVIEW_MAX_DEFAULT,

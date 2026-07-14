@@ -7,7 +7,7 @@ from typing import Any
 from PySide6.QtCore import QEasingCurve, QTime, QTimer
 from PySide6.QtWidgets import QListView
 
-from tarragon.theme.motion import DURATION_FAST, DURATION_NORMAL
+from tarragon.theme.constants import DURATION_FAST, DURATION_NORMAL
 
 # Animation tokens (from tokens.json motion values)
 HOVER_SCALE_TARGET = 1.02

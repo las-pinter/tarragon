@@ -26,7 +26,7 @@ from PySide6.QtWidgets import (
 
 from tarragon.app_paths import cache_dir, data_dir
 from tarragon.services.settings_service import SettingsService
-from tarragon.theme.spacing import MD, SM, XS
+from tarragon.theme.constants import MD, SM, XS
 
 
 class SettingsDialog(QDialog):

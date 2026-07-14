@@ -12,7 +12,7 @@ from PySide6.QtWidgets import QHBoxLayout, QPushButton, QScrollArea, QWidget
 
 from tarragon.theme.color_buckets import BUCKET_HEX_COLORS
 from tarragon.theme.colors import AMBER_ACCENT
-from tarragon.theme.spacing import SM, XS
+from tarragon.theme.constants import SM, XS
 
 # -- Style constants ----------------------------------------------------------
 

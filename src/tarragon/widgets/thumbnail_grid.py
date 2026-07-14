@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
 
 from tarragon.models.thumbnail_model import ThumbnailModel
 from tarragon.widgets.thumbnail_animator import ThumbnailAnimator
-from tarragon.theme.layout import GRID_GAP, THUMBNAIL_SIZE
+from tarragon.theme.constants import GRID_GAP, THUMBNAIL_SIZE
 from tarragon.widgets.thumbnail_delegate import (
     HOVER_MARGIN,
     TEXT_AREA_HEIGHT,

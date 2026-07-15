@@ -11,6 +11,8 @@ Design patterns:
 
 from __future__ import annotations
 
+from functools import partial
+
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QHBoxLayout,
@@ -169,5 +171,5 @@ class TagFilterBar(QWidget):
         """
         return create_removable_chip(
             label_text=tag_name,
-            on_remove=lambda tid=tag_id: self._remove_tag(tid),
+            on_remove=partial(self._remove_tag, tag_id),
         )

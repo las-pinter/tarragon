@@ -13,6 +13,7 @@ connect to a single widget instead of three separate ones.
 from __future__ import annotations
 
 import logging
+from functools import partial
 from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
@@ -210,7 +211,7 @@ class FilterBar(QWidget):
         display_name = _short_folder_name(folder_path)
         return create_removable_chip(
             label_text=display_name,
-            on_remove=lambda fp=folder_path: self._remove_folder_chip(fp),
+            on_remove=partial(self._remove_folder_chip, folder_path),
             tooltip=folder_path,
         )
 

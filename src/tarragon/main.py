@@ -95,7 +95,7 @@ class MainWindow(_MainWindow):
         """
         # Shut down thumbnail service first — cancels pending work and
         # forcefully terminates any stuck worker processes.
-        if hasattr(self, "_thumbnail_service"):
+        if self._thumbnail_service is not None:
             self._thumbnail_service.shutdown()
         if isinstance(self._settings, Settings):
             self._settings.close()

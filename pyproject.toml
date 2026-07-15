@@ -72,5 +72,5 @@ show_error_codes = true
 exclude = ["dist/"]
 
 [[tool.mypy.overrides]]
-module = ["PIL.*", "psd_tools.*", "importlib_resources"]
+module = ["PIL.*", "psd_tools.*"]
 ignore_missing_imports = true

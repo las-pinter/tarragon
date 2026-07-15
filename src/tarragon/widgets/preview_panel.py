@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import math
+from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -533,8 +534,8 @@ class PreviewPanel(QWidget):
 
         pill = _TagPillWidget(
             tag_name=tag_name,
-            on_remove=lambda t=tag: self._on_tag_remove_clicked(t),
-            on_toggle=lambda t=tag: self._on_tag_pill_clicked(t),
+            on_remove=partial(self._on_tag_remove_clicked, tag),
+            on_toggle=partial(self._on_tag_pill_clicked, tag),
         )
         # All pills in the flow layout are user-created (primary role)
         pill.setProperty("tagRole", "primary")
@@ -557,7 +558,7 @@ class PreviewPanel(QWidget):
                     effect.setOpacity(0.5)
                     pill.setGraphicsEffect(effect)
                 else:
-                    pill.setGraphicsEffect(None)
+                    pill.setGraphicsEffect(None)  # type: ignore[arg-type]  # Qt accepts None to clear effects at runtime
 
         return pill
 

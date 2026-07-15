@@ -345,7 +345,8 @@ class MainWindow(QMainWindow):
         if img is None or cache_path is None:
             return
         # Update model with the emitted cache path
-        self.thumbnail_model.set_thumbnail(source_path, Path(cache_path), resolution=resolution_size)
+        if self.thumbnail_model is not None:
+            self.thumbnail_model.set_thumbnail(source_path, Path(cache_path), resolution=resolution_size)
 
     def _on_thumbnail_error(self, source_path: str, error_message: str) -> None:
         """Handle thumbnail render error."""
@@ -371,7 +372,8 @@ class MainWindow(QMainWindow):
 
         file_path = Path(path)
         extension = file_path.suffix
-        launch_editor(self._db, file_path, extension)
+        if self._db is not None:
+            launch_editor(self._db, file_path, extension)
 
     def _on_regenerate_requested(self, file_path: str) -> None:
         """Handle 'Regenerate Thumbnail' context menu action."""
@@ -476,7 +478,8 @@ class MainWindow(QMainWindow):
         file_infos = scan_folder(folder_path)
         if not file_infos:
             logger.warning("No images found in %s", folder_path)
-            self.thumbnail_model.set_paths([])
+            if self.thumbnail_model is not None:
+                self.thumbnail_model.set_paths([])
             return
 
         # Populate database immediately so filtered queries return results
@@ -499,7 +502,8 @@ class MainWindow(QMainWindow):
             self._run_filtered_query()
         else:
             paths = [fi.path for fi in file_infos]
-            self.thumbnail_model.set_paths(paths)
+            if self.thumbnail_model is not None:
+                self.thumbnail_model.set_paths(paths)
             # Update info bar for unfiltered folder view
             self._update_gallery_info_bar()
 

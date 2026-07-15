@@ -234,7 +234,7 @@ class ThumbnailService(QObject):
         self,
         img: Image.Image,
         file_info: FileInfo,
-        resolution_size: int,
+        resolution_size: int | None,
         cache_path: Path,
     ) -> str:
         """Save *img* to cache, emit thumbnailReady, and return the path string.

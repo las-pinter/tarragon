@@ -71,9 +71,7 @@ def render_clip_image(
         finally:
             conn.close()
     except Exception:
-        logger.warning(
-            "render_clip_image: failed to query CanvasPreview in %s", file_path
-        )
+        logger.warning("render_clip_image: failed to query CanvasPreview in %s", file_path)
         return None
     finally:
         if tmp is not None:
@@ -114,6 +112,6 @@ def render_clip_image(
         img = img.convert("RGBA")
 
     if target_size is not None:
-        img.thumbnail((target_size, target_size), Image.LANCZOS)
+        img.thumbnail((target_size, target_size), Image.Resampling.LANCZOS)
 
     return img

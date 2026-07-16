@@ -185,7 +185,10 @@ class TestColorTagsReplacedOnRerender:
 
         # First render — produces red and green tags
         _run_render_all_resolutions(
-            service, file_info, img, tmp_path,
+            service,
+            file_info,
+            img,
+            tmp_path,
             extract_return=["color:green", "color:red"],
         )
 
@@ -197,7 +200,10 @@ class TestColorTagsReplacedOnRerender:
 
         # Act — second render produces different tags (blue and yellow)
         _run_render_all_resolutions(
-            service, file_info, img, tmp_path,
+            service,
+            file_info,
+            img,
+            tmp_path,
             extract_return=["color:blue", "color:yellow"],
         )
 
@@ -240,7 +246,10 @@ class TestManualTagsPreserved:
 
         # Act — render with auto color tags
         _run_render_all_resolutions(
-            service, file_info, img, tmp_path,
+            service,
+            file_info,
+            img,
+            tmp_path,
             extract_return=["color:red"],
         )
 
@@ -252,7 +261,10 @@ class TestManualTagsPreserved:
 
         # Act again — re-render with different auto_color tags
         _run_render_all_resolutions(
-            service, file_info, img, tmp_path,
+            service,
+            file_info,
+            img,
+            tmp_path,
             extract_return=["color:blue"],
         )
 
@@ -565,7 +577,10 @@ class TestColorTaggingForValidImage:
             patch("tarragon.services.thumbnail_service.generate_cache_paths") as mock_paths,
             patch("tarragon.services.thumbnail_service.save_to_cache"),
             patch("tarragon.services.thumbnail_service.derive_smaller_sizes", return_value={}),
-            patch("tarragon.services.color_tagger.extract_dominant_color_tags", return_value=["color:red"]) as mock_extract,
+            patch(
+                "tarragon.services.color_tagger.extract_dominant_color_tags",
+                return_value=["color:red"],
+            ) as mock_extract,
         ):
             mock_paths.return_value = {
                 str(RESOLUTION_THUMBNAIL): tmp_path / "cache" / "256.png",

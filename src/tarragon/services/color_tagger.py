@@ -76,7 +76,7 @@ def extract_dominant_color_tags(
     rgb = image.convert("RGB")
 
     # 2. Downsample to 64x64
-    small = rgb.resize((64, 64), Image.LANCZOS)
+    small = rgb.resize((64, 64), Image.Resampling.LANCZOS)
 
     # 3. Quantize to palette_size colors (MEDIANCUT)
     quantized = small.quantize(colors=palette_size, method=Image.Quantize.MEDIANCUT)

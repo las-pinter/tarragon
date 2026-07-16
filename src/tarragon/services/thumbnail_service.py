@@ -301,7 +301,7 @@ class ThumbnailService(QObject):
         if not cached.get("thumbnail_cache_path") or not Path(cached["thumbnail_cache_path"]).exists():
             if max(source_image.size) > RESOLUTION_THUMBNAIL:
                 thumb_img = source_image.copy()
-                thumb_img.thumbnail((RESOLUTION_THUMBNAIL, RESOLUTION_THUMBNAIL), Image.LANCZOS)
+                thumb_img.thumbnail((RESOLUTION_THUMBNAIL, RESOLUTION_THUMBNAIL), Image.Resampling.LANCZOS)
             else:
                 # Source is smaller than RESOLUTION_THUMBNAIL — include as-is
                 thumb_img = source_image.copy()
@@ -315,7 +315,7 @@ class ThumbnailService(QObject):
         ):
             if max(source_image.size) > RESOLUTION_PREVIEW:
                 preview_img = source_image.copy()
-                preview_img.thumbnail((RESOLUTION_PREVIEW, RESOLUTION_PREVIEW), Image.LANCZOS)
+                preview_img.thumbnail((RESOLUTION_PREVIEW, RESOLUTION_PREVIEW), Image.Resampling.LANCZOS)
             else:
                 # Source is smaller than RESOLUTION_PREVIEW — include as-is
                 preview_img = source_image.copy()

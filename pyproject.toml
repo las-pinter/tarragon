@@ -28,7 +28,7 @@ dependencies = [
     "Pillow>=10.0",
     "psd-tools[composite]>=1.9.7",
     "platformdirs>=4.0",
-    "psutil>=5.9",
+    "psutil>=6.0",
 ]
 
 [project.optional-dependencies]

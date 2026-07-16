@@ -195,7 +195,7 @@ def derive_smaller_sizes(source_image: Image.Image, target_sizes: list[int]) -> 
     for size in target_sizes:
         if max(source_image.size) > size:
             derived = source_image.copy()
-            derived.thumbnail((size, size), Image.LANCZOS)
+            derived.thumbnail((size, size), Image.Resampling.LANCZOS)
             results[size] = derived
         else:
             # Image is smaller than or equal to target — include as-is

@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+
 from tarragon.db import Database
 from tarragon.services.editors import (
     launch_editor,
@@ -98,7 +99,10 @@ def test_launch_editor_non_blocking(db: Database) -> None:
 
 def test_launch_editor_fallback_to_os_default(db: Database) -> None:
     """No association triggers OS default handler (xdg-open on non-Windows)."""
-    with patch("tarragon.services.editors.sys") as mock_sys, patch("tarragon.services.editors.subprocess.Popen") as mock_popen:
+    with (
+        patch("tarragon.services.editors.sys") as mock_sys,
+        patch("tarragon.services.editors.subprocess.Popen") as mock_popen,
+    ):
         mock_sys.platform = "linux"
         launch_editor(db, Path("/tmp/img.png"), ".unknown")
 
@@ -119,7 +123,10 @@ def test_launch_editor_windows_uses_startfile(db: Database) -> None:
 
 def test_launch_editor_linux_uses_xdg_open(db: Database) -> None:
     """Linux fallback uses xdg-open."""
-    with patch("tarragon.services.editors.sys") as mock_sys, patch("tarragon.services.editors.subprocess.Popen") as mock_popen:
+    with (
+        patch("tarragon.services.editors.sys") as mock_sys,
+        patch("tarragon.services.editors.subprocess.Popen") as mock_popen,
+    ):
         mock_sys.platform = "linux"
         launch_editor(db, Path("/home/user/photo.jpg"), ".nope")
 

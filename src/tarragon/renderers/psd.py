@@ -90,7 +90,7 @@ def _composite_psd_in_process(
 
         # Resize to target_size if specified
         if target_size is not None and max(image.size) > target_size:
-            image.thumbnail((target_size, target_size), Image.LANCZOS)
+            image.thumbnail((target_size, target_size), Image.Resampling.LANCZOS)
 
         # Return as PNG bytes (PIL Image is not picklable)
         buf = io.BytesIO()

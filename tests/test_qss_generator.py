@@ -136,7 +136,6 @@ def test_generate_qss_contains_pseudo_states(tokens: dict[str, Any]) -> None:
         assert pseudo in qss, f"Pseudo-state '{pseudo}' missing from generated QSS"
 
 
-
 def test_generate_qss_no_gradients(tokens: dict[str, Any]) -> None:
     """Generated QSS does not contain gradients (design constraint)."""
     qss = generate_qss(tokens).lower()

@@ -434,6 +434,3 @@ class TestFolderChipTooltips:
         labels = chip.findChildren(QLabel)
         assert len(labels) >= 1
         assert labels[0].toolTip() == "/home/user/photos/vacation"
-
-
-

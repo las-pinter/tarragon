@@ -17,15 +17,12 @@ class TagsMixin(_MixinBase):
         """Insert a tag if it doesn't exist; always returns the tag id."""
         logger.debug("ensure_tag: name=%s", name)
         cursor = self._execute(
-            "INSERT INTO tags (name) VALUES (?) "
-            "ON CONFLICT(name) DO UPDATE SET name=name RETURNING id",
+            "INSERT INTO tags (name) VALUES (?) ON CONFLICT(name) DO UPDATE SET name=name RETURNING id",
             (name,),
         )
         return int(cursor.fetchone()["id"])
 
-    def add_file_tags(
-        self, paths: list[str], tag_id: int, source: str = "user"
-    ) -> None:
+    def add_file_tags(self, paths: list[str], tag_id: int, source: str = "user") -> None:
         """Associate one or more file paths with a given tag."""
         logger.debug(
             "add_file_tags: %d paths, tag_id=%d, source=%s",
@@ -41,9 +38,7 @@ class TagsMixin(_MixinBase):
 
     def remove_file_tags(self, paths: list[str], tag_id: int) -> None:
         """Remove file-tag associations for the given paths and tag."""
-        logger.debug(
-            "remove_file_tags: %d paths, tag_id=%d", len(paths), tag_id
-        )
+        logger.debug("remove_file_tags: %d paths, tag_id=%d", len(paths), tag_id)
         normalized = [_normalize_path(p) for p in paths]
         placeholders = ",".join("?" * len(normalized))
         self._execute(
@@ -56,9 +51,7 @@ class TagsMixin(_MixinBase):
         """Return the set of tag ids associated with a given path."""
         path = _normalize_path(path)
         logger.debug("get_file_tag_ids: path=%s", path)
-        cursor = self._execute(
-            "SELECT tag_id FROM file_tags WHERE path = ?", (path,)
-        )
+        cursor = self._execute("SELECT tag_id FROM file_tags WHERE path = ?", (path,))
         return {row["tag_id"] for row in cursor.fetchall()}
 
     def get_tags_for_file(self, path: str) -> list[dict[str, Any]]:
@@ -84,9 +77,7 @@ class TagsMixin(_MixinBase):
             (path,),
         )
 
-    def get_file_tag_ids_batch(
-        self, paths: list[str]
-    ) -> dict[str, set[int]]:
+    def get_file_tag_ids_batch(self, paths: list[str]) -> dict[str, set[int]]:
         """Batch lookup of tag IDs for multiple file paths.
 
         More efficient than calling :meth:`get_file_tag_ids` in a loop.
@@ -133,17 +124,13 @@ class TagsMixin(_MixinBase):
     def get_tag_name(self, tag_id: int) -> str | None:
         """Return the name of a tag by its id, or None if not found."""
         logger.debug("get_tag_name: tag_id=%d", tag_id)
-        row = self._execute(
-            "SELECT name FROM tags WHERE id = ?", (tag_id,)
-        ).fetchone()
+        row = self._execute("SELECT name FROM tags WHERE id = ?", (tag_id,)).fetchone()
         return row["name"] if row else None
 
     def replace_auto_color_tags(self, path: str, tags: list[str]) -> None:
         """Delete old auto_color tags for a path and insert new ones."""
         path = _normalize_path(path)
-        logger.debug(
-            "replace_auto_color_tags: path=%s, tags=%d", path, len(tags)
-        )
+        logger.debug("replace_auto_color_tags: path=%s, tags=%d", path, len(tags))
         self._execute(
             "DELETE FROM file_tags WHERE path = ? AND source = 'auto_color'",
             (path,),
@@ -152,8 +139,7 @@ class TagsMixin(_MixinBase):
             tag_ids: list[int] = []
             for name in tags:
                 cursor = self._execute(
-                    "INSERT INTO tags (name) VALUES (?) "
-                    "ON CONFLICT(name) DO UPDATE SET name=name RETURNING id",
+                    "INSERT INTO tags (name) VALUES (?) ON CONFLICT(name) DO UPDATE SET name=name RETURNING id",
                     (name,),
                 )
                 tag_ids.append(cursor.fetchone()["id"])
@@ -164,9 +150,7 @@ class TagsMixin(_MixinBase):
             )
         self._commit()
 
-    def get_all_tags_with_counts(
-        self, folder_path: str | None = None
-    ) -> list[dict[str, Any]]:
+    def get_all_tags_with_counts(self, folder_path: str | None = None) -> list[dict[str, Any]]:
         """Return all tags with their usage counts.
 
         Parameters
@@ -182,9 +166,7 @@ class TagsMixin(_MixinBase):
             List of dicts with keys: ``id``, ``name``, ``usage_count``.
             Ordered alphabetically by name.
         """
-        logger.debug(
-            "get_all_tags_with_counts: folder_path=%s", folder_path
-        )
+        logger.debug("get_all_tags_with_counts: folder_path=%s", folder_path)
         if folder_path:
             folder_path = _normalize_path(folder_path)
             return self.fetch_all(

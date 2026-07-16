@@ -1107,9 +1107,7 @@ def test_paint_selection_border_uses_inset_rect(delegate: Any, mock_painter: Any
 class TestSelectionChangedSignalSingle:
     """test_selection_changed_signal_single — Single selection emits signal with 1 path."""
 
-    def test_single_selection_emits_one_path(
-        self, grid_with_model: tuple[ThumbnailGrid, ThumbnailModel]
-    ) -> None:
+    def test_single_selection_emits_one_path(self, grid_with_model: tuple[ThumbnailGrid, ThumbnailModel]) -> None:
         """Selecting one item emits selection_changed with a list of 1 path."""
         grid, model = grid_with_model
 
@@ -1132,9 +1130,7 @@ class TestSelectionChangedSignalSingle:
 class TestSelectionChangedSignalMulti:
     """test_selection_changed_signal_multi — Multi selection emits signal with multiple paths."""
 
-    def test_multi_selection_emits_multiple_paths(
-        self, grid_with_model: tuple[ThumbnailGrid, ThumbnailModel]
-    ) -> None:
+    def test_multi_selection_emits_multiple_paths(self, grid_with_model: tuple[ThumbnailGrid, ThumbnailModel]) -> None:
         """Selecting multiple items emits selection_changed with all selected paths."""
         grid, model = grid_with_model
 
@@ -1161,9 +1157,7 @@ class TestSelectionChangedSignalMulti:
 class TestSelectionChangedSignalEmpty:
     """test_selection_changed_signal_empty — No selection emits empty list."""
 
-    def test_no_selection_emits_empty_list(
-        self, grid_with_model: tuple[ThumbnailGrid, ThumbnailModel]
-    ) -> None:
+    def test_no_selection_emits_empty_list(self, grid_with_model: tuple[ThumbnailGrid, ThumbnailModel]) -> None:
         """Clearing selection emits selection_changed with an empty list."""
         grid, model = grid_with_model
 

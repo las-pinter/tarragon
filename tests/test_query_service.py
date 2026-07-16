@@ -392,15 +392,27 @@ class TestQueryService:
         # Simulate Windows-style paths being stored (they get normalized to '/')
         db.upsert_thumbnail(
             "D:/Dropbox/Art/Speedpaintings/img1.jpg",
-            mtime=1, size=100, width=10, height=10, cache_uuid="w1",
+            mtime=1,
+            size=100,
+            width=10,
+            height=10,
+            cache_uuid="w1",
         )
         db.upsert_thumbnail(
             "D:/Dropbox/Art/Speedpaintings/img2.jpg",
-            mtime=2, size=200, width=10, height=10, cache_uuid="w2",
+            mtime=2,
+            size=200,
+            width=10,
+            height=10,
+            cache_uuid="w2",
         )
         db.upsert_thumbnail(
             "D:/Dropbox/Art/Other/img3.jpg",
-            mtime=3, size=300, width=10, height=10, cache_uuid="w3",
+            mtime=3,
+            size=300,
+            width=10,
+            height=10,
+            cache_uuid="w3",
         )
 
         # Query with backslash folder path — this was the bug
@@ -416,7 +428,11 @@ class TestQueryService:
         svc = QueryService(db)
         db.upsert_thumbnail(
             "D:/Dropbox/Mixed/test_mixed.png",
-            mtime=1, size=100, width=10, height=10, cache_uuid="mix1",
+            mtime=1,
+            size=100,
+            width=10,
+            height=10,
+            cache_uuid="mix1",
         )
 
         # Forward slash query should find forward-slash stored paths

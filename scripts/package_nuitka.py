@@ -107,13 +107,9 @@ def build(target_platform: str) -> None:
     ]
 
     if target_platform == "windows":
-        cmd.append(
-            "--mingw64"
-        )
+        cmd.append("--mingw64")
     else:
-        cmd.append(
-            "--gcc"
-        )
+        cmd.append("--gcc")
 
     cmd.append(str(entry_point))
 
@@ -139,10 +135,7 @@ if __name__ == "__main__":
         "--platform",
         choices=["linux", "windows"],
         default=None,
-        help=(
-            "Target platform for the build. "
-            "If omitted, the current platform is auto-detected."
-        ),
+        help=("Target platform for the build. If omitted, the current platform is auto-detected."),
     )
     args = parser.parse_args()
     target = _resolve_platform(args.platform)

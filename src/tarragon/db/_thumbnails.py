@@ -27,9 +27,7 @@ class ThumbnailsMixin(_MixinBase):
     ) -> None:
         """Insert or update a thumbnail record."""
         path = _normalize_path(path)
-        logger.debug(
-            "upsert_thumbnail: path=%s, mtime=%d, size=%d", path, mtime, size
-        )
+        logger.debug("upsert_thumbnail: path=%s, mtime=%d, size=%d", path, mtime, size)
         self._execute(
             """
             INSERT INTO thumbnails (
@@ -81,9 +79,7 @@ class ThumbnailsMixin(_MixinBase):
             return
         logger.debug("bulk_upsert_stubs: %d files", len(files))
         # Normalize path separators to forward slashes for cross-platform consistency
-        normalized = [
-            (_normalize_path(path), mtime, size) for path, mtime, size in files
-        ]
+        normalized = [(_normalize_path(path), mtime, size) for path, mtime, size in files]
         self._executemany(
             """
             INSERT INTO thumbnails (
@@ -110,19 +106,13 @@ class ThumbnailsMixin(_MixinBase):
         """Fetch a single thumbnail record as a dict, or None if absent."""
         path = _normalize_path(path)
         logger.debug("get_thumbnail: path=%s", path)
-        row = self._execute(
-            "SELECT * FROM thumbnails WHERE path = ?", (path,)
-        ).fetchone()
+        row = self._execute("SELECT * FROM thumbnails WHERE path = ?", (path,)).fetchone()
         return _row_to_dict(row) if row else None
 
-    def list_thumbnails_for_folder(
-        self, folder_path: str
-    ) -> list[dict[str, Any]]:
+    def list_thumbnails_for_folder(self, folder_path: str) -> list[dict[str, Any]]:
         """List all thumbnail records whose path starts with folder_path."""
         folder_path = _normalize_path(folder_path)
-        logger.debug(
-            "list_thumbnails_for_folder: folder_path=%s", folder_path
-        )
+        logger.debug("list_thumbnails_for_folder: folder_path=%s", folder_path)
         cursor = self._execute(
             "SELECT * FROM thumbnails WHERE path LIKE ?",
             (f"{folder_path.rstrip('/')}/%",),

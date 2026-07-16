@@ -27,12 +27,7 @@ class FilterState:
 
     def is_empty(self) -> bool:
         """Return ``True`` if no filters are active."""
-        return (
-            not self.filename_filter
-            and not self.tag_ids
-            and not self.color_tags
-            and not self.folder_filters
-        )
+        return not self.filename_filter and not self.tag_ids and not self.color_tags and not self.folder_filters
 
     def clear(self) -> None:
         """Clear all filters, restoring the unfiltered state."""

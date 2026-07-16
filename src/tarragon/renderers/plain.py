@@ -36,7 +36,7 @@ def render_plain_image(file_path: Path, target_size: int | None = None) -> Image
         if img.mode not in ("RGBA", "RGB"):
             img = img.convert("RGBA")
         if target_size is not None:
-            img.thumbnail((target_size, target_size), Image.LANCZOS)
+            img.thumbnail((target_size, target_size), Image.Resampling.LANCZOS)
         return img
     except (OSError, ValueError):
         return None

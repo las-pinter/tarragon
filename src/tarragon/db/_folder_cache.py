@@ -34,9 +34,7 @@ class FolderCacheMixin(_MixinBase):
         )
         self._commit()
 
-    def get_or_create_folder_uuid(
-        self, folder_path: str, candidate_uuid: str
-    ) -> str:
+    def get_or_create_folder_uuid(self, folder_path: str, candidate_uuid: str) -> str:
         """Atomically insert a candidate UUID and return the winning UUID.
 
         Uses INSERT ... ON CONFLICT DO NOTHING so that concurrent callers
@@ -45,9 +43,7 @@ class FolderCacheMixin(_MixinBase):
         to guarantee consistency.
         """
         folder_path = _normalize_path(folder_path)
-        logger.debug(
-            "get_or_create_folder_uuid: folder_path=%s", folder_path
-        )
+        logger.debug("get_or_create_folder_uuid: folder_path=%s", folder_path)
         with self._lock:
             self._conn.execute(
                 "INSERT INTO folder_cache_uuids (folder_path, cache_uuid) "

@@ -21,14 +21,11 @@ class EditorsMixin(_MixinBase):
         ).fetchone()
         return row["command_template"] if row else None
 
-    def upsert_editor_association(
-        self, extension: str, command_template: str
-    ) -> None:
+    def upsert_editor_association(self, extension: str, command_template: str) -> None:
         """Insert or update an editor association."""
         logger.debug("upsert_editor_association: extension=%s", extension)
         self._execute(
-            "INSERT OR REPLACE INTO editor_associations "
-            "(extension, command_template) VALUES (?, ?)",
+            "INSERT OR REPLACE INTO editor_associations (extension, command_template) VALUES (?, ?)",
             (extension, command_template),
         )
         self._commit()

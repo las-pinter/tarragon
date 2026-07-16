@@ -344,14 +344,14 @@ class GalleryController:
             preview_path = thumb_record.get("preview_cache_path")
             if preview_path and Path(preview_path).is_file():
                 img = Image.open(preview_path)
-                img._from_cache = True
+                img._from_cache = True  # type: ignore[attr-defined]  # Intentional dynamic attribute for cached images
                 return img, original_width, original_height
 
             # Fallback: full resolution cache
             full_path = thumb_record.get("full_cache_path")
             if full_path and Path(full_path).is_file():
                 img = Image.open(full_path)
-                img._from_cache = True
+                img._from_cache = True  # type: ignore[attr-defined]  # Intentional dynamic attribute for cached images
                 return img, original_width, original_height
 
         # Fallback: open the original file directly

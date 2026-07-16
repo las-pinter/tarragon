@@ -114,9 +114,7 @@ class LogPanel(QWidget):
         from background threads.
         """
         color = _LEVEL_COLORS.get(level, _DEFAULT_COLOR)
-        self._text_area.appendHtml(
-            f'<span style="color:{color};">{message}</span>'
-        )
+        self._text_area.appendHtml(f'<span style="color:{color};">{message}</span>')
 
     def clear_logs(self) -> None:
         """Remove all log lines from the panel."""

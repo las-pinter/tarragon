@@ -294,9 +294,7 @@ class TestSidebarWidgetFunctionality:
         list_view.doubleClicked.emit(index)
         assert captured == []
 
-    def test_favorite_clicked_invalid_index_does_not_emit(
-        self, sidebar: SidebarWidget
-    ) -> None:
+    def test_favorite_clicked_invalid_index_does_not_emit(self, sidebar: SidebarWidget) -> None:
         """Clicking with an invalid index does not emit favorite_clicked."""
         captured: list[str] = []
         sidebar.favorite_clicked.connect(lambda path: captured.append(path))

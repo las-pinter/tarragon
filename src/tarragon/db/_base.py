@@ -100,9 +100,7 @@ class _MixinBase:
     def _commit(self) -> None:
         raise NotImplementedError
 
-    def fetch_all(
-        self, sql: str, params: SqlParams = ()
-    ) -> list[dict[str, Any]]:
+    def fetch_all(self, sql: str, params: SqlParams = ()) -> list[dict[str, Any]]:
         raise NotImplementedError
 
 
@@ -173,9 +171,7 @@ class _Base(_MixinBase):
             logger.debug("SQL (script) completed in %.3fs", elapsed)
         except sqlite3.Error as e:
             elapsed = time.perf_counter() - start
-            logger.error(
-                "SQL (script) failed after %.3fs: error: %s", elapsed, e
-            )
+            logger.error("SQL (script) failed after %.3fs: error: %s", elapsed, e)
             raise
 
     def _commit(self) -> None:
@@ -233,9 +229,7 @@ class _Base(_MixinBase):
     def get_schema_version(self) -> int:
         """Return the stored schema version, or 0 if absent."""
         logger.debug("get_schema_version")
-        row = self._execute(
-            "SELECT version FROM schema_version LIMIT 1"
-        ).fetchone()
+        row = self._execute("SELECT version FROM schema_version LIMIT 1").fetchone()
         return row["version"] if row else 0
 
     # -- Context manager protocol --------------------------------------------

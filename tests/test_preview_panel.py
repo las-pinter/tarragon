@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import gc
 import math
+from collections.abc import Generator
 from pathlib import Path
-from typing import Any, Generator
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -13,6 +14,7 @@ from PIL import Image
 from PySide6.QtCore import QSize
 from PySide6.QtGui import QResizeEvent
 from PySide6.QtWidgets import QLabel, QSizePolicy, QVBoxLayout, QWidget
+
 from tarragon.widgets.preview_panel import PreviewPanel
 
 
@@ -203,16 +205,19 @@ def test_clear_resets_state(qapp: Any, sample_image: Any) -> None:  # noqa: ARG0
 # ── Metadata Tests ───────────────────────────────────────────────────
 
 
-@pytest.mark.parametrize("size_bytes,expected", [
-    (0, "0 B"),
-    (1, "1 B"),
-    (500, "500 B"),
-    (1024, "1.0 KB"),
-    (1536, "1.5 KB"),
-    (2 * 1024 * 1024, "2.0 MB"),
-    (3 * 1024 * 1024 * 1024, "3.0 GB"),
-    (5 * 1024**4, "5.0 TB"),
-])
+@pytest.mark.parametrize(
+    "size_bytes,expected",
+    [
+        (0, "0 B"),
+        (1, "1 B"),
+        (500, "500 B"),
+        (1024, "1.0 KB"),
+        (1536, "1.5 KB"),
+        (2 * 1024 * 1024, "2.0 MB"),
+        (3 * 1024 * 1024 * 1024, "3.0 GB"),
+        (5 * 1024**4, "5.0 TB"),
+    ],
+)
 def test_format_size_parametrized(qapp: Any, size_bytes: int, expected: str) -> None:  # noqa: ARG001
     """_format_size formats all byte ranges correctly."""
     assert PreviewPanel._format_size(size_bytes) == expected
@@ -766,17 +771,13 @@ def test_set_image_rgba_converted_to_rgb(qapp: Any) -> None:  # noqa: ARG001
         rgba = Image.new("RGBA", (200, 100), color=(255, 0, 0, 128))
         panel.set_image(rgba)
         assert panel._current_image is not None
-        assert panel._current_image.mode == "RGB", (
-            f"Expected RGB after set_image, got {panel._current_image.mode}"
-        )
+        assert panel._current_image.mode == "RGB", f"Expected RGB after set_image, got {panel._current_image.mode}"
     finally:
         panel.close()
 
 
 def test_set_image_rgba_fully_transparent_becomes_dark_bg(qapp: Any) -> None:  # noqa: ARG001
     """RGBA image wiv full transparency composites onto da dark preview bg."""
-    from tarragon.widgets.preview_panel import BG_SECONDARY
-
     panel = PreviewPanel()
     try:
         # Fully transparent RGBA image
@@ -1058,22 +1059,14 @@ def test_transpose_for_orientation_pixel_content_5_and_7() -> None:
     # Orientation 5: must match PIL's TRANSPOSE exactly
     expected_5 = base.transpose(Image.Transpose.TRANSPOSE)
     result_5 = _transpose_for_orientation(base.copy(), 5)
-    assert result_5.size == expected_5.size, (
-        f"Orientation 5 size mismatch: {result_5.size} != {expected_5.size}"
-    )
-    assert list(result_5.getdata()) == list(expected_5.getdata()), (
-        "Orientation 5 pixels do not match PIL TRANSPOSE"
-    )
+    assert result_5.size == expected_5.size, f"Orientation 5 size mismatch: {result_5.size} != {expected_5.size}"
+    assert list(result_5.getdata()) == list(expected_5.getdata()), "Orientation 5 pixels do not match PIL TRANSPOSE"
 
     # Orientation 7: must match PIL's TRANSVERSE exactly
     expected_7 = base.transpose(Image.Transpose.TRANSVERSE)
     result_7 = _transpose_for_orientation(base.copy(), 7)
-    assert result_7.size == expected_7.size, (
-        f"Orientation 7 size mismatch: {result_7.size} != {expected_7.size}"
-    )
-    assert list(result_7.getdata()) == list(expected_7.getdata()), (
-        "Orientation 7 pixels do not match PIL TRANSVERSE"
-    )
+    assert result_7.size == expected_7.size, f"Orientation 7 size mismatch: {result_7.size} != {expected_7.size}"
+    assert list(result_7.getdata()) == list(expected_7.getdata()), "Orientation 7 pixels do not match PIL TRANSVERSE"
 
 
 # ── Regression: Double EXIF from cache (Bug 2) ────────────────────────
@@ -1197,9 +1190,7 @@ def test_pil_to_qimage_rgba_pixel_values(qapp: Any) -> None:  # noqa: ARG001
             expected = pil_img.getpixel((x, y))
             qcolor = qimage.pixelColor(x, y)
             actual = (qcolor.red(), qcolor.green(), qcolor.blue(), qcolor.alpha())
-            assert actual == expected, (
-                f"RGBA pixel mismatch at ({x}, {y}): expected {expected}, got {actual}"
-            )
+            assert actual == expected, f"RGBA pixel mismatch at ({x}, {y}): expected {expected}, got {actual}"
 
 
 # ── Multi-preview: aspect ratio preservation ──────────────────────────
@@ -1338,9 +1329,7 @@ def test_set_multi_preview_rgba_preserves_aspect_ratio(qapp: Any) -> None:  # no
         bg_color = (28, 27, 34)
         # Top area should be background (letterbox) since image is 4:1
         top_center = mosaic.getpixel((mosaic.width // 2, 10))
-        assert top_center == bg_color, (
-            f"Expected background at top, got {top_center}"
-        )
+        assert top_center == bg_color, f"Expected background at top, got {top_center}"
     finally:
         panel.close()
 
@@ -1350,10 +1339,10 @@ def test_set_multi_preview_multiple_images_all_preserve_ratio(qapp: Any) -> None
     panel = PreviewPanel()
     try:
         images = [
-            Image.new("RGB", (800, 200), color="red"),    # wide 4:1
-            Image.new("RGB", (200, 800), color="blue"),   # tall 1:4
+            Image.new("RGB", (800, 200), color="red"),  # wide 4:1
+            Image.new("RGB", (200, 800), color="blue"),  # tall 1:4
             Image.new("RGB", (400, 400), color="green"),  # square 1:1
-            Image.new("RGB", (600, 300), color="yellow"), # wide 2:1
+            Image.new("RGB", (600, 300), color="yellow"),  # wide 2:1
         ]
         captured: list[Image.Image] = []
 
@@ -1673,9 +1662,7 @@ class TestMosaicClearsSingleState:
         # Assert
         assert preview_panel._cached_pixmap is None
 
-    def test_clears_current_path(
-        self, preview_panel: PreviewPanel, tmp_path: Path
-    ) -> None:
+    def test_clears_current_path(self, preview_panel: PreviewPanel, tmp_path: Path) -> None:
         """set_multi_preview clears _current_path."""
         # Arrange
         test_file = tmp_path / "test.jpg"
@@ -1698,9 +1685,7 @@ class TestMosaicClearsSingleState:
 class TestMosaicExifTranspose:
     """Verify EXIF orientation is applied to each image in the mosaic."""
 
-    def test_exif_rotated_image_displays_upright(
-        self, preview_panel: PreviewPanel, tmp_path: Path
-    ) -> None:
+    def test_exif_rotated_image_displays_upright(self, preview_panel: PreviewPanel, tmp_path: Path) -> None:
         """Images with EXIF orientation tag are transposed before pasting.
 
         A 200x100 image with orientation tag 6 (rotate 90 CW) should be
@@ -1839,10 +1824,12 @@ def test_set_tags_clears_previous_pills(qapp: Any) -> None:  # noqa: ARG001
         panel.set_tags([{"id": 1, "name": "old_tag", "source": "user"}])
         assert len(panel._tag_pills) == 1
 
-        panel.set_tags([
-            {"id": 2, "name": "new_tag1", "source": "user"},
-            {"id": 3, "name": "new_tag2", "source": "user"},
-        ])
+        panel.set_tags(
+            [
+                {"id": 2, "name": "new_tag1", "source": "user"},
+                {"id": 3, "name": "new_tag2", "source": "user"},
+            ]
+        )
         assert len(panel._tag_pills) == 2
         assert panel._tag_pills[0].text() == "new_tag1"
     finally:
@@ -2024,7 +2011,8 @@ def test_tri_state_not_applied_for_single_selection(qapp: Any) -> None:  # noqa:
 
 
 def test_tag_pill_clicked_removes_tag_when_all_have_it(
-    qapp: Any, mock_tag_service: Any,  # noqa: ARG001
+    qapp: Any,
+    mock_tag_service: Any,  # noqa: ARG001
 ) -> None:
     """Clicking a tag pill removes the tag when all selected files have it."""
     service = mock_tag_service
@@ -2042,7 +2030,8 @@ def test_tag_pill_clicked_removes_tag_when_all_have_it(
 
 
 def test_tag_pill_clicked_adds_tag_when_not_all_have_it(
-    qapp: Any, mock_tag_service: Any,  # noqa: ARG001
+    qapp: Any,
+    mock_tag_service: Any,  # noqa: ARG001
 ) -> None:
     """Clicking a tag pill adds the tag when not all selected files have it."""
     service = mock_tag_service
@@ -2060,7 +2049,8 @@ def test_tag_pill_clicked_adds_tag_when_not_all_have_it(
 
 
 def test_tag_pill_clicked_noop_without_selection(
-    qapp: Any, mock_tag_service: Any,  # noqa: ARG001
+    qapp: Any,
+    mock_tag_service: Any,  # noqa: ARG001
 ) -> None:
     """Clicking a tag pill does nothing when no files are selected."""
     service = mock_tag_service
@@ -2107,7 +2097,8 @@ def test_inline_tag_input_creation(qapp: Any, mock_tag_service: Any) -> None:  #
 
 
 def test_inline_tag_input_submitted_creates_tag(
-    qapp: Any, mock_tag_service: Any,  # noqa: ARG001
+    qapp: Any,
+    mock_tag_service: Any,  # noqa: ARG001
 ) -> None:
     """Submitting inline input creates the tag and adds it to files."""
     service = mock_tag_service
@@ -2126,7 +2117,8 @@ def test_inline_tag_input_submitted_creates_tag(
 
 
 def test_inline_tag_input_finished_restores_button(
-    qapp: Any, mock_tag_service: Any,  # noqa: ARG001
+    qapp: Any,
+    mock_tag_service: Any,  # noqa: ARG001
 ) -> None:
     """Finishing inline input removes the input and shows the add button."""
     service = mock_tag_service
@@ -2144,7 +2136,8 @@ def test_inline_tag_input_finished_restores_button(
 
 
 def test_inline_tag_input_empty_does_not_create_tag(
-    qapp: Any, mock_tag_service: Any,  # noqa: ARG001
+    qapp: Any,
+    mock_tag_service: Any,  # noqa: ARG001
 ) -> None:
     """Submitting empty inline input does not create a tag."""
     service = mock_tag_service
@@ -2163,7 +2156,8 @@ def test_inline_tag_input_empty_does_not_create_tag(
 
 
 def test_get_union_tags_combines_tags_from_multiple_files(
-    qapp: Any, mock_tag_service: Any,  # noqa: ARG001
+    qapp: Any,
+    mock_tag_service: Any,  # noqa: ARG001
 ) -> None:
     """get_union_tags returns the union of tags from all paths."""
     service = mock_tag_service
@@ -2197,7 +2191,8 @@ def test_get_union_tags_without_tag_service_returns_empty(qapp: Any) -> None:  #
 
 
 def test_tags_changed_signal_emitted_on_external_change(
-    qapp: Any, mock_tag_service: Any,  # noqa: ARG001
+    qapp: Any,
+    mock_tag_service: Any,  # noqa: ARG001
 ) -> None:
     """tags_changed signal is emitted when external tags change."""
     service = mock_tag_service
@@ -2216,7 +2211,8 @@ def test_tags_changed_signal_emitted_on_external_change(
 
 
 def test_add_button_disabled_without_selection(
-    qapp: Any, mock_tag_service: Any,  # noqa: ARG001
+    qapp: Any,
+    mock_tag_service: Any,  # noqa: ARG001
 ) -> None:
     """Add tag button does nothing when no files are selected."""
     service = mock_tag_service
@@ -2265,9 +2261,7 @@ def test_tags_container_nonzero_height_after_set_tags(qapp: Any) -> None:  # noq
         panel.set_tags(tags)
 
         # The container must have non-zero height after tags are added
-        assert panel._tags_container.height() > 0, (
-            "Tags container should have non-zero height after set_tags()"
-        )
+        assert panel._tags_container.height() > 0, "Tags container should have non-zero height after set_tags()"
     finally:
         panel.close()
 
@@ -2306,9 +2300,7 @@ def test_flow_layout_minimum_size_hint_with_items(qapp: Any) -> None:  # noqa: A
         panel.set_tags(tags)
 
         assert isinstance(panel._tags_flow, FlowLayout)
-        assert panel._tags_flow.count() > 0, (
-            "FlowLayout should contain items after set_tags()"
-        )
+        assert panel._tags_flow.count() > 0, "FlowLayout should contain items after set_tags()"
     finally:
         panel.close()
 
@@ -2339,10 +2331,12 @@ def test_tags_container_geometry_updates_on_clear(qapp: Any) -> None:  # noqa: A
     try:
         panel.show()
         # Add tags
-        panel.set_tags([
-            {"id": 1, "name": "tag1", "source": "user"},
-            {"id": 2, "name": "tag2", "source": "user"},
-        ])
+        panel.set_tags(
+            [
+                {"id": 1, "name": "tag1", "source": "user"},
+                {"id": 2, "name": "tag2", "source": "user"},
+            ]
+        )
         assert len(panel._tag_pills) == 2
 
         # Clear tags
@@ -2487,15 +2481,14 @@ def test_color_square_button_has_color_square_property(qapp: Any) -> None:  # no
     panel = PreviewPanel()
     try:
         for name, btn in panel._color_square_buttons.items():
-            assert btn.property("colorSquare") is True, (
-                f"Color square '{name}' should have colorSquare=True property"
-            )
+            assert btn.property("colorSquare") is True, f"Color square '{name}' should have colorSquare=True property"
     finally:
         panel.close()
 
 
 def test_color_square_clicked_adds_tag(
-    qapp: Any, mock_tag_service: Any,  # noqa: ARG001
+    qapp: Any,
+    mock_tag_service: Any,  # noqa: ARG001
 ) -> None:
     """Clicking a color square adds the color tag when not all files have it."""
     service = mock_tag_service
@@ -2514,7 +2507,8 @@ def test_color_square_clicked_adds_tag(
 
 
 def test_color_square_clicked_removes_tag(
-    qapp: Any, mock_tag_service: Any,  # noqa: ARG001
+    qapp: Any,
+    mock_tag_service: Any,  # noqa: ARG001
 ) -> None:
     """Clicking a color square removes the color tag when all files have it."""
     service = mock_tag_service
@@ -2590,7 +2584,8 @@ def test_tag_pill_remove_button_has_object_name(qapp: Any) -> None:  # noqa: ARG
 
 
 def test_tag_pill_remove_clicked_calls_service(
-    qapp: Any, mock_tag_service: Any,  # noqa: ARG001
+    qapp: Any,
+    mock_tag_service: Any,  # noqa: ARG001
 ) -> None:
     """Clicking the × button removes the tag from files."""
     service = mock_tag_service
@@ -2607,7 +2602,8 @@ def test_tag_pill_remove_clicked_calls_service(
 
 
 def test_tag_pill_remove_noop_without_selection(
-    qapp: Any, mock_tag_service: Any,  # noqa: ARG001
+    qapp: Any,
+    mock_tag_service: Any,  # noqa: ARG001
 ) -> None:
     """Clicking × does nothing when no files are selected."""
     service = mock_tag_service
@@ -2624,7 +2620,8 @@ def test_tag_pill_remove_noop_without_selection(
 
 
 def test_add_tag_dropdown_filters_color_tags(
-    qapp: Any, mock_tag_service: Any,  # noqa: ARG001
+    qapp: Any,
+    mock_tag_service: Any,  # noqa: ARG001
 ) -> None:
     """The +Add dropdown excludes color: tags from the list.
 
@@ -2647,11 +2644,10 @@ def test_add_tag_dropdown_filters_color_tags(
 
         # Patch QMenu.exec to return None (no selection) and capture menu actions
         added_actions: list[str] = []
-        original_add_action = None
 
-        with patch("tarragon.widgets.preview_panel.QMenu") as MockMenu:
+        with patch("tarragon.widgets.preview_panel.QMenu") as mock_qmenu:
             mock_menu = MagicMock()
-            MockMenu.return_value = mock_menu
+            mock_qmenu.return_value = mock_menu
 
             def fake_add_action(name):
                 added_actions.append(name)

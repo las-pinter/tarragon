@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-from collections.abc import Generator
 from pathlib import Path
 from typing import Any
 
-import pytest
 from PySide6.QtWidgets import QDockWidget, QMainWindow
-from tarragon.main_window import MainWindow
 
+from tarragon.main_window import MainWindow
 
 # ── Instantiation Tests ────────────────────────────────────────────────
 
@@ -192,9 +190,7 @@ def test_run_filtered_query_does_not_clear_gallery_when_no_folder(qapp: Any) -> 
         window.setup_widgets(db, tag_service)
 
         # Pre-load some paths into the model (simulating a folder open)
-        from pathlib import Path as P
-
-        window.thumbnail_model.set_paths([P("/fake/img1.png"), P("/fake/img2.png")])
+        window.thumbnail_model.set_paths([Path("/fake/img1.png"), Path("/fake/img2.png")])
         assert window.thumbnail_model.rowCount() == 2
 
         # _current_folder is "" (default) — calling _run_filtered_query should NOT clear
@@ -431,15 +427,9 @@ def test_folder_filter_in_global_mode(qapp: Any) -> None:  # noqa: ARG001
         db.init_schema()
 
         # Thumbnails in two different folders
-        db.upsert_thumbnail(
-            "/folder_a/img1.png", mtime=1, size=100, width=800, height=600, cache_uuid="u1"
-        )
-        db.upsert_thumbnail(
-            "/folder_b/img2.png", mtime=2, size=200, width=1024, height=768, cache_uuid="u2"
-        )
-        db.upsert_thumbnail(
-            "/folder_a/img3.png", mtime=3, size=300, width=640, height=480, cache_uuid="u3"
-        )
+        db.upsert_thumbnail("/folder_a/img1.png", mtime=1, size=100, width=800, height=600, cache_uuid="u1")
+        db.upsert_thumbnail("/folder_b/img2.png", mtime=2, size=200, width=1024, height=768, cache_uuid="u2")
+        db.upsert_thumbnail("/folder_a/img3.png", mtime=3, size=300, width=640, height=480, cache_uuid="u3")
 
         tag_service = TagService(db=db)
         window.setup_widgets(db, tag_service)
@@ -540,7 +530,8 @@ def test_scope_change_shows_folder_button(qapp: Any) -> None:  # noqa: ARG001
 
 
 def test_filters_return_results_immediately_after_folder_open(
-    qapp: Any, tmp_path: Path  # noqa: ARG001
+    qapp: Any,
+    tmp_path: Path,  # noqa: ARG001
 ) -> None:
     """After opening a folder, filtered queries return results without waiting for renders.
 
@@ -597,10 +588,12 @@ def test_bulk_upsert_stubs_inserts_and_updates(qapp: Any) -> None:  # noqa: ARG0
     db.init_schema()
     try:
         # Insert stubs
-        db.bulk_upsert_stubs([
-            ("/test/a.png", 100, 500),
-            ("/test/b.png", 200, 600),
-        ])
+        db.bulk_upsert_stubs(
+            [
+                ("/test/a.png", 100, 500),
+                ("/test/b.png", 200, 600),
+            ]
+        )
 
         # Verify stubs were inserted with placeholder values
         rec_a = db.get_thumbnail("/test/a.png")
@@ -613,9 +606,11 @@ def test_bulk_upsert_stubs_inserts_and_updates(qapp: Any) -> None:  # noqa: ARG0
         assert rec_a["thumbnail_cache_path"] is None
 
         # Update stubs (simulating a re-scan with new mtime/size)
-        db.bulk_upsert_stubs([
-            ("/test/a.png", 999, 777),
-        ])
+        db.bulk_upsert_stubs(
+            [
+                ("/test/a.png", 999, 777),
+            ]
+        )
         rec_a_updated = db.get_thumbnail("/test/a.png")
         assert rec_a_updated is not None
         assert rec_a_updated["mtime"] == 999

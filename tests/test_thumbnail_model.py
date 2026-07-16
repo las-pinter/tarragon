@@ -326,6 +326,4 @@ class TestThumbnailModel:
         for i in range(100):
             idx = model.index(i, 0)
             thumb = model.data(idx, ThumbnailModel.ThumbnailRole256)
-            assert thumb == f"/cache/256/file_{i:03d}.png", (
-                f"Thumbnail for file_{i:03d}.jpg lost after unfilter"
-            )
+            assert thumb == f"/cache/256/file_{i:03d}.png", f"Thumbnail for file_{i:03d}.jpg lost after unfilter"

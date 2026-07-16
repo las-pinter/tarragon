@@ -26,9 +26,7 @@ def test_tokens_has_all_sections() -> None:
 
     data = load_tokens()
     required_sections = {"colors", "typography", "spacing", "radius", "motion", "layout", "badge"}
-    assert set(data.keys()) == required_sections, (
-        f"token sections {set(data.keys())} != expected {required_sections}"
-    )
+    assert set(data.keys()) == required_sections, f"token sections {set(data.keys())} != expected {required_sections}"
 
 
 def test_tokens_colors_section() -> None:

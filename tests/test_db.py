@@ -590,7 +590,11 @@ class TestWindowsPathNormalization:
         """upsert_thumbnail stores paths with forward slashes even when given backslashes."""
         db.upsert_thumbnail(
             "D:\\Dropbox\\Art\\image.png",
-            mtime=1, size=100, width=10, height=10, cache_uuid="u1",
+            mtime=1,
+            size=100,
+            width=10,
+            height=10,
+            cache_uuid="u1",
         )
         result = db.get_thumbnail("D:/Dropbox/Art/image.png")
         assert result is not None
@@ -600,7 +604,11 @@ class TestWindowsPathNormalization:
         """get_thumbnail finds records regardless of the separator used in the query."""
         db.upsert_thumbnail(
             "D:/Dropbox/Art/image.png",
-            mtime=1, size=100, width=10, height=10, cache_uuid="u1",
+            mtime=1,
+            size=100,
+            width=10,
+            height=10,
+            cache_uuid="u1",
         )
         # Query with backslashes should still find the record
         result = db.get_thumbnail("D:\\Dropbox\\Art\\image.png")
@@ -622,11 +630,19 @@ class TestWindowsPathNormalization:
         """list_thumbnails_for_folder works when folder_path uses backslashes."""
         db.upsert_thumbnail(
             "D:/Dropbox/Art/a.png",
-            mtime=1, size=100, width=10, height=10, cache_uuid="u1",
+            mtime=1,
+            size=100,
+            width=10,
+            height=10,
+            cache_uuid="u1",
         )
         db.upsert_thumbnail(
             "D:/Dropbox/Art/b.png",
-            mtime=2, size=200, width=10, height=10, cache_uuid="u2",
+            mtime=2,
+            size=200,
+            width=10,
+            height=10,
+            cache_uuid="u2",
         )
         # Query with backslash separator — this was the original bug
         results = db.list_thumbnails_for_folder("D:\\Dropbox\\Art")
@@ -636,7 +652,11 @@ class TestWindowsPathNormalization:
         """delete_thumbnails_by_folder works when folder_path uses backslashes."""
         db.upsert_thumbnail(
             "D:/Dropbox/Art/a.png",
-            mtime=1, size=100, width=10, height=10, cache_uuid="u1",
+            mtime=1,
+            size=100,
+            width=10,
+            height=10,
+            cache_uuid="u1",
         )
         db.delete_thumbnails_by_folder("D:\\Dropbox\\Art")
         assert db.get_thumbnail("D:/Dropbox/Art/a.png") is None
@@ -645,7 +665,11 @@ class TestWindowsPathNormalization:
         """list_distinct_folders returns paths with forward slashes."""
         db.upsert_thumbnail(
             "D:/Dropbox/Art/a.png",
-            mtime=1, size=100, width=10, height=10, cache_uuid="u1",
+            mtime=1,
+            size=100,
+            width=10,
+            height=10,
+            cache_uuid="u1",
         )
         folders = db.list_distinct_folders()
         assert folders == ["D:/Dropbox/Art"]
@@ -684,7 +708,11 @@ class TestWindowsPathNormalization:
         tag_id = db.ensure_tag("nature")
         db.upsert_thumbnail(
             "D:/Dropbox/Art/a.png",
-            mtime=1, size=100, width=10, height=10, cache_uuid="u1",
+            mtime=1,
+            size=100,
+            width=10,
+            height=10,
+            cache_uuid="u1",
         )
         db.add_file_tags(["D:/Dropbox/Art/a.png"], tag_id)
 

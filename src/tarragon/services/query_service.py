@@ -65,7 +65,10 @@ class QueryService:
         folder_filters = folder_filters or set()
         logger.debug(
             "Query start: folders=%s, filename_filter=%s, color_tags=%s, tag_ids=%s",
-            folder_filters, filename_filter, color_tags, tag_ids,
+            folder_filters,
+            filename_filter,
+            color_tags,
+            tag_ids,
         )
         tag_ids = tag_ids or set()
         color_tags = color_tags or set()

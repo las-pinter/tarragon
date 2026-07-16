@@ -105,9 +105,9 @@ def test_build_command_includes_entry_point(package_module: Any) -> None:
     # The entry point should be the last argument
     entry_point = cmd[-1]
     assert entry_point.endswith("main.py"), f"Last argument should be main.py entry point, got: {entry_point}"
-    assert (
-        "src" in entry_point and "tarragon" in entry_point
-    ), f"Entry point path should contain src/tarragon, got: {entry_point}"
+    assert "src" in entry_point and "tarragon" in entry_point, (
+        f"Entry point path should contain src/tarragon, got: {entry_point}"
+    )
 
 
 def test_build_command_includes_tarragon_package(package_module: Any) -> None:
@@ -117,9 +117,9 @@ def test_build_command_includes_tarragon_package(package_module: Any) -> None:
 
     mock_run.assert_called_once()
     cmd = mock_run.call_args[0][0]
-    assert (
-        "--include-package=tarragon" in cmd
-    ), "Nuitka command must include --include-package=tarragon to bundle the application package"
+    assert "--include-package=tarragon" in cmd, (
+        "Nuitka command must include --include-package=tarragon to bundle the application package"
+    )
 
 
 def test_build_command_includes_python_path(package_module: Any) -> None:
@@ -196,10 +196,10 @@ def test_build_bat_references_venv() -> None:
 def test_build_sh_installs_requirements() -> None:
     """build.sh must install using the pyproject.toml build extra."""
     content = BUILD_SH.read_text()
-    assert '.[build]' in content, "build.sh must install via .[build] extra"
+    assert ".[build]" in content, "build.sh must install via .[build] extra"
 
 
 def test_build_bat_installs_requirements() -> None:
     """build.bat must install using the pyproject.toml build extra."""
     content = BUILD_BAT.read_text()
-    assert '.[build]' in content, "build.bat must install via .[build] extra"
+    assert ".[build]" in content, "build.bat must install via .[build] extra"

@@ -29,7 +29,7 @@ class ThumbnailModel(QAbstractListModel):
     """
 
     PathRole: int = Qt.ItemDataRole.UserRole + 1
-    ThumbnailRole256: int = Qt.ItemDataRole.UserRole + 2   # 256px thumbnail
+    ThumbnailRole256: int = Qt.ItemDataRole.UserRole + 2  # 256px thumbnail
     ThumbnailRole1024: int = Qt.ItemDataRole.UserRole + 3  # 1024px preview
     ThumbnailRoleFull: int = Qt.ItemDataRole.UserRole + 4  # Full resolution
 

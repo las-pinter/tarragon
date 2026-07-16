@@ -47,13 +47,11 @@ class TestMigrateV1ToV2:
     def _insert_backslash_records(self, db: Database) -> None:
         """Insert records with backslash paths directly via SQL (bypassing normalization)."""
         db._execute(
-            "INSERT INTO thumbnails (path, mtime, size, width, height, cache_uuid) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO thumbnails (path, mtime, size, width, height, cache_uuid) VALUES (?, ?, ?, ?, ?, ?)",
             ("D:\\Dropbox\\Art\\image.jpg", 1, 100, 800, 600, "u1"),
         )
         db._execute(
-            "INSERT INTO thumbnails (path, mtime, size, width, height, cache_uuid) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO thumbnails (path, mtime, size, width, height, cache_uuid) VALUES (?, ?, ?, ?, ?, ?)",
             ("D:\\Dropbox\\Art\\photo.png", 2, 200, 1024, 768, "u2"),
         )
         tag_id = db.ensure_tag("landscape")
@@ -110,8 +108,7 @@ class TestMigrateV1ToV2:
     def test_already_normalized_paths_unchanged(self, db: Database) -> None:
         """Paths already using forward slashes are not modified."""
         db._execute(
-            "INSERT INTO thumbnails (path, mtime, size, width, height, cache_uuid) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO thumbnails (path, mtime, size, width, height, cache_uuid) VALUES (?, ?, ?, ?, ?, ?)",
             ("/home/user/photos/img.jpg", 1, 100, 800, 600, "u1"),
         )
         db._commit()

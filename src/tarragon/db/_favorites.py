@@ -38,7 +38,5 @@ class FavoritesMixin(_MixinBase):
     def list_favorites(self) -> list[dict[str, Any]]:
         """Return all favorite records ordered by sort_order then path."""
         logger.debug("list_favorites")
-        cursor = self._execute(
-            "SELECT * FROM favorites ORDER BY sort_order, path"
-        )
+        cursor = self._execute("SELECT * FROM favorites ORDER BY sort_order, path")
         return [_row_to_dict(row) for row in cursor.fetchall()]

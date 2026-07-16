@@ -638,9 +638,7 @@ class PreviewPanel(QWidget):
         # background-color is dynamic (unique per color bucket) and cannot be
         # expressed as a QSS rule.  Border, border-radius, and hover styles are
         # handled by the QSS rule for QPushButton[colorSquare="true"].
-        btn.setStyleSheet(
-            f"QPushButton {{ background-color: {hex_color}; }}"
-        )
+        btn.setStyleSheet(f"QPushButton {{ background-color: {hex_color}; }}")
         btn.clicked.connect(
             lambda _checked=False, name=bucket_name: self._on_color_square_clicked(name),
         )
@@ -675,9 +673,7 @@ class PreviewPanel(QWidget):
 
                 if color_tag_id is not None:
                     files_with_tag = sum(
-                        1
-                        for path in self._selected_paths
-                        if color_tag_id in self._cached_file_tags.get(path, set())
+                        1 for path in self._selected_paths if color_tag_id in self._cached_file_tags.get(path, set())
                     )
                     total = len(self._selected_paths)
                     if files_with_tag == total:
@@ -731,10 +727,7 @@ class PreviewPanel(QWidget):
         # Check if all selected files have this color tag
         all_have_tag = False
         if color_tag_id is not None:
-            all_have_tag = all(
-                color_tag_id in self._cached_file_tags.get(path, set())
-                for path in self._selected_paths
-            )
+            all_have_tag = all(color_tag_id in self._cached_file_tags.get(path, set()) for path in self._selected_paths)
 
         if all_have_tag and color_tag_id is not None:
             self._tag_service.remove_tags_from_files(
@@ -889,11 +882,13 @@ class PreviewPanel(QWidget):
                 # Fall back to service lookup when name wasn't in the tag dict
                 name = self._tag_service.get_tag_name(tag_id)
             if name:
-                union_tags.append({
-                    "id": tag_id,
-                    "name": name,
-                    "source": tag_info[tag_id]["source"],
-                })
+                union_tags.append(
+                    {
+                        "id": tag_id,
+                        "name": name,
+                        "source": tag_info[tag_id]["source"],
+                    }
+                )
         return union_tags
 
     def _clear_tag_pills(self) -> None:

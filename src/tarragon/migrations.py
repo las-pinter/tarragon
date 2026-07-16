@@ -30,10 +30,7 @@ def _migrate_v1_to_v2(db: Database) -> None:
         ("folder_cache_uuids", "folder_path"),
     ]
     for table, column in tables_columns:
-        db._execute(
-            f"UPDATE {table} SET {column} = REPLACE({column}, '\\', '/')"
-            f" WHERE {column} LIKE '%\\%'"
-        )
+        db._execute(f"UPDATE {table} SET {column} = REPLACE({column}, '\\', '/') WHERE {column} LIKE '%\\%'")
     db._commit()
     logger.info("Migration v1→v2: normalized backslash paths to forward slashes")
 

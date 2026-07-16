@@ -271,9 +271,7 @@ class TestGetAllTagsScoped:
         tags = service.get_all_tags(folder_path="")
         assert tags[0]["usage_count"] == 1
 
-    def test_folder_path_does_not_match_sibling_with_shared_prefix(
-        self, service: TagService
-    ) -> None:
+    def test_folder_path_does_not_match_sibling_with_shared_prefix(self, service: TagService) -> None:
         """folder_path='/photos' must NOT count files in '/photos-vacation/'."""
         tag_id = service._get_or_create_tag("beach")
         service._db.add_file_tags(["/photos/img.png", "/photos-vacation/img.png"], tag_id)

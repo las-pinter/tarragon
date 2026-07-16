@@ -141,47 +141,45 @@ class MainWindow(QMainWindow):
             | Library  |                   | Preview  |
             |          |     Gallery       |          |
             |          |                   |          |
-            |          |                   |          |
             +----------+-------------------+----------+
+            |                Log                      |
+            +------------------------------------------+
 
-        The Log dock is added to the bottom area but hidden by default.
+        All four panels — including Gallery — are true QDockWidgets
+        participating in the dock area, so the user has full freedom to
+        drag, resize, float, or tab them together. QMainWindow always
+        requires *some* central widget, so we give it an invisible,
+        zero-size placeholder and let dock splits cover the whole window.
         """
         # Enable dock nesting - required for split layouts
         self.setDockNestingEnabled(True)
 
-        # Create docks
+        # QMainWindow needs a central widget to exist, but we don't want it
+        # to occupy real estate or behave specially — Gallery should be a
+        # normal dock like everything else, not locked into the fixed
+        # central slot.
+        placeholder = QWidget()
+        placeholder.setMaximumSize(0, 0)
+        self.setCentralWidget(placeholder)
+
+        # Create docks — all areas allowed on all four, for full rearrangement freedom
         self.sidebar_dock = QDockWidget("Library", self)
-        self.sidebar_dock.setAllowedAreas(Qt.DockWidgetArea.LeftDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea)
+        self.sidebar_dock.setAllowedAreas(Qt.DockWidgetArea.AllDockWidgetAreas)
 
         self.grid_dock = QDockWidget("Gallery", self)
-        self.grid_dock.setAllowedAreas(
-            Qt.DockWidgetArea.LeftDockWidgetArea
-            | Qt.DockWidgetArea.RightDockWidgetArea
-            | Qt.DockWidgetArea.TopDockWidgetArea
-            | Qt.DockWidgetArea.BottomDockWidgetArea
-        )
+        self.grid_dock.setAllowedAreas(Qt.DockWidgetArea.AllDockWidgetAreas)
 
         self.preview_dock = QDockWidget("Preview", self)
-        self.preview_dock.setAllowedAreas(Qt.DockWidgetArea.LeftDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea)
+        self.preview_dock.setAllowedAreas(Qt.DockWidgetArea.AllDockWidgetAreas)
 
         self.log_dock = QDockWidget("Log", self)
-        self.log_dock.setAllowedAreas(
-            Qt.DockWidgetArea.LeftDockWidgetArea
-            | Qt.DockWidgetArea.RightDockWidgetArea
-            | Qt.DockWidgetArea.BottomDockWidgetArea
-        )
+        self.log_dock.setAllowedAreas(Qt.DockWidgetArea.AllDockWidgetAreas)
 
-        # Add docks in the correct order for the desired layout:
-        # 1. Gallery as the CENTRAL widget — fills the middle of the window
-        self.setCentralWidget(self.grid_dock)
-
-        # 2. Library on the left
+        # Seed the initial arrangement. Since the central widget has no
+        # size, these dock areas span the full window.
         self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.sidebar_dock)
-
-        # 3. Preview on the right
-        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.preview_dock)
-
-        # 4. Log at the bottom (hidden by default)
+        self.splitDockWidget(self.sidebar_dock, self.grid_dock, Qt.Orientation.Horizontal)
+        self.splitDockWidget(self.grid_dock, self.preview_dock, Qt.Orientation.Horizontal)
         self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self.log_dock)
 
         # Set initial dock sizes — preview panel should be roughly half the

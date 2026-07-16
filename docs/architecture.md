@@ -43,8 +43,8 @@ main.py
         ├── models/
         │     ├── thumbnail_model.py    — Data model backing the thumbnail grid
         │     └── filter_state.py       — Filter state management
-        ├── db.py                       — SQLite database schema and CRUD
-        ├── migrations.py               — Schema migration framework
+        ├── db/                          — SQLite database schema and CRUD (mixin package, see below)
+        ├── migrations.py                — Schema migration framework
         ├── scanner.py                  — Folder scanning and file discovery
         ├── thumbnail.py                — Image rendering pipeline (plain + PSD)
         ├── color_tagger.py             — Dominant color extraction algorithm
@@ -181,9 +181,16 @@ The theme is driven by design tokens stored in `tokens.json` and exposed through
 
 ## Data Layer
 
-### Database (`db.py`)
+### Database (`db/`)
 
-SQLite-backed repository using WAL journal mode for concurrent read/write access. All operations are thread-safe via a `threading.Lock`. See [database.md](database.md) for full schema documentation.
+SQLite-backed repository using WAL journal mode for concurrent read/write access. All operations are thread-safe via a `threading.Lock`. Implemented as a mixin package rather than a single module:
+
+- `_base.py` — Connection management, thread-safe SQL helpers (`_execute`, `_executemany`, `_executescript`, `_commit`), schema initialization, and the `normalize_path()` helper.
+- `_thumbnails.py`, `_tags.py`, `_favorites.py`, `_folder_cache.py`, `_editors.py` — CRUD operations for each table, each as a mixin class.
+- `database.py` — The final `Database` class, composed from `_Base` plus all the CRUD mixins.
+- `__init__.py` — Public surface: exports `Database` and `normalize_path`; everything else is an internal implementation detail.
+
+See [database.md](database.md) for full schema documentation.
 
 ### Migrations (`migrations.py`)
 

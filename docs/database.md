@@ -9,6 +9,7 @@ Tarragon uses a single SQLite database to store thumbnail metadata, tags, favori
 ```
 
 Platform-specific paths:
+
 - Linux: `~/.local/share/tarragon/tarragon.db`
 - macOS: `~/Library/Application Support/tarragon/tarragon.db`
 - Windows: `%APPDATA%\tarragon\tarragon.db`
@@ -104,6 +105,7 @@ CREATE TABLE IF NOT EXISTS file_tags (
 **Composite primary key**: `(path, tag_id, source)` — a file can have the same tag from different sources.
 
 **Tag sources**:
+
 - `user` — Manually assigned by the user through the tag panel.
 - `auto_color` — Automatically assigned by the color tagging algorithm.
 
@@ -158,6 +160,10 @@ Values are JSON-serialized by the `Settings` class before storage and deserializ
 | `color_tag_min_share` | `0.10` | float | Minimum pixel share for a color tag (10%) |
 | `color_tag_neutral_s_threshold` | `0.15` | float | Saturation threshold for neutral classification |
 | `cache_format` | `"png"` | str | Cache image format (`"png"` or `"jpeg"`) |
+| `cache_dir` | `null` | str \| null | Custom cache directory path; `null` uses the platform default |
+| `debug_mode` | `false` | bool | Enable verbose (DEBUG-level) logging in the Log panel |
+| `window_layout_state` | `null` | str \| null | Base64-encoded `QMainWindow.saveState()` — persisted dock arrangement |
+| `window_geometry_state` | `null` | str \| null | Base64-encoded `QWidget.saveGeometry()` — persisted window size/position/maximized state |
 
 ### `editor_associations`
 

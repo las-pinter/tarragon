@@ -22,6 +22,8 @@ DEFAULTS: dict[str, Any] = {
     "cache_dir": None,
     "cache_format": "png",
     "debug_mode": False,
+    "window_layout_state": None,
+    "window_geometry_state": None,
 }
 
 

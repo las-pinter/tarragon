@@ -208,3 +208,35 @@ class SettingsService:
     def set_debug_mode(self, value: bool) -> None:
         """Set whether debug logging is enabled."""
         self._settings.set("debug_mode", bool(value))
+
+    # ── window_layout_state ──────────────────────────────────────────────────
+    # Stores QMainWindow.saveState(), base64-encoded so the binary QByteArray
+    # survives the JSON round-trip through the settings store.
+
+    def get_window_layout_state(self) -> str | None:
+        """Get the saved dock layout (base64-encoded QByteArray), or None if unset."""
+        value = self._settings.get("window_layout_state")
+        if value is None:
+            return None
+        return str(value)
+
+    def set_window_layout_state(self, value: str | None) -> None:
+        """Set the saved dock layout (base64-encoded QByteArray)."""
+        self._settings.set("window_layout_state", value)
+
+    # ── window_geometry_state ────────────────────────────────────────────────
+    # Stores QWidget.saveGeometry(), base64-encoded. This is distinct from
+    # window_layout_state: geometry covers window size, position, and
+    # maximized/"windowed fullscreen" state, while layout_state covers dock
+    # arrangement. Qt keeps these as two separate QByteArrays.
+
+    def get_window_geometry_state(self) -> str | None:
+        """Get the saved window geometry (base64-encoded QByteArray), or None if unset."""
+        value = self._settings.get("window_geometry_state")
+        if value is None:
+            return None
+        return str(value)
+
+    def set_window_geometry_state(self, value: str | None) -> None:
+        """Set the saved window geometry (base64-encoded QByteArray)."""
+        self._settings.set("window_geometry_state", value)

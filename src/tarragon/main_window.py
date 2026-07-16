@@ -7,8 +7,8 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QAction, QIcon
+from PySide6.QtCore import QByteArray, Qt, QTimer
+from PySide6.QtGui import QAction, QCloseEvent, QIcon
 from PySide6.QtWidgets import (
     QApplication,
     QDockWidget,
@@ -107,6 +107,12 @@ class MainWindow(QMainWindow):
         self.log_dock: QDockWidget
         self._create_docks()
 
+        # Restore the user's last dock arrangement, if one was saved.
+        # Tracked so setup_widgets() knows whether to apply the
+        # first-run default (Log panel hidden) or leave the restored
+        # visibility alone.
+        self._layout_restored: bool = self._restore_layout_state()
+
         # ── Menu bar and actions ────────────────────────────────────────
         self._setup_actions()
 
@@ -150,6 +156,10 @@ class MainWindow(QMainWindow):
         drag, resize, float, or tab them together. QMainWindow always
         requires *some* central widget, so we give it an invisible,
         zero-size placeholder and let dock splits cover the whole window.
+
+        The Log dock is added to the bottom area but hidden by default
+        on first run (see setup_widgets(); a previously-saved layout
+        overrides this).
         """
         # Enable dock nesting - required for split layouts
         self.setDockNestingEnabled(True)
@@ -162,17 +172,24 @@ class MainWindow(QMainWindow):
         placeholder.setMaximumSize(0, 0)
         self.setCentralWidget(placeholder)
 
-        # Create docks — all areas allowed on all four, for full rearrangement freedom
+        # Create docks — all areas allowed on all four, for full rearrangement
+        # freedom. objectName is required (not just the title) for
+        # QMainWindow.saveState()/restoreState() to reliably identify each
+        # dock across sessions.
         self.sidebar_dock = QDockWidget("Library", self)
+        self.sidebar_dock.setObjectName("sidebar_dock")
         self.sidebar_dock.setAllowedAreas(Qt.DockWidgetArea.AllDockWidgetAreas)
 
         self.grid_dock = QDockWidget("Gallery", self)
+        self.grid_dock.setObjectName("grid_dock")
         self.grid_dock.setAllowedAreas(Qt.DockWidgetArea.AllDockWidgetAreas)
 
         self.preview_dock = QDockWidget("Preview", self)
+        self.preview_dock.setObjectName("preview_dock")
         self.preview_dock.setAllowedAreas(Qt.DockWidgetArea.AllDockWidgetAreas)
 
         self.log_dock = QDockWidget("Log", self)
+        self.log_dock.setObjectName("log_dock")
         self.log_dock.setAllowedAreas(Qt.DockWidgetArea.AllDockWidgetAreas)
 
         # Seed the initial arrangement. Since the central widget has no
@@ -191,6 +208,71 @@ class MainWindow(QMainWindow):
             [sidebar_width, preview_width],
             Qt.Orientation.Horizontal,
         )
+
+    # ── Layout Persistence ───────────────────────────────────────────────
+
+    def _restore_layout_state(self) -> bool:
+        """Restore a previously-saved window geometry and dock arrangement.
+
+        Geometry (size, position, maximized/"windowed fullscreen" state)
+        and dock layout are two separate QByteArrays in Qt, restored
+        independently here. Geometry is restored on a best-effort basis;
+        only dock-layout success is reported back, since that's what
+        setup_widgets() needs to decide the Log panel's default visibility.
+
+        Returns:
+            True if a saved dock layout was found and applied, False
+            otherwise (first run, corrupt data, or no settings service
+            available).
+        """
+        if self._settings_service is None:
+            return False
+
+        encoded_geometry = self._settings_service.get_window_geometry_state()
+        if encoded_geometry:
+            try:
+                geometry_raw = QByteArray.fromBase64(encoded_geometry.encode("ascii"))
+            except (ValueError, UnicodeEncodeError):
+                logger.warning("Corrupt window_geometry_state value; ignoring", exc_info=True)
+            else:
+                if not self.restoreGeometry(geometry_raw):
+                    logger.warning("Failed to restore window geometry (incompatible or corrupt state)")
+
+        encoded_layout = self._settings_service.get_window_layout_state()
+        if not encoded_layout:
+            return False
+        try:
+            layout_raw = QByteArray.fromBase64(encoded_layout.encode("ascii"))
+        except (ValueError, UnicodeEncodeError):
+            logger.warning("Corrupt window_layout_state value; ignoring", exc_info=True)
+            return False
+        if not self.restoreState(layout_raw):
+            logger.warning("Failed to restore dock layout (incompatible or corrupt state)")
+            return False
+        return True
+
+    def _save_layout_state(self) -> None:
+        """Persist the current window geometry and dock arrangement."""
+        if self._settings_service is None:
+            return
+
+        geometry_raw: QByteArray = self.saveGeometry()
+        encoded_geometry = bytes(geometry_raw.toBase64()).decode("ascii")
+        self._settings_service.set_window_geometry_state(encoded_geometry)
+
+        layout_raw: QByteArray = self.saveState()
+        encoded_layout = bytes(layout_raw.toBase64()).decode("ascii")
+        self._settings_service.set_window_layout_state(encoded_layout)
+
+    def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802
+        """Save the dock layout before the window closes.
+
+        Subclasses (e.g. the application MainWindow in main.py) that
+        override closeEvent for their own teardown should call
+        super().closeEvent(event) so this still runs.
+        """
+        self._save_layout_state()
+        super().closeEvent(event)
 
     # ── Widget Setup ─────────────────────────────────────────────────
 
@@ -273,7 +355,10 @@ class MainWindow(QMainWindow):
         # Log panel — application log output in dedicated dock
         self.log_panel = LogPanel(parent=self)
         self.log_dock.setWidget(self.log_panel)
-        self.log_dock.hide()
+        # Hidden by default on first run only — a restored layout already
+        # encodes whatever visibility the user last left it in.
+        if not self._layout_restored:
+            self.log_dock.hide()
 
         # Set up logging handler to route Python logs into the log panel
         self._log_handler = QtLogHandler(self.log_panel)

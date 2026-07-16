@@ -97,11 +97,14 @@ class MainWindow(_MainWindow):
         # forcefully terminates any stuck worker processes.
         if self._thumbnail_service is not None:
             self._thumbnail_service.shutdown()
+        # super().closeEvent() saves the dock layout via the settings
+        # service, which writes through to the database — it must run
+        # before the database connection below is closed.
+        super().closeEvent(event)
         if isinstance(self._settings, Settings):
             self._settings.close()
         if isinstance(self._database, Database):
             self._database.close()
-        super().closeEvent(event)
         # Force immediate exit — bypasses atexit handlers that may hang
         # on ProcessPoolExecutor worker processes stuck in system calls.
         # Skip this during testing to allow pytest to clean up properly.

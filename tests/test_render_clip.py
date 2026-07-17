@@ -6,11 +6,9 @@ import io
 import sqlite3
 from pathlib import Path
 
-import pytest
 from PIL import Image
 
 from tarragon.thumbnail import render_clip_image
-
 
 # =========================================================================
 # Helper — build a synthetic .clip file

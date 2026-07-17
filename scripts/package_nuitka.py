@@ -142,7 +142,7 @@ if __name__ == "__main__":
         "--platform",
         choices=["linux", "windows", "macos"],
         default=None,
-        help=("Target platform for the build. " "If omitted, the current platform is auto-detected."),
+        help=("Target platform for the build. If omitted, the current platform is auto-detected."),
     )
     args = parser.parse_args()
     target = _resolve_platform(args.platform)

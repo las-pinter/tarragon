@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from PIL import Image, ImageOps
-from PySide6.QtCore import QSize, Qt, Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QImage, QPixmap, QResizeEvent
 from PySide6.QtWidgets import (
     QGraphicsOpacityEffect,
@@ -27,11 +27,11 @@ from PySide6.QtWidgets import (
 from tarragon.db import normalize_path
 from tarragon.image_utils import _EXIF_ORIENTATION_TAG, _apply_exif_from_original
 from tarragon.services.tag_service import TagService
-from tarragon.widgets.flow_layout import FlowLayout
-from tarragon.widgets.tag_pill import _TagPillWidget
 from tarragon.theme.color_buckets import BUCKET_COLORS, BUCKET_HEX_COLORS
 from tarragon.theme.colors import BG_SECONDARY
 from tarragon.theme.constants import MULTI_PREVIEW_MAX_DEFAULT, SM, XS
+from tarragon.widgets.flow_layout import FlowLayout
+from tarragon.widgets.tag_pill import _TagPillWidget
 
 logger = logging.getLogger(__name__)
 

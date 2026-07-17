@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 from PySide6.QtCore import QModelIndex, Qt
+
 from tarragon.models.thumbnail_model import ThumbnailModel
 from tarragon.thumbnail import RESOLUTION_FULL, RESOLUTION_PREVIEW, RESOLUTION_THUMBNAIL
 
@@ -326,4 +327,6 @@ class TestThumbnailModel:
         for i in range(100):
             idx = model.index(i, 0)
             thumb = model.data(idx, ThumbnailModel.ThumbnailRole256)
-            assert thumb == str(Path(f"/cache/256/file_{i:03d}.png")), f"Thumbnail for file_{i:03d}.jpg lost after unfilter"
+            assert thumb == str(Path(f"/cache/256/file_{i:03d}.png")), (
+                f"Thumbnail for file_{i:03d}.jpg lost after unfilter"
+            )

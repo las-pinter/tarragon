@@ -18,7 +18,6 @@ from PySide6.QtWidgets import QLabel, QWidget
 
 from tarragon.widgets.flow_layout import FlowLayout
 
-
 # =========================================================================
 # TestFlowLayout
 # =========================================================================

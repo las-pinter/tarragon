@@ -24,8 +24,8 @@ from tarragon.renderers.cache import (  # noqa: F401
 from tarragon.renderers.clip import render_clip_image  # noqa: F401
 from tarragon.renderers.plain import render_plain_image  # noqa: F401
 from tarragon.renderers.psd import (  # noqa: F401
-    _compute_worker_count,
     _composite_psd_in_process,
+    _compute_worker_count,
     _get_executor,
     _shutdown_executor,
     render_psd_image,

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import pytest
 from PIL import Image
+
 from tarragon.services.color_tagger import extract_dominant_color_tags
 
 # =========================================================================

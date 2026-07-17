@@ -1,11 +1,7 @@
 """Tests for the application entry point."""
 
-from collections.abc import Generator
 from pathlib import Path
 from typing import Any
-
-import pytest
-
 
 # ── Import Tests ───────────────────────────────────────────────────────
 

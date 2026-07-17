@@ -19,8 +19,8 @@ from tarragon.renderers.cache import (
 from tarragon.renderers.clip import render_clip_image
 from tarragon.renderers.plain import render_plain_image
 from tarragon.renderers.psd import (
-    _compute_worker_count,
     _composite_psd_in_process,
+    _compute_worker_count,
     _get_executor,
     _shutdown_executor,
     render_psd_image,

@@ -34,8 +34,8 @@ from tarragon.theme.colors import (
     CORAL_MUTED,
     TEXT_MUTED,
 )
-from tarragon.theme.file_type_badge import get_badge_colors
 from tarragon.theme.constants import GRID_GAP, THUMBNAIL_SIZE
+from tarragon.theme.file_type_badge import get_badge_colors
 from tarragon.theme.typography import SMALL_SIZE
 from tarragon.widgets.thumbnail_animator import ThumbnailAnimator
 

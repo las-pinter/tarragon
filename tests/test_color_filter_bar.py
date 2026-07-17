@@ -12,7 +12,8 @@ from __future__ import annotations
 from collections.abc import Generator
 
 import pytest
-from PySide6.QtWidgets import QApplication, QPushButton
+from PySide6.QtWidgets import QPushButton
+
 from tarragon.widgets.color_filter_bar import ColorFilterBar
 
 # ── Fixtures ────────────────────────────────────────────────────────────────

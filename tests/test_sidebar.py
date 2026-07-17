@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Generator
 from pathlib import Path
-from typing import Any, Generator
 
 import pytest
 from PySide6.QtCore import QModelIndex, Qt
-from PySide6.QtWidgets import QApplication, QLabel, QListView, QPushButton, QTreeView
+from PySide6.QtWidgets import QLabel, QListView, QPushButton, QTreeView
 
 from tarragon.db import Database
 from tarragon.models.favorites_model import FavoritesModel

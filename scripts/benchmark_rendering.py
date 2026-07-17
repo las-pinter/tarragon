@@ -17,14 +17,12 @@ from __future__ import annotations
 import argparse
 import io
 import statistics
-import sys
 import tempfile
 import time
 from pathlib import Path
 from typing import Any
 
 from PIL import Image, ImageDraw
-
 
 # ---------------------------------------------------------------------------
 # Test image generators
@@ -370,7 +368,7 @@ def main() -> None:
     args = parse_args()
     iterations = max(1, args.iterations)
 
-    print(f"Tarragon Rendering Benchmark")
+    print("Tarragon Rendering Benchmark")
     print(f"Iterations per test: {iterations}")
     print()
 

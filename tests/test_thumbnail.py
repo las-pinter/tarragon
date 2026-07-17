@@ -507,6 +507,7 @@ def test_render_plain_image_converts_cmyk_to_rgba(tmp_path: Path) -> None:
 def test_render_plain_image_with_icc_profile(tmp_path: Path) -> None:
     """render_plain_image handles images with embedded ICC profiles."""
     from PIL import ImageCms
+
     from tarragon.thumbnail import render_plain_image
 
     img_path = tmp_path / "icc_profile.jpg"
@@ -1143,6 +1144,7 @@ def test_render_psd_image_worker_returns_valid_bytes(tmp_path: Path) -> None:
     import io
 
     from PIL import Image as PILImage
+
     from tarragon.thumbnail import render_psd_image
 
     # Create a real PNG image as bytes
@@ -1176,6 +1178,7 @@ def test_render_psd_image_with_tiny_psd_file(tmp_path: Path) -> None:
     and psd-tools library.
     """
     from psd_tools import PSDImage
+
     from tarragon.thumbnail import render_psd_image
 
     psd_path = tmp_path / "tiny_test.psd"
@@ -1197,6 +1200,7 @@ def test_render_psd_image_with_tiny_psd_file(tmp_path: Path) -> None:
 def test_render_psd_image_resizes_large_composite(tmp_path: Path) -> None:
     """render_psd_image resizes composited output when target_size is specified."""
     from psd_tools import PSDImage
+
     from tarragon.thumbnail import MASTER_LONG_EDGE, render_psd_image
 
     psd_path = tmp_path / "large_test.psd"

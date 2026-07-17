@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+
 from tarragon.db import Database
 from tarragon.settings import DEFAULTS, Settings
 

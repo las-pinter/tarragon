@@ -5,11 +5,13 @@ Usage:
     python scripts/package_nuitka.py
     python scripts/package_nuitka.py --platform linux
     python scripts/package_nuitka.py --platform windows
+    python scripts/package_nuitka.py --platform macos
 
 System dependencies:
     - Python packages: nuitka, patchelf, zstandard
     - Linux: python3-dev (for headers), patchelf (apt-get install python3-dev patchelf)
     - Windows: Visual Studio Build Tools (MSVC compiler)
+    - macOS: Xcode command line tools (clang) — xcode-select --install
     - Recommended: ccache (for faster repeat builds — apt-get install ccache)
 """
 
@@ -37,7 +39,7 @@ def _find_ccache() -> str | None:
 
 
 def _resolve_platform(explicit: str | None) -> str:
-    """Return the target platform string: 'linux' or 'windows'.
+    """Return the target platform string: 'linux', 'windows', or 'macos'.
 
     If *explicit* is given (from --platform), validate and return it.
     Otherwise, auto-detect from the running system.
@@ -50,6 +52,8 @@ def _resolve_platform(explicit: str | None) -> str:
         return "linux"
     if sys.platform.startswith("win32"):
         return "windows"
+    if sys.platform.startswith("darwin"):
+        return "macos"
     return sys.platform  # best-effort fallback
 
 
@@ -108,8 +112,11 @@ def build(target_platform: str) -> None:
 
     if target_platform == "windows":
         cmd.append("--mingw64")
-    else:
+    elif target_platform == "linux":
         cmd.append("--gcc")
+    # macOS: no explicit compiler flag — Nuitka uses the system Clang
+    # toolchain (Xcode command line tools) by default, which is what's
+    # available on GitHub's macos-latest runners.
 
     cmd.append(str(entry_point))
 
@@ -123,7 +130,7 @@ def build(target_platform: str) -> None:
     subprocess.run(cmd, check=True, cwd=str(project_root), env=env)
 
     output_file = project_root / "dist" / "tarragon"
-    print(f"\n RELEASE BUILD COMPLETE!")
+    print("\n RELEASE BUILD COMPLETE!")
     print(f"   Output: {output_file}")
 
 
@@ -133,9 +140,9 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--platform",
-        choices=["linux", "windows"],
+        choices=["linux", "windows", "macos"],
         default=None,
-        help=("Target platform for the build. If omitted, the current platform is auto-detected."),
+        help=("Target platform for the build. " "If omitted, the current platform is auto-detected."),
     )
     args = parser.parse_args()
     target = _resolve_platform(args.platform)

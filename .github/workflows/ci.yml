@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
   pull_request:
-    branches: [main]
+    branches: [main, dev]
 
 concurrency:
   group: ci-${{ github.head_ref || github.run_id }}
@@ -32,10 +32,10 @@ jobs:
       - name: Install dependencies
         run: pip install -e .[dev]
 
-      - name: Pre-commit validation (all hooks)
-        run: pre-commit run --all-files
-
+      # Ruff, ruff-format, and mypy are checked once in lint.yml rather than
+      # here — running the full pre-commit suite across all 4 os/python
+      # matrix legs was pure duplicated work with no additional coverage.
       - name: Run tests
         env:
           QT_QPA_PLATFORM: offscreen
-        run: pytest -v --tb=short || [ $? -eq 5 ]
+        run: pytest -v --tb=short

@@ -257,11 +257,11 @@ class MainWindow(QMainWindow):
             return
 
         geometry_raw: QByteArray = self.saveGeometry()
-        encoded_geometry = geometry_raw.toBase64().data().decode("ascii")
+        encoded_geometry = bytes(geometry_raw.toBase64().data()).decode("ascii")
         self._settings_service.set_window_geometry_state(encoded_geometry)
 
         layout_raw: QByteArray = self.saveState()
-        encoded_layout = layout_raw.toBase64().data().decode("ascii")
+        encoded_layout = bytes(layout_raw.toBase64().data()).decode("ascii")
         self._settings_service.set_window_layout_state(encoded_layout)
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802

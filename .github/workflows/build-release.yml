@@ -4,8 +4,32 @@ on:
   release:
     types: [published]
 
+permissions:
+  contents: write
+
 jobs:
+  # Re-runs the test suite against the exact commit the release tag points
+  # at. This is deliberately independent of ci.yml's history for that ref —
+  # a release can be cut from a commit or tag that predates any push/PR
+  # event, so we can't assume ci.yml ever ran against it. build depends on
+  # this passing before compiling or publishing anything.
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+      - name: Install dependencies
+        run: pip install -e .[dev]
+      - name: Run tests
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: pytest -v --tb=short
+
   build:
+    needs: test
     strategy:
       matrix:
         include:
@@ -13,6 +37,8 @@ jobs:
             binary-name: tarragon
           - os: windows-latest
             binary-name: Tarragon.exe
+          - os: macos-latest
+            binary-name: tarragon-macos
 
     runs-on: ${{ matrix.os }}
 
@@ -21,6 +47,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+          cache: "pip"
       - name: Install dependencies
         run: pip install -e ".[build]"
       - name: Build binary
@@ -30,10 +57,23 @@ jobs:
         run: |
           if [ "$RUNNER_OS" == "Linux" ]; then
             mv dist/tarragon dist/${{ matrix.binary-name }}
+          elif [ "$RUNNER_OS" == "macOS" ]; then
+            mv dist/tarragon dist/${{ matrix.binary-name }}
           else
             mv dist/tarragon.exe dist/${{ matrix.binary-name }}
+          fi
+      - name: Generate checksum
+        shell: bash
+        run: |
+          cd dist
+          if [ "$RUNNER_OS" == "macOS" ]; then
+            shasum -a 256 ${{ matrix.binary-name }} > ${{ matrix.binary-name }}.sha256
+          else
+            sha256sum ${{ matrix.binary-name }} > ${{ matrix.binary-name }}.sha256
           fi
       - name: Upload to release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/${{ matrix.binary-name }}
+          files: |
+            dist/${{ matrix.binary-name }}
+            dist/${{ matrix.binary-name }}.sha256

@@ -106,14 +106,15 @@ class ThumbnailModel(QAbstractListModel):
             cache_path: The cached file path on disk.
             resolution: Pixel resolution (256, 1024) or None for full.
         """
-        if source_path not in self._thumbnails:
-            self._thumbnails[source_path] = {}
-        self._thumbnails[source_path][resolution] = cache_path
-        logger.debug("set_thumbnail: path=%s, resolution=%s, cache=%s", source_path, resolution, cache_path)
+        normalized = str(Path(source_path))
+        if normalized not in self._thumbnails:
+            self._thumbnails[normalized] = {}
+        self._thumbnails[normalized][resolution] = cache_path
+        logger.debug("set_thumbnail: path=%s, resolution=%s, cache=%s", normalized, resolution, cache_path)
 
         # Find row and emit dataChanged for the specific role
         for row, path in enumerate(self._paths):
-            if str(path) == source_path:
+            if str(path) == normalized:
                 index = self.index(row)
                 role = self._resolution_to_role(resolution)
                 self.dataChanged.emit(index, index, [role])

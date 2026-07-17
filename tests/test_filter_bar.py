@@ -360,11 +360,11 @@ class TestShortFolderName:
 
     def test_long_path_shows_last_two(self) -> None:
         """Long paths show only the last two components."""
-        assert _short_folder_name("/home/user/photos/vacation") == "photos/vacation"
+        assert _short_folder_name("/home/user/photos/vacation") == str(Path("photos/vacation"))
 
     def test_three_components(self) -> None:
         """Three-component paths show the last two."""
-        assert _short_folder_name("/a/b/c") == "b/c"
+        assert _short_folder_name("/a/b/c") == str(Path("b/c"))
 
 
 # =========================================================================

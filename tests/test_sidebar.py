@@ -343,4 +343,4 @@ class TestSidebarWidgetFunctionality:
         tree.clicked.emit(child_index)
 
         assert len(captured) == 1
-        assert captured[0] == str(subfolder)
+        assert captured[0] == str(subfolder).replace("\\", "/")

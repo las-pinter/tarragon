@@ -114,12 +114,12 @@ class TestQueryService:
 
         assert len(result) == 6
         paths = {str(p) for p in result}
-        assert "/test/photos/sunset_beach.png" in paths
-        assert "/test/photos/forest_path.jpg" in paths
-        assert "/test/photos/blue_ocean.jpg" in paths
-        assert "/test/photos/green_valley.png" in paths
-        assert "/test/photos/mountain_top.jpg" in paths
-        assert "/test/photos/doc.txt" in paths
+        assert str(Path("/test/photos/sunset_beach.png")) in paths
+        assert str(Path("/test/photos/forest_path.jpg")) in paths
+        assert str(Path("/test/photos/blue_ocean.jpg")) in paths
+        assert str(Path("/test/photos/green_valley.png")) in paths
+        assert str(Path("/test/photos/mountain_top.jpg")) in paths
+        assert str(Path("/test/photos/doc.txt")) in paths
 
     def test_empty_filters_returns_ordered(
         self,
@@ -140,7 +140,7 @@ class TestQueryService:
         result = service.query(folder_filters={"/test/photos/"}, filename_filter="beach")
 
         paths = {str(p) for p in result}
-        assert paths == {"/test/photos/sunset_beach.png"}
+        assert paths == {str(Path("/test/photos/sunset_beach.png"))}
 
     def test_filename_filter_case_insensitive(
         self,
@@ -151,7 +151,7 @@ class TestQueryService:
         result = service.query(folder_filters={"/test/photos/"}, filename_filter="BEACH")
 
         paths = {str(p) for p in result}
-        assert paths == {"/test/photos/sunset_beach.png"}
+        assert paths == {str(Path("/test/photos/sunset_beach.png"))}
 
     def test_filename_filter_special_chars(
         self,
@@ -181,8 +181,8 @@ class TestQueryService:
         paths = {str(p) for p in result}
         # sunset_beach.png and blue_ocean.jpg have BOTH beach AND vacation
         assert paths == {
-            "/test/photos/sunset_beach.png",
-            "/test/photos/blue_ocean.jpg",
+            str(Path("/test/photos/sunset_beach.png")),
+            str(Path("/test/photos/blue_ocean.jpg")),
         }
 
     def test_tag_filter_no_matches(self, service: QueryService, tag_ids: dict[str, int]) -> None:
@@ -205,8 +205,8 @@ class TestQueryService:
         paths = {str(p) for p in result}
         # forest_path.jpg and green_valley.png have "green" tag
         assert paths == {
-            "/test/photos/forest_path.jpg",
-            "/test/photos/green_valley.png",
+            str(Path("/test/photos/forest_path.jpg")),
+            str(Path("/test/photos/green_valley.png")),
         }
 
     def test_color_tag_and_semantics_multiple(self, service: QueryService, tag_ids: dict[str, int]) -> None:
@@ -238,8 +238,8 @@ class TestQueryService:
         # forest_path.jpg → nature (user) + green (auto_color)  ✓
         # green_valley.png → nature (user) + green (auto_color) ✓
         assert paths == {
-            "/test/photos/forest_path.jpg",
-            "/test/photos/green_valley.png",
+            str(Path("/test/photos/forest_path.jpg")),
+            str(Path("/test/photos/green_valley.png")),
         }
 
     def test_empty_folder_path_returns_all(
@@ -301,9 +301,9 @@ class TestQueryService:
         paths = {str(p) for p in result}
         # beach tag: sunset_beach.png, blue_ocean.jpg (photos) + beach.png (other)
         assert paths == {
-            "/test/photos/sunset_beach.png",
-            "/test/photos/blue_ocean.jpg",
-            "/test/other/beach.png",
+            str(Path("/test/photos/sunset_beach.png")),
+            str(Path("/test/photos/blue_ocean.jpg")),
+            str(Path("/test/other/beach.png")),
         }
 
     def test_global_query_with_color_filter(
@@ -316,8 +316,8 @@ class TestQueryService:
         paths = {str(p) for p in result}
         # warm: sunset_beach.png (photos) + beach.png (other)
         assert paths == {
-            "/test/photos/sunset_beach.png",
-            "/test/other/beach.png",
+            str(Path("/test/photos/sunset_beach.png")),
+            str(Path("/test/other/beach.png")),
         }
 
     def test_global_query_with_filename_filter(
@@ -329,8 +329,8 @@ class TestQueryService:
         result = service.query(folder_filters=set(), filename_filter="beach")
         paths = {str(p) for p in result}
         assert paths == {
-            "/test/photos/sunset_beach.png",
-            "/test/other/beach.png",
+            str(Path("/test/photos/sunset_beach.png")),
+            str(Path("/test/other/beach.png")),
         }
 
     # ── Multi-folder OR logic ─────────────────────────────────────────
@@ -377,7 +377,7 @@ class TestQueryService:
 
         result = svc.query(folder_filters={"/photos"})
         paths = {str(p) for p in result}
-        assert paths == {"/photos/img.png"}
+        assert paths == {str(Path("/photos/img.png"))}
 
     # ── Windows path separator normalization ──────────────────────
 
@@ -419,8 +419,8 @@ class TestQueryService:
         result = svc.query(folder_filters={"D:\\Dropbox\\Art\\Speedpaintings"})
         paths = {str(p) for p in result}
         assert paths == {
-            "D:/Dropbox/Art/Speedpaintings/img1.jpg",
-            "D:/Dropbox/Art/Speedpaintings/img2.jpg",
+            str(Path("D:/Dropbox/Art/Speedpaintings/img1.jpg")),
+            str(Path("D:/Dropbox/Art/Speedpaintings/img2.jpg")),
         }
 
     def test_folder_filter_mixed_separators(self, db: Database) -> None:
@@ -438,12 +438,12 @@ class TestQueryService:
         # Forward slash query should find forward-slash stored paths
         result_fwd = svc.query(folder_filters={"D:/Dropbox/Mixed"})
         fwd_paths = {str(p) for p in result_fwd}
-        assert "D:/Dropbox/Mixed/test_mixed.png" in fwd_paths
+        assert str(Path("D:/Dropbox/Mixed/test_mixed.png")) in fwd_paths
 
         # Backslash query should also find them
         result_bwd = svc.query(folder_filters={"D:\\Dropbox\\Mixed"})
         bwd_paths = {str(p) for p in result_bwd}
-        assert "D:/Dropbox/Mixed/test_mixed.png" in bwd_paths
+        assert str(Path("D:/Dropbox/Mixed/test_mixed.png")) in bwd_paths
 
         # Both queries should return the same results
         assert fwd_paths == bwd_paths

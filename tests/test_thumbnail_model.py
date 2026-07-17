@@ -58,7 +58,7 @@ class TestThumbnailModel:
         index = model.index(0, 0)
         result = model.data(index, ThumbnailModel.PathRole)
 
-        assert result == "/some/long/path/image.jpg"
+        assert result == str(Path("/some/long/path/image.jpg"))
         assert isinstance(result, str)
 
     def test_invalid_index_returns_none(self) -> None:
@@ -124,7 +124,7 @@ class TestThumbnailModel:
 
         index = model.index(0, 0)
         assert model.data(index, Qt.ItemDataRole.DisplayRole) == "照片.jpg"
-        assert model.data(index, ThumbnailModel.PathRole) == "/data/图片/照片.jpg"
+        assert model.data(index, ThumbnailModel.PathRole) == str(Path("/data/图片/照片.jpg"))
         assert isinstance(model.data(index, ThumbnailModel.PathRole), str)
 
     def test_data_with_special_characters_in_path(self) -> None:
@@ -134,7 +134,7 @@ class TestThumbnailModel:
 
         index = model.index(0, 0)
         assert model.data(index, Qt.ItemDataRole.DisplayRole) == "file with spaces (1).png"
-        assert model.data(index, ThumbnailModel.PathRole) == "/data/file with spaces (1).png"
+        assert model.data(index, ThumbnailModel.PathRole) == str(Path("/data/file with spaces (1).png"))
 
     def test_data_with_deeply_nested_path(self) -> None:
         """data() handles deeply nested paths (50+ levels deep)."""
@@ -189,7 +189,7 @@ class TestThumbnailModel:
         assert model.rowCount() == 1
         index = model.index(0, 0)
         assert model.data(index, Qt.ItemDataRole.DisplayRole) == "file_49.jpg"
-        assert model.data(index, ThumbnailModel.PathRole) == "/path/file_49.jpg"
+        assert model.data(index, ThumbnailModel.PathRole) == str(Path("/path/file_49.jpg"))
 
     # ------------------------------------------------------------------
     # Multi-resolution thumbnail role tests
@@ -218,9 +218,9 @@ class TestThumbnailModel:
         model.set_thumbnail("/test/image.jpg", Path("/cache/full/test/image.png"), resolution=RESOLUTION_FULL)
 
         index = model.index(0, 0)
-        assert model.data(index, ThumbnailModel.ThumbnailRole256) == "/cache/256/test/image.png"
-        assert model.data(index, ThumbnailModel.ThumbnailRole1024) == "/cache/1024/test/image.png"
-        assert model.data(index, ThumbnailModel.ThumbnailRoleFull) == "/cache/full/test/image.png"
+        assert model.data(index, ThumbnailModel.ThumbnailRole256) == str(Path("/cache/256/test/image.png"))
+        assert model.data(index, ThumbnailModel.ThumbnailRole1024) == str(Path("/cache/1024/test/image.png"))
+        assert model.data(index, ThumbnailModel.ThumbnailRoleFull) == str(Path("/cache/full/test/image.png"))
 
     # ------------------------------------------------------------------
     # Bug 3 regression: set_paths preserves cached thumbnails
@@ -242,8 +242,8 @@ class TestThumbnailModel:
         # Thumbnails for remaining paths should be preserved
         idx_a = model.index(0, 0)
         idx_b = model.index(1, 0)
-        assert model.data(idx_a, ThumbnailModel.ThumbnailRole256) == "/cache/256/one.png"
-        assert model.data(idx_b, ThumbnailModel.ThumbnailRole256) == "/cache/256/two.png"
+        assert model.data(idx_a, ThumbnailModel.ThumbnailRole256) == str(Path("/cache/256/one.png"))
+        assert model.data(idx_b, ThumbnailModel.ThumbnailRole256) == str(Path("/cache/256/two.png"))
 
     def test_set_paths_preserves_thumbnails_for_removed_paths(self) -> None:
         """set_paths() keeps cached thumbnails even for paths no longer in the list.
@@ -261,8 +261,8 @@ class TestThumbnailModel:
         model.set_paths([Path("/c/three.jpg")])
 
         # Internal dict should still contain old entries (not pruned)
-        assert "/a/one.jpg" in model._thumbnails
-        assert "/b/two.jpg" in model._thumbnails
+        assert str(Path("/a/one.jpg")) in model._thumbnails
+        assert str(Path("/b/two.jpg")) in model._thumbnails
         assert model.rowCount() == 1
 
     def test_set_paths_with_same_paths_preserves_all_thumbnails(self) -> None:
@@ -279,8 +279,8 @@ class TestThumbnailModel:
 
         idx_a = model.index(0, 0)
         idx_b = model.index(1, 0)
-        assert model.data(idx_a, ThumbnailModel.ThumbnailRole256) == "/cache/256/one.png"
-        assert model.data(idx_b, ThumbnailModel.ThumbnailRole1024) == "/cache/1024/two.png"
+        assert model.data(idx_a, ThumbnailModel.ThumbnailRole256) == str(Path("/cache/256/one.png"))
+        assert model.data(idx_b, ThumbnailModel.ThumbnailRole1024) == str(Path("/cache/1024/two.png"))
 
     def test_set_paths_empty_list_preserves_cached_thumbnails(self) -> None:
         """set_paths([]) removes all paths but preserves cached thumbnails.
@@ -296,7 +296,7 @@ class TestThumbnailModel:
 
         assert model.rowCount() == 0
         # Thumbnails are preserved (not pruned)
-        assert "/a/one.jpg" in model._thumbnails
+        assert str(Path("/a/one.jpg")) in model._thumbnails
 
     def test_set_paths_filter_unfilter_preserves_all_thumbnails(self) -> None:
         """Simulates color filter: filter to subset, then restore — all thumbnails survive.
@@ -326,4 +326,4 @@ class TestThumbnailModel:
         for i in range(100):
             idx = model.index(i, 0)
             thumb = model.data(idx, ThumbnailModel.ThumbnailRole256)
-            assert thumb == f"/cache/256/file_{i:03d}.png", f"Thumbnail for file_{i:03d}.jpg lost after unfilter"
+            assert thumb == str(Path(f"/cache/256/file_{i:03d}.png")), f"Thumbnail for file_{i:03d}.jpg lost after unfilter"

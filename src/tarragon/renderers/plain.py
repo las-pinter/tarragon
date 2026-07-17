@@ -31,7 +31,7 @@ def render_plain_image(file_path: Path, target_size: int | None = None) -> Image
     decoded — the caller should treat ``None`` as "skip / use placeholder".
     """
     try:
-        img = Image.open(file_path)
+        img: Image.Image = Image.open(file_path)
         img = ImageOps.exif_transpose(img) or img  # Apply EXIF rotation
         if img.mode not in ("RGBA", "RGB"):
             img = img.convert("RGBA")

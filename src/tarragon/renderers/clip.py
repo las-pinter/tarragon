@@ -102,7 +102,7 @@ def render_clip_image(
     png_bytes = blob[png_start:png_end]
 
     try:
-        img = Image.open(io.BytesIO(png_bytes))
+        img: Image.Image = Image.open(io.BytesIO(png_bytes))
         img.load()  # Force decode so we catch corrupt PNG data now
     except Exception:
         logger.warning("render_clip_image: failed to decode PNG from %s", file_path)

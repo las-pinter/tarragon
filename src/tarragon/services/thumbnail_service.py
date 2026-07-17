@@ -5,16 +5,17 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from PIL import Image
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal, Slot
 
 from tarragon.db import Database
+from tarragon.renderers.psd import _get_executor
 from tarragon.scanner import FileInfo
 from tarragon.services.settings_service import SettingsService
-from tarragon.renderers.psd import _get_executor
 from tarragon.thumbnail import (
     RESOLUTION_FULL,
     RESOLUTION_PREVIEW,

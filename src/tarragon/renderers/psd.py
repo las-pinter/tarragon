@@ -10,7 +10,7 @@ from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 import psutil
-from PIL import Image, ImageOps
+from PIL import Image
 
 logger = logging.getLogger(__name__)
 

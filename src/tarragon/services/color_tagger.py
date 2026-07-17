@@ -94,7 +94,13 @@ def extract_dominant_color_tags(
 
     # 6. For each color: convert to HSV, map to bucket, accumulate share
     bucket_shares: dict[str, float] = {}
-    for count, (r, g, b) in colors:
+    for count, color in colors:
+        # getcolors() is typed to allow a bare int/float pixel value for
+        # some image modes; since rgb_quantized was explicitly converted
+        # to "RGB" above, color is always an (r, g, b) tuple at runtime.
+        if not isinstance(color, tuple):
+            continue
+        r, g, b = color
         rn, gn, bn = r / 255.0, g / 255.0, b / 255.0
         h, s, v = _rgb_to_hsv(rn, gn, bn)
 

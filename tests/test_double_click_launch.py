@@ -15,7 +15,6 @@ from unittest.mock import patch
 import pytest
 from PySide6.QtCore import QPointF, Qt
 from PySide6.QtGui import QMouseEvent
-from PySide6.QtWidgets import QApplication
 from tarragon.db import Database
 from tarragon.main_window import MainWindow
 from tarragon.models.thumbnail_model import ThumbnailModel
@@ -99,7 +98,7 @@ def test_double_click_emits_signal(grid_with_model: tuple[ThumbnailGrid, Thumbna
 
     # Assert: signal emitted with the correct path
     assert len(emitted) == 1
-    assert emitted[0] == "/fake/images/photo_001.png"
+    assert emitted[0] == str(Path("/fake/images/photo_001.png"))
 
 
 # ── Test 2: Double-click on empty area does nothing ─────────────

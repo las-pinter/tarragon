@@ -157,5 +157,12 @@ class QtLogHandler(logging.Handler):
         try:
             msg = self.format(record)
             self._log_panel._log_signal.emit(msg, record.levelno)
+        except RuntimeError:
+            # Widget destroyed — remove ourselves from loggers so we
+            # never try to emit to a dead panel again.
+            for logger_name in [None, "tarragon", "tarragon.db"]:
+                logger = logging.getLogger(logger_name)
+                if self in logger.handlers:
+                    logger.removeHandler(self)
         except Exception:
             self.handleError(record)

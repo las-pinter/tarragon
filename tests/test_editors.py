@@ -65,7 +65,7 @@ def test_substitute_file_path_handles_spaces() -> None:
 
     args = substitute_file_path(template, file_path)
 
-    assert args == ["gimp", "/home/user/My Photos/image.png"]
+    assert args == ["gimp", str(Path("/home/user/My Photos/image.png"))]
 
 
 def test_substitute_file_path_handles_special_chars() -> None:
@@ -75,7 +75,7 @@ def test_substitute_file_path_handles_special_chars() -> None:
 
     args = substitute_file_path(template, file_path)
 
-    assert args == ["editor", "--open", "/tmp/file (copy) [v2].txt"]
+    assert args == ["editor", "--open", str(Path("/tmp/file (copy) [v2].txt"))]
 
 
 def test_substitute_file_path_raises_without_placeholder() -> None:
@@ -94,7 +94,7 @@ def test_launch_editor_non_blocking(db: Database) -> None:
     with patch("tarragon.services.editors.subprocess.Popen") as mock_popen:
         launch_editor(db, Path("/tmp/img.png"), ".png")
 
-    mock_popen.assert_called_once_with(["gimp", "/tmp/img.png"], shell=False)
+    mock_popen.assert_called_once_with(["gimp", str(Path("/tmp/img.png"))], shell=False)
 
 
 def test_launch_editor_fallback_to_os_default(db: Database) -> None:
@@ -106,7 +106,7 @@ def test_launch_editor_fallback_to_os_default(db: Database) -> None:
         mock_sys.platform = "linux"
         launch_editor(db, Path("/tmp/img.png"), ".unknown")
 
-    mock_popen.assert_called_once_with(["xdg-open", "/tmp/img.png"])
+    mock_popen.assert_called_once_with(["xdg-open", str(Path("/tmp/img.png"))])
 
 
 def test_launch_editor_windows_uses_startfile(db: Database) -> None:
@@ -118,7 +118,7 @@ def test_launch_editor_windows_uses_startfile(db: Database) -> None:
         mock_sys.platform = "win32"
         launch_editor(db, Path("C:\\img.png"), ".unknown")
 
-    mock_startfile.assert_called_once_with("C:\\img.png")
+    mock_startfile.assert_called_once_with(str(Path("C:\\img.png")))
 
 
 def test_launch_editor_linux_uses_xdg_open(db: Database) -> None:
@@ -130,4 +130,4 @@ def test_launch_editor_linux_uses_xdg_open(db: Database) -> None:
         mock_sys.platform = "linux"
         launch_editor(db, Path("/home/user/photo.jpg"), ".nope")
 
-    mock_popen.assert_called_once_with(["xdg-open", "/home/user/photo.jpg"])
+    mock_popen.assert_called_once_with(["xdg-open", str(Path("/home/user/photo.jpg"))])

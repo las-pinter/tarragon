@@ -42,7 +42,7 @@ jobs:
           - os: windows-latest
             binary-name: Tarragon.exe
           - os: macos-latest
-            binary-name: tarragon-macos
+            binary-name: tarragon
 
     runs-on: ${{ matrix.os }}
 

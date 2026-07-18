@@ -64,9 +64,7 @@ jobs:
           sudo apt-get install -y libegl1 libgl1 libxkbcommon0 libdbus-1-3
 
       # NOTE: this repo is src-layout — the entry point is src/tarragon/main.py,
-      # not tarragon/main.py. A build failure here is a real failure: it is
-      # NOT swallowed, since this job exists specifically to catch Nuitka/
-      # PySide6 packaging regressions before they reach a release build.
+      # not tarragon/main.py.
       - name: Attempt minimal Nuitka compilation
         env:
           QT_QPA_PLATFORM: offscreen

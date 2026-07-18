@@ -95,6 +95,7 @@ def build(target_platform: str) -> None:
         sys.executable,
         "-m",
         "nuitka",
+        "--assume-yes-for-downloads",
         "--standalone",
         "--windows-console-mode=disable",
         "--static-libpython=no",

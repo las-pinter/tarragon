@@ -19,7 +19,6 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
     "Operating System :: POSIX :: Linux",
-    "Operating System :: MacOS",
     "Operating System :: Microsoft :: Windows",
     "Topic :: Multimedia :: Graphics :: Viewers",
 ]
@@ -33,11 +32,13 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = [
-    "pytest>=8.0",
-    "ruff>=0.4",
-    "pre-commit>=3.6",
+build = [
+    "nuitka>=2.0",
+    "patchelf; sys_platform == \"linux\"",
+    "zstandard>=0.20",
+    "ordered-set>=4.1",
 ]
+dev = ["mypy>=2.0", "pytest>=8.0", "pre-commit>=3.0", "types-psutil>=6.0"]
 
 [project.urls]
 Homepage = "https://github.com/las-pinter/tarragon"
@@ -55,8 +56,22 @@ select = ["E", "F", "I", "N", "W", "UP"]
 quote-style = "double"
 indent-style = "space"
 
+[tool.setuptools.package-data]
+tarragon = ["theme/*.qss"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py", "*_test.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
+
+[tool.mypy]
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+show_error_codes = true
+exclude = ["dist/"]
+
+[[tool.mypy.overrides]]
+module = ["PIL.*", "psd_tools.*"]
+ignore_missing_imports = true

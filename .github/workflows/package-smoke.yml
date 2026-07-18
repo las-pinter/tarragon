@@ -2,9 +2,8 @@ name: Package Smoke Test
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
   pull_request:
-    branches: [main]
 
 concurrency:
   group: smoke-${{ github.head_ref || github.run_id }}
@@ -30,12 +29,17 @@ jobs:
       - name: Install runtime dependencies
         run: pip install -e .
 
+      - name: Install Qt system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libgl1 libxkbcommon0 libdbus-1-3
+
       - name: Run import smoke tests
         env:
           QT_QPA_PLATFORM: offscreen
         run: |
-          python -c "import tarragon_viewer; print('tarragon_viewer OK')"
-          python -c "import tarragon_viewer.main; print('tarragon_viewer.main OK')"
+          python -c "import tarragon; print('tarragon OK')"
+          python -c "import tarragon.main; print('tarragon.main OK')"
 
   nuitka-smoke:
     runs-on: ubuntu-latest
@@ -56,6 +60,15 @@ jobs:
       - name: Install runtime and build dependencies
         run: pip install -e . nuitka
 
+      - name: Install Qt system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libgl1 libxkbcommon0 libdbus-1-3
+
+      # NOTE: this repo is src-layout — the entry point is src/tarragon/main.py,
+      # not tarragon/main.py. A build failure here is a real failure: it is
+      # NOT swallowed, since this job exists specifically to catch Nuitka/
+      # PySide6 packaging regressions before they reach a release build.
       - name: Attempt minimal Nuitka compilation
         env:
           QT_QPA_PLATFORM: offscreen
@@ -65,4 +78,4 @@ jobs:
             --enable-plugin=pyside6 \
             --output-filename=tarragon-smoke.bin \
             --remove-output \
-            tarragon_viewer/main.py || echo "Nuitka build failed — import smoke is the gatekeeper"
+            src/tarragon/main.py

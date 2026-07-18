@@ -2,16 +2,15 @@ name: Lint
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
   pull_request:
-    branches: [main]
 
 concurrency:
   group: lint-${{ github.head_ref || github.run_id }}
   cancel-in-progress: true
 
 jobs:
-  ruff:
+  lint:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -30,11 +29,10 @@ jobs:
       - name: Install dependencies
         run: pip install -e .[dev]
 
-      # Lint is checked before formatting because if there are style violations,
-      # we want to report them first. Formatting check is a secondary pass that
-      # only matters once lint passes — keeping failures focused and actionable.
-      - name: Check linting with ruff
-        run: ruff check .
-
-      - name: Check formatting with ruff
-        run: ruff format --check .
+      # Runs ruff check, ruff format --check, mypy, and the hygiene hooks
+      # (trailing-whitespace, end-of-file-fixer) from .pre-commit-config.yaml
+      # in one pass — this is the single source of truth for lint/type
+      # checks, run once rather than duplicated across ci.yml's os/python
+      # matrix.
+      - name: Pre-commit validation (all hooks)
+        run: pre-commit run --all-files

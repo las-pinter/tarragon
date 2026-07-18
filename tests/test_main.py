@@ -1,38 +1,63 @@
 """Tests for the application entry point."""
 
-import pytest
+from pathlib import Path
+from typing import Any
+
+# ── Import Tests ───────────────────────────────────────────────────────
 
 
-@pytest.fixture(autouse=True)
-def qapp():
-    """Provide a shared QApplication instance for all Qt tests."""
-    from PySide6.QtWidgets import QApplication
+def test_main_module_imports_cleanly() -> None:
+    """main.py can be imported without side effects or errors."""
+    from tarragon import main  # noqa: F401
 
-    app = QApplication.instance()
-    if app is None:
-        app = QApplication(["test"])
-    yield app
+    assert hasattr(main, "MainWindow")
+    assert hasattr(main, "main")
 
 
-def test_main_window_is_qmainwindow():
-    """MainWindow is a subclass of QMainWindow."""
-    from PySide6.QtWidgets import QMainWindow
+# ── MainWindow Class Tests ─────────────────────────────────────────────
 
+
+def test_main_window_has_title(qapp: Any, tmp_path: Path) -> None:  # noqa: ARG001
+    """MainWindow sets a title on initialization (with services at temp paths)."""
+
+    from tarragon.db import Database
     from tarragon.main import MainWindow
+    from tarragon.settings import Settings
 
-    assert issubclass(MainWindow, QMainWindow)
+    settings_db = Database(tmp_path / "test_settings.db")
+    settings_db.init_schema()
+    settings = Settings(settings_db)
+    database = Database(tmp_path / "test_main.db")
+    window = MainWindow(settings=settings, database=database)
+    try:
+        assert window.windowTitle() == "Tarragon"
+    finally:
+        window.close()
 
 
-def test_main_window_has_title(qapp):  # noqa: ARG001
-    """MainWindow sets a title on initialization."""
+def test_main_window_has_database(qapp: Any, tmp_path: Path) -> None:  # noqa: ARG001
+    """MainWindow (from main.py) stores a Database reference."""
+
+    from tarragon.db import Database
     from tarragon.main import MainWindow
+    from tarragon.settings import Settings
 
-    window = MainWindow()
+    settings_db = Database(tmp_path / "test_settings2.db")
+    settings_db.init_schema()
+    settings = Settings(settings_db)
+    database = Database(tmp_path / "test_main_dbref.db")
+    window = MainWindow(settings=settings, database=database)
+    try:
+        assert hasattr(window, "_database")
+        assert isinstance(window._database, Database)
+    finally:
+        window.close()
 
-    assert window.windowTitle() == "Tarragon"
+
+# ── Entry Point Tests ──────────────────────────────────────────────────
 
 
-def test_main_function_exists():
+def test_main_function_exists() -> None:
     """main() function is callable."""
     from tarragon.main import main
 

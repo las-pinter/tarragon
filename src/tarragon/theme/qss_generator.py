@@ -1,0 +1,616 @@
+"""QSS generator — builds the application stylesheet from design tokens.
+
+Reads ``tokens.json`` (via :func:`~tarragon.theme.tokens.load_tokens`) and
+produces a deterministic QSS string from the design tokens.
+Changing token values in ``tokens.json`` and
+re-running the generator updates the entire theme.
+
+Example::
+
+    from tarragon.theme.qss_generator import generate_qss
+    from tarragon.theme.tokens import load_tokens
+
+    qss = generate_qss(load_tokens())
+    app.setStyleSheet(qss)
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+#: CSS generic font family keywords and system font identifiers — must NOT be quoted in QSS/CSS.
+_CSS_GENERIC_FAMILIES = frozenset(
+    {
+        "serif",
+        "sans-serif",
+        "cursive",
+        "fantasy",
+        "monospace",
+        "-apple-system",
+        "system-ui",
+    }
+)
+
+
+def _format_font_family(font_family: str) -> str:
+    """Format a comma-separated font family string for QSS.
+
+    Each font name is quoted unless it is a CSS generic family keyword
+    (``serif``, ``sans-serif``, ``monospace``, etc.), matching standard
+    CSS/QSS convention.
+
+    Args:
+        font_family: Comma-separated font names (e.g. ``"Segoe UI, sans-serif"``).
+
+    Returns:
+        QSS-formatted string (e.g. ``'"Segoe UI", sans-serif'``).
+    """
+    parts: list[str] = []
+    for name in font_family.split(","):
+        stripped = name.strip()
+        if stripped.lower() in _CSS_GENERIC_FAMILIES:
+            parts.append(stripped)
+        else:
+            parts.append(f'"{stripped}"')
+    return ", ".join(parts)
+
+
+def generate_qss(tokens: dict[str, Any]) -> str:
+    """Generate a complete QSS stylesheet from design tokens.
+
+    The output is deterministic: the same *tokens* dictionary always produces
+    the same QSS string.  All hardcoded color, spacing, typography, and
+    border-radius values are resolved from the token dictionaries.
+
+    Args:
+        tokens: Parsed ``tokens.json`` dictionary.  Must contain the keys
+            ``colors``, ``typography``, ``spacing``, and ``radius``.
+
+    Returns:
+        A complete QSS stylesheet string ready for ``QApplication.setStyleSheet``.
+    """
+    c = tokens["colors"]
+    t = tokens["typography"]
+    s = tokens["spacing"]
+    r = tokens["radius"]
+
+    # Pre-format the font-family strings for QSS.
+    # The primary font name is always quoted; generic fallbacks are not.
+    # We construct QSS-safe font strings from the token values: the first (primary)
+    # font is quoted, remaining names are passed through as-is.
+    ui_font = _format_font_family(str(t["font_family"]))
+    mono_font = _format_font_family(str(t["mono_family"]))
+
+    body_px = int(t["body_size"])
+    small_px = int(t["small_size"])
+    log_px = int(t["log_size"])
+    caption_px = int(t["caption_size"])
+    weight_semibold = int(t["weight_semibold"])
+
+    xs = int(s["xs"])
+    sm = int(s["sm"])
+    md = int(s["md"])
+    lg = int(s["lg"])
+
+    r_xs = int(r["xs"])
+    r_sm = int(r["sm"])
+    r_md = int(r["md"])
+    r_lg = int(r["lg"])
+    r_xl = int(r["xl"])
+
+    # Color shortcuts for readability.
+    bg_primary = c["bg_primary"]
+    bg_secondary = c["bg_secondary"]
+    bg_tertiary = c["bg_tertiary"]
+    surface_highlight = c["surface_highlight"]
+    surface_hover = c["surface_hover"]
+    coral_strong = c["coral_strong"]
+    coral_muted = c["coral_muted"]
+    coral_dark = c["coral_dark"]
+    coral_bright = c["coral_bright"]
+    amber_accent = c["amber_accent"]
+    amber_light = c["amber_light"]
+    amber_dark = c["amber_dark"]
+    text_primary = c["text_primary"]
+    text_secondary = c["text_secondary"]
+    text_muted = c["text_muted"]
+    text_tertiary = c["text_tertiary"]
+    border_interactive = c["border_interactive"]
+    bg_disabled = c["bg_disabled"]
+    border_disabled = c["border_disabled"]
+    bg_log_panel = c["bg_log_panel"]
+
+    return f"""\
+/* Tarragon Theme — Dark Coral-Amber Aesthetic */
+/* Generated from tokens.json: colors, typography, spacing, radius, layout */
+
+/* ── Base window background ─────────────────────────────────────── */
+QMainWindow {{
+    background-color: {bg_primary};
+}}
+
+/* ── Dock widgets (Library, Gallery, Preview) ───────────────────── */
+QDockWidget {{
+    background-color: {bg_secondary};
+    color: {text_primary};
+    font-family: {ui_font};
+    font-size: {body_px}px;
+}}
+
+QDockWidget::title {{
+    background-color: {bg_tertiary};
+    color: {amber_accent};
+    font-weight: {weight_semibold};
+    font-size: {body_px}px;
+    padding-left: {sm}px;
+    padding-right: {sm}px;
+}}
+
+QDockWidget::close-button,
+QDockWidget::float-button {{
+    background-color: transparent;
+    border: none;
+}}
+
+QDockWidget::close-button:hover,
+QDockWidget::float-button:hover {{
+    background-color: {surface_highlight};
+}}
+
+/* ── Buttons (toolbar, action buttons) ──────────────────────────── */
+QPushButton {{
+    background-color: {bg_tertiary};
+    color: {text_primary};
+    font-family: {ui_font};
+    font-size: {body_px}px;
+    border: none;
+    border-radius: {r_sm}px;
+    padding-left: {md}px;
+    padding-right: {md}px;
+    padding-top: {xs + 2}px;
+    padding-bottom: {xs + 2}px;
+}}
+
+QPushButton:hover {{
+    background-color: {surface_highlight};
+    color: {amber_accent};
+}}
+
+QPushButton:pressed {{
+    background-color: {coral_muted};
+    color: {text_primary};
+}}
+
+/* ── Labels (static text) ───────────────────────────────────────── */
+QLabel {{
+    background-color: transparent;
+    color: {text_primary};
+    font-family: {ui_font};
+    font-size: {body_px}px;
+}}
+
+/* ── Tag pills ──────────────────────────────────────────────────── */
+QLabel[tagRole="primary"] {{
+    background-color: {coral_dark};  /* dark tinted bg */
+    color: {coral_strong};  /* coral text */
+    padding: {xs - 1}px {sm}px;
+    border-radius: {r_xl}px;
+    font-size: {small_px}px;
+}}
+
+QLabel[tagRole="secondary"] {{
+    background-color: {amber_dark};  /* dark tinted bg */
+    color: {amber_accent};  /* amber text */
+    padding: {xs - 1}px {sm}px;
+    border-radius: {r_xl}px;
+    font-size: {small_px}px;
+}}
+
+/* ── Line edits (search boxes, text input) ──────────────────────── */
+QLineEdit {{
+    background-color: {bg_secondary};
+    color: {text_primary};
+    font-family: {ui_font};
+    font-size: {caption_px}px;
+    border: none;
+    border-radius: {r_md}px;
+    padding-left: 28px;
+    padding-right: {sm}px;
+    padding-top: {xs}px;
+    padding-bottom: {xs}px;
+}}
+
+QLineEdit:hover {{
+    background-color: {surface_highlight};
+}}
+
+QLineEdit:focus {{
+    border: 1px solid {coral_strong};
+}}
+
+/* ── Scroll bars (gallery thumbnails) ───────────────────────────── */
+QScrollBar:vertical {{
+    background-color: {bg_secondary};
+    width: {sm}px;
+    margin: 0px;
+}}
+
+QScrollBar::handle:vertical {{
+    background-color: {bg_tertiary};
+    border-radius: {r_md}px;
+    min-height: 20px;
+}}
+
+QScrollBar::handle:vertical:hover {{
+    background-color: {coral_muted};
+}}
+
+QScrollBar::add-line:vertical,
+QScrollBar::sub-line:vertical {{
+    height: 0px;
+}}
+
+QScrollBar:horizontal {{
+    background-color: {bg_secondary};
+    height: {sm}px;
+    margin: 0px;
+}}
+
+QScrollBar::handle:horizontal {{
+    background-color: {bg_tertiary};
+    border-radius: {r_md}px;
+    min-width: 20px;
+}}
+
+QScrollBar::handle:horizontal:hover {{
+    background-color: {coral_muted};
+}}
+
+QScrollBar::add-line:horizontal,
+QScrollBar::sub-line:horizontal {{
+    width: 0px;
+}}
+
+/* ── Tool bars ──────────────────────────────────────────────────── */
+QToolBar {{
+    background-color: {bg_secondary};
+    border-bottom: 1px solid {bg_tertiary};
+    spacing: {xs}px;
+    padding: {xs}px;
+}}
+
+/* ── Status bar ─────────────────────────────────────────────────── */
+QStatusBar {{
+    background-color: {bg_secondary};
+    color: {text_secondary};
+    font-family: {ui_font};
+    font-size: {small_px}px;
+    border-top: 1px solid {bg_tertiary};
+}}
+
+/* ── List / Tree views (library panel) ──────────────────────────── */
+QListView,
+QTreeView {{
+    background-color: {bg_secondary};
+    color: {text_primary};
+    font-family: {ui_font};
+    font-size: {body_px}px;
+    border: none;
+    outline: none;
+}}
+
+QListView::item:hover,
+QTreeView::item:hover {{
+    background-color: {surface_highlight};
+    color: {amber_accent};
+}}
+
+QListView::item:selected,
+QTreeView::item:selected {{
+    background-color: {coral_muted};
+    color: {text_primary};
+}}
+
+/* ── Sidebar section headers ────────────────────────────────────── */
+QLabel#sidebarSectionHeader {{
+    color: {text_muted};
+    font-size: {caption_px}px;
+    margin: 0px 6px 6px 6px;
+}}
+
+/* ── Sidebar favorites list ─────────────────────────────────────── */
+QListView#sidebarFavorites {{
+    background-color: transparent;
+    color: {text_secondary};
+    font-size: {body_px}px;
+}}
+
+QListView#sidebarFavorites::item {{
+    padding: 5px 6px;
+    border-radius: {r_md}px;
+    color: {text_secondary};
+}}
+
+QListView#sidebarFavorites::item:hover {{
+    background-color: {surface_hover};
+    color: {text_primary};
+}}
+
+QListView#sidebarFavorites::item:selected {{
+    background-color: {bg_tertiary};
+    color: {text_primary};
+}}
+
+/* ── Sidebar folder tree ────────────────────────────────────────── */
+QTreeView#sidebarFolderTree {{
+    background-color: transparent;
+    color: {text_secondary};
+    font-size: {body_px}px;
+}}
+
+QTreeView#sidebarFolderTree::item {{
+    color: {text_secondary};
+}}
+
+QTreeView#sidebarFolderTree::item:hover {{
+    background-color: {surface_hover};
+    color: {text_primary};
+}}
+
+QTreeView#sidebarFolderTree::item:selected {{
+    background-color: {bg_tertiary};
+    color: {text_primary};
+}}
+
+/* ── Group boxes (if used in panels) ────────────────────────────── */
+QGroupBox {{
+    background-color: transparent;
+    border: 1px solid {bg_tertiary};
+    border-radius: {r_sm}px;
+    margin-top: {md}px;
+    padding-top: {lg}px;
+    padding-left: {sm}px;
+    padding-right: {sm}px;
+    padding-bottom: {sm}px;
+    color: {text_primary};
+}}
+
+QGroupBox::title {{
+    subcontrol-origin: margin;
+    left: {sm}px;
+    top: -{xs}px;
+    color: {amber_accent};
+}}
+
+/* ── Checkboxes and radio buttons ───────────────────────────────── */
+QCheckBox,
+QRadioButton {{
+    background-color: transparent;
+    color: {text_primary};
+    font-family: {ui_font};
+    font-size: {body_px}px;
+    padding: {xs}px;
+}}
+
+QCheckBox::indicator, QGroupBox::indicator {{
+    width: 18px;
+    height: 18px;
+    border: 2px solid {amber_accent};
+    border-radius: {r_xs}px;
+    background-color: {bg_tertiary};
+}}
+
+QCheckBox::indicator:hover, QGroupBox::indicator:hover {{
+    border-color: {amber_light};
+    background-color: {surface_hover};
+}}
+
+QCheckBox::indicator:checked, QGroupBox::indicator:checked {{
+    background-color: {coral_muted};
+    border-color: {amber_accent};
+    image: none;
+}}
+
+QCheckBox::indicator:checked:hover, QGroupBox::indicator:checked:hover {{
+    background-color: {coral_bright};
+}}
+
+QCheckBox::indicator:disabled, QGroupBox::indicator:disabled {{
+    background-color: {bg_disabled};
+    border-color: {border_disabled};
+}}
+
+/* ── Combo boxes ─────────────────────────────────────────────────── */
+QComboBox {{
+    background-color: {bg_tertiary};
+    color: {text_primary};
+    font-family: {ui_font};
+    font-size: {body_px}px;
+    border: none;
+    border-radius: {r_sm}px;
+    padding-left: {sm}px;
+    padding-right: {sm}px;
+}}
+
+QComboBox:hover {{
+    background-color: {surface_highlight};
+}}
+
+QComboBox::drop-down {{
+    border: none;
+    width: {lg}px;
+}}
+
+/* ── Scroll area backgrounds ────────────────────────────────────── */
+QScrollArea {{
+    border: none;
+    background-color: transparent;
+}}
+
+/* ── Log Panel ─────────────────────────────────────────────────── */
+QPlainTextEdit#logText {{
+    background-color: {bg_log_panel};
+    color: {text_primary};
+    font-family: {mono_font};
+    font-size: {log_px}px;
+    border: 1px solid {surface_highlight};
+    border-radius: {r_md}px;
+    padding: {xs}px;
+    selection-background-color: {coral_muted};
+    selection-color: {text_primary};
+}}
+
+/* ── Tab widgets ─────────────────────────────────────────────────── */
+QTabWidget::pane {{
+    border: 1px solid {bg_tertiary};
+    border-radius: {r_sm}px;
+    padding: {sm}px;
+}}
+
+QTabBar::tab {{
+    background-color: {bg_tertiary};
+    color: {text_secondary};
+    font-family: {ui_font};
+    font-size: {body_px}px;
+    padding: {xs}px {md}px;
+    border: none;
+}}
+
+QTabBar::tab:selected {{
+    background-color: {bg_secondary};
+    color: {amber_accent};
+}}
+
+QTabBar::tab:hover {{
+    background-color: {surface_highlight};
+    color: {amber_accent};
+}}
+
+/* ── Gallery info bar ────────────────────────────────────────────── */
+QLabel#galleryInfoLabel {{
+    color: {text_muted};
+    font-size: {caption_px}px;
+}}
+
+QLabel#galleryActiveFiltersPill {{
+    background-color: {amber_dark};
+    color: {amber_accent};
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: {caption_px}px;
+}}
+
+/* ── Preview panel background ──────────────────────────────────────── */
+QWidget#previewPanel {{
+    background-color: {bg_primary};
+}}
+
+/* ── Preview panel section headers ────────────────────────────────── */
+QLabel#previewSectionHeader {{
+    color: {text_muted};
+    font-size: {caption_px}px;
+}}
+
+/* ── Preview panel metadata ───────────────────────────────────────── */
+QLabel#previewMetaLabel {{
+    color: {text_muted};
+    font-size: {caption_px}px;
+}}
+
+QLabel#previewMetaValue {{
+    color: {text_tertiary};
+    font-size: {caption_px}px;
+}}
+
+/* ── Preview panel add-tag button ─────────────────────────────────── */
+QPushButton#previewAddTagBtn {{
+    background-color: transparent;
+    color: {text_muted};
+    border: 1px solid {border_interactive};
+    border-radius: {r_xl}px;
+    padding: 3px 8px;
+    font-size: {caption_px}px;
+}}
+
+QPushButton#previewAddTagBtn:hover {{
+    background-color: {surface_highlight};
+    color: {text_secondary};
+}}
+
+/* ── Color square buttons (preview panel) ─────────────────────────── */
+QPushButton[colorSquare="true"] {{
+    border: none;
+    border-radius: 4px;
+}}
+
+QPushButton[colorSquare="true"]:hover {{
+    border: 1px solid {text_primary};
+}}
+
+/* ── Tag pill remove button (hover ×) ─────────────────────────────── */
+QPushButton#tagPillRemoveBtn {{
+    color: {coral_muted};
+    border: none;
+    background: transparent;
+    font-weight: bold;
+    padding: 0;
+    font-size: {small_px}px;
+}}
+
+QPushButton#tagPillRemoveBtn:hover {{
+    color: {coral_strong};
+}}
+
+/* ── Filter chips (tag/filter bar) ──────────────────────────────────────── */
+QFrame#filterChip {{
+    background-color: {surface_hover};
+    border: 1px solid {amber_accent};
+    border-radius: {r_xl}px;
+    padding: 2px 6px;
+}}
+
+QLabel#filterChipLabel {{
+    color: {amber_accent};
+    border: none;
+    background: transparent;
+}}
+
+QPushButton#filterChipRemoveBtn {{
+    color: {coral_muted};
+    border: none;
+    background: transparent;
+    font-weight: bold;
+    padding: 0;
+    font-size: {small_px}px;
+}}
+
+QPushButton#filterChipRemoveBtn:hover {{
+    color: {coral_strong};
+}}
+
+/* ── Preview panel image label ──────────────────────────────────────────── */
+QLabel#previewImageLabel {{
+    background-color: {bg_secondary};
+    border: none;
+    border-radius: {r_lg}px;
+    color: {text_secondary};
+    font-size: {body_px}px;
+}}
+"""
+
+
+def load_and_generate_qss() -> str:
+    """Generate a complete QSS stylesheet from design tokens.
+
+    Convenience function that loads tokens and passes them through
+    :func:`generate_qss` to produce the stylesheet.
+
+    Returns:
+        The generated QSS text ready for ``QApplication.setStyleSheet``.
+    """
+    from tarragon.theme.tokens import load_tokens
+
+    return generate_qss(load_tokens())
+
+
+__all__ = ["generate_qss", "load_and_generate_qss"]

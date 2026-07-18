@@ -112,11 +112,6 @@ def build(target_platform: str) -> None:
 
     if target_platform == "windows":
         cmd.append("--mingw64")
-    elif target_platform == "linux":
-        cmd.append("--gcc")
-    # macOS: no explicit compiler flag — Nuitka uses the system Clang
-    # toolchain (Xcode command line tools) by default, which is what's
-    # available on GitHub's macos-latest runners.
 
     cmd.append(str(entry_point))
 

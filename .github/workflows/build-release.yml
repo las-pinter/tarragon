@@ -65,11 +65,11 @@ jobs:
         shell: bash
         run: |
           if [ "$RUNNER_OS" == "Linux" ]; then
-            mv dist/tarragon dist/${{ matrix.binary-name }}
+            mv dist/tarragon dist/release/${{ matrix.binary-name }}
           elif [ "$RUNNER_OS" == "macOS" ]; then
-            mv dist/tarragon dist/${{ matrix.binary-name }}
+            mv dist/tarragon dist/release/${{ matrix.binary-name }}
           else
-            mv dist/tarragon.exe dist/${{ matrix.binary-name }}
+            mv dist/tarragon.exe dist/release/${{ matrix.binary-name }}
           fi
       - name: Generate checksum
         shell: bash
@@ -84,5 +84,5 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/${{ matrix.binary-name }}
-            dist/${{ matrix.binary-name }}.sha256
+            dist/release/${{ matrix.binary-name }}
+            dist/release/${{ matrix.binary-name }}.sha256

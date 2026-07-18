@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-
 from tarragon.theme.qss_generator import generate_qss
 from tarragon.theme.tokens import load_tokens
 

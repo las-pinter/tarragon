@@ -8,7 +8,6 @@ from pathlib import Path
 import pytest
 from PySide6.QtCore import QModelIndex, Qt
 from PySide6.QtWidgets import QLabel, QListView, QPushButton, QTreeView
-
 from tarragon.db import Database
 from tarragon.models.favorites_model import FavoritesModel
 from tarragon.widgets.sidebar import SidebarWidget

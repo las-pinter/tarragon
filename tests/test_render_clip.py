@@ -7,7 +7,6 @@ import sqlite3
 from pathlib import Path
 
 from PIL import Image
-
 from tarragon.thumbnail import render_clip_image
 
 # =========================================================================

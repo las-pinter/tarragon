@@ -25,7 +25,6 @@ from PySide6.QtWidgets import (
     QStyleOptionViewItem,
     QToolTip,
 )
-
 from tarragon.models.thumbnail_model import ThumbnailModel
 from tarragon.theme.colors import BG_PRIMARY, BG_SECONDARY
 from tarragon.theme.file_type_badge import BADGE_COLORS, DEFAULT_BADGE_COLORS, get_badge_colors

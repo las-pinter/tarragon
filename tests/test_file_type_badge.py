@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import pytest
 from PySide6.QtGui import QColor
-
 from tarragon.theme.file_type_badge import (
     BADGE_COLORS,
     DEFAULT_BADGE_COLORS,

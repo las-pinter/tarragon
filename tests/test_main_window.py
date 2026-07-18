@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import Any
 
 from PySide6.QtWidgets import QDockWidget, QMainWindow
-
 from tarragon.main_window import MainWindow
 
 # ── Instantiation Tests ────────────────────────────────────────────────
@@ -197,9 +196,9 @@ def test_run_filtered_query_does_not_clear_gallery_when_no_folder(qapp: Any) -> 
         window._run_filtered_query()
 
         # Model should still have 2 paths
-        assert window.thumbnail_model.rowCount() == 2, (
-            "_run_filtered_query() cleared the gallery when _current_folder was empty"
-        )
+        assert (
+            window.thumbnail_model.rowCount() == 2
+        ), "_run_filtered_query() cleared the gallery when _current_folder was empty"
     finally:
         window.close()
 
@@ -495,7 +494,6 @@ def test_scope_change_shows_folder_button(qapp: Any) -> None:  # noqa: ARG001
     from pathlib import Path
 
     from PySide6.QtWidgets import QPushButton
-
     from tarragon.db import Database
     from tarragon.services.tag_service import TagService
 

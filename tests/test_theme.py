@@ -224,7 +224,6 @@ def test_apply_theme_no_exception(qapp: Any) -> None:  # noqa: ARG001
 def test_apply_theme_sets_stylesheet(qapp: Any) -> None:  # noqa: ARG001
     """After _apply_theme(), the stylesheet is non-empty."""
     from PySide6.QtWidgets import QApplication
-
     from tarragon.main_window import MainWindow
 
     window = MainWindow()
@@ -242,7 +241,6 @@ def test_apply_theme_sets_stylesheet(qapp: Any) -> None:  # noqa: ARG001
 def test_stylesheet_contains_dark_background(qapp: Any) -> None:  # noqa: ARG001
     """The applied stylesheet contains the dark background color."""
     from PySide6.QtWidgets import QApplication
-
     from tarragon.main_window import MainWindow
 
     window = MainWindow()
@@ -259,7 +257,6 @@ def test_stylesheet_contains_dark_background(qapp: Any) -> None:  # noqa: ARG001
 def test_stylesheet_contains_coral_hover_state(qapp: Any) -> None:  # noqa: ARG001
     """The applied stylesheet references coral for hover states."""
     from PySide6.QtWidgets import QApplication
-
     from tarragon.main_window import MainWindow
 
     window = MainWindow()
@@ -276,7 +273,6 @@ def test_stylesheet_contains_coral_hover_state(qapp: Any) -> None:  # noqa: ARG0
 def test_stylesheet_contains_amber_select_state(qapp: Any) -> None:  # noqa: ARG001
     """The applied stylesheet references amber for selected/focus states."""
     from PySide6.QtWidgets import QApplication
-
     from tarragon.main_window import MainWindow
 
     window = MainWindow()

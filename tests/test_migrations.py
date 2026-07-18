@@ -6,7 +6,6 @@ from collections.abc import Generator
 from pathlib import Path
 
 import pytest
-
 from tarragon.db import Database
 from tarragon.migrations import MigrationRunner, _migrate_v1_to_v2
 

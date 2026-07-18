@@ -13,7 +13,6 @@ from collections.abc import Generator
 
 import pytest
 from PySide6.QtWidgets import QPushButton
-
 from tarragon.widgets.color_filter_bar import ColorFilterBar
 
 # ── Fixtures ────────────────────────────────────────────────────────────────

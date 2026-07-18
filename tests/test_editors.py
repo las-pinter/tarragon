@@ -7,7 +7,6 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-
 from tarragon.db import Database
 from tarragon.services.editors import (
     launch_editor,

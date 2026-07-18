@@ -12,7 +12,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from PIL import Image
-
 from tarragon.db import Database
 from tarragon.db._base import _normalize_path
 from tarragon.scanner import FileInfo

@@ -13,7 +13,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from PIL import Image
-
 from tarragon.scanner import FileInfo
 from tarragon.services.thumbnail_service import ThumbnailService
 from tarragon.thumbnail import RESOLUTION_FULL, RESOLUTION_PREVIEW, RESOLUTION_THUMBNAIL
@@ -999,7 +998,6 @@ class TestRenderPsdImageCancellation:
         from concurrent.futures import Future
 
         from PIL import Image
-
         from tarragon.thumbnail import render_psd_image
 
         # Create a resolved future with valid PNG bytes
@@ -1230,9 +1228,10 @@ class TestDeriveMissingResolutionsSmallImages:
         for emission in emitted:
             if emission[2] == RESOLUTION_PREVIEW:
                 cached_preview_img = emission[1]
-                assert cached_preview_img.size == (200, 150), (
-                    f"Small image should NOT be upscaled to 1024, got size {cached_preview_img.size}"
-                )
+                assert cached_preview_img.size == (
+                    200,
+                    150,
+                ), f"Small image should NOT be upscaled to 1024, got size {cached_preview_img.size}"
                 break
         else:
             pytest.fail("No emission found for 1024 resolution tier")

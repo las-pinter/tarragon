@@ -3,7 +3,6 @@
 from pathlib import Path
 
 import pytest
-
 from tarragon.db import Database
 from tarragon.services.settings_service import SettingsService
 from tarragon.settings import Settings

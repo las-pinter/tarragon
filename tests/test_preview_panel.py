@@ -14,7 +14,6 @@ from PIL import Image
 from PySide6.QtCore import QSize
 from PySide6.QtGui import QResizeEvent
 from PySide6.QtWidgets import QLabel, QSizePolicy, QVBoxLayout, QWidget
-
 from tarragon.widgets.preview_panel import PreviewPanel
 
 
@@ -854,9 +853,9 @@ def test_set_image_applies_exif_from_original_for_cached_image(qapp: Any, tmp_pa
         panel.set_image(cached, path=orig_path)
 
         # After EXIF recovery, 200×100 should become 100×200
-        assert panel._dimensions_label.text() == "Dimensions: 100 × 200", (
-            f"Expected 100 × 200 after EXIF recovery, got: {panel._dimensions_label.text()}"
-        )
+        assert (
+            panel._dimensions_label.text() == "Dimensions: 100 × 200"
+        ), f"Expected 100 × 200 after EXIF recovery, got: {panel._dimensions_label.text()}"
     finally:
         panel.close()
 
@@ -1098,9 +1097,9 @@ def test_set_image_skips_exif_recovery_when_from_cache(qapp: Any, tmp_path: Any)
         panel.set_image(cached, path=orig_path)
 
         # Should NOT be rotated — cache already has correct orientation
-        assert panel._dimensions_label.text() == "Dimensions: 200 × 100", (
-            f"Expected 200 × 100 (no double rotation), got: {panel._dimensions_label.text()}"
-        )
+        assert (
+            panel._dimensions_label.text() == "Dimensions: 200 × 100"
+        ), f"Expected 200 × 100 (no double rotation), got: {panel._dimensions_label.text()}"
     finally:
         panel.close()
 
@@ -2238,9 +2237,9 @@ def test_tags_container_has_minimum_height_when_empty(qapp: Any) -> None:  # noq
     """
     panel = PreviewPanel()
     try:
-        assert panel._tags_container.minimumHeight() > 0, (
-            "Tags container should have a minimum height to remain visible when empty"
-        )
+        assert (
+            panel._tags_container.minimumHeight() > 0
+        ), "Tags container should have a minimum height to remain visible when empty"
     finally:
         panel.close()
 
@@ -2314,9 +2313,9 @@ def test_flow_layout_minimum_size_hint_empty_returns_nonzero_height(qapp: Any) -
 
     panel = PreviewPanel()
     try:
-        assert panel._tags_container.minimumHeight() > 0, (
-            f"Tags container minimumHeight should be > 0 even when empty, got {panel._tags_container.minimumHeight()}"
-        )
+        assert (
+            panel._tags_container.minimumHeight() > 0
+        ), f"Tags container minimumHeight should be > 0 even when empty, got {panel._tags_container.minimumHeight()}"
     finally:
         panel.close()
 
@@ -2469,9 +2468,9 @@ def test_color_square_button_has_pointing_hand_cursor(qapp: Any) -> None:  # noq
     panel = PreviewPanel()
     try:
         for name, btn in panel._color_square_buttons.items():
-            assert btn.cursor().shape() == Qt.CursorShape.PointingHandCursor, (
-                f"Color square '{name}' should have PointingHandCursor"
-            )
+            assert (
+                btn.cursor().shape() == Qt.CursorShape.PointingHandCursor
+            ), f"Color square '{name}' should have PointingHandCursor"
     finally:
         panel.close()
 

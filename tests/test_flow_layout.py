@@ -15,7 +15,6 @@ from __future__ import annotations
 
 from PySide6.QtCore import QRect
 from PySide6.QtWidgets import QLabel, QWidget
-
 from tarragon.widgets.flow_layout import FlowLayout
 
 # =========================================================================

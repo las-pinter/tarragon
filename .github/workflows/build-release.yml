@@ -8,11 +8,6 @@ permissions:
   contents: write
 
 jobs:
-  # Re-runs the test suite against the exact commit the release tag points
-  # at. This is deliberately independent of ci.yml's history for that ref —
-  # a release can be cut from a commit or tag that predates any push/PR
-  # event, so we can't assume ci.yml ever ran against it. build depends on
-  # this passing before compiling or publishing anything.
   test:
     runs-on: ubuntu-latest
     steps:
@@ -40,7 +35,7 @@ jobs:
           - os: ubuntu-latest
             binary-name: tarragon
           - os: windows-latest
-            binary-name: Tarragon.exe
+            binary-name: tarragon.exe
           - os: macos-latest
             binary-name: tarragon
 
@@ -61,16 +56,6 @@ jobs:
           sudo apt-get install -y libegl1 libgl1 libxkbcommon0 libdbus-1-3
       - name: Build binary
         run: python scripts/package_nuitka.py
-      - name: Rename binary
-        shell: bash
-        run: |
-          if [ "$RUNNER_OS" == "Linux" ]; then
-            mv dist/tarragon dist/release/${{ matrix.binary-name }}
-          elif [ "$RUNNER_OS" == "macOS" ]; then
-            mv dist/tarragon dist/release/${{ matrix.binary-name }}
-          else
-            mv dist/tarragon.exe dist/release/${{ matrix.binary-name }}
-          fi
       - name: Generate checksum
         shell: bash
         run: |
@@ -84,5 +69,5 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/release/${{ matrix.binary-name }}
-            dist/release/${{ matrix.binary-name }}.sha256
+            dist/${{ matrix.binary-name }}
+            dist/${{ matrix.binary-name }}.sha256

@@ -1,10 +1,13 @@
 """Application paths — platform-aware directories for Tarragon data and cache."""
 
+import sys
 from pathlib import Path
 
 import platformdirs
 
 _custom_cache_dir: Path | None = None
+
+PORTABLE_DATA_DIRNAME = "data"
 
 
 def set_cache_dir(custom_path: Path | None) -> None:
@@ -13,17 +16,59 @@ def set_cache_dir(custom_path: Path | None) -> None:
     _custom_cache_dir = custom_path
 
 
-def data_dir() -> Path:
-    """Return the user-data directory for Tarragon.
+def _is_compiled() -> bool:
+    """Return True when this module is running from a Nuitka-compiled build.
 
-    Uses platformdirs to resolve the correct location on each OS:
-        - Linux:   ~/.local/share/tarragon
-        - macOS:   ~/Library/Application Support/tarragon
-        - Windows: %APPDATA%\\tarragon
+    Nuitka injects a ``__compiled__`` attribute into the namespace of every
+    module it compiles (not just the main module), so checking for it here
+    reliably distinguishes a packaged build from a normal `python`/pytest
+    run — where portable-mode detection should never kick in.
+    """
+    return "__compiled__" in globals()
+
+
+def _portable_data_dir() -> Path | None:
+    """Return the portable data directory next to the executable, if present.
+
+    A `data` folder placed next to the executable signals portable mode:
+    all app state (db, cache) lives alongside the binary instead of the OS
+    user-data directory, so the whole app is self-contained on a USB stick,
+    a synced folder, etc.
+
+    Only checked in compiled builds. In Nuitka onefile mode, ``sys.argv[0]``
+    is the path to the original launched executable, while ``__file__``
+    would point at the temporary extraction directory the bootstrap unpacks
+    to — so ``sys.argv[0]`` is the correct anchor for finding a sibling
+    `data` folder.
+    """
+    if not _is_compiled():
+        return None
+    exe_dir = Path(sys.argv[0]).resolve().parent
+    candidate = exe_dir / PORTABLE_DATA_DIRNAME
+    if candidate.is_dir():
+        return candidate
+    return None
+
+
+def data_dir() -> Path:
+    """Return the data directory for Tarragon.
+
+    Resolution order:
+        1. Portable mode: a `data` folder next to the executable, when
+           running from a compiled build.
+        2. Platform-standard user-data directory otherwise, via platformdirs:
+            - Linux:   ~/.local/share/tarragon
+            - macOS:   ~/Library/Application Support/tarragon
+            - Windows: %APPDATA%\\tarragon
 
     Raises RuntimeError if platformdirs returns None (e.g. headless systems
-    without a proper HOME environment variable).
+    without a proper HOME environment variable) and no portable data dir
+    was found.
     """
+    portable = _portable_data_dir()
+    if portable is not None:
+        return portable
+
     result = platformdirs.user_data_dir("tarragon")
     if result is None:
         raise RuntimeError(

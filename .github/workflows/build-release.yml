@@ -34,10 +34,13 @@ jobs:
         include:
           - os: ubuntu-latest
             binary-name: tarragon
+            asset-os: linux
           - os: windows-latest
             binary-name: tarragon.exe
+            asset-os: windows
           - os: macos-latest
             binary-name: tarragon
+            asset-os: macos
 
     runs-on: ${{ matrix.os }}
 
@@ -56,18 +59,36 @@ jobs:
           sudo apt-get install -y libegl1 libgl1 libxkbcommon0 libdbus-1-3
       - name: Build binary
         run: python scripts/package_nuitka.py
+      - name: Assemble portable package
+        shell: bash
+        run: |
+          set -e
+          PKG_NAME="tarragon-${{ github.event.release.tag_name }}-${{ matrix.asset-os }}-portable"
+          PKG_DIR="dist/$PKG_NAME"
+          mkdir -p "$PKG_DIR/data"
+          mv "dist/${{ matrix.binary-name }}" "$PKG_DIR/${{ matrix.binary-name }}"
+          echo "PKG_NAME=$PKG_NAME" >> "$GITHUB_ENV"
+      - name: Zip portable package
+        shell: bash
+        run: |
+          cd dist
+          if [ "$RUNNER_OS" == "Windows" ]; then
+            powershell -Command "Compress-Archive -Path '${{ env.PKG_NAME }}' -DestinationPath '${{ env.PKG_NAME }}.zip'"
+          else
+            zip -r "${{ env.PKG_NAME }}.zip" "${{ env.PKG_NAME }}"
+          fi
       - name: Generate checksum
         shell: bash
         run: |
           cd dist
           if [ "$RUNNER_OS" == "macOS" ]; then
-            shasum -a 256 ${{ matrix.binary-name }} > ${{ matrix.binary-name }}.sha256
+            shasum -a 256 "${{ env.PKG_NAME }}.zip" > "${{ env.PKG_NAME }}.zip.sha256"
           else
-            sha256sum ${{ matrix.binary-name }} > ${{ matrix.binary-name }}.sha256
+            sha256sum "${{ env.PKG_NAME }}.zip" > "${{ env.PKG_NAME }}.zip.sha256"
           fi
       - name: Upload to release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/${{ matrix.binary-name }}
-            dist/${{ matrix.binary-name }}.sha256
+            dist/${{ env.PKG_NAME }}.zip
+            dist/${{ env.PKG_NAME }}.zip.sha256

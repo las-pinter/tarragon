@@ -70,6 +70,14 @@ dist\tarragon-viewer.exe --help
 - [ ] Git tag created: `git tag v0.x.x`
 - [ ] GitHub release created with binary artifacts
 
+## Portable Packaging
+
+Release binaries are distributed as portable zip packages (`tarragon-<version>-<os>-portable.zip`), not installers. Each zip contains the binary alongside an empty `data/` folder.
+
+At runtime, `app_paths.data_dir()` checks for a `data` folder next to the executable (only in compiled builds — never in dev/pytest runs). If present, all app state (SQLite db, thumbnail cache) lives there instead of the OS user-data directory, so the whole app is self-contained and can be moved between machines or run from removable media. Deleting the `data` folder reverts to normal (non-portable) behavior on next launch.
+
+An installed/non-portable variant (Inno Setup on Windows, DMG on macOS, .deb/AppImage on Linux) is a possible future addition, but is out of scope for now — see the packaging discussion for tradeoffs.
+
 ## Code Signing (Post-MVP)
 
 For production releases, consider code signing:

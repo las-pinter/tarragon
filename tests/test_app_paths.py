@@ -93,6 +93,76 @@ def test_ensure_dirs_wraps_oserror_with_context(tmp_path: Path) -> None:
         assert "root data dir:" in error_msg
 
 
+def test_data_dir_ignores_sibling_data_folder_when_not_compiled(tmp_path: Path) -> None:
+    """A `data` folder next to sys.argv[0] is ignored outside a compiled build."""
+    from tarragon.app_paths import data_dir
+
+    exe_path = tmp_path / "tarragon"
+    (tmp_path / "data").mkdir()
+
+    with (
+        patch("tarragon.app_paths.platformdirs.user_data_dir", return_value=MOCK_DATA),
+        patch("tarragon.app_paths.sys.argv", [str(exe_path)]),
+    ):
+        result = data_dir()
+
+    assert result == Path(MOCK_DATA)
+
+
+def test_data_dir_uses_sibling_data_folder_when_compiled(tmp_path: Path) -> None:
+    """A `data` folder next to sys.argv[0] is used as data_dir() in a compiled build."""
+    import tarragon.app_paths as app_paths_module
+    from tarragon.app_paths import data_dir
+
+    exe_path = tmp_path / "tarragon"
+    portable_dir = tmp_path / "data"
+    portable_dir.mkdir()
+
+    with (
+        patch("tarragon.app_paths.platformdirs.user_data_dir", return_value=MOCK_DATA),
+        patch("tarragon.app_paths.sys.argv", [str(exe_path)]),
+        patch.object(app_paths_module, "__compiled__", object(), create=True),
+    ):
+        result = data_dir()
+
+    assert result == portable_dir
+
+
+def test_data_dir_falls_back_when_compiled_but_no_sibling_data_folder(tmp_path: Path) -> None:
+    """Without a sibling `data` folder, a compiled build still uses the platform path."""
+    import tarragon.app_paths as app_paths_module
+    from tarragon.app_paths import data_dir
+
+    exe_path = tmp_path / "tarragon"  # no "data" subfolder created
+
+    with (
+        patch("tarragon.app_paths.platformdirs.user_data_dir", return_value=MOCK_DATA),
+        patch("tarragon.app_paths.sys.argv", [str(exe_path)]),
+        patch.object(app_paths_module, "__compiled__", object(), create=True),
+    ):
+        result = data_dir()
+
+    assert result == Path(MOCK_DATA)
+
+
+def test_db_path_and_cache_dir_follow_portable_data_dir(tmp_path: Path) -> None:
+    """db_path() and cache_dir() resolve under the portable dir when it's active."""
+    import tarragon.app_paths as app_paths_module
+    from tarragon.app_paths import cache_dir, db_path
+
+    exe_path = tmp_path / "tarragon"
+    portable_dir = tmp_path / "data"
+    portable_dir.mkdir()
+
+    with (
+        patch("tarragon.app_paths.platformdirs.user_data_dir", return_value=MOCK_DATA),
+        patch("tarragon.app_paths.sys.argv", [str(exe_path)]),
+        patch.object(app_paths_module, "__compiled__", object(), create=True),
+    ):
+        assert db_path() == portable_dir / "tarragon.db"
+        assert cache_dir() == portable_dir / "cache"
+
+
 @pytest.mark.parametrize(
     "platform_path,expected_db,expected_cache",
     [

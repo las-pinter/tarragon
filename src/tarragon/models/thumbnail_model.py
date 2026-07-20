@@ -1,4 +1,4 @@
-"""ThumbnailModel — QAbstractListModel providing path strings to a thumbnail grid view."""
+"""QAbstractListModel providing path strings to a thumbnail grid view."""
 
 from __future__ import annotations
 
@@ -29,25 +29,25 @@ class ThumbnailModel(QAbstractListModel):
     """
 
     PathRole: int = Qt.ItemDataRole.UserRole + 1
-    ThumbnailRole256: int = Qt.ItemDataRole.UserRole + 2  # 256px thumbnail
-    ThumbnailRole1024: int = Qt.ItemDataRole.UserRole + 3  # 1024px preview
-    ThumbnailRoleFull: int = Qt.ItemDataRole.UserRole + 4  # Full resolution
+    ThumbnailRole256: int = Qt.ItemDataRole.UserRole + 2
+    ThumbnailRole1024: int = Qt.ItemDataRole.UserRole + 3
+    ThumbnailRoleFull: int = Qt.ItemDataRole.UserRole + 4
 
     def __init__(self, parent: QObject | None = None) -> None:
         """Initialise the model with an empty path list."""
         super().__init__(parent)
         self._paths: list[Path] = []
-        # Keys: source path string -> {resolution: cache Path}
+        # Keys: source path string, values {resolution: cache Path}
         # Resolutions: 256, 1024, None (for full)
         self._thumbnails: dict[str, dict[int | None, Path]] = {}
 
     @override
-    def rowCount(self, parent: QModelIndex | QPersistentModelIndex = QPersistentModelIndex()) -> int:  # noqa: N802
+    def rowCount(self, parent: QModelIndex | QPersistentModelIndex = QPersistentModelIndex()) -> int:
         """Return the number of paths in the model."""
         return len(self._paths)
 
     @override
-    def data(self, index: QModelIndex | QPersistentModelIndex, role: int = Qt.ItemDataRole.DisplayRole) -> object:  # noqa: N802
+    def data(self, index: QModelIndex | QPersistentModelIndex, role: int = Qt.ItemDataRole.DisplayRole) -> object:
         """Return data for *index* according to *role*.
 
         Returns ``None`` for invalid indices or unsupported roles.
@@ -76,19 +76,16 @@ class ThumbnailModel(QAbstractListModel):
     def set_paths(self, paths: list[Path]) -> None:
         """Replace the entire path list, resetting the model.
 
-        Does NOT prune ``_thumbnails`` — all cached entries are preserved so
+        Does NOT prune ``_thumbnails``, all cached entries are preserved so
         that filtering/unfiltering doesn't lose thumbnail images.  Stale
         entries for paths no longer present are harmless; they'll be
         overwritten when new thumbnails are generated.
         """
         start = time.perf_counter()
         logger.debug("set_paths: %d items", len(paths))
-        if paths is None:
-            raise TypeError("set_paths() expected a list of Path objects, got None")
+
         self.beginResetModel()
         self._paths = list(paths)
-        # Don't prune _thumbnails — preserve cached entries for all paths
-        # so filtering/unfiltering doesn't lose thumbnail images
         self.endResetModel()
         elapsed = time.perf_counter() - start
         logger.debug("set_paths completed in %.3fs", elapsed)

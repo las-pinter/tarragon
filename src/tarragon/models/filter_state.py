@@ -1,4 +1,4 @@
-"""FilterState — composite filter state for the image browser."""
+"""Composite filter state for the image browser."""
 
 from __future__ import annotations
 
@@ -21,9 +21,9 @@ class FilterState:
     """
 
     filename_filter: str = ""
-    tag_ids: set[int] = field(default_factory=set)
-    color_tags: set[str] = field(default_factory=set)
-    folder_filters: set[str] = field(default_factory=set)
+    tag_ids: set[int] = field(default_factory=set[int])
+    color_tags: set[str] = field(default_factory=set[str])
+    folder_filters: set[str] = field(default_factory=set[str])
 
     def is_empty(self) -> bool:
         """Return ``True`` if no filters are active."""

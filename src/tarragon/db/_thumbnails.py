@@ -1,11 +1,11 @@
-"""Thumbnail CRUD operations — mixed into the Database class."""
+"""Thumbnail CRUD operations mixed into the Database class."""
 
 from __future__ import annotations
 
 import logging
 from typing import Any
 
-from tarragon.db._base import _MixinBase, _normalize_path, _row_to_dict
+from tarragon.db._base import _MixinBase, _row_to_dict, normalize_path
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +26,7 @@ class ThumbnailsMixin(_MixinBase):
         full_cache_path: str | None = None,
     ) -> None:
         """Insert or update a thumbnail record."""
-        path = _normalize_path(path)
+        path = normalize_path(path)
         logger.debug("upsert_thumbnail: path=%s, mtime=%d, size=%d", path, mtime, size)
         self._execute(
             """
@@ -67,19 +67,19 @@ class ThumbnailsMixin(_MixinBase):
         for the current folder *before* async thumbnail rendering completes, so
         that filtered queries return results immediately.
 
-        When rendering later calls ``upsert_thumbnail()`` with real dimensions
+        When rendering later calls `upsert_thumbnail()` with real dimensions
         and cache paths, the ``ON CONFLICT`` clause updates the stub in place.
 
         Parameters
         ----------
         files:
-            List of ``(path, mtime, size)`` tuples.
+            List of `(path, mtime, size)` tuples.
         """
         if not files:
             return
         logger.debug("bulk_upsert_stubs: %d files", len(files))
         # Normalize path separators to forward slashes for cross-platform consistency
-        normalized = [(_normalize_path(path), mtime, size) for path, mtime, size in files]
+        normalized = [(normalize_path(path), mtime, size) for path, mtime, size in files]
         self._executemany(
             """
             INSERT INTO thumbnails (
@@ -97,21 +97,21 @@ class ThumbnailsMixin(_MixinBase):
 
     def delete_thumbnail(self, path: str) -> None:
         """Remove a thumbnail record by path."""
-        path = _normalize_path(path)
+        path = normalize_path(path)
         logger.debug("delete_thumbnail: path=%s", path)
         self._execute("DELETE FROM thumbnails WHERE path = ?", (path,))
         self._commit()
 
     def get_thumbnail(self, path: str) -> dict[str, Any] | None:
         """Fetch a single thumbnail record as a dict, or None if absent."""
-        path = _normalize_path(path)
+        path = normalize_path(path)
         logger.debug("get_thumbnail: path=%s", path)
         row = self._execute("SELECT * FROM thumbnails WHERE path = ?", (path,)).fetchone()
         return _row_to_dict(row) if row else None
 
     def list_thumbnails_for_folder(self, folder_path: str) -> list[dict[str, Any]]:
         """List all thumbnail records whose path starts with folder_path."""
-        folder_path = _normalize_path(folder_path)
+        folder_path = normalize_path(folder_path)
         logger.debug("list_thumbnails_for_folder: folder_path=%s", folder_path)
         cursor = self._execute(
             "SELECT * FROM thumbnails WHERE path LIKE ?",
@@ -129,7 +129,7 @@ class ThumbnailsMixin(_MixinBase):
             this value (followed by ``/``) are deleted.
         """
         logger.debug("delete_thumbnails_by_folder: folder_path=%s", folder_path)
-        folder_path = _normalize_path(folder_path)
+        folder_path = normalize_path(folder_path)
         self._execute(
             "DELETE FROM thumbnails WHERE path LIKE ?",
             (f"{folder_path.rstrip('/')}/%",),

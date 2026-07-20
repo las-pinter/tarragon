@@ -1,11 +1,11 @@
-"""Favorites CRUD operations — mixed into the Database class."""
+"""Favorites CRUD operations mixed into the Database class."""
 
 from __future__ import annotations
 
 import logging
 from typing import Any
 
-from tarragon.db._base import _MixinBase, _normalize_path, _row_to_dict
+from tarragon.db._base import _MixinBase, _row_to_dict, normalize_path
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +20,7 @@ class FavoritesMixin(_MixinBase):
         sort_order: int = 0,
     ) -> None:
         """Add a file to favorites."""
-        path = _normalize_path(path)
+        path = normalize_path(path)
         logger.debug("add_favorite: path=%s, label=%s", path, label)
         self._execute(
             "INSERT OR IGNORE INTO favorites (path, label, sort_order) VALUES (?, ?, ?)",
@@ -30,7 +30,7 @@ class FavoritesMixin(_MixinBase):
 
     def remove_favorite(self, path: str) -> None:
         """Remove a file from favorites."""
-        path = _normalize_path(path)
+        path = normalize_path(path)
         logger.debug("remove_favorite: path=%s", path)
         self._execute("DELETE FROM favorites WHERE path = ?", (path,))
         self._commit()

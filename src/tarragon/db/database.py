@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from tarragon.db._base import _Base
+from tarragon.db._base import Base
 from tarragon.db._editors import EditorsMixin
 from tarragon.db._favorites import FavoritesMixin
 from tarragon.db._folder_cache import FolderCacheMixin
@@ -10,11 +10,9 @@ from tarragon.db._settings import SettingsMixin
 from tarragon.db._tags import TagsMixin
 from tarragon.db._thumbnails import ThumbnailsMixin
 
-__all__ = ["Database"]
-
 
 class Database(
-    _Base,
+    Base,
     ThumbnailsMixin,
     TagsMixin,
     FavoritesMixin,

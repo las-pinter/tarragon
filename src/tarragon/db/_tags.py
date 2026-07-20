@@ -1,11 +1,11 @@
-"""Tag and file-tag CRUD operations — mixed into the Database class."""
+"""Tag and file-tag CRUD operations mixed into the Database class."""
 
 from __future__ import annotations
 
 import logging
 from typing import Any
 
-from tarragon.db._base import _MixinBase, _normalize_path
+from tarragon.db._base import _MixinBase, normalize_path
 
 logger = logging.getLogger(__name__)
 
@@ -32,14 +32,14 @@ class TagsMixin(_MixinBase):
         )
         self._executemany(
             "INSERT OR IGNORE INTO file_tags (path, tag_id, source) VALUES (?, ?, ?)",
-            [(_normalize_path(p), tag_id, source) for p in paths],
+            [(normalize_path(p), tag_id, source) for p in paths],
         )
         self._commit()
 
     def remove_file_tags(self, paths: list[str], tag_id: int) -> None:
         """Remove file-tag associations for the given paths and tag."""
         logger.debug("remove_file_tags: %d paths, tag_id=%d", len(paths), tag_id)
-        normalized = [_normalize_path(p) for p in paths]
+        normalized = [normalize_path(p) for p in paths]
         placeholders = ",".join("?" * len(normalized))
         self._execute(
             f"DELETE FROM file_tags WHERE path IN ({placeholders}) AND tag_id = ?",
@@ -49,7 +49,7 @@ class TagsMixin(_MixinBase):
 
     def get_file_tag_ids(self, path: str) -> set[int]:
         """Return the set of tag ids associated with a given path."""
-        path = _normalize_path(path)
+        path = normalize_path(path)
         logger.debug("get_file_tag_ids: path=%s", path)
         cursor = self._execute("SELECT tag_id FROM file_tags WHERE path = ?", (path,))
         return {row["tag_id"] for row in cursor.fetchall()}
@@ -65,10 +65,10 @@ class TagsMixin(_MixinBase):
         Returns
         -------
         list[dict[str, Any]]
-            List of dicts with keys: ``id``, ``name``, ``source``.
+            List of dicts with keys: `id`, `name`, `source`.
         """
         logger.debug("get_tags_for_file: path=%s", path)
-        path = _normalize_path(path)
+        path = normalize_path(path)
         return self.fetch_all(
             """SELECT t.id, t.name, ft.source
                FROM tags t
@@ -97,7 +97,7 @@ class TagsMixin(_MixinBase):
         if not paths:
             return {}
 
-        normalized = [_normalize_path(p) for p in paths]
+        normalized = [normalize_path(p) for p in paths]
         placeholders = ", ".join("?" * len(normalized))
         rows = self.fetch_all(
             f"SELECT path, tag_id FROM file_tags WHERE path IN ({placeholders})",
@@ -129,7 +129,7 @@ class TagsMixin(_MixinBase):
 
     def replace_auto_color_tags(self, path: str, tags: list[str]) -> None:
         """Delete old auto_color tags for a path and insert new ones."""
-        path = _normalize_path(path)
+        path = normalize_path(path)
         logger.debug("replace_auto_color_tags: path=%s, tags=%d", path, len(tags))
         self._execute(
             "DELETE FROM file_tags WHERE path = ? AND source = 'auto_color'",
@@ -163,12 +163,12 @@ class TagsMixin(_MixinBase):
         Returns
         -------
         list[dict[str, Any]]
-            List of dicts with keys: ``id``, ``name``, ``usage_count``.
+            List of dicts with keys: `id`, `name`, `usage_count`.
             Ordered alphabetically by name.
         """
         logger.debug("get_all_tags_with_counts: folder_path=%s", folder_path)
         if folder_path:
-            folder_path = _normalize_path(folder_path)
+            folder_path = normalize_path(folder_path)
             return self.fetch_all(
                 """SELECT t.id, t.name, COUNT(ft.path) AS usage_count
                    FROM tags t

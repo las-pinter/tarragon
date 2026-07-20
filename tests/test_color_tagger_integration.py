@@ -13,7 +13,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from PIL import Image
 from tarragon.db import Database
-from tarragon.db._base import _normalize_path
+from tarragon.db._base import normalize_path
 from tarragon.scanner import FileInfo
 from tarragon.services.thumbnail_service import ThumbnailService
 from tarragon.thumbnail import RESOLUTION_PREVIEW, RESOLUTION_THUMBNAIL
@@ -73,7 +73,7 @@ def _make_image(width: int = 128, height: int = 64, color: tuple[int, int, int] 
 
 def _get_file_tag_names(db: Database, path: str) -> list[tuple[str, str]]:
     """Helper to retrieve tag (name, source) pairs for a file path from the DB."""
-    normalized = _normalize_path(path)
+    normalized = normalize_path(path)
     cursor = db._conn.execute(
         """
         SELECT t.name, ft.source

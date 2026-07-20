@@ -16,25 +16,8 @@ from typing import Any, Self
 
 logger = logging.getLogger(__name__)
 
-#: Acceptable SQLite parameter types (any sequence thereof).
+# Acceptable SQLite parameter types (any sequence thereof).
 SqlParams = Sequence[str | int | float | bytes | None]
-
-
-def _normalize_path(path: str) -> str:
-    """Normalize path separators to forward slashes for cross-platform consistency.
-
-    SQLite LIKE patterns use ``/`` as the separator.  On Windows,
-    ``str(Path(...))`` produces backslash-separated paths which do not
-    match ``/%`` LIKE patterns.  Normalizing everything to forward slashes
-    at the database boundary ensures consistent behaviour on all platforms.
-    """
-    if not path:
-        return path
-    return path.replace("\\", "/")
-
-
-#: Public alias for use by other modules.
-normalize_path = _normalize_path
 
 INITIAL_SCHEMA = """
 CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);
@@ -70,18 +53,23 @@ CREATE TABLE IF NOT EXISTS folder_cache_uuids (
 """
 
 
+def normalize_path(path: str) -> str:
+    """Normalize path separators to forward slashes for cross-platform consistency."""
+    if not path:
+        return path
+    return path.replace("\\", "/")
+
+
 def _row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
     """Convert a sqlite3.Row to a plain dict."""
     return dict(row)
 
 
 class _MixinBase:
-    """Abstract base for database mixins — declares the shared interface.
+    """Abstract base for database mixins, declares the shared interface.
 
     This class defines the attributes and methods that all mixin classes
-    rely on (``_execute``, ``_commit``, ``_conn``, ``_lock``, etc.) without
-    providing an ``__init__``.  This avoids MRO diamond conflicts when
-    ``Database`` inherits from both ``_Base`` and the mixins.
+    rely on.
     """
 
     _conn: sqlite3.Connection
@@ -104,10 +92,10 @@ class _MixinBase:
         raise NotImplementedError
 
 
-class _Base(_MixinBase):
+class Base(_MixinBase):
     """Base database class providing connection management and SQL helpers.
 
-    ``Database`` composes ``_Base`` with all mixins via multiple inheritance.
+    `Database` composes `_Base` with all mixins via multiple inheritance.
     """
 
     def __init__(self, db_path: Path) -> None:
@@ -117,7 +105,9 @@ class _Base(_MixinBase):
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.row_factory = sqlite3.Row
 
-    # -- Thread-safe helpers ------------------------------------------------
+    # -------------------------------------------------------------------------
+    # Thread-safe helpers
+    # -------------------------------------------------------------------------
 
     def _execute(self, sql: str, params: SqlParams = ()) -> sqlite3.Cursor:
         """Execute SQL with lock for thread safety."""
@@ -179,7 +169,9 @@ class _Base(_MixinBase):
         with self._lock:
             self._conn.commit()
 
-    # -- Generic query executor ---------------------------------------------
+    # -------------------------------------------------------------------------
+    # Generic query executor
+    # -------------------------------------------------------------------------
 
     def fetch_all(self, sql: str, params: SqlParams = ()) -> list[dict[str, Any]]:
         """Execute a SQL query and return all rows as a list of dicts.
@@ -200,7 +192,9 @@ class _Base(_MixinBase):
         cursor = self._execute(sql, params)
         return [_row_to_dict(row) for row in cursor.fetchall()]
 
-    # -- Lifecycle -----------------------------------------------------------
+    # -------------------------------------------------------------------------
+    # Lifecycle
+    # -------------------------------------------------------------------------
 
     def init_schema(self) -> None:
         """Execute INITIAL_SCHEMA; creates all tables if absent. Idempotent."""
@@ -214,7 +208,9 @@ class _Base(_MixinBase):
         logger.debug("Closing database connection: %s", self._db_path)
         self._conn.close()
 
-    # -- Schema version ------------------------------------------------------
+    # -------------------------------------------------------------------------
+    # Schema version
+    # -------------------------------------------------------------------------
 
     def set_schema_version(self, version: int) -> None:
         """Set the current schema version. Replaces any existing rows."""
@@ -232,7 +228,9 @@ class _Base(_MixinBase):
         row = self._execute("SELECT version FROM schema_version LIMIT 1").fetchone()
         return row["version"] if row else 0
 
-    # -- Context manager protocol --------------------------------------------
+    # -------------------------------------------------------------------------
+    # Context manager protocol
+    # -------------------------------------------------------------------------
 
     def __enter__(self) -> Self:
         return self

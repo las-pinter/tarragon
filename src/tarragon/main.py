@@ -33,7 +33,7 @@ class MainWindow(_MainWindow):
             settings: Application settings repository.  Auto-created if omitted.
             database: Image catalog database connection.  Auto-created if omitted.
         """
-        # Lazy construction — only create what the caller didn't provide.
+        # Lazy construction, only create what the caller didn't provide.
         owned_database: Database | None = None
 
         if database is None:

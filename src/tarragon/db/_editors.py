@@ -1,4 +1,4 @@
-"""Editor association CRUD operations — mixed into the Database class."""
+"""Editor association CRUD operations mixed into the Database class."""
 
 from __future__ import annotations
 

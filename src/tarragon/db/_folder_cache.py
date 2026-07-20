@@ -1,11 +1,11 @@
-"""Folder cache UUID CRUD operations — mixed into the Database class."""
+"""Folder cache UUID CRUD operations mixed into the Database class."""
 
 from __future__ import annotations
 
 import logging
 from pathlib import Path
 
-from tarragon.db._base import _MixinBase, _normalize_path
+from tarragon.db._base import _MixinBase, normalize_path
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +15,7 @@ class FolderCacheMixin(_MixinBase):
 
     def get_folder_uuid(self, folder_path: str) -> str | None:
         """Return the cache UUID for a source folder, or None if not mapped."""
-        folder_path = _normalize_path(folder_path)
+        folder_path = normalize_path(folder_path)
         logger.debug("get_folder_uuid: folder_path=%s", folder_path)
         row = self._execute(
             "SELECT cache_uuid FROM folder_cache_uuids WHERE folder_path = ?",
@@ -25,7 +25,7 @@ class FolderCacheMixin(_MixinBase):
 
     def upsert_folder_uuid(self, folder_path: str, cache_uuid: str) -> None:
         """Insert or update the cache UUID for a source folder."""
-        folder_path = _normalize_path(folder_path)
+        folder_path = normalize_path(folder_path)
         logger.debug("upsert_folder_uuid: folder_path=%s", folder_path)
         self._execute(
             "INSERT INTO folder_cache_uuids (folder_path, cache_uuid) VALUES (?, ?) "
@@ -39,10 +39,10 @@ class FolderCacheMixin(_MixinBase):
 
         Uses INSERT ... ON CONFLICT DO NOTHING so that concurrent callers
         for the same folder all converge on a single UUID without a
-        read-then-write race.  The actual stored UUID is always read back
+        read-then-write race. The actual stored UUID is always read back
         to guarantee consistency.
         """
-        folder_path = _normalize_path(folder_path)
+        folder_path = normalize_path(folder_path)
         logger.debug("get_or_create_folder_uuid: folder_path=%s", folder_path)
         with self._lock:
             self._conn.execute(

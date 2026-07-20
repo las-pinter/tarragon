@@ -62,12 +62,12 @@ def test_ensure_dirs_is_idempotent(tmp_path: Path) -> None:
         assert (tmp_path / "cache").is_dir()
 
 
-def test_data_dir_raises_runtimeerror_when_platformdirs_returns_none() -> None:
-    """data_dir() raises RuntimeError when platformdirs returns None."""
+def test_data_dir_raises_runtimeerror_when_platformdirs_returns_empty() -> None:
+    """data_dir() raises RuntimeError when platformdirs returns empty string."""
     from tarragon.app_paths import data_dir
 
-    with patch("tarragon.app_paths.platformdirs.user_data_dir", return_value=None):
-        with pytest.raises(RuntimeError, match="platformdirs returned None"):
+    with patch("tarragon.app_paths.platformdirs.user_data_dir", return_value=""):
+        with pytest.raises(RuntimeError, match="platformdirs returned empty string"):
             data_dir()
 
 

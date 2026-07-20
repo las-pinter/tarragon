@@ -58,7 +58,7 @@ class MainWindow(_MainWindow):
 
         resolved_settings = owned_settings or settings
 
-        # Configure custom cache directory if set (via SettingsService for validated access)
+        # Configure custom cache directory if set
         if resolved_settings is not None:
             settings_service = SettingsService(resolved_settings)
             custom_cache = settings_service.get_cache_dir()
@@ -81,19 +81,19 @@ class MainWindow(_MainWindow):
         Uses os._exit(0) after cleanup to ensure immediate termination,
         bypassing atexit handlers that may hang on stuck worker processes.
         """
-        # Shut down thumbnail service first — cancels pending work and
+        # Shut down thumbnail service first. Cancels pending work and
         # forcefully terminates any stuck worker processes.
         if self._thumbnail_service is not None:
             self._thumbnail_service.shutdown()
         # super().closeEvent() saves the dock layout via the settings
-        # service, which writes through to the database — it must run
+        # service, which writes through to the database. It must run
         # before the database connection below is closed.
         super().closeEvent(event)
         if isinstance(self._settings, Settings):
             self._settings.close()
         if isinstance(self._database, Database):
             self._database.close()
-        # Force immediate exit — bypasses atexit handlers that may hang
+        # Force immediate exit. Bypasses atexit handlers that may hang
         # on ProcessPoolExecutor worker processes stuck in system calls.
         # Skip this during testing to allow pytest to clean up properly.
         if "pytest" not in sys.modules:

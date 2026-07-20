@@ -1,4 +1,4 @@
-"""Models — data models for Tarragon views."""
+"""Data models for Tarragon views."""
 
 from tarragon.models.favorites_model import FavoritesModel
 from tarragon.models.filter_state import FilterState

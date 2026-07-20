@@ -1,7 +1,6 @@
-"""FavoritesModel — QAbstractListModel backed by the database favorites table.
+"""QAbstractListModel backed by the database favorites table.
 
-Provides a model for displaying and managing the user's favorite folders
-in the sidebar, with DisplayRole (label or basename) and UserRole (path).
+Provides a model for displaying and managing the user's favorite folders.
 """
 
 from __future__ import annotations
@@ -35,16 +34,16 @@ class FavoritesModel(QAbstractListModel):
         self.load_from_db()
 
     @override
-    def rowCount(self, parent: QModelIndex | QPersistentModelIndex = QPersistentModelIndex()) -> int:  # noqa: N802
+    def rowCount(self, parent: QModelIndex | QPersistentModelIndex = QPersistentModelIndex()) -> int:
         """Return the number of favorite entries."""
         return len(self._favorites)
 
     @override
-    def data(self, index: QModelIndex | QPersistentModelIndex, role: int = Qt.ItemDataRole.DisplayRole) -> Any:  # noqa: N802
+    def data(self, index: QModelIndex | QPersistentModelIndex, role: int = Qt.ItemDataRole.DisplayRole) -> Any:
         """Return data for *index* according to *role*.
 
-        * ``DisplayRole`` → user label, or file basename if label is ``None``
-        * ``UserRole``    → full path string
+        * ``DisplayRole``: user label, or file basename if label is ``None``
+        * ``UserRole``:    full path string
         """
         if not index.isValid() or not (0 <= index.row() < len(self._favorites)):
             return None
@@ -62,7 +61,9 @@ class FavoritesModel(QAbstractListModel):
 
         return None
 
-    # ── Mutators ────────────────────────────────────────────────
+    # -------------------------------------------------------------------------
+    # Mutators
+    # -------------------------------------------------------------------------
 
     def add_favorite(self, path: str, label: str | None = None) -> None:
         """Persist a new favorite via the database and refresh the model.

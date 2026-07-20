@@ -4,7 +4,7 @@ import logging
 import os
 import sys
 
-from PySide6.QtGui import QCloseEvent, QPalette
+from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import QApplication
 
 from tarragon.app_paths import db_path, ensure_dirs
@@ -14,19 +14,7 @@ from tarragon.migrations import MigrationRunner
 from tarragon.services.settings_service import SettingsService
 from tarragon.services.tag_service import TagService
 from tarragon.settings import Settings
-from tarragon.theme.colors import (
-    AMBER_ACCENT,
-    BG_PRIMARY,
-    BG_SECONDARY,
-    BG_TERTIARY,
-    CORAL_MUTED,
-    CORAL_STRONG,
-    HIGHLIGHT_DISABLED,
-    SEPARATOR,
-    TEXT_PRIMARY,
-    TEXT_SECONDARY,
-    TEXT_TERTIARY,
-)
+from tarragon.theme.colors import create_palette
 
 logger = logging.getLogger(__name__)
 
@@ -114,7 +102,7 @@ class MainWindow(_MainWindow):
 
 def main() -> None:
     """Application entry point."""
-    ensure_dirs()  # Create data directories before opening database
+    ensure_dirs()
 
     logging.basicConfig(
         level=logging.INFO,
@@ -130,33 +118,7 @@ def main() -> None:
     app.setApplicationName("tarragon")
     app.setStyle("Fusion")
 
-    # Set dark palette for Fusion style (matches design tokens)
-    palette = QPalette()
-    palette.setColor(QPalette.ColorRole.Window, BG_PRIMARY)
-    palette.setColor(QPalette.ColorRole.WindowText, TEXT_PRIMARY)
-    palette.setColor(QPalette.ColorRole.Base, BG_SECONDARY)
-    palette.setColor(QPalette.ColorRole.AlternateBase, BG_TERTIARY)
-    palette.setColor(QPalette.ColorRole.ToolTipBase, BG_TERTIARY)
-    palette.setColor(QPalette.ColorRole.ToolTipText, TEXT_PRIMARY)
-    palette.setColor(QPalette.ColorRole.Text, TEXT_PRIMARY)
-    palette.setColor(QPalette.ColorRole.Button, BG_TERTIARY)
-    palette.setColor(QPalette.ColorRole.ButtonText, TEXT_PRIMARY)
-    palette.setColor(QPalette.ColorRole.BrightText, CORAL_STRONG)
-    palette.setColor(QPalette.ColorRole.Highlight, CORAL_MUTED)
-    palette.setColor(QPalette.ColorRole.HighlightedText, TEXT_PRIMARY)
-    palette.setColor(QPalette.ColorRole.Link, AMBER_ACCENT)
-
-    # Disabled color group — for disabled widgets
-    palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.WindowText, TEXT_TERTIARY)
-    palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.Text, TEXT_TERTIARY)
-    palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.ButtonText, TEXT_TERTIARY)
-    palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.HighlightedText, TEXT_TERTIARY)
-    palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.Highlight, HIGHLIGHT_DISABLED)
-
-    # Additional roles for completeness
-    palette.setColor(QPalette.ColorRole.Mid, SEPARATOR)
-    palette.setColor(QPalette.ColorRole.LinkVisited, TEXT_SECONDARY)
-    palette.setColor(QPalette.ColorRole.PlaceholderText, TEXT_TERTIARY)
+    palette = create_palette()
     app.setPalette(palette)
 
     window = MainWindow()

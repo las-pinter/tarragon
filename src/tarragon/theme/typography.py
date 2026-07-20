@@ -1,28 +1,16 @@
-"""Typography constants derived from design tokens.
-
-Raw values (sizes) come from the ``typography`` section of *tokens.json*.
-Only the constants with production consumers are exported.
-
-Example::
-
-    from tarragon.theme.typography import SMALL_SIZE, LOG_SIZE
-    label.setFontSize(SMALL_SIZE)
-    log.setFontSize(LOG_SIZE)
-"""
+"""Typography constants derived from design tokens."""
 
 from __future__ import annotations
 
-from tarragon.theme.tokens import load_tokens
+BODY_SIZE: int = 12
+HEADING_SIZE: int = 16
+SMALL_SIZE: int = 10
+LOG_SIZE: int = 11
+CAPTION_SIZE: int = 11
 
-# ── Load tokens once at import time ──────────────────────────────────────────
-_typo: dict[str, int | str] = load_tokens()["typography"]
+WEIGHT_REGULAR: int = 400
+WEIGHT_MEDIUM: int = 500
+WEIGHT_SEMIBOLD: int = 600
 
-# ── Raw token values ─────────────────────────────────────────────────────────
-
-#: Small / caption text size in points.
-SMALL_SIZE: int = int(_typo["small_size"])
-
-#: Log / monospace text size in points.
-LOG_SIZE: int = int(_typo["log_size"])
-
-__all__ = ["LOG_SIZE", "SMALL_SIZE"]
+FONT_FAMILY: str = "Segoe UI, -apple-system, sans-serif"
+MONO_FAMILY: str = "Consolas, Courier New, monospace"

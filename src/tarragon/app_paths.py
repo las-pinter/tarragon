@@ -17,29 +17,16 @@ def set_cache_dir(custom_path: Path | None) -> None:
 
 
 def _is_compiled() -> bool:
-    """Return True when this module is running from a Nuitka-compiled build.
-
-    Nuitka injects a ``__compiled__`` attribute into the namespace of every
-    module it compiles (not just the main module), so checking for it here
-    reliably distinguishes a packaged build from a normal `python`/pytest
-    run — where portable-mode detection should never kick in.
-    """
+    """Return True when this module is running from a Nuitka-compiled build."""
     return "__compiled__" in globals()
 
 
 def _portable_data_dir() -> Path | None:
     """Return the portable data directory next to the executable, if present.
 
-    A `data` folder placed next to the executable signals portable mode:
-    all app state (db, cache) lives alongside the binary instead of the OS
-    user-data directory, so the whole app is self-contained on a USB stick,
-    a synced folder, etc.
+    A `data` folder placed next to the executable signals portable mode.
 
-    Only checked in compiled builds. In Nuitka onefile mode, ``sys.argv[0]``
-    is the path to the original launched executable, while ``__file__``
-    would point at the temporary extraction directory the bootstrap unpacks
-    to — so ``sys.argv[0]`` is the correct anchor for finding a sibling
-    `data` folder.
+    Only checked in compiled builds.
     """
     if not _is_compiled():
         return None
@@ -70,9 +57,9 @@ def data_dir() -> Path:
         return portable
 
     result = platformdirs.user_data_dir("tarragon")
-    if result is None:
+    if result == "":
         raise RuntimeError(
-            "platformdirs returned None for user_data_dir('tarragon'). "
+            "platformdirs returned empty string for user_data_dir('tarragon'). "
             "This typically happens on headless systems without a valid "
             "HOME or XDG_DATA_HOME environment variable."
         )

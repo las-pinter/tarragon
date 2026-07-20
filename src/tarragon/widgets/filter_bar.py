@@ -26,7 +26,7 @@ from PySide6.QtWidgets import (
 
 from tarragon.db import Database
 from tarragon.services.tag_service import TagService
-from tarragon.theme.constants import XS
+from tarragon.theme.constants import SPACING_XS
 from tarragon.widgets._chip_utils import create_removable_chip
 from tarragon.widgets.color_filter_bar import ColorFilterBar
 from tarragon.widgets.flow_layout import FlowLayout
@@ -82,7 +82,7 @@ class FilterBar(QWidget):
         self._folder_chips_container = QWidget()
         self._folder_chips_layout = QHBoxLayout(self._folder_chips_container)
         self._folder_chips_layout.setContentsMargins(0, 0, 0, 0)
-        self._folder_chips_layout.setSpacing(XS)
+        self._folder_chips_layout.setSpacing(SPACING_XS)
 
         # Folder menu (reused, cleared & repopulated on each show)
         self._folder_menu = QMenu(self)

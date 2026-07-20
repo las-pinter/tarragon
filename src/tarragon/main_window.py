@@ -513,9 +513,9 @@ class MainWindow(QMainWindow):
 
     def _apply_theme(self) -> None:
         """Generate and apply the QSS stylesheet from design tokens."""
-        from tarragon.theme.qss_generator import load_and_generate_qss
+        from tarragon.theme.qss_generator import generate_qss
 
-        qss_content = load_and_generate_qss()
+        qss_content = generate_qss()
         app = QApplication.instance()
         if isinstance(app, QApplication):
             app.setStyleSheet(qss_content)

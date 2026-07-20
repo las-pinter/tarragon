@@ -12,7 +12,7 @@ from PySide6.QtWidgets import QHBoxLayout, QPushButton, QScrollArea, QWidget
 
 from tarragon.theme.color_buckets import BUCKET_HEX_COLORS
 from tarragon.theme.colors import AMBER_ACCENT
-from tarragon.theme.constants import SM, XS
+from tarragon.theme.constants import SPACING_S, SPACING_XS
 
 # -- Style constants ----------------------------------------------------------
 
@@ -45,7 +45,7 @@ class ColorFilterBar(QWidget):
 
         # -- Layout -----------------------------------------------------------
         outer_layout = QHBoxLayout(self)
-        outer_layout.setContentsMargins(SM, XS, SM, XS)
+        outer_layout.setContentsMargins(SPACING_S, SPACING_XS, SPACING_S, SPACING_XS)
 
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
@@ -55,8 +55,8 @@ class ColorFilterBar(QWidget):
 
         container = QWidget()
         self._layout = QHBoxLayout(container)
-        self._layout.setContentsMargins(XS, XS, XS, XS)
-        self._layout.setSpacing(XS)
+        self._layout.setContentsMargins(SPACING_XS, SPACING_XS, SPACING_XS, SPACING_XS)
+        self._layout.setSpacing(SPACING_XS)
 
         for bucket_name, hex_color in self.BUCKET_HUES.items():
             btn = self._create_swatch_button(bucket_name, hex_color)

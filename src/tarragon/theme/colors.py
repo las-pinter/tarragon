@@ -1,123 +1,92 @@
-"""Typed QColor constants derived from tokens.json.
-
-Every color in the ``colors`` and ``badge`` sections of *tokens.json* is
-exposed as a module-level :class:`QColor` constant using ``UPPER_CASE``
-naming.
-
-Example::
-
-    from tarragon.theme.colors import BG_PRIMARY, CORAL_STRONG, BADGE_BG_VINOUS
-    widget.setStyleSheet(f"background: {BG_PRIMARY.name()};")
-"""
+"""Typed QColor constants and palette."""
 
 from __future__ import annotations
 
-from PySide6.QtGui import QColor
+from PySide6.QtGui import QColor, QPalette
 
-from tarragon.theme.tokens import load_tokens
+# Background colors
+BG_PRIMARY: QColor = QColor("#16151A")
+BG_SECONDARY: QColor = QColor("#1c1b22")
+BG_TERTIARY: QColor = QColor("#211f29")
+SURFACE_HIGHLIGHT: QColor = QColor("#3D3B44")
 
-# ── Load tokens once at import time ──────────────────────────────────────────
-_tokens = load_tokens()
-_colors: dict[str, str] = _tokens["colors"]
-_badge: dict[str, str] = _tokens["badge"]
+# Accent colors
+CORAL_STRONG: QColor = QColor("#F0997B")
+CORAL_MUTED: QColor = QColor("#D85A30")
+CORAL_DARK: QColor = QColor("#4A1B0C")
+CORAL_BRIGHT: QColor = QColor("#E06540")
+AMBER_ACCENT: QColor = QColor("#FAC775")
+AMBER_LIGHT: QColor = QColor("#FFD480")
+AMBER_DARK: QColor = QColor("#412402")
 
-# ── Background colors ────────────────────────────────────────────────────────
-BG_PRIMARY: QColor = QColor(_colors["bg_primary"])
-BG_SECONDARY: QColor = QColor(_colors["bg_secondary"])
-BG_TERTIARY: QColor = QColor(_colors["bg_tertiary"])
-SURFACE_HIGHLIGHT: QColor = QColor(_colors["surface_highlight"])
+# Surface interaction colors
+SURFACE_HOVER: QColor = QColor("#2a2836")
 
-# ── Accent colors ────────────────────────────────────────────────────────────
-CORAL_STRONG: QColor = QColor(_colors["coral_strong"])
-CORAL_MUTED: QColor = QColor(_colors["coral_muted"])
-CORAL_DARK: QColor = QColor(_colors["coral_dark"])
-CORAL_BRIGHT: QColor = QColor(_colors["coral_bright"])
-AMBER_ACCENT: QColor = QColor(_colors["amber_accent"])
-AMBER_LIGHT: QColor = QColor(_colors["amber_light"])
-AMBER_DARK: QColor = QColor(_colors["amber_dark"])
+# Text colors
+TEXT_PRIMARY: QColor = QColor("#ece9f2")
+TEXT_SECONDARY: QColor = QColor("#8d8a98")
+TEXT_TERTIARY: QColor = QColor("#a8a5b0")
+TEXT_MUTED: QColor = QColor("#65626f")
 
-# ── Surface interaction colors ───────────────────────────────────────────────
-SURFACE_HOVER: QColor = QColor(_colors["surface_hover"])
+# Border colors
+BORDER_SUBTLE: QColor = QColor("rgba(255,255,255,0.06)")
+BORDER_CARD: QColor = QColor("rgba(255,255,255,0.08)")
+BORDER_INTERACTIVE: QColor = QColor("rgba(255,255,255,0.12)")
 
-# ── Text colors ──────────────────────────────────────────────────────────────
-TEXT_PRIMARY: QColor = QColor(_colors["text_primary"])
-TEXT_SECONDARY: QColor = QColor(_colors["text_secondary"])
-TEXT_TERTIARY: QColor = QColor(_colors["text_tertiary"])
-TEXT_MUTED: QColor = QColor(_colors["text_muted"])
+# Misc colors
+BG_DISABLED: QColor = QColor("#1a1820")
+BORDER_DISABLED: QColor = QColor("#3a3845")
+BG_LOG_PANEL: QColor = QColor("#1a1a2e")
+HIGHLIGHT_DISABLED: QColor = QColor("#4A3A35")
+SEPARATOR: QColor = QColor("#1E1D23")
 
-# ── Border colors ────────────────────────────────────────────────────────────
-BORDER_SUBTLE: QColor = QColor(_colors["border_subtle"])
-BORDER_CARD: QColor = QColor(_colors["border_card"])
-BORDER_INTERACTIVE: QColor = QColor(_colors["border_interactive"])
+# Badge colors
+BADGE_BG_VINOUS: QColor = QColor("#4A1B0C")
+BADGE_FG_VINOUS: QColor = QColor("#F0997B")
+BADGE_BG_SAGE: QColor = QColor("#1A3A2A")
+BADGE_FG_SAGE: QColor = QColor("#7BC88F")
+BADGE_BG_NAVY: QColor = QColor("#1A2A3A")
+BADGE_FG_NAVY: QColor = QColor("#7BA8C8")
+BADGE_BG_UMBER: QColor = QColor("#3A2A1A")
+BADGE_FG_UMBER: QColor = QColor("#C8A87B")
+BADGE_BG_PLUM: QColor = QColor("#2A1A3A")
+BADGE_FG_PLUM: QColor = QColor("#A87BC8")
+BADGE_BG_TEAL: QColor = QColor("#1A3A3A")
+BADGE_FG_TEAL: QColor = QColor("#7BC8C8")
+BADGE_BG_OLIVE: QColor = QColor("#3A3A1A")
+BADGE_FG_OLIVE: QColor = QColor("#C8C87B")
+BADGE_BG_AZURE: QColor = QColor("#2E86AB")
+BADGE_FG_AZURE: QColor = QColor("#D4EEF7")
+BADGE_BG_NEUTRAL: QColor = QColor("#2A2A2A")
+BADGE_FG_NEUTRAL: QColor = QColor("#A8A5B0")
 
-# ── Misc colors ──────────────────────────────────────────────────────────────
-BG_DISABLED: QColor = QColor(_colors["bg_disabled"])
-BORDER_DISABLED: QColor = QColor(_colors["border_disabled"])
-BG_LOG_PANEL: QColor = QColor(_colors["bg_log_panel"])
-HIGHLIGHT_DISABLED: QColor = QColor(_colors["highlight_disabled"])
-SEPARATOR: QColor = QColor(_colors["separator"])
 
-# ── Badge colors ─────────────────────────────────────────────────────────────
-BADGE_BG_VINOUS: QColor = QColor(_badge["bg_vinous"])
-BADGE_FG_VINOUS: QColor = QColor(_badge["fg_vinous"])
-BADGE_BG_SAGE: QColor = QColor(_badge["bg_sage"])
-BADGE_FG_SAGE: QColor = QColor(_badge["fg_sage"])
-BADGE_BG_NAVY: QColor = QColor(_badge["bg_navy"])
-BADGE_FG_NAVY: QColor = QColor(_badge["fg_navy"])
-BADGE_BG_UMBER: QColor = QColor(_badge["bg_umber"])
-BADGE_FG_UMBER: QColor = QColor(_badge["fg_umber"])
-BADGE_BG_PLUM: QColor = QColor(_badge["bg_plum"])
-BADGE_FG_PLUM: QColor = QColor(_badge["fg_plum"])
-BADGE_BG_TEAL: QColor = QColor(_badge["bg_teal"])
-BADGE_FG_TEAL: QColor = QColor(_badge["fg_teal"])
-BADGE_BG_OLIVE: QColor = QColor(_badge["bg_olive"])
-BADGE_FG_OLIVE: QColor = QColor(_badge["fg_olive"])
-BADGE_BG_AZURE: QColor = QColor(_badge["bg_azure"])
-BADGE_FG_AZURE: QColor = QColor(_badge["fg_azure"])
-BADGE_BG_NEUTRAL: QColor = QColor(_badge["bg_neutral"])
-BADGE_FG_NEUTRAL: QColor = QColor(_badge["fg_neutral"])
+def create_palette() -> QPalette:
+    palette = QPalette()
+    palette.setColor(QPalette.ColorRole.Window, BG_PRIMARY)
+    palette.setColor(QPalette.ColorRole.WindowText, TEXT_PRIMARY)
+    palette.setColor(QPalette.ColorRole.Base, BG_SECONDARY)
+    palette.setColor(QPalette.ColorRole.AlternateBase, BG_TERTIARY)
+    palette.setColor(QPalette.ColorRole.ToolTipBase, BG_TERTIARY)
+    palette.setColor(QPalette.ColorRole.ToolTipText, TEXT_PRIMARY)
+    palette.setColor(QPalette.ColorRole.Text, TEXT_PRIMARY)
+    palette.setColor(QPalette.ColorRole.Button, BG_TERTIARY)
+    palette.setColor(QPalette.ColorRole.ButtonText, TEXT_PRIMARY)
+    palette.setColor(QPalette.ColorRole.BrightText, CORAL_STRONG)
+    palette.setColor(QPalette.ColorRole.Highlight, CORAL_MUTED)
+    palette.setColor(QPalette.ColorRole.HighlightedText, TEXT_PRIMARY)
+    palette.setColor(QPalette.ColorRole.Link, AMBER_ACCENT)
 
-__all__ = [
-    "AMBER_ACCENT",
-    "AMBER_DARK",
-    "AMBER_LIGHT",
-    "BADGE_BG_AZURE",
-    "BADGE_BG_NEUTRAL",
-    "BADGE_BG_NAVY",
-    "BADGE_BG_OLIVE",
-    "BADGE_BG_PLUM",
-    "BADGE_BG_SAGE",
-    "BADGE_BG_TEAL",
-    "BADGE_BG_UMBER",
-    "BADGE_BG_VINOUS",
-    "BADGE_FG_AZURE",
-    "BADGE_FG_NEUTRAL",
-    "BADGE_FG_NAVY",
-    "BADGE_FG_OLIVE",
-    "BADGE_FG_PLUM",
-    "BADGE_FG_SAGE",
-    "BADGE_FG_TEAL",
-    "BADGE_FG_UMBER",
-    "BADGE_FG_VINOUS",
-    "BG_DISABLED",
-    "BG_LOG_PANEL",
-    "BG_PRIMARY",
-    "BG_SECONDARY",
-    "BG_TERTIARY",
-    "BORDER_CARD",
-    "BORDER_DISABLED",
-    "BORDER_INTERACTIVE",
-    "BORDER_SUBTLE",
-    "CORAL_BRIGHT",
-    "CORAL_DARK",
-    "CORAL_MUTED",
-    "CORAL_STRONG",
-    "HIGHLIGHT_DISABLED",
-    "SEPARATOR",
-    "SURFACE_HIGHLIGHT",
-    "SURFACE_HOVER",
-    "TEXT_MUTED",
-    "TEXT_PRIMARY",
-    "TEXT_SECONDARY",
-    "TEXT_TERTIARY",
-]
+    # Disabled color group for disabled widgets
+    palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.WindowText, TEXT_TERTIARY)
+    palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.Text, TEXT_TERTIARY)
+    palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.ButtonText, TEXT_TERTIARY)
+    palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.HighlightedText, TEXT_TERTIARY)
+    palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.Highlight, HIGHLIGHT_DISABLED)
+
+    # Additional roles for completeness
+    palette.setColor(QPalette.ColorRole.Mid, SEPARATOR)
+    palette.setColor(QPalette.ColorRole.LinkVisited, TEXT_SECONDARY)
+    palette.setColor(QPalette.ColorRole.PlaceholderText, TEXT_TERTIARY)
+
+    return palette

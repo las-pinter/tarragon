@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from tarragon.theme.constants import XS
+from tarragon.theme.constants import SPACING_XS
 
 
 def create_removable_chip(
@@ -48,8 +48,8 @@ def create_removable_chip(
     chip.setObjectName("filterChip")
 
     chip_layout = QHBoxLayout(chip)
-    chip_layout.setContentsMargins(XS, XS, XS, XS)
-    chip_layout.setSpacing(XS)
+    chip_layout.setContentsMargins(SPACING_XS, SPACING_XS, SPACING_XS, SPACING_XS)
+    chip_layout.setSpacing(SPACING_XS)
 
     label = QLabel(label_text)
     label.setObjectName("filterChipLabel")

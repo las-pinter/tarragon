@@ -1,4 +1,4 @@
-"""Tarragon theme — design tokens and visual constants."""
+"""Tarragon theme design tokens and visual constants."""
 
 from tarragon.theme import color_buckets, colors
 

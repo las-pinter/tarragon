@@ -29,7 +29,7 @@ from tarragon.image_utils import _EXIF_ORIENTATION_TAG, _apply_exif_from_origina
 from tarragon.services.tag_service import TagService
 from tarragon.theme.color_buckets import BUCKET_COLORS, BUCKET_HEX_COLORS
 from tarragon.theme.colors import BG_SECONDARY
-from tarragon.theme.constants import MULTI_PREVIEW_MAX_DEFAULT, SM, XS
+from tarragon.theme.constants import MULTI_PREVIEW_MAX_DEFAULT, SPACING_S, SPACING_XS
 from tarragon.widgets.flow_layout import FlowLayout
 from tarragon.widgets.tag_pill import _TagPillWidget
 
@@ -83,8 +83,8 @@ class PreviewPanel(QWidget):
     def _setup_ui(self) -> None:
         """Build the UI layout."""
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(SM, SM, SM, SM)
-        layout.setSpacing(SM)
+        layout.setContentsMargins(SPACING_S, SPACING_S, SPACING_S, SPACING_S)
+        layout.setSpacing(SPACING_S)
 
         # ── Image label (centered, scaled) ────────────────────────────
         self._image_label = QLabel()
@@ -104,7 +104,7 @@ class PreviewPanel(QWidget):
         layout.addWidget(self._metadata_header)
 
         self._metadata_grid = QGridLayout()
-        self._metadata_grid.setHorizontalSpacing(SM)
+        self._metadata_grid.setHorizontalSpacing(SPACING_S)
         self._metadata_grid.setVerticalSpacing(2)
 
         # Key labels (left column — muted)
@@ -148,7 +148,7 @@ class PreviewPanel(QWidget):
         self._color_squares_container = QWidget()
         self._color_squares_layout = QHBoxLayout(self._color_squares_container)
         self._color_squares_layout.setContentsMargins(0, 0, 0, 0)
-        self._color_squares_layout.setSpacing(XS)
+        self._color_squares_layout.setSpacing(SPACING_XS)
         self._color_square_buttons: dict[str, QPushButton] = {}
         for bucket_name in BUCKET_COLORS:
             btn = self._create_color_square_button(bucket_name)

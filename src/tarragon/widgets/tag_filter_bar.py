@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (
 )
 
 from tarragon.services.tag_service import TagService
-from tarragon.theme.constants import SM, XS
+from tarragon.theme.constants import SPACING_S
 from tarragon.widgets._chip_utils import create_removable_chip
 
 
@@ -49,8 +49,8 @@ class TagFilterBar(QWidget):
         # margins here would push the Add Tag+ button below the baseline
         # of sibling widgets (e.g. the Add Folder+ button) that have no
         # such internal padding.
-        layout.setContentsMargins(SM, 0, SM, 0)
-        layout.setSpacing(XS)
+        layout.setContentsMargins(SPACING_S, 0, SPACING_S, 0)
+        layout.setSpacing(SPACING_S)
 
         # "Add Tag+" button — always visible, opens tag menu on click
         self._add_button = QPushButton("Add Tag+")
@@ -62,7 +62,7 @@ class TagFilterBar(QWidget):
         self._chips_container = QWidget()
         self._chips_layout = QHBoxLayout(self._chips_container)
         self._chips_layout.setContentsMargins(0, 0, 0, 0)
-        self._chips_layout.setSpacing(XS)
+        self._chips_layout.setSpacing(SPACING_S)
         layout.addWidget(self._chips_container)
 
         layout.addStretch()

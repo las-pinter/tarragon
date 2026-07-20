@@ -1,8 +1,6 @@
 """File extension badge color definitions.
 
-Maps file extensions to (background, text) :class:`QColor` pairs used by
-:class:`~tarragon.widgets.thumbnail_grid.ThumbnailDelegate` to paint a
-color-coded badge on each thumbnail.
+Maps file extensions to (background, text) QColor pairs.
 """
 
 from __future__ import annotations
@@ -30,7 +28,7 @@ from tarragon.theme.colors import (
     BADGE_FG_VINOUS,
 )
 
-# Map of file extension -> (background_color, text_color)
+# Map of file extensions
 BADGE_COLORS: dict[str, tuple[QColor, QColor]] = {
     "psd": (BADGE_BG_VINOUS, BADGE_FG_VINOUS),
     "psb": (BADGE_BG_VINOUS, BADGE_FG_VINOUS),
@@ -60,10 +58,3 @@ def get_badge_colors(extension: str) -> tuple[QColor, QColor]:
     """
     ext = extension.lower().lstrip(".")
     return BADGE_COLORS.get(ext, DEFAULT_BADGE_COLORS)
-
-
-__all__ = [
-    "BADGE_COLORS",
-    "DEFAULT_BADGE_COLORS",
-    "get_badge_colors",
-]

@@ -1,24 +1,12 @@
-"""QSS generator — builds the application stylesheet from design tokens.
-
-Reads ``tokens.json`` (via :func:`~tarragon.theme.tokens.load_tokens`) and
-produces a deterministic QSS string from the design tokens.
-Changing token values in ``tokens.json`` and
-re-running the generator updates the entire theme.
-
-Example::
-
-    from tarragon.theme.qss_generator import generate_qss
-    from tarragon.theme.tokens import load_tokens
-
-    qss = generate_qss(load_tokens())
-    app.setStyleSheet(qss)
-"""
+"""Generator for the application stylesheet."""
 
 from __future__ import annotations
 
-from typing import Any
+import tarragon.theme.colors as colors
+import tarragon.theme.constants as constants
+import tarragon.theme.typography as typography
 
-#: CSS generic font family keywords and system font identifiers — must NOT be quoted in QSS/CSS.
+# CSS generic font family keywords and system font identifiers
 _CSS_GENERIC_FAMILIES = frozenset(
     {
         "serif",
@@ -55,95 +43,38 @@ def _format_font_family(font_family: str) -> str:
     return ", ".join(parts)
 
 
-def generate_qss(tokens: dict[str, Any]) -> str:
+def generate_qss() -> str:
     """Generate a complete QSS stylesheet from design tokens.
-
-    The output is deterministic: the same *tokens* dictionary always produces
-    the same QSS string.  All hardcoded color, spacing, typography, and
-    border-radius values are resolved from the token dictionaries.
-
-    Args:
-        tokens: Parsed ``tokens.json`` dictionary.  Must contain the keys
-            ``colors``, ``typography``, ``spacing``, and ``radius``.
 
     Returns:
         A complete QSS stylesheet string ready for ``QApplication.setStyleSheet``.
     """
-    c = tokens["colors"]
-    t = tokens["typography"]
-    s = tokens["spacing"]
-    r = tokens["radius"]
-
-    # Pre-format the font-family strings for QSS.
-    # The primary font name is always quoted; generic fallbacks are not.
-    # We construct QSS-safe font strings from the token values: the first (primary)
-    # font is quoted, remaining names are passed through as-is.
-    ui_font = _format_font_family(str(t["font_family"]))
-    mono_font = _format_font_family(str(t["mono_family"]))
-
-    body_px = int(t["body_size"])
-    small_px = int(t["small_size"])
-    log_px = int(t["log_size"])
-    caption_px = int(t["caption_size"])
-    weight_semibold = int(t["weight_semibold"])
-
-    xs = int(s["xs"])
-    sm = int(s["sm"])
-    md = int(s["md"])
-    lg = int(s["lg"])
-
-    r_xs = int(r["xs"])
-    r_sm = int(r["sm"])
-    r_md = int(r["md"])
-    r_lg = int(r["lg"])
-    r_xl = int(r["xl"])
-
-    # Color shortcuts for readability.
-    bg_primary = c["bg_primary"]
-    bg_secondary = c["bg_secondary"]
-    bg_tertiary = c["bg_tertiary"]
-    surface_highlight = c["surface_highlight"]
-    surface_hover = c["surface_hover"]
-    coral_strong = c["coral_strong"]
-    coral_muted = c["coral_muted"]
-    coral_dark = c["coral_dark"]
-    coral_bright = c["coral_bright"]
-    amber_accent = c["amber_accent"]
-    amber_light = c["amber_light"]
-    amber_dark = c["amber_dark"]
-    text_primary = c["text_primary"]
-    text_secondary = c["text_secondary"]
-    text_muted = c["text_muted"]
-    text_tertiary = c["text_tertiary"]
-    border_interactive = c["border_interactive"]
-    bg_disabled = c["bg_disabled"]
-    border_disabled = c["border_disabled"]
-    bg_log_panel = c["bg_log_panel"]
 
     return f"""\
-/* Tarragon Theme — Dark Coral-Amber Aesthetic */
-/* Generated from tokens.json: colors, typography, spacing, radius, layout */
+/* Tarragon Theme, Dark Coral-Amber Aesthetic */
 
-/* ── Base window background ─────────────────────────────────────── */
+/* -------------------------------------------------------------------------------- */
+/* Base window background */
+/* -------------------------------------------------------------------------------- */
 QMainWindow {{
-    background-color: {bg_primary};
+    background-color: hsla{colors.BG_PRIMARY.getHsl()};
 }}
 
-/* ── Dock widgets (Library, Gallery, Preview) ───────────────────── */
+/* Dock widgets (Library, Gallery, Preview) */
 QDockWidget {{
-    background-color: {bg_secondary};
-    color: {text_primary};
-    font-family: {ui_font};
-    font-size: {body_px}px;
+    background-color: hsla{colors.BG_SECONDARY.getHsl()};
+    color: hsla{colors.TEXT_PRIMARY.getHsl()};
+    font-family: {_format_font_family(typography.FONT_FAMILY)};
+    font-size: {typography.BODY_SIZE}px;
 }}
 
 QDockWidget::title {{
-    background-color: {bg_tertiary};
-    color: {amber_accent};
-    font-weight: {weight_semibold};
-    font-size: {body_px}px;
-    padding-left: {sm}px;
-    padding-right: {sm}px;
+    background-color: hsla{colors.BG_TERTIARY.getHsl()};
+    color: hsla{colors.AMBER_ACCENT.getHsl()};
+    font-weight: {typography.WEIGHT_SEMIBOLD};
+    font-size: {typography.BODY_SIZE}px;
+    padding-left: {constants.SPACING_S}px;
+    padding-right: {constants.SPACING_S}px;
 }}
 
 QDockWidget::close-button,
@@ -154,95 +85,101 @@ QDockWidget::float-button {{
 
 QDockWidget::close-button:hover,
 QDockWidget::float-button:hover {{
-    background-color: {surface_highlight};
+    background-color: hsla{colors.SURFACE_HIGHLIGHT.getHsl()};
 }}
 
-/* ── Buttons (toolbar, action buttons) ──────────────────────────── */
+/* -------------------------------------------------------------------------------- */
+/*  Buttons */
+/* -------------------------------------------------------------------------------- */
 QPushButton {{
-    background-color: {bg_tertiary};
-    color: {text_primary};
-    font-family: {ui_font};
-    font-size: {body_px}px;
+    background-color: hsla{colors.BG_TERTIARY.getHsl()};
+    color: hsla{colors.TEXT_PRIMARY.getHsl()};
+    font-family: {_format_font_family(typography.FONT_FAMILY)};
+    font-size: {typography.BODY_SIZE}px;
     border: none;
-    border-radius: {r_sm}px;
-    padding-left: {md}px;
-    padding-right: {md}px;
-    padding-top: {xs + 2}px;
-    padding-bottom: {xs + 2}px;
+    border-radius: {constants.RADIUS_S}px;
+    padding-left: {constants.SPACING_M}px;
+    padding-right: {constants.SPACING_M}px;
+    padding-top: {constants.SPACING_XS + 2}px;
+    padding-bottom: {constants.SPACING_XS + 2}px;
 }}
 
 QPushButton:hover {{
-    background-color: {surface_highlight};
-    color: {amber_accent};
+    background-color: hsla{colors.SURFACE_HIGHLIGHT.getHsl()};
+    color: hsla{colors.AMBER_ACCENT.getHsl()};
 }}
 
 QPushButton:pressed {{
-    background-color: {coral_muted};
-    color: {text_primary};
+    background-color: hsla{colors.CORAL_MUTED.getHsl()};
+    color: hsla{colors.TEXT_PRIMARY.getHsl()};
 }}
 
-/* ── Labels (static text) ───────────────────────────────────────── */
+/* -------------------------------------------------------------------------------- */
+/* Labels  */
+/* -------------------------------------------------------------------------------- */
 QLabel {{
     background-color: transparent;
-    color: {text_primary};
-    font-family: {ui_font};
-    font-size: {body_px}px;
+    color: hsla{colors.TEXT_PRIMARY.getHsl()};
+    font-family: {_format_font_family(typography.FONT_FAMILY)};
+    font-size: {typography.BODY_SIZE}px;
 }}
 
-/* ── Tag pills ──────────────────────────────────────────────────── */
+/* Tag pills */
 QLabel[tagRole="primary"] {{
-    background-color: {coral_dark};  /* dark tinted bg */
-    color: {coral_strong};  /* coral text */
-    padding: {xs - 1}px {sm}px;
-    border-radius: {r_xl}px;
-    font-size: {small_px}px;
+    background-color: hsla{colors.CORAL_DARK.getHsl()};
+    color: hsla{colors.CORAL_STRONG.getHsl()};
+    padding: {constants.SPACING_XS - 1}px {constants.SPACING_S}px;
+    border-radius: {constants.RADIUS_XL}px;
+    font-size: {typography.SMALL_SIZE}px;
 }}
 
 QLabel[tagRole="secondary"] {{
-    background-color: {amber_dark};  /* dark tinted bg */
-    color: {amber_accent};  /* amber text */
-    padding: {xs - 1}px {sm}px;
-    border-radius: {r_xl}px;
-    font-size: {small_px}px;
+    background-color: hsla{colors.AMBER_DARK.getHsl()};
+    color: hsla{colors.AMBER_ACCENT.getHsl()};
+    padding: {constants.SPACING_XS - 1}px {constants.SPACING_S}px;
+    border-radius: {constants.RADIUS_XL}px;
+    font-size: {typography.SMALL_SIZE}px;
 }}
 
-/* ── Line edits (search boxes, text input) ──────────────────────── */
+/* Line edits */
 QLineEdit {{
-    background-color: {bg_secondary};
-    color: {text_primary};
-    font-family: {ui_font};
-    font-size: {caption_px}px;
+    background-color: hsla{colors.BG_SECONDARY.getHsl()};
+    color: hsla{colors.TEXT_PRIMARY.getHsl()};
+    font-family: {_format_font_family(typography.FONT_FAMILY)};
+    font-size: {typography.CAPTION_SIZE}px;
     border: none;
-    border-radius: {r_md}px;
+    border-radius: {constants.RADIUS_M}px;
     padding-left: 28px;
-    padding-right: {sm}px;
-    padding-top: {xs}px;
-    padding-bottom: {xs}px;
+    padding-right: {constants.SPACING_S}px;
+    padding-top: {constants.SPACING_XS}px;
+    padding-bottom: {constants.SPACING_XS}px;
 }}
 
 QLineEdit:hover {{
-    background-color: {surface_highlight};
+    background-color: hsla{colors.SURFACE_HIGHLIGHT.getHsl()};
 }}
 
 QLineEdit:focus {{
-    border: 1px solid {coral_strong};
+    border: 1px solid hsla{colors.CORAL_STRONG.getHsl()};
 }}
 
-/* ── Scroll bars (gallery thumbnails) ───────────────────────────── */
+/* -------------------------------------------------------------------------------- */
+/* Scroll bars (gallery thumbnails) */
+/* -------------------------------------------------------------------------------- */
 QScrollBar:vertical {{
-    background-color: {bg_secondary};
-    width: {sm}px;
+    background-color: hsla{colors.BG_SECONDARY.getHsl()};
+    width: {constants.SPACING_S}px;
     margin: 0px;
 }}
 
 QScrollBar::handle:vertical {{
-    background-color: {bg_tertiary};
-    border-radius: {r_md}px;
+    background-color: hsla{colors.BG_TERTIARY.getHsl()};
+    border-radius: {constants.RADIUS_M}px;
     min-height: 20px;
 }}
 
 QScrollBar::handle:vertical:hover {{
-    background-color: {coral_muted};
+    background-color: hsla{colors.CORAL_MUTED.getHsl()};
 }}
 
 QScrollBar::add-line:vertical,
@@ -251,19 +188,19 @@ QScrollBar::sub-line:vertical {{
 }}
 
 QScrollBar:horizontal {{
-    background-color: {bg_secondary};
-    height: {sm}px;
+    background-color: hsla{colors.BG_SECONDARY.getHsl()};
+    height: {constants.SPACING_S}px;
     margin: 0px;
 }}
 
 QScrollBar::handle:horizontal {{
-    background-color: {bg_tertiary};
-    border-radius: {r_md}px;
+    background-color: hsla{colors.BG_TERTIARY.getHsl()};
+    border-radius: {constants.RADIUS_M}px;
     min-width: 20px;
 }}
 
 QScrollBar::handle:horizontal:hover {{
-    background-color: {coral_muted};
+    background-color: hsla{colors.CORAL_MUTED.getHsl()};
 }}
 
 QScrollBar::add-line:horizontal,
@@ -271,346 +208,369 @@ QScrollBar::sub-line:horizontal {{
     width: 0px;
 }}
 
-/* ── Tool bars ──────────────────────────────────────────────────── */
+/* -------------------------------------------------------------------------------- */
+/* Tool bars */
+/* -------------------------------------------------------------------------------- */
 QToolBar {{
-    background-color: {bg_secondary};
-    border-bottom: 1px solid {bg_tertiary};
-    spacing: {xs}px;
-    padding: {xs}px;
+    background-color: hsla{colors.BG_SECONDARY.getHsl()};
+    border-bottom: 1px solid hsla{colors.BG_TERTIARY.getHsl()};
+    spacing: {constants.SPACING_XS}px;
+    padding: {constants.SPACING_XS}px;
 }}
 
-/* ── Status bar ─────────────────────────────────────────────────── */
+/* Status bar */
 QStatusBar {{
-    background-color: {bg_secondary};
-    color: {text_secondary};
-    font-family: {ui_font};
-    font-size: {small_px}px;
-    border-top: 1px solid {bg_tertiary};
+    background-color: hsla{colors.BG_SECONDARY.getHsl()};
+    color: hsla{colors.TEXT_SECONDARY.getHsl()};
+    font-family: {_format_font_family(typography.FONT_FAMILY)};
+    font-size: {typography.SMALL_SIZE}px;
+    border-top: 1px solid hsla{colors.BG_TERTIARY.getHsl()};
 }}
 
-/* ── List / Tree views (library panel) ──────────────────────────── */
+/* -------------------------------------------------------------------------------- */
+/* List, Tree views */
+/* -------------------------------------------------------------------------------- */
 QListView,
 QTreeView {{
-    background-color: {bg_secondary};
-    color: {text_primary};
-    font-family: {ui_font};
-    font-size: {body_px}px;
+    background-color: hsla{colors.BG_SECONDARY.getHsl()};
+    color: hsla{colors.TEXT_PRIMARY.getHsl()};
+    font-family: {_format_font_family(typography.FONT_FAMILY)};
+    font-size: {typography.BODY_SIZE}px;
     border: none;
     outline: none;
 }}
 
 QListView::item:hover,
 QTreeView::item:hover {{
-    background-color: {surface_highlight};
-    color: {amber_accent};
+    background-color: hsla{colors.SURFACE_HIGHLIGHT.getHsl()};
+    color: hsla{colors.AMBER_ACCENT.getHsl()};
 }}
 
 QListView::item:selected,
 QTreeView::item:selected {{
-    background-color: {coral_muted};
-    color: {text_primary};
+    background-color: hsla{colors.CORAL_MUTED.getHsl()};
+    color: hsla{colors.TEXT_PRIMARY.getHsl()};
 }}
 
-/* ── Sidebar section headers ────────────────────────────────────── */
+/* -------------------------------------------------------------------------------- */
+/* Sidebar section headers */
+/* -------------------------------------------------------------------------------- */
 QLabel#sidebarSectionHeader {{
-    color: {text_muted};
-    font-size: {caption_px}px;
+    color: hsla{colors.TEXT_MUTED.getHsl()};
+    font-size: {typography.CAPTION_SIZE}px;
     margin: 0px 6px 6px 6px;
 }}
 
-/* ── Sidebar favorites list ─────────────────────────────────────── */
+/* -------------------------------------------------------------------------------- */
+/* Sidebar favorites list */
+/* -------------------------------------------------------------------------------- */
 QListView#sidebarFavorites {{
     background-color: transparent;
-    color: {text_secondary};
-    font-size: {body_px}px;
+    color: hsla{colors.TEXT_SECONDARY.getHsl()};
+    font-size: {typography.BODY_SIZE}px;
 }}
 
 QListView#sidebarFavorites::item {{
     padding: 5px 6px;
-    border-radius: {r_md}px;
-    color: {text_secondary};
+    border-radius: {constants.RADIUS_M}px;
+    color: hsla{colors.TEXT_SECONDARY.getHsl()};
 }}
 
 QListView#sidebarFavorites::item:hover {{
-    background-color: {surface_hover};
-    color: {text_primary};
+    background-color: hsla{colors.SURFACE_HOVER.getHsl()};
+    color: hsla{colors.TEXT_PRIMARY.getHsl()};
 }}
 
 QListView#sidebarFavorites::item:selected {{
-    background-color: {bg_tertiary};
-    color: {text_primary};
+    background-color: hsla{colors.BG_TERTIARY.getHsl()};
+    color: hsla{colors.TEXT_PRIMARY.getHsl()};
 }}
 
-/* ── Sidebar folder tree ────────────────────────────────────────── */
+/* -------------------------------------------------------------------------------- */
+/* Sidebar folder tree */
+/* -------------------------------------------------------------------------------- */
 QTreeView#sidebarFolderTree {{
     background-color: transparent;
-    color: {text_secondary};
-    font-size: {body_px}px;
+    color: hsla{colors.TEXT_SECONDARY.getHsl()};
+    font-size: {typography.BODY_SIZE}px;
 }}
 
 QTreeView#sidebarFolderTree::item {{
-    color: {text_secondary};
+    color: hsla{colors.TEXT_SECONDARY.getHsl()};
 }}
 
 QTreeView#sidebarFolderTree::item:hover {{
-    background-color: {surface_hover};
-    color: {text_primary};
+    background-color: hsla{colors.SURFACE_HOVER.getHsl()};
+    color: hsla{colors.TEXT_PRIMARY.getHsl()};
 }}
 
 QTreeView#sidebarFolderTree::item:selected {{
-    background-color: {bg_tertiary};
-    color: {text_primary};
+    background-color: hsla{colors.BG_TERTIARY.getHsl()};
+    color: hsla{colors.TEXT_PRIMARY.getHsl()};
 }}
 
-/* ── Group boxes (if used in panels) ────────────────────────────── */
+/* -------------------------------------------------------------------------------- */
+/* Group boxes */
+/* -------------------------------------------------------------------------------- */
 QGroupBox {{
     background-color: transparent;
-    border: 1px solid {bg_tertiary};
-    border-radius: {r_sm}px;
-    margin-top: {md}px;
-    padding-top: {lg}px;
-    padding-left: {sm}px;
-    padding-right: {sm}px;
-    padding-bottom: {sm}px;
-    color: {text_primary};
+    border: 1px solid hsla{colors.BG_TERTIARY.getHsl()};
+    border-radius: {constants.RADIUS_S}px;
+    margin-top: {constants.SPACING_M}px;
+    padding-top: {constants.SPACING_L}px;
+    padding-left: {constants.SPACING_S}px;
+    padding-right: {constants.SPACING_S}px;
+    padding-bottom: {constants.SPACING_S}px;
+    color: hsla{colors.TEXT_PRIMARY.getHsl()};
 }}
 
 QGroupBox::title {{
     subcontrol-origin: margin;
-    left: {sm}px;
-    top: -{xs}px;
-    color: {amber_accent};
+    left: {constants.SPACING_S}px;
+    top: -{constants.SPACING_XS}px;
+    color: hsla{colors.AMBER_ACCENT.getHsl()};
 }}
 
-/* ── Checkboxes and radio buttons ───────────────────────────────── */
+/* -------------------------------------------------------------------------------- */
+/* Checkboxes and radio buttons */
+/* -------------------------------------------------------------------------------- */
 QCheckBox,
 QRadioButton {{
     background-color: transparent;
-    color: {text_primary};
-    font-family: {ui_font};
-    font-size: {body_px}px;
-    padding: {xs}px;
+    color: hsla{colors.TEXT_PRIMARY.getHsl()};
+    font-family: {_format_font_family(typography.FONT_FAMILY)};
+    font-size: {typography.BODY_SIZE}px;
+    padding: {constants.SPACING_XS}px;
 }}
 
 QCheckBox::indicator, QGroupBox::indicator {{
     width: 18px;
     height: 18px;
-    border: 2px solid {amber_accent};
-    border-radius: {r_xs}px;
-    background-color: {bg_tertiary};
+    border: 2px solid hsla{colors.AMBER_ACCENT.getHsl()};
+    border-radius: {constants.RADIUS_XS}px;
+    background-color: hsla{colors.BG_TERTIARY.getHsl()};
 }}
 
 QCheckBox::indicator:hover, QGroupBox::indicator:hover {{
-    border-color: {amber_light};
-    background-color: {surface_hover};
+    border-color: hsla{colors.AMBER_LIGHT.getHsl()};
+    background-color: hsla{colors.SURFACE_HOVER.getHsl()};
 }}
 
 QCheckBox::indicator:checked, QGroupBox::indicator:checked {{
-    background-color: {coral_muted};
-    border-color: {amber_accent};
+    background-color: hsla{colors.CORAL_MUTED.getHsl()};
+    border-color: hsla{colors.AMBER_ACCENT.getHsl()};
     image: none;
 }}
 
 QCheckBox::indicator:checked:hover, QGroupBox::indicator:checked:hover {{
-    background-color: {coral_bright};
+    background-color: hsla{colors.CORAL_BRIGHT.getHsl()};
 }}
 
 QCheckBox::indicator:disabled, QGroupBox::indicator:disabled {{
-    background-color: {bg_disabled};
-    border-color: {border_disabled};
+    background-color: hsla{colors.BG_DISABLED.getHsl()};
+    border-color: hsla{colors.BORDER_DISABLED.getHsl()};
 }}
 
-/* ── Combo boxes ─────────────────────────────────────────────────── */
+/* -------------------------------------------------------------------------------- */
+/* Combo boxes */
+/* -------------------------------------------------------------------------------- */
 QComboBox {{
-    background-color: {bg_tertiary};
-    color: {text_primary};
-    font-family: {ui_font};
-    font-size: {body_px}px;
+    background-color: hsla{colors.BG_TERTIARY.getHsl()};
+    color: hsla{colors.TEXT_PRIMARY.getHsl()};
+    font-family: {_format_font_family(typography.FONT_FAMILY)};
+    font-size: {typography.BODY_SIZE}px;
     border: none;
-    border-radius: {r_sm}px;
-    padding-left: {sm}px;
-    padding-right: {sm}px;
+    border-radius: {constants.RADIUS_S}px;
+    padding-left: {constants.SPACING_S}px;
+    padding-right: {constants.SPACING_S}px;
 }}
 
 QComboBox:hover {{
-    background-color: {surface_highlight};
+    background-color: hsla{colors.SURFACE_HIGHLIGHT.getHsl()};
 }}
 
 QComboBox::drop-down {{
     border: none;
-    width: {lg}px;
+    width: {constants.SPACING_L}px;
 }}
 
-/* ── Scroll area backgrounds ────────────────────────────────────── */
+/* -------------------------------------------------------------------------------- */
+/* Scroll area backgrounds */
+/* -------------------------------------------------------------------------------- */
 QScrollArea {{
     border: none;
     background-color: transparent;
 }}
 
-/* ── Log Panel ─────────────────────────────────────────────────── */
+/* -------------------------------------------------------------------------------- */
+/* Log Panel */
+/* -------------------------------------------------------------------------------- */
 QPlainTextEdit#logText {{
-    background-color: {bg_log_panel};
-    color: {text_primary};
-    font-family: {mono_font};
-    font-size: {log_px}px;
-    border: 1px solid {surface_highlight};
-    border-radius: {r_md}px;
-    padding: {xs}px;
-    selection-background-color: {coral_muted};
-    selection-color: {text_primary};
+    background-color: hsla{colors.BG_LOG_PANEL.getHsl()};
+    color: hsla{colors.TEXT_PRIMARY.getHsl()};
+    font-family: {_format_font_family(typography.MONO_FAMILY)};
+    font-size: {typography.LOG_SIZE}px;
+    border: 1px solid hsla{colors.SURFACE_HIGHLIGHT.getHsl()};
+    border-radius: {constants.RADIUS_M}px;
+    padding: {constants.SPACING_XS}px;
+    selection-background-color: hsla{colors.CORAL_MUTED.getHsl()};
+    selection-color: hsla{colors.TEXT_PRIMARY.getHsl()};
 }}
 
-/* ── Tab widgets ─────────────────────────────────────────────────── */
+/* -------------------------------------------------------------------------------- */
+/* Tab widgets */
+/* -------------------------------------------------------------------------------- */
 QTabWidget::pane {{
-    border: 1px solid {bg_tertiary};
-    border-radius: {r_sm}px;
-    padding: {sm}px;
+    border: 1px solid hsla{colors.BG_TERTIARY.getHsl()};
+    border-radius: {constants.RADIUS_S}px;
+    padding: {constants.SPACING_S}px;
 }}
 
 QTabBar::tab {{
-    background-color: {bg_tertiary};
-    color: {text_secondary};
-    font-family: {ui_font};
-    font-size: {body_px}px;
-    padding: {xs}px {md}px;
+    background-color: hsla{colors.BG_TERTIARY.getHsl()};
+    color: hsla{colors.TEXT_SECONDARY.getHsl()};
+    font-family: {_format_font_family(typography.FONT_FAMILY)};
+    font-size: {typography.BODY_SIZE}px;
+    padding: {constants.SPACING_XS}px {constants.SPACING_M}px;
     border: none;
 }}
 
 QTabBar::tab:selected {{
-    background-color: {bg_secondary};
-    color: {amber_accent};
+    background-color: hsla{colors.BG_SECONDARY.getHsl()};
+    color: hsla{colors.AMBER_ACCENT.getHsl()};
 }}
 
 QTabBar::tab:hover {{
-    background-color: {surface_highlight};
-    color: {amber_accent};
+    background-color: hsla{colors.SURFACE_HIGHLIGHT.getHsl()};
+    color: hsla{colors.AMBER_ACCENT.getHsl()};
 }}
 
-/* ── Gallery info bar ────────────────────────────────────────────── */
+/* -------------------------------------------------------------------------------- */
+/* Gallery info bar */
+/* -------------------------------------------------------------------------------- */
 QLabel#galleryInfoLabel {{
-    color: {text_muted};
-    font-size: {caption_px}px;
+    color: hsla{colors.TEXT_MUTED.getHsl()};
+    font-size: {typography.CAPTION_SIZE}px;
 }}
 
 QLabel#galleryActiveFiltersPill {{
-    background-color: {amber_dark};
-    color: {amber_accent};
+    background-color: hsla{colors.AMBER_DARK.getHsl()};
+    color: hsla{colors.AMBER_ACCENT.getHsl()};
     padding: 3px 8px;
     border-radius: 6px;
-    font-size: {caption_px}px;
+    font-size: {typography.CAPTION_SIZE}px;
 }}
 
-/* ── Preview panel background ──────────────────────────────────────── */
+/* -------------------------------------------------------------------------------- */
+/* Preview panel background */
+/* -------------------------------------------------------------------------------- */
 QWidget#previewPanel {{
-    background-color: {bg_primary};
+    background-color: hsla{colors.BG_PRIMARY.getHsl()};
 }}
 
-/* ── Preview panel section headers ────────────────────────────────── */
+/* -------------------------------------------------------------------------------- */
+/* Preview panel section headers */
+/* -------------------------------------------------------------------------------- */
 QLabel#previewSectionHeader {{
-    color: {text_muted};
-    font-size: {caption_px}px;
+    color: hsla{colors.TEXT_MUTED.getHsl()};
+    font-size: {typography.CAPTION_SIZE}px;
 }}
 
-/* ── Preview panel metadata ───────────────────────────────────────── */
+/* -------------------------------------------------------------------------------- */
+/* Preview panel metadata */
+/* -------------------------------------------------------------------------------- */
 QLabel#previewMetaLabel {{
-    color: {text_muted};
-    font-size: {caption_px}px;
+    color: hsla{colors.TEXT_MUTED.getHsl()};
+    font-size: {typography.CAPTION_SIZE}px;
 }}
 
 QLabel#previewMetaValue {{
-    color: {text_tertiary};
-    font-size: {caption_px}px;
+    color: hsla{colors.TEXT_TERTIARY.getHsl()};
+    font-size: {typography.CAPTION_SIZE}px;
 }}
 
-/* ── Preview panel add-tag button ─────────────────────────────────── */
+/* -------------------------------------------------------------------------------- */
+/* Preview panel add-tag button */
+/* -------------------------------------------------------------------------------- */
 QPushButton#previewAddTagBtn {{
     background-color: transparent;
-    color: {text_muted};
-    border: 1px solid {border_interactive};
-    border-radius: {r_xl}px;
+    color: hsla{colors.TEXT_MUTED.getHsl()};
+    border: 1px solid hsla{colors.BORDER_INTERACTIVE.getHsl()};
+    border-radius: {constants.RADIUS_XL}px;
     padding: 3px 8px;
-    font-size: {caption_px}px;
+    font-size: {typography.CAPTION_SIZE}px;
 }}
 
 QPushButton#previewAddTagBtn:hover {{
-    background-color: {surface_highlight};
-    color: {text_secondary};
+    background-color: hsla{colors.SURFACE_HIGHLIGHT.getHsl()};
+    color: hsla{colors.TEXT_SECONDARY.getHsl()};
 }}
 
-/* ── Color square buttons (preview panel) ─────────────────────────── */
+/* -------------------------------------------------------------------------------- */
+/* Color square buttons (preview panel) */
+/* -------------------------------------------------------------------------------- */
 QPushButton[colorSquare="true"] {{
     border: none;
     border-radius: 4px;
 }}
 
 QPushButton[colorSquare="true"]:hover {{
-    border: 1px solid {text_primary};
+    border: 1px solid hsla{colors.TEXT_PRIMARY.getHsl()};
 }}
 
-/* ── Tag pill remove button (hover ×) ─────────────────────────────── */
+/* -------------------------------------------------------------------------------- */
+/* Tag pill remove button */
+/* -------------------------------------------------------------------------------- */
 QPushButton#tagPillRemoveBtn {{
-    color: {coral_muted};
+    color: hsla{colors.CORAL_MUTED.getHsl()};
     border: none;
     background: transparent;
     font-weight: bold;
     padding: 0;
-    font-size: {small_px}px;
+    font-size: {typography.SMALL_SIZE}px;
 }}
 
 QPushButton#tagPillRemoveBtn:hover {{
-    color: {coral_strong};
+    color: hsla{colors.CORAL_STRONG.getHsl()};
 }}
 
-/* ── Filter chips (tag/filter bar) ──────────────────────────────────────── */
+/* -------------------------------------------------------------------------------- */
+/* Filter chips */
+/* -------------------------------------------------------------------------------- */
 QFrame#filterChip {{
-    background-color: {surface_hover};
-    border: 1px solid {amber_accent};
-    border-radius: {r_xl}px;
+    background-color: hsla{colors.SURFACE_HOVER.getHsl()};
+    border: 1px solid hsla{colors.AMBER_ACCENT.getHsl()};
+    border-radius: {constants.RADIUS_XL}px;
     padding: 2px 6px;
 }}
 
 QLabel#filterChipLabel {{
-    color: {amber_accent};
+    color: hsla{colors.AMBER_ACCENT.getHsl()};
     border: none;
     background: transparent;
 }}
 
 QPushButton#filterChipRemoveBtn {{
-    color: {coral_muted};
+    color: hsla{colors.CORAL_MUTED.getHsl()};
     border: none;
     background: transparent;
     font-weight: bold;
     padding: 0;
-    font-size: {small_px}px;
+    font-size: {typography.SMALL_SIZE}px;
 }}
 
 QPushButton#filterChipRemoveBtn:hover {{
-    color: {coral_strong};
+    color: hsla{colors.CORAL_STRONG.getHsl()};
 }}
 
-/* ── Preview panel image label ──────────────────────────────────────────── */
+/* -------------------------------------------------------------------------------- */
+/* Preview panel image label */
+/* -------------------------------------------------------------------------------- */
 QLabel#previewImageLabel {{
-    background-color: {bg_secondary};
+    background-color: hsla{colors.BG_SECONDARY.getHsl()};
     border: none;
-    border-radius: {r_lg}px;
-    color: {text_secondary};
-    font-size: {body_px}px;
+    border-radius: {constants.RADIUS_L}px;
+    color: hsla{colors.TEXT_SECONDARY.getHsl()};
+    font-size: {typography.BODY_SIZE}px;
 }}
 """
-
-
-def load_and_generate_qss() -> str:
-    """Generate a complete QSS stylesheet from design tokens.
-
-    Convenience function that loads tokens and passes them through
-    :func:`generate_qss` to produce the stylesheet.
-
-    Returns:
-        The generated QSS text ready for ``QApplication.setStyleSheet``.
-    """
-    from tarragon.theme.tokens import load_tokens
-
-    return generate_qss(load_tokens())
-
-
-__all__ = ["generate_qss", "load_and_generate_qss"]

@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import logging
 
-from tarragon.db._base import _MixinBase
+from tarragon.db._base import MixinBase
 
 logger = logging.getLogger(__name__)
 
 
-class EditorsMixin(_MixinBase):
+class EditorsMixin(MixinBase):
     """Manage editor command associations for file extensions."""
 
     def get_editor_command(self, extension: str) -> str | None:

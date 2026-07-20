@@ -5,12 +5,12 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from tarragon.db._base import _MixinBase, _row_to_dict, normalize_path
+from tarragon.db._base import MixinBase, _row_to_dict, normalize_path
 
 logger = logging.getLogger(__name__)
 
 
-class ThumbnailsMixin(_MixinBase):
+class ThumbnailsMixin(MixinBase):
     """Insert, query, and delete thumbnail records."""
 
     def upsert_thumbnail(

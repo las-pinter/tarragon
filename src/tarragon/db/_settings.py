@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import logging
 
-from tarragon.db._base import _MixinBase
+from tarragon.db._base import MixinBase
 
 logger = logging.getLogger(__name__)
 
 
-class SettingsMixin(_MixinBase):
+class SettingsMixin(MixinBase):
     """Read and write key-value settings."""
 
     def get_setting(self, key: str) -> str | None:

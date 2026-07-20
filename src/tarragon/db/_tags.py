@@ -5,12 +5,12 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from tarragon.db._base import _MixinBase, normalize_path
+from tarragon.db._base import MixinBase, normalize_path
 
 logger = logging.getLogger(__name__)
 
 
-class TagsMixin(_MixinBase):
+class TagsMixin(MixinBase):
     """Create, query, and delete tags and their file associations."""
 
     def ensure_tag(self, name: str) -> int:

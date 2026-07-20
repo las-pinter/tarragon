@@ -5,12 +5,12 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from tarragon.db._base import _MixinBase, _row_to_dict, normalize_path
+from tarragon.db._base import MixinBase, _row_to_dict, normalize_path
 
 logger = logging.getLogger(__name__)
 
 
-class FavoritesMixin(_MixinBase):
+class FavoritesMixin(MixinBase):
     """Add, remove, and list favorite records."""
 
     def add_favorite(

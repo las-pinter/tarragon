@@ -65,7 +65,7 @@ def _row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
     return dict(row)
 
 
-class _MixinBase:
+class MixinBase:
     """Abstract base for database mixins, declares the shared interface.
 
     This class defines the attributes and methods that all mixin classes
@@ -92,7 +92,7 @@ class _MixinBase:
         raise NotImplementedError
 
 
-class Base(_MixinBase):
+class Base(MixinBase):
     """Base database class providing connection management and SQL helpers.
 
     `Database` composes `_Base` with all mixins via multiple inheritance.

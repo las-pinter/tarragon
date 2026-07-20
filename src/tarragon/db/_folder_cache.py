@@ -5,12 +5,12 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from tarragon.db._base import _MixinBase, normalize_path
+from tarragon.db._base import MixinBase, normalize_path
 
 logger = logging.getLogger(__name__)
 
 
-class FolderCacheMixin(_MixinBase):
+class FolderCacheMixin(MixinBase):
     """Map source folders to cache UUIDs and clean up stale entries."""
 
     def get_folder_uuid(self, folder_path: str) -> str | None:

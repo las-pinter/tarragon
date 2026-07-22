@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from tarragon.db import Database
+from tarragon.db.database import Database
 from tarragon.services.tag_service import TagService
 from tarragon.theme.constants import SPACING_XS
 from tarragon.widgets._chip_utils import create_removable_chip

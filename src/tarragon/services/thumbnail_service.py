@@ -12,11 +12,8 @@ from typing import Any
 from PIL import Image
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal, Slot
 
-from tarragon.db import Database
-from tarragon.renderers.psd import _get_executor
-from tarragon.scanner import FileInfo
-from tarragon.services.settings_service import SettingsService
-from tarragon.thumbnail import (
+from tarragon.db.database import Database
+from tarragon.renderers.cache import (
     RESOLUTION_FULL,
     RESOLUTION_PREVIEW,
     RESOLUTION_THUMBNAIL,
@@ -24,11 +21,13 @@ from tarragon.thumbnail import (
     generate_cache_paths,
     generate_cache_uuid,
     invalidate_cache_files,
-    render_clip_image,
-    render_plain_image,
-    render_psd_image,
     save_to_cache,
 )
+from tarragon.renderers.clip import render_clip_image
+from tarragon.renderers.plain import render_plain_image
+from tarragon.renderers.psd import get_executor, render_psd_image
+from tarragon.scanner import FileInfo
+from tarragon.services.settings_service import SettingsService
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +83,7 @@ class ThumbnailService(QObject):
         # user-configured worker count (falls back to RAM-adaptive default
         # when the setting is absent / None).
         max_psd_workers = self._settings_service.get_max_psd_workers()
-        _get_executor(max_workers=max_psd_workers)
+        get_executor(max_workers=max_psd_workers)
 
     def cancel_pending(self) -> None:
         """Cancel all pending thumbnail generation.
@@ -114,9 +113,9 @@ class ThumbnailService(QObject):
         # Shut down the ProcessPoolExecutor first to cancel any pending PSD renders.
         # This prevents worker processes from blocking on queue.get() indefinitely.
         # Deferred import to avoid circular dependency
-        from tarragon.renderers.psd import _shutdown_executor
+        from tarragon.renderers.psd import shutdown_executor
 
-        _shutdown_executor()
+        shutdown_executor()
         self._threadpool.waitForDone(timeout_ms)
         logger.debug("ThumbnailService shutdown complete")
 

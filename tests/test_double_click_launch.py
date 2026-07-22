@@ -15,7 +15,7 @@ from unittest.mock import patch
 import pytest
 from PySide6.QtCore import QPointF, Qt
 from PySide6.QtGui import QMouseEvent
-from tarragon.db import Database
+from tarragon.db.database import Database
 from tarragon.main_window import MainWindow
 from tarragon.models.thumbnail_model import ThumbnailModel
 from tarragon.widgets.thumbnail_grid import ThumbnailGrid

@@ -20,7 +20,7 @@ def test_main_module_imports_cleanly() -> None:
 def test_main_window_has_title(qapp: Any, tmp_path: Path) -> None:  # noqa: ARG001
     """MainWindow sets a title on initialization (with services at temp paths)."""
 
-    from tarragon.db import Database
+    from tarragon.db.database import Database
     from tarragon.main import MainWindow
     from tarragon.settings import Settings
 
@@ -38,7 +38,7 @@ def test_main_window_has_title(qapp: Any, tmp_path: Path) -> None:  # noqa: ARG0
 def test_main_window_has_database(qapp: Any, tmp_path: Path) -> None:  # noqa: ARG001
     """MainWindow (from main.py) stores a Database reference."""
 
-    from tarragon.db import Database
+    from tarragon.db.database import Database
     from tarragon.main import MainWindow
     from tarragon.settings import Settings
 

@@ -1,4 +1,4 @@
-"""CLIP image rendering — extract thumbnails from Clip Studio Paint .clip files."""
+"""CLIP image rendering, extract thumbnails from Clip Studio Paint .clip files."""
 
 from __future__ import annotations
 
@@ -86,7 +86,7 @@ def render_clip_image(
 
     blob = row[0]
 
-    # Extract the PNG from the blob — it may contain extra bytes before/after
+    # Extract the PNG from the blob, it may contain extra bytes before/after
     png_start = blob.find(_PNG_SIGNATURE)
     if png_start == -1:
         logger.warning("render_clip_image: no PNG signature in ImageData of %s", file_path)

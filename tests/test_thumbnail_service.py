@@ -13,9 +13,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from PIL import Image
+from tarragon.renderers.cache import RESOLUTION_FULL, RESOLUTION_PREVIEW, RESOLUTION_THUMBNAIL
 from tarragon.scanner import FileInfo
 from tarragon.services.thumbnail_service import ThumbnailService
-from tarragon.thumbnail import RESOLUTION_FULL, RESOLUTION_PREVIEW, RESOLUTION_THUMBNAIL
 
 # =========================================================================
 # Constants for edge case testing
@@ -56,7 +56,7 @@ def settings_mock() -> MagicMock:
 @pytest.fixture
 def service(db_mock: MagicMock, settings_mock: MagicMock) -> ThumbnailService:
     """Create a ThumbnailService with mocked DB, settings_service, and QThreadPool."""
-    with patch("tarragon.services.thumbnail_service._get_executor"):
+    with patch("tarragon.services.thumbnail_service.get_executor"):
         svc = ThumbnailService(db=db_mock, settings_service=settings_mock)
     # Replace the real QThreadPool with a mock that executes tasks synchronously
     # so tests can verify render_func dispatch through check_and_render().
@@ -82,14 +82,14 @@ class TestInstantiation:
 
     def test_service_instantiation(self, db_mock: MagicMock, settings_mock: MagicMock) -> None:
         """Creating a ThumbnailService stores dependencies, reads cache_format, and initializes PSD pool."""
-        with patch("tarragon.services.thumbnail_service._get_executor") as mock_get_executor:
+        with patch("tarragon.services.thumbnail_service.get_executor") as mockget_executor:
             svc = ThumbnailService(db=db_mock, settings_service=settings_mock)
         assert svc._db is db_mock
         assert svc._settings_service is settings_mock
         assert svc._cache_format == "png"
         settings_mock.get_cache_format.assert_called()
         settings_mock.get_max_psd_workers.assert_called()
-        mock_get_executor.assert_called_once_with(max_workers=3)
+        mockget_executor.assert_called_once_with(max_workers=3)
 
     def test_signals_exist(self, service: ThumbnailService) -> None:
         """ThumbnailService exposes the required signals."""
@@ -962,7 +962,7 @@ class TestRenderPsdImageCancellation:
         import threading
         from concurrent.futures import Future
 
-        from tarragon.thumbnail import render_psd_image
+        from tarragon.renderers.psd import render_psd_image
 
         cancel_event = threading.Event()
         cancel_event.set()  # Already cancelled
@@ -971,7 +971,7 @@ class TestRenderPsdImageCancellation:
         # Don't resolve the future — it should be cancelled before waiting
 
         with (
-            patch("tarragon.renderers.psd._get_executor") as mock_exec,
+            patch("tarragon.renderers.psd.get_executor") as mock_exec,
         ):
             mock_executor = MagicMock()
             mock_executor.submit.return_value = mock_future
@@ -998,7 +998,7 @@ class TestRenderPsdImageCancellation:
         from concurrent.futures import Future
 
         from PIL import Image
-        from tarragon.thumbnail import render_psd_image
+        from tarragon.renderers.psd import render_psd_image
 
         # Create a resolved future with valid PNG bytes
         img = Image.new("RGB", (10, 10), color="red")
@@ -1010,7 +1010,7 @@ class TestRenderPsdImageCancellation:
         mock_future: Future[bytes | None] = Future()
         mock_future.set_result(png_bytes)
 
-        with patch("tarragon.renderers.psd._get_executor") as mock_exec:
+        with patch("tarragon.renderers.psd.get_executor") as mock_exec:
             mock_executor = MagicMock()
             mock_executor.submit.return_value = mock_future
             mock_exec.return_value = mock_executor
@@ -1304,7 +1304,7 @@ class TestAutoColorTagSignal:
         disabled_settings.get_tile_grid_size.return_value = "2x2"
         disabled_settings.get_color_tag_enabled.return_value = False  # Disabled!
 
-        with patch("tarragon.services.thumbnail_service._get_executor"):
+        with patch("tarragon.services.thumbnail_service.get_executor"):
             svc = ThumbnailService(db=db_mock, settings_service=disabled_settings)
 
         file_info = FileInfo(
@@ -1630,7 +1630,7 @@ class TestInvalidateCacheFiles:
         db_mock: MagicMock,
     ) -> None:
         """Cache files for all 3 resolutions are deleted from disk."""
-        from tarragon.thumbnail import invalidate_cache_files
+        from tarragon.renderers.cache import invalidate_cache_files
 
         cache_dir = tmp_path / "cache"
         cache_dir.mkdir(parents=True)
@@ -1661,7 +1661,7 @@ class TestInvalidateCacheFiles:
         db_mock: MagicMock,
     ) -> None:
         """When no DB record exists, invalidate_cache_files is a no-op."""
-        from tarragon.thumbnail import invalidate_cache_files
+        from tarragon.renderers.cache import invalidate_cache_files
 
         db_mock.get_thumbnail.return_value = None
 
@@ -1675,7 +1675,7 @@ class TestInvalidateCacheFiles:
         db_mock: MagicMock,
     ) -> None:
         """Cache files that don't exist on disk don't cause errors (missing_ok=True)."""
-        from tarragon.thumbnail import invalidate_cache_files
+        from tarragon.renderers.cache import invalidate_cache_files
 
         source_path = str(tmp_path / "source.png")
         db_mock.get_thumbnail.return_value = {
@@ -1695,7 +1695,7 @@ class TestInvalidateCacheFiles:
         db_mock: MagicMock,
     ) -> None:
         """Only non-None cache paths are processed for deletion."""
-        from tarragon.thumbnail import invalidate_cache_files
+        from tarragon.renderers.cache import invalidate_cache_files
 
         cache_dir = tmp_path / "cache"
         cache_dir.mkdir(parents=True)

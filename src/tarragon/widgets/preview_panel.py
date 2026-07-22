@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from tarragon.db import normalize_path
+from tarragon.db._base import normalize_path
 from tarragon.image_utils import _EXIF_ORIENTATION_TAG, _apply_exif_from_original
 from tarragon.services.tag_service import TagService
 from tarragon.theme.color_buckets import BUCKET_COLORS, BUCKET_HEX_COLORS

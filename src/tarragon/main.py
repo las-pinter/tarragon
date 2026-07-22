@@ -8,7 +8,7 @@ from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import QApplication
 
 from tarragon.app_paths import db_path, ensure_dirs
-from tarragon.db import Database
+from tarragon.db.database import Database
 from tarragon.main_window import MainWindow as _MainWindow
 from tarragon.migrations import MigrationRunner
 from tarragon.services.settings_service import SettingsService

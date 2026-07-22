@@ -12,15 +12,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from PIL import Image
-from tarragon.db import Database
 from tarragon.db._base import normalize_path
+from tarragon.db.database import Database
+from tarragon.renderers.cache import RESOLUTION_PREVIEW, RESOLUTION_THUMBNAIL
 from tarragon.scanner import FileInfo
 from tarragon.services.thumbnail_service import ThumbnailService
-from tarragon.thumbnail import RESOLUTION_PREVIEW, RESOLUTION_THUMBNAIL
-
-# =========================================================================
-# Fixtures
-# =========================================================================
 
 
 @pytest.fixture()
@@ -50,7 +46,7 @@ def settings_mock() -> MagicMock:
 @pytest.fixture()
 def service(db: Database, settings_mock: MagicMock) -> ThumbnailService:
     """Create a ThumbnailService with real DB, mock settings_service, and mock threadpool."""
-    with patch("tarragon.services.thumbnail_service._get_executor"):
+    with patch("tarragon.services.thumbnail_service.get_executor"):
         svc = ThumbnailService(db=db, settings_service=settings_mock)
     svc._threadpool = MagicMock()
     return svc
@@ -123,11 +119,6 @@ def _run_render_all_resolutions(
             service._render_all_resolutions(file_info)
 
 
-# =========================================================================
-# Test 1: Color tags extracted on render
-# =========================================================================
-
-
 class TestColorTagsExtractedOnRender:
     """After a successful render, color tags are extracted and persisted to DB."""
 
@@ -163,11 +154,6 @@ class TestColorTagsExtractedOnRender:
         assert len(emitted) >= 1
         assert emitted[0][0] == str(file_info.path)
         assert emitted[0][1] is img
-
-
-# =========================================================================
-# Test 2: Color tags replaced on re-render
-# =========================================================================
 
 
 class TestColorTagsReplacedOnRerender:
@@ -215,11 +201,6 @@ class TestColorTagsReplacedOnRerender:
         assert "color:green" not in final_names, "Old auto_color tag should be removed"
         assert "color:blue" in final_names, "New auto_color tag should be present"
         assert "color:yellow" in final_names, "New auto_color tag should be present"
-
-
-# =========================================================================
-# Test 3: Manual tags preserved
-# =========================================================================
 
 
 class TestManualTagsPreserved:
@@ -277,11 +258,6 @@ class TestManualTagsPreserved:
         assert ("color:blue", "auto_color") in final_with_source, "New auto_color should be present"
 
 
-# =========================================================================
-# Test 4: Color tagging disabled
-# =========================================================================
-
-
 class TestColorTaggingDisabled:
     """When color_tag_enabled=False, no color tags are generated."""
 
@@ -299,7 +275,7 @@ class TestColorTaggingDisabled:
         settings_mock.get_tile_grid_size.return_value = "2x2"
         settings_mock.get_color_tag_enabled.return_value = False
 
-        with patch("tarragon.services.thumbnail_service._get_executor"):
+        with patch("tarragon.services.thumbnail_service.get_executor"):
             svc = ThumbnailService(db=db, settings_service=settings_mock)
         svc._threadpool = MagicMock()
 
@@ -323,11 +299,6 @@ class TestColorTaggingDisabled:
         # Assert — thumbnailReady still emitted (pipeline not broken)
         assert len(emitted) >= 1
         assert emitted[0][1] is img
-
-
-# =========================================================================
-# Test 5: Color tagging failure isolated
-# =========================================================================
 
 
 class TestColorTaggingFailureIsolated:
@@ -428,11 +399,6 @@ class TestColorTaggingFailureIsolated:
         assert emitted[0][1] is img
 
 
-# =========================================================================
-# Test 6: Settings parameters used
-# =========================================================================
-
-
 class TestSettingsParametersUsed:
     """Verify palette_size, min_share, neutral_s_threshold are passed from settings."""
 
@@ -453,7 +419,7 @@ class TestSettingsParametersUsed:
         settings_mock.get_color_tag_min_share.return_value = 0.25
         settings_mock.get_color_tag_neutral_s_threshold.return_value = 0.30
 
-        with patch("tarragon.services.thumbnail_service._get_executor"):
+        with patch("tarragon.services.thumbnail_service.get_executor"):
             svc = ThumbnailService(db=db, settings_service=settings_mock)
         svc._threadpool = MagicMock()
 
@@ -523,11 +489,6 @@ class TestSettingsParametersUsed:
             min_share=0.10,
             neutral_s_threshold=0.15,
         )
-
-
-# =========================================================================
-# Edge case: None image or None cache_path skips color tagging
-# =========================================================================
 
 
 class TestColorTaggingForValidImage:

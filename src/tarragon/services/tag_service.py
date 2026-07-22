@@ -11,7 +11,7 @@ from typing import Any
 
 from PySide6.QtCore import QObject, Signal
 
-from tarragon.db import Database
+from tarragon.db.database import Database
 
 logger = logging.getLogger(__name__)
 

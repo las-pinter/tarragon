@@ -1,10 +1,13 @@
-"""Plain image rendering — open and normalise standard image formats."""
+"""Plain image rendering, open and normalise standard image formats."""
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 from PIL import Image, ImageOps
+
+logger = logging.getLogger(__name__)
 
 
 def render_plain_image(file_path: Path, target_size: int | None = None) -> Image.Image | None:
@@ -21,22 +24,23 @@ def render_plain_image(file_path: Path, target_size: int | None = None) -> Image
 
     Steps
     -----
-    1. Open the file with Pillow (supports JPEG, PNG, WebP, TIFF, …).
+    1. Open the file with Pillow.
     2. Convert non-RGB/RGBA modes to RGBA so the rest of the pipeline sees
        a consistent pixel format.
     3. Apply EXIF orientation correction.
     4. If *target_size* is given, shrink in-place preserving aspect ratio.
 
     Returns *None* (instead of raising) when the file cannot be opened or
-    decoded — the caller should treat ``None`` as "skip / use placeholder".
+    decoded, the caller should treat ``None`` as "skip / use placeholder".
     """
     try:
         img: Image.Image = Image.open(file_path)
-        img = ImageOps.exif_transpose(img) or img  # Apply EXIF rotation
+        img = ImageOps.exif_transpose(img) or img
         if img.mode not in ("RGBA", "RGB"):
             img = img.convert("RGBA")
         if target_size is not None:
             img.thumbnail((target_size, target_size), Image.Resampling.LANCZOS)
         return img
     except (OSError, ValueError):
+        logger.error("Error during opening image: %s", file_path)
         return None

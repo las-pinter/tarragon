@@ -8,7 +8,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from tarragon.db import Database
+from tarragon.db.database import Database
 
 
 def resolve_editor_command(db: Database, extension: str) -> str | None:

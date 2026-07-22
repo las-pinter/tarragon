@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 
-from tarragon.db import Database
+from tarragon.db.database import Database
 
 logger = logging.getLogger(__name__)
 

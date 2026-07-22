@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 from PySide6.QtWidgets import QPushButton
-from tarragon.db import Database
+from tarragon.db.database import Database
 from tarragon.services.tag_service import TagService
 from tarragon.widgets.color_filter_bar import ColorFilterBar
 from tarragon.widgets.filter_bar import FilterBar, _short_folder_name

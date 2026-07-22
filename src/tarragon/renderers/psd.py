@@ -1,4 +1,4 @@
-"""PSD / PSB compositing pipeline — subprocess-based rendering with a shared process pool."""
+"""PSD / PSB compositing. subprocess-based rendering with a shared process pool."""
 
 from __future__ import annotations
 
@@ -13,11 +13,6 @@ import psutil
 from PIL import Image
 
 logger = logging.getLogger(__name__)
-
-
-# =========================================================================
-# PSD / PSB compositing pipeline
-# =========================================================================
 
 
 def _compute_worker_count(manual_override: int | None = None) -> int:
@@ -55,11 +50,11 @@ def _composite_psd_in_process(
         (full resolution output).
 
     Returns raw PNG bytes on success, or ``None`` on any failure (failure
-    isolation — never crash the worker).
+    isolation never crash the worker).
     """
     file_path = Path(file_path_str)
     try:
-        from psd_tools import PSDImage  # Import inside try — worker may lack psd_tools
+        from psd_tools import PSDImage  # Import inside, worker may lack psd_tools
 
         psd = PSDImage.open(file_path)
         canvas_mp = (psd.width * psd.height) / 1_000_000
@@ -84,7 +79,7 @@ def _composite_psd_in_process(
                         target.paste(tile_img, (x1, y1))
                         del tile_img
                     except Exception:
-                        # Skip problematic tiles — partial render is better than crash
+                        # Skip problematic tiles, partial render is better than crash
                         pass
             image = target
 
@@ -97,7 +92,8 @@ def _composite_psd_in_process(
         image.save(buf, "PNG")
         return buf.getvalue()
     except Exception:
-        return None  # Failure isolation — never crash the worker
+        logger.warning("Rendering failed for %s", file_path_str)
+        return None  # Failure isolation, never crash the worker
 
 
 # Shared ``ProcessPoolExecutor`` singleton
@@ -105,7 +101,7 @@ _shared_executor: ProcessPoolExecutor | None = None
 _executor_lock = threading.Lock()
 
 
-def _get_executor(max_workers: int | None = None) -> ProcessPoolExecutor:
+def get_executor(max_workers: int | None = None) -> ProcessPoolExecutor:
     """Get or create the shared ``ProcessPoolExecutor`` singleton.
 
     On first creation, *max_workers* is forwarded to ``_compute_worker_count``
@@ -119,11 +115,11 @@ def _get_executor(max_workers: int | None = None) -> ProcessPoolExecutor:
             if _shared_executor is None:  # double-checked locking
                 worker_count = _compute_worker_count(max_workers)
                 _shared_executor = ProcessPoolExecutor(max_workers=worker_count)
-                atexit.register(_shutdown_executor)
+                atexit.register(shutdown_executor)
     return _shared_executor
 
 
-def _shutdown_executor() -> None:
+def shutdown_executor() -> None:
     """Shut down the shared executor on exit."""
     global _shared_executor
     with _executor_lock:
@@ -174,7 +170,7 @@ def render_psd_image(
         set, the future is cancelled and ``None`` is returned immediately.
         The event is polled every 500 ms while waiting for the subprocess.
     """
-    executor = _get_executor()
+    executor = get_executor()
     future = executor.submit(
         _composite_psd_in_process,
         str(file_path.resolve()),
@@ -196,7 +192,7 @@ def render_psd_image(
                 return None
             except TimeoutError:
                 continue
-        # Future completed — retrieve the result.
+        # Future completed, retrieve the result.
         result_bytes = future.result()
         if result_bytes is not None:
             return Image.open(io.BytesIO(result_bytes))

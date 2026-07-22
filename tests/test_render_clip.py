@@ -7,7 +7,7 @@ import sqlite3
 from pathlib import Path
 
 from PIL import Image
-from tarragon.thumbnail import render_clip_image
+from tarragon.renderers.clip import render_clip_image
 
 # =========================================================================
 # Helper — build a synthetic .clip file

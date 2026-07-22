@@ -6,7 +6,7 @@ import json
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from tarragon.db import Database
+    from tarragon.db.database import Database
 
 from tarragon.theme.constants import MULTI_PREVIEW_MAX_DEFAULT
 

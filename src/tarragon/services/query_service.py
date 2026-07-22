@@ -12,7 +12,8 @@ import time
 from pathlib import Path
 from typing import Any
 
-from tarragon.db import Database, normalize_path
+from tarragon.db._base import normalize_path
+from tarragon.db.database import Database
 
 logger = logging.getLogger(__name__)
 

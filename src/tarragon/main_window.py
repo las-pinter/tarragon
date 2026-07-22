@@ -19,9 +19,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from tarragon.db import Database
+from tarragon.db.database import Database
 from tarragon.gallery_controller import GalleryController
-from tarragon.models import FilterState
+from tarragon.models.filter_state import FilterState
 from tarragon.models.thumbnail_model import ThumbnailModel
 from tarragon.services.query_service import QueryService
 from tarragon.services.settings_service import SettingsService

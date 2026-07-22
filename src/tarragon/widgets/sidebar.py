@@ -34,7 +34,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from tarragon.db import Database
+from tarragon.db.database import Database
 from tarragon.models.favorites_model import FavoritesModel  # noqa: F401 — re-exported
 from tarragon.theme.colors import CORAL_STRONG, TEXT_SECONDARY
 

@@ -178,7 +178,7 @@ def test_run_filtered_query_does_not_clear_gallery_when_no_folder(qapp: Any) -> 
     """
     from pathlib import Path
 
-    from tarragon.db import Database
+    from tarragon.db.database import Database
     from tarragon.services.tag_service import TagService
 
     window = MainWindow()
@@ -207,7 +207,7 @@ def test_run_filtered_query_works_when_folder_is_set(qapp: Any) -> None:  # noqa
     """_run_filtered_query() queries the DB and updates the model when folder is set."""
     from pathlib import Path
 
-    from tarragon.db import Database
+    from tarragon.db.database import Database
     from tarragon.services.tag_service import TagService
 
     window = MainWindow()
@@ -245,7 +245,7 @@ def test_has_filters_includes_tag_filters(qapp: Any) -> None:  # noqa: ARG001
     """_on_open_folder detects active tag filters and runs filtered query."""
     from pathlib import Path
 
-    from tarragon.db import Database
+    from tarragon.db.database import Database
     from tarragon.services.tag_service import TagService
 
     window = MainWindow()
@@ -293,7 +293,7 @@ def test_filtered_query_returns_empty_when_no_match(qapp: Any) -> None:  # noqa:
     """
     from pathlib import Path
 
-    from tarragon.db import Database
+    from tarragon.db.database import Database
     from tarragon.services.tag_service import TagService
 
     window = MainWindow()
@@ -330,7 +330,7 @@ def test_global_scope_queries_entire_db(qapp: Any) -> None:  # noqa: ARG001
     """In global mode, _run_filtered_query ignores folder constraint."""
     from pathlib import Path
 
-    from tarragon.db import Database
+    from tarragon.db.database import Database
     from tarragon.services.tag_service import TagService
 
     window = MainWindow()
@@ -376,7 +376,7 @@ def test_folder_navigated_applies_active_filters(qapp: Any, tmp_path: Path) -> N
     """Navigating to a folder via sidebar applies active filters."""
     from pathlib import Path
 
-    from tarragon.db import Database
+    from tarragon.db.database import Database
     from tarragon.services.tag_service import TagService
 
     window = MainWindow()
@@ -417,7 +417,7 @@ def test_folder_filter_in_global_mode(qapp: Any) -> None:  # noqa: ARG001
     """In global mode, the folder filter dropdown restricts results to a specific folder."""
     from pathlib import Path
 
-    from tarragon.db import Database
+    from tarragon.db.database import Database
     from tarragon.services.tag_service import TagService
 
     window = MainWindow()
@@ -465,7 +465,7 @@ def test_filter_bar_replaces_separate_bars(qapp: Any) -> None:  # noqa: ARG001
     """MainWindow uses FilterBar instead of separate ColorFilterBar and TagFilterBar."""
     from pathlib import Path
 
-    from tarragon.db import Database
+    from tarragon.db.database import Database
     from tarragon.services.tag_service import TagService
     from tarragon.widgets.filter_bar import FilterBar
 
@@ -494,7 +494,7 @@ def test_scope_change_shows_folder_button(qapp: Any) -> None:  # noqa: ARG001
     from pathlib import Path
 
     from PySide6.QtWidgets import QPushButton
-    from tarragon.db import Database
+    from tarragon.db.database import Database
     from tarragon.services.tag_service import TagService
 
     window = MainWindow()
@@ -538,7 +538,7 @@ def test_filters_return_results_immediately_after_folder_open(
     If a user applied a filter before rendering finished, the query returned zero
     results because the database was empty.
     """
-    from tarragon.db import Database
+    from tarragon.db.database import Database
     from tarragon.services.tag_service import TagService
 
     window = MainWindow()
@@ -580,7 +580,7 @@ def test_filters_return_results_immediately_after_folder_open(
 
 def test_bulk_upsert_stubs_inserts_and_updates(qapp: Any) -> None:  # noqa: ARG001
     """bulk_upsert_stubs inserts new records and updates existing ones."""
-    from tarragon.db import Database
+    from tarragon.db.database import Database
 
     db = Database(Path(":memory:"))
     db.init_schema()
@@ -638,7 +638,7 @@ def test_bulk_upsert_stubs_inserts_and_updates(qapp: Any) -> None:  # noqa: ARG0
 
 def test_bulk_upsert_stubs_empty_list_is_noop(qapp: Any) -> None:  # noqa: ARG001
     """bulk_upsert_stubs with empty list does nothing and doesn't error."""
-    from tarragon.db import Database
+    from tarragon.db.database import Database
 
     db = Database(Path(":memory:"))
     db.init_schema()

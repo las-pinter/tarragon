@@ -10,7 +10,7 @@ from typing import Any, override
 
 from PySide6.QtCore import QAbstractListModel, QModelIndex, QPersistentModelIndex, Qt
 
-from tarragon.db import Database
+from tarragon.db.database import Database
 
 
 class FavoritesModel(QAbstractListModel):

@@ -15,7 +15,7 @@ from PIL import Image
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QLineEdit
 
-from tarragon.db import Database
+from tarragon.db.database import Database
 from tarragon.models.filter_state import FilterState
 from tarragon.models.thumbnail_model import ThumbnailModel
 from tarragon.scanner import FileInfo

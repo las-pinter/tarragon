@@ -1,4 +1,4 @@
-"""Settings persistence — typed key-value store backed by SQLite."""
+"""Typed key-value store backed by SQLite."""
 
 from __future__ import annotations
 
@@ -37,15 +37,11 @@ class Settings:
     def __init__(self, db: Database) -> None:
         self._db = db
 
-    # ── Lifecycle ────────────────────────────────────────────────
-
     def init_defaults(self) -> None:
-        """INSERT OR IGNORE every DEFAULTS entry — idempotent first-run setup."""
+        """INSERT OR IGNORE every DEFAULTS entry, idempotent first-run setup."""
         for key, value in DEFAULTS.items():
             if self._db.get_setting(key) is None:
                 self._db.set_setting(key, json.dumps(value))
-
-    # ── Accessors ────────────────────────────────────────────────
 
     def get(self, key: str) -> Any:
         """Read a setting value; fall back to DEFAULTS if the key is absent."""
@@ -60,10 +56,8 @@ class Settings:
         """Persist a setting value (JSON-serialized)."""
         self._db.set_setting(key, json.dumps(value))
 
-    # ── Teardown ─────────────────────────────────────────────────
-
     def close(self) -> None:
-        """No-op — connection lifecycle is owned by the Database instance."""
+        """No-op, connection lifecycle is owned by the Database instance."""
 
     def __enter__(self) -> Settings:
         return self

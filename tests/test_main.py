@@ -22,7 +22,7 @@ def test_main_window_has_title(qapp: Any, tmp_path: Path) -> None:  # noqa: ARG0
 
     from tarragon.db.database import Database
     from tarragon.main import MainWindow
-    from tarragon.settings import Settings
+    from tarragon.services.settings import Settings
 
     settings_db = Database(tmp_path / "test_settings.db")
     settings_db.init_schema()
@@ -40,7 +40,7 @@ def test_main_window_has_database(qapp: Any, tmp_path: Path) -> None:  # noqa: A
 
     from tarragon.db.database import Database
     from tarragon.main import MainWindow
-    from tarragon.settings import Settings
+    from tarragon.services.settings import Settings
 
     settings_db = Database(tmp_path / "test_settings2.db")
     settings_db.init_schema()

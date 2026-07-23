@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 from tarragon.db.database import Database
-from tarragon.settings import DEFAULTS, Settings
+from tarragon.services.settings import DEFAULTS, Settings
 
 # ── Fixtures ────────────────────────────────────────────────────
 

@@ -67,9 +67,9 @@ class ThumbnailService(QObject):
     compositing to the module-level ProcessPoolExecutor shared singleton.
     """
 
-    thumbnailReady = Signal(str, object, object, object)  # noqa: N815 — (path, image, resolution_size, cache_path)
-    errorOccurred = Signal(str, str)  # noqa: N815 — Qt signal follows camelCase convention
-    tagsUpdated = Signal()  # noqa: N815 — emitted after auto-color tags are persisted
+    thumbnail_ready = Signal(str, object, object, object)
+    error_occurred = Signal(str, str)
+    tags_updated = Signal()
 
     def __init__(self, db: Database, settings_service: SettingsService, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -103,16 +103,13 @@ class ThumbnailService(QObject):
         self._cancel_event.clear()
 
     def shutdown(self, timeout_ms: int = 5000) -> None:
-        """Graceful shutdown — cancel pending tasks, wait for running ones.
+        """Graceful shutdown. Cancel pending tasks, wait for running ones.
 
         Args:
             timeout_ms: Maximum time to wait for in-flight tasks to finish
-                (milliseconds).  Defaults to 5 000 (5 seconds).
+            (milliseconds). Defaults to 5000 (5 seconds).
         """
         self.cancel_pending()
-        # Shut down the ProcessPoolExecutor first to cancel any pending PSD renders.
-        # This prevents worker processes from blocking on queue.get() indefinitely.
-        # Deferred import to avoid circular dependency
         from tarragon.renderers.psd import shutdown_executor
 
         shutdown_executor()
@@ -121,16 +118,16 @@ class ThumbnailService(QObject):
 
     @Slot(FileInfo)
     def check_and_render(self, file_info: FileInfo) -> str:
-        """Check cache; if stale or missing, render all resolutions.
+        """Check cache. If stale or missing, render all resolutions.
 
         Called from the main thread for each file discovered during a scan.
         Handles three resolution tiers: thumbnail (256), preview (1024),
         and full (original resolution).
 
         Returns a status string for batch summary logging:
-            "cached"  — all resolutions served from cache
-            "derived" — missing resolutions derived from existing cached image
-            "queued"  — async render dispatched to thread pool
+            "cached": all resolutions served from cache
+            "derived": missing resolutions derived from existing cached image
+            "queued": async render dispatched to thread pool
         """
         start = time.perf_counter()
         logger.debug("check_and_render: %s", file_info.path)
@@ -138,30 +135,23 @@ class ThumbnailService(QObject):
 
         # Auto-regeneration: When source file mtime or size changes,
         # the cache is considered stale and triggers a full re-render.
-        # This happens automatically on folder re-scan — no manual
-        # invalidation needed. The comparison uses int(mtime) to match
-        # the integer precision stored in the database.
-        # Check if cache is valid (mtime + size match)
+        # This happens automatically on folder re-scan.
         if cached and cached["mtime"] == int(file_info.mtime) and cached["size"] == file_info.size:
-            # Check if we have all three resolutions
             has_thumbnail = cached.get("thumbnail_cache_path") and Path(cached["thumbnail_cache_path"]).exists()
             has_preview = cached.get("preview_cache_path") and Path(cached["preview_cache_path"]).exists()
             has_full = cached.get("full_cache_path") and Path(cached["full_cache_path"]).exists()
 
             if has_thumbnail and has_preview and has_full:
-                # All resolutions cached — emit signals for each
                 self._emit_cached_thumbnails(file_info, cached)
                 elapsed = time.perf_counter() - start
                 logger.debug("check_and_render completed in %.3fs: status=cached", elapsed)
                 return "cached"
 
-            # Some resolutions missing — derive from largest available
             result = self._derive_missing_resolutions(file_info, cached)
             elapsed = time.perf_counter() - start
             logger.debug("check_and_render completed in %.3fs: status=%s", elapsed, result)
             return result
 
-        # Cache miss or invalid — render all resolutions from source (async)
         task = _RenderAllTask(
             file_info=file_info,
             on_error=self._on_error,
@@ -193,10 +183,8 @@ class ThumbnailService(QObject):
         """
         logger.info("Regenerating thumbnail for: %s", source_path)
 
-        # Delete existing cache files and DB record
         invalidate_cache_files(self._db, str(source_path))
 
-        # Stat the file to build a FileInfo for re-rendering
         try:
             stat = source_path.stat()
         except OSError:
@@ -210,21 +198,22 @@ class ThumbnailService(QObject):
             extension=source_path.suffix.lower(),
         )
 
-        # Re-render from scratch (cache was just invalidated)
         self.check_and_render(file_info)
 
     def _emit_cached_thumbnails(self, file_info: FileInfo, cached: dict[str, Any]) -> None:
-        """Emit thumbnailReady signals for all cached resolutions."""
-        for resolution_key, resolution_size in [
+        """Emit thumbnail_ready signals for all cached resolutions."""
+        cache_entries: list[tuple[str, int | None]] = [
             ("thumbnail_cache_path", RESOLUTION_THUMBNAIL),
             ("preview_cache_path", RESOLUTION_PREVIEW),
             ("full_cache_path", RESOLUTION_FULL),
-        ]:
+        ]
+
+        for resolution_key, resolution_size in cache_entries:
             cache_path = cached.get(resolution_key)
             if cache_path and Path(cache_path).exists():
                 try:
                     img = Image.open(cache_path)
-                    self.thumbnailReady.emit(str(file_info.path), img, resolution_size, cache_path)
+                    self.thumbnail_ready.emit(str(file_info.path), img, resolution_size, cache_path)
                 except Exception:
                     logger.warning(
                         "Corrupt cache file, skipping resolution %s: %s", resolution_size, cache_path, exc_info=True
@@ -237,7 +226,7 @@ class ThumbnailService(QObject):
         resolution_size: int | None,
         cache_path: Path,
     ) -> str:
-        """Save *img* to cache, emit thumbnailReady, and return the path string.
+        """Save *img* to cache, emit thumbnail_ready, and return the path string.
 
         Shared helper used by both :meth:`_derive_missing_resolutions` and
         :meth:`_render_all_resolutions` to avoid duplicating the
@@ -245,7 +234,7 @@ class ThumbnailService(QObject):
         """
         save_to_cache(img, cache_path, self._cache_format)
         path_str = str(cache_path)
-        self.thumbnailReady.emit(str(file_info.path), img, resolution_size, path_str)
+        self.thumbnail_ready.emit(str(file_info.path), img, resolution_size, path_str)
         return path_str
 
     def _derive_missing_resolutions(self, file_info: FileInfo, cached: dict[str, Any]) -> str:
@@ -253,7 +242,6 @@ class ThumbnailService(QObject):
 
         Returns a status string: "derived" or "queued".
         """
-        # Find largest available resolution
         full_path = cached.get("full_cache_path")
         preview_path = cached.get("preview_cache_path")
 
@@ -263,7 +251,7 @@ class ThumbnailService(QObject):
         if full_path and Path(full_path).exists():
             try:
                 source_image = Image.open(full_path)
-                source_resolution = RESOLUTION_FULL  # Full resolution
+                source_resolution = RESOLUTION_FULL
             except Exception:
                 logger.warning("Failed to open cached full resolution: %s", full_path, exc_info=True)
 
@@ -275,7 +263,7 @@ class ThumbnailService(QObject):
                 logger.warning("Failed to open cached preview resolution: %s", preview_path, exc_info=True)
 
         if source_image is None:
-            # No cached image available — render from source (async)
+            # No cached image available, render from source (async)
             task = _RenderAllTask(
                 file_info=file_info,
                 on_error=self._on_error,
@@ -286,7 +274,7 @@ class ThumbnailService(QObject):
             logger.debug("Queued render for %s", file_info.path)
             return "queued"
 
-        # Derive missing sizes — use per-folder UUID from DB (atomic)
+        # Derive missing sizes, use per-folder UUID from DB (atomic)
         folder_path = str(file_info.path.parent)
         candidate_uuid = cached.get("cache_uuid") or generate_cache_uuid()
         cache_uuid = self._db.get_or_create_folder_uuid(folder_path, candidate_uuid)
@@ -297,19 +285,17 @@ class ThumbnailService(QObject):
         final_preview_path = cached.get("preview_cache_path")
         final_full_path = cached.get("full_cache_path")
 
-        # Save missing thumbnail (RESOLUTION_THUMBNAIL)
+        # Save missing thumbnail
         if not cached.get("thumbnail_cache_path") or not Path(cached["thumbnail_cache_path"]).exists():
             if max(source_image.size) > RESOLUTION_THUMBNAIL:
                 thumb_img = source_image.copy()
                 thumb_img.thumbnail((RESOLUTION_THUMBNAIL, RESOLUTION_THUMBNAIL), Image.Resampling.LANCZOS)
             else:
-                # Source is smaller than RESOLUTION_THUMBNAIL — include as-is
                 thumb_img = source_image.copy()
             final_thumb_path = self._save_and_record(
                 thumb_img, file_info, RESOLUTION_THUMBNAIL, cache_paths[str(RESOLUTION_THUMBNAIL)]
             )
 
-        # Save missing preview (RESOLUTION_PREVIEW) — only if source is full resolution
         if source_resolution == RESOLUTION_FULL and (
             not cached.get("preview_cache_path") or not Path(cached["preview_cache_path"]).exists()
         ):
@@ -317,16 +303,13 @@ class ThumbnailService(QObject):
                 preview_img = source_image.copy()
                 preview_img.thumbnail((RESOLUTION_PREVIEW, RESOLUTION_PREVIEW), Image.Resampling.LANCZOS)
             else:
-                # Source is smaller than RESOLUTION_PREVIEW — include as-is
                 preview_img = source_image.copy()
             final_preview_path = self._save_and_record(
                 preview_img, file_info, RESOLUTION_PREVIEW, cache_paths[str(RESOLUTION_PREVIEW)]
             )
 
-        # Emit signals for already-cached resolutions (BUG #3 fix)
         self._emit_cached_thumbnails(file_info, cached)
 
-        # Update database with all paths (BUG #5 fix: preserve existing paths)
         self._db.upsert_thumbnail(
             path=str(file_info.path),
             mtime=int(file_info.mtime),
@@ -350,7 +333,6 @@ class ThumbnailService(QObject):
         start = time.perf_counter()
         logger.debug("_render_all_resolutions: %s", file_info.path)
 
-        # ── Cancel check: before any work ──────────────────────────────
         if self._cancel_event.is_set():
             logger.debug("_render_all_resolutions cancelled before start: %s", file_info.path)
             return
@@ -362,10 +344,9 @@ class ThumbnailService(QObject):
         cache_uuid = self._db.get_or_create_folder_uuid(folder_path, generate_cache_uuid())
         cache_paths = generate_cache_paths(file_info.path, cache_uuid)
 
-        # Render full resolution first
         if file_info.extension.lower() in {".psd", ".psb"}:
             threshold = self._settings_service.get_large_canvas_threshold_mp()
-            grid_str = self._settings_service.get_tile_grid_size()  # e.g. "2x2"
+            grid_str = self._settings_service.get_tile_grid_size()
             grid_x, grid_y = (int(d) for d in grid_str.split("x"))
             full_img = render_psd_image(
                 file_info.path,
@@ -380,28 +361,25 @@ class ThumbnailService(QObject):
         else:
             full_img = render_plain_image(file_info.path, target_size=RESOLUTION_FULL)
 
-        # ── Cancel check: after expensive render ───────────────────────
+        # Cancel check: after expensive render
         if self._cancel_event.is_set():
             logger.debug("_render_all_resolutions cancelled after render: %s", file_info.path)
             return
 
         if full_img is None:
-            self.errorOccurred.emit(str(file_info.path), "Failed to render image")
-            self.thumbnailReady.emit(str(file_info.path), None, None, None)
+            self.error_occurred.emit(str(file_info.path), "Failed to render image")
+            self.thumbnail_ready.emit(str(file_info.path), None, None, None)
             return
 
-        # Save full resolution
         self._save_and_record(full_img, file_info, RESOLUTION_FULL, cache_paths["full"])
 
-        # Derive and save smaller resolutions
         smaller_sizes = derive_smaller_sizes(full_img, [RESOLUTION_THUMBNAIL, RESOLUTION_PREVIEW])
 
-        # Track which paths were actually saved (BUG #4 fix)
         thumb_path = None
         preview_path = None
 
         for size, img in smaller_sizes.items():
-            # ── Cancel check: between resolution saves ─────────────────
+            # Cancel check: between resolution saves
             if self._cancel_event.is_set():
                 logger.debug("_render_all_resolutions cancelled during smaller sizes: %s", file_info.path)
                 return
@@ -426,11 +404,11 @@ class ThumbnailService(QObject):
                     neutral_s_threshold=self._settings_service.get_color_tag_neutral_s_threshold(),
                 )
                 self._db.replace_auto_color_tags(str(file_info.path), tags)
-                self.tagsUpdated.emit()
+                self.tags_updated.emit()
             except (ImportError, OSError, RuntimeError, ValueError):
                 logger.warning("Color tagging failed for %s", file_info.path, exc_info=True)
 
-        # Update database with only the paths that were actually saved (BUG #4 fix)
+        # Update database with only the paths that were actually saved
         self._db.upsert_thumbnail(
             path=str(file_info.path),
             mtime=int(file_info.mtime),
@@ -447,5 +425,5 @@ class ThumbnailService(QObject):
 
     def _on_error(self, file_info: FileInfo, error_message: str) -> None:
         """Handle render error."""
-        self.errorOccurred.emit(str(file_info.path), error_message)
-        self.thumbnailReady.emit(str(file_info.path), None, None, None)
+        self.error_occurred.emit(str(file_info.path), error_message)
+        self.thumbnail_ready.emit(str(file_info.path), None, None, None)

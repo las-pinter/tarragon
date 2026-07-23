@@ -78,7 +78,7 @@ class PreviewPanel(QWidget):
 
         # React to external tag changes (e.g. from thumbnail auto-color)
         if self._tag_service is not None:
-            self._tag_service.tagsChanged.connect(self._on_external_tags_changed)
+            self._tag_service.tags_changed.connect(self._on_external_tags_changed)
 
     def _setup_ui(self) -> None:
         """Build the UI layout."""
@@ -595,7 +595,7 @@ class PreviewPanel(QWidget):
                     self._selected_paths,
                     [tag_name],
                 )
-        # tagsChanged signal from service triggers _on_external_tags_changed
+        # tags_changed signal from service triggers _on_external_tags_changed
 
     def _on_tag_remove_clicked(self, tag: dict[str, Any]) -> None:
         """Handle click on the × button of a tag pill — remove tag from files.
@@ -614,7 +614,7 @@ class PreviewPanel(QWidget):
             self._selected_paths,
             {tag_id},
         )
-        # tagsChanged signal from service triggers _on_external_tags_changed
+        # tags_changed signal from service triggers _on_external_tags_changed
 
     # ── Color squares ────────────────────────────────────────────────────────
 
@@ -740,7 +740,7 @@ class PreviewPanel(QWidget):
                 [color_tag_name],
                 source="auto_color",
             )
-        # tagsChanged signal from service triggers _on_external_tags_changed
+        # tags_changed signal from service triggers _on_external_tags_changed
 
     def _on_add_tag_clicked(self) -> None:
         """Show dropdown menu of existing custom tags + 'Create new...' option.

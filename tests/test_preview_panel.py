@@ -1769,9 +1769,9 @@ def mock_tag_service() -> Any:
     """Create a mock TagService for testing tag management."""
     from unittest.mock import MagicMock
 
-    # Create a mock that has the tagsChanged signal
+    # Create a mock that has the tags_changed signal
     service = MagicMock()
-    service.tagsChanged = MagicMock()
+    service.tags_changed = MagicMock()
     service.get_tags_for_file.return_value = []
     service.get_all_tags.return_value = []
     service.get_file_tag_ids_batch.return_value = {}

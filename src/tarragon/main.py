@@ -9,11 +9,12 @@ from PySide6.QtWidgets import QApplication
 
 from tarragon.app_paths import db_path, ensure_dirs
 from tarragon.db.database import Database
+from tarragon.logging import LogFormatter
 from tarragon.main_window import MainWindow as _MainWindow
 from tarragon.migrations import MigrationRunner
+from tarragon.services.settings import Settings
 from tarragon.services.settings_service import SettingsService
 from tarragon.services.tag_service import TagService
-from tarragon.settings import Settings
 from tarragon.theme.colors import create_palette
 
 logger = logging.getLogger(__name__)
@@ -104,11 +105,9 @@ def main() -> None:
     """Application entry point."""
     ensure_dirs()
 
-    logging.basicConfig(
-        level=logging.INFO,
-        format="[%(asctime)s] %(levelname)-8s %(name)s: %(message)s",
-        datefmt="%H:%M:%S",
-    )
+    handler = logging.StreamHandler()
+    handler.setFormatter(LogFormatter())
+    logging.basicConfig(level=logging.INFO, handlers=[handler])
 
     # Suppress noisy third-party debug logging
     logging.getLogger("PIL").setLevel(logging.WARNING)

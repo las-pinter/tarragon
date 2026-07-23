@@ -31,7 +31,7 @@ Plain image renders are dispatched via `_RenderAllTask(QRunnable)` to a `QThread
 1. Calls `render_plain_image()` to render the full-resolution image.
 2. Generates cache paths via `generate_cache_paths()` for all three resolution tiers.
 3. Calls `save_to_cache()` to write each rendered resolution to disk.
-4. Persists metadata to the database and emits `thumbnailReady` for each resolution.
+4. Persists metadata to the database and emits `thumbnail_ready` for each resolution.
 
 ## PSD/PSB Compositing Pipeline
 
@@ -146,7 +146,7 @@ After the full-resolution image is rendered, two smaller sizes are derived via `
 | Preview | `RESOLUTION_PREVIEW` | 1024px | Detail preview, zoom level 1 |
 | Full | `RESOLUTION_FULL` (`None`) | Original | Full source resolution (no resizing) |
 
-All three tiers are saved to the cache and emitted via `thumbnailReady` signals. The `derive_smaller_sizes()` function never upscales — if the source is smaller than a target tier, a copy is included as-is so that all cache tiers are populated.
+All three tiers are saved to the cache and emitted via `thumbnail_ready` signals. The `derive_smaller_sizes()` function never upscales — if the source is smaller than a target tier, a copy is included as-is so that all cache tiers are populated.
 
 ### Cancellation Support
 

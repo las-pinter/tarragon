@@ -73,13 +73,13 @@ class TestAddTagsToFiles:
             assert names == {"character", "landscape"}, f"{path} should have both tags"
 
     def test_add_tags_to_files_emits_tags_changed(self, service: TagService) -> None:
-        """add_tags_to_files emits tagsChanged."""
+        """add_tags_to_files emits tags_changed."""
         emitted = []
-        service.tagsChanged.connect(lambda: emitted.append(True))
+        service.tags_changed.connect(lambda: emitted.append(True))
 
         service.add_tags_to_files(["/img/a.png"], ["test"])
 
-        assert len(emitted) == 1, "tagsChanged should be emitted once"
+        assert len(emitted) == 1, "tags_changed should be emitted once"
 
     def test_add_tags_to_files_idempotent(self, service: TagService) -> None:
         """Adding the same tag twice does not duplicate."""
@@ -115,16 +115,16 @@ class TestRemoveTagsFromFiles:
             assert names == {"character"}, f"{path} should only have 'character' after removal"
 
     def test_remove_tags_from_files_emits_tags_changed(self, service: TagService) -> None:
-        """remove_tags_from_files emits tagsChanged."""
+        """remove_tags_from_files emits tags_changed."""
         service.add_tags_to_files(["/img/a.png"], ["test"])
         tag_id = service._get_or_create_tag("test")
 
         emitted = []
-        service.tagsChanged.connect(lambda: emitted.append(True))
+        service.tags_changed.connect(lambda: emitted.append(True))
 
         service.remove_tags_from_files(["/img/a.png"], {tag_id})
 
-        assert len(emitted) == 1, "tagsChanged should be emitted once"
+        assert len(emitted) == 1, "tags_changed should be emitted once"
 
     def test_remove_tags_from_files_nonexistent_tag(self, service: TagService) -> None:
         """Removing a tag that doesn't exist does not raise."""

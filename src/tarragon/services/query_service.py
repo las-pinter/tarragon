@@ -1,4 +1,4 @@
-"""Query service — SQL filter composition for thumbnail queries.
+"""SQL filter composition for thumbnail queries.
 
 Combines filename text search, tag ID filters (AND semantics),
 color tag filters (AND semantics), and folder filters (OR semantics)
@@ -22,8 +22,8 @@ class QueryService:
     """Service-layer wrapper for composing SQL filter queries on thumbnails.
 
     Each filter (filename, tag ids, color tags) is a composable condition
-    that gets combined into a single parameterised SQL statement.  The class
-    owns no connection state — it delegates to the injected *Database* for all
+    that gets combined into a single parameterised SQL statement. The class
+    owns no connection state. It delegates to the injected *Database* for all
     execution.
     """
 
@@ -42,7 +42,7 @@ class QueryService:
         Parameters
         ----------
         folder_filters:
-            Set of folder paths to scope the query.  Thumbnails whose path
+            Set of folder paths to scope the query. Thumbnails whose path
             starts with **any** of these strings are included (OR semantics).
             When empty or ``None``, the query spans the **entire database**
             (global mode).
@@ -77,7 +77,7 @@ class QueryService:
         conditions: list[str] = []
         params: list[Any] = []
 
-        # ── Folder scope (empty = global / entire DB) ──────────────
+        # Folder scope
         if folder_filters:
             folder_conds: list[str] = []
             for folder in sorted(folder_filters):
@@ -88,13 +88,13 @@ class QueryService:
                 params.append(f"{normalized.rstrip('/')}/%")
             conditions.append(f"({' OR '.join(folder_conds)})")
 
-        # ── Filename filter (applied to basename via %/%) ──────────
+        # Filename filter
         if filename_filter:
             escaped = filename_filter.replace("%", "\\%").replace("_", "\\_")
             conditions.append("path LIKE ? ESCAPE '\\'")
             params.append(f"%{escaped}%")
 
-        # ── Tag ID filter (AND semantics) ──────────────────────────
+        # Tag ID filter
         if tag_ids:
             placeholders = ",".join("?" * len(tag_ids))
             conditions.append(
@@ -108,7 +108,7 @@ class QueryService:
             params.extend(sorted(tag_ids))
             params.append(len(tag_ids))
 
-        # ── Color tag filter (AND semantics) ───────────────────────
+        #  Color tag filter
         if color_tags:
             placeholders = ",".join("?" * len(color_tags))
             conditions.append(

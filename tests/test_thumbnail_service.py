@@ -93,8 +93,8 @@ class TestInstantiation:
 
     def test_signals_exist(self, service: ThumbnailService) -> None:
         """ThumbnailService exposes the required signals."""
-        assert hasattr(service, "thumbnailReady")
-        assert hasattr(service, "errorOccurred")
+        assert hasattr(service, "thumbnail_ready")
+        assert hasattr(service, "error_occurred")
 
     def test_cache_format_from_settings(self, service: ThumbnailService) -> None:
         """_cache_format is initialised from settings_service."""
@@ -115,7 +115,7 @@ class TestCheckAndRender:
         service: ThumbnailService,
         db_mock: MagicMock,
     ) -> None:
-        """Valid cache entry with all 3 resolution files → emit thumbnailReady for each."""
+        """Valid cache entry with all 3 resolution files → emit thumbnail_ready for each."""
         cache_dir = tmp_path / "cache"
         cache_dir.mkdir(parents=True)
         thumb_path = cache_dir / "thumb.png"
@@ -146,7 +146,7 @@ class TestCheckAndRender:
         }
 
         emitted: list[tuple[str, object, object]] = []
-        service.thumbnailReady.connect(lambda p, i, r: emitted.append((p, i, r)))
+        service.thumbnail_ready.connect(lambda p, i, r: emitted.append((p, i, r)))
 
         service.check_and_render(file_info)
 
@@ -375,7 +375,7 @@ class TestCallbacks:
         tmp_path: Path,
         service: ThumbnailService,
     ) -> None:
-        """_on_error emits errorOccurred and thumbnailReady (with None image)."""
+        """_on_error emits error_occurred and thumbnail_ready (with None image)."""
         file_info = FileInfo(
             path=tmp_path / "fail.png",
             mtime=1000.0,
@@ -385,8 +385,8 @@ class TestCallbacks:
 
         ready_emitted: list[tuple[str, object]] = []
         error_emitted: list[tuple[str, str]] = []
-        service.thumbnailReady.connect(lambda p, i: ready_emitted.append((p, i)))
-        service.errorOccurred.connect(lambda p, e: error_emitted.append((p, e)))
+        service.thumbnail_ready.connect(lambda p, i: ready_emitted.append((p, i)))
+        service.error_occurred.connect(lambda p, e: error_emitted.append((p, e)))
 
         service._on_error(file_info, "Something went wrong")
 
@@ -551,7 +551,7 @@ class TestCheckAndRenderEdgeCases:
         }
 
         emitted: list[tuple[str, object]] = []
-        service.thumbnailReady.connect(lambda p, i: emitted.append((p, i)))
+        service.thumbnail_ready.connect(lambda p, i: emitted.append((p, i)))
 
         service.check_and_render(file_info)
 
@@ -627,8 +627,8 @@ class TestCallbackEdgeCases:
 
         ready_emitted: list[tuple[str, object]] = []
         error_emitted: list[tuple[str, str]] = []
-        service.thumbnailReady.connect(lambda p, i: ready_emitted.append((p, i)))
-        service.errorOccurred.connect(lambda p, e: error_emitted.append((p, e)))
+        service.thumbnail_ready.connect(lambda p, i: ready_emitted.append((p, i)))
+        service.error_occurred.connect(lambda p, e: error_emitted.append((p, e)))
 
         service._on_error(file_info, "Disk full")
 
@@ -1129,7 +1129,7 @@ class TestDeriveMissingResolutionsSmallImages:
         }
 
         emitted: list[tuple[Any, ...]] = []
-        service.thumbnailReady.connect(lambda *args: emitted.append(args))
+        service.thumbnail_ready.connect(lambda *args: emitted.append(args))
 
         result = service._derive_missing_resolutions(file_info, cached)
 
@@ -1177,7 +1177,7 @@ class TestDeriveMissingResolutionsSmallImages:
         }
 
         emitted: list[tuple[Any, ...]] = []
-        service.thumbnailReady.connect(lambda *args: emitted.append(args))
+        service.thumbnail_ready.connect(lambda *args: emitted.append(args))
 
         result = service._derive_missing_resolutions(file_info, cached)
 
@@ -1220,7 +1220,7 @@ class TestDeriveMissingResolutionsSmallImages:
         }
 
         emitted: list[tuple[Any, ...]] = []
-        service.thumbnailReady.connect(lambda *args: emitted.append(args))
+        service.thumbnail_ready.connect(lambda *args: emitted.append(args))
 
         service._derive_missing_resolutions(file_info, cached)
 
@@ -1243,11 +1243,11 @@ class TestDeriveMissingResolutionsSmallImages:
 
 
 class TestAutoColorTagSignal:
-    """Verify that auto-color tagging emits tagsUpdated signal."""
+    """Verify that auto-color tagging emits tags_updated signal."""
 
     def test_tags_updated_signal_exists(self, service: ThumbnailService) -> None:
-        """ThumbnailService exposes a tagsUpdated signal."""
-        assert hasattr(service, "tagsUpdated")
+        """ThumbnailService exposes a tags_updated signal."""
+        assert hasattr(service, "tags_updated")
 
     def test_render_all_emits_tags_updated_when_color_tagging_enabled(
         self,
@@ -1256,7 +1256,7 @@ class TestAutoColorTagSignal:
         db_mock: MagicMock,
         settings_mock: MagicMock,
     ) -> None:
-        """_render_all_resolutions emits tagsUpdated after persisting auto-color tags."""
+        """_render_all_resolutions emits tags_updated after persisting auto-color tags."""
         file_info = FileInfo(
             path=tmp_path / "source.png",
             mtime=1000.0,
@@ -1265,7 +1265,7 @@ class TestAutoColorTagSignal:
         )
 
         emitted = []
-        service.tagsUpdated.connect(lambda: emitted.append(True))
+        service.tags_updated.connect(lambda: emitted.append(True))
 
         mock_img = MagicMock(spec=Image.Image)
         mock_img.width = 64
@@ -1286,8 +1286,8 @@ class TestAutoColorTagSignal:
             }
             service._render_all_resolutions(file_info)
 
-        # tagsUpdated should have been emitted exactly once
-        assert len(emitted) == 1, f"tagsUpdated should be emitted once after auto-tagging, got {len(emitted)}"
+        # tags_updated should have been emitted exactly once
+        assert len(emitted) == 1, f"tags_updated should be emitted once after auto-tagging, got {len(emitted)}"
         # DB method should have been called
         db_mock.replace_auto_color_tags.assert_called_once_with(str(file_info.path), ["red", "blue"])
 
@@ -1296,7 +1296,7 @@ class TestAutoColorTagSignal:
         tmp_path: Path,
         db_mock: MagicMock,
     ) -> None:
-        """When color_tag_enabled is False, tagsUpdated is NOT emitted."""
+        """When color_tag_enabled is False, tags_updated is NOT emitted."""
         disabled_settings = MagicMock()
         disabled_settings.get_cache_format.return_value = "png"
         disabled_settings.get_max_psd_workers.return_value = 3
@@ -1315,7 +1315,7 @@ class TestAutoColorTagSignal:
         )
 
         emitted = []
-        svc.tagsUpdated.connect(lambda: emitted.append(True))
+        svc.tags_updated.connect(lambda: emitted.append(True))
 
         mock_img = MagicMock(spec=Image.Image)
         mock_img.width = 64
@@ -1335,8 +1335,8 @@ class TestAutoColorTagSignal:
             }
             svc._render_all_resolutions(file_info)
 
-        # tagsUpdated should NOT have been emitted
-        assert len(emitted) == 0, "tagsUpdated should NOT be emitted when color tagging is disabled"
+        # tags_updated should NOT have been emitted
+        assert len(emitted) == 0, "tags_updated should NOT be emitted when color tagging is disabled"
         db_mock.replace_auto_color_tags.assert_not_called()
 
     def test_render_all_no_tags_updated_on_color_extraction_failure(
@@ -1345,7 +1345,7 @@ class TestAutoColorTagSignal:
         service: ThumbnailService,
         db_mock: MagicMock,
     ) -> None:
-        """When color extraction raises, tagsUpdated is NOT emitted (failure is swallowed)."""
+        """When color extraction raises, tags_updated is NOT emitted (failure is swallowed)."""
         file_info = FileInfo(
             path=tmp_path / "source.png",
             mtime=1000.0,
@@ -1354,7 +1354,7 @@ class TestAutoColorTagSignal:
         )
 
         emitted = []
-        service.tagsUpdated.connect(lambda: emitted.append(True))
+        service.tags_updated.connect(lambda: emitted.append(True))
 
         mock_img = MagicMock(spec=Image.Image)
         mock_img.width = 64
@@ -1379,8 +1379,8 @@ class TestAutoColorTagSignal:
             # Should not raise — color tagging failure is swallowed
             service._render_all_resolutions(file_info)
 
-        # tagsUpdated should NOT have been emitted since extraction failed
-        assert len(emitted) == 0, "tagsUpdated should NOT be emitted when color extraction fails"
+        # tags_updated should NOT have been emitted since extraction failed
+        assert len(emitted) == 0, "tags_updated should NOT be emitted when color extraction fails"
 
 
 # =========================================================================
@@ -1590,7 +1590,7 @@ class TestThumbnailServiceEdgeCases:
         }
 
         emitted: list[tuple[str, object, object]] = []
-        service.thumbnailReady.connect(lambda p, i, r: emitted.append((p, i, r)))
+        service.thumbnail_ready.connect(lambda p, i, r: emitted.append((p, i, r)))
 
         service.check_and_render(file_info)
         assert len(emitted) == 3, "First call should be a cache hit with 3 emissions"
@@ -1613,7 +1613,7 @@ class TestThumbnailServiceEdgeCases:
         service: ThumbnailService,
     ) -> None:
         """Each signal is a distinct Qt signal object."""
-        assert service.thumbnailReady is not service.errorOccurred
+        assert service.thumbnail_ready is not service.error_occurred
 
 
 # =========================================================================

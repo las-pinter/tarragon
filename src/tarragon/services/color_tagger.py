@@ -1,7 +1,6 @@
-"""Color tagger — extracts dominant color tags from images.
+"""Extracts dominant color tags from images.
 
 Pure, deterministic algorithm for extracting color information from images.
-No ML, no randomization — just math.
 """
 
 from __future__ import annotations

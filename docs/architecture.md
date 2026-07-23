@@ -134,7 +134,7 @@ Services sit between the UI widgets and the data layer, providing business logic
 
 `services/thumbnail_service.py` — Coordinates thumbnail generation, caching, and UI signal emission.
 
-- Inherits `QObject` to emit Qt signals (`thumbnailReady`, `errorOccurred`).
+- Inherits `QObject` to emit Qt signals (`thumbnail_ready`, `error_occurred`).
 - Uses a `QThreadPool` for all render tasks (`_RenderAllTask`), covering plain image renders, PSD dispatch wrappers, and CLIP extraction.
 - Delegates PSD/PSB compositing to the module-level `ProcessPoolExecutor` (called from within `_RenderAllTask`).
 - On render completion, persists thumbnail metadata to the database and optionally extracts color tags.
@@ -153,7 +153,7 @@ Services sit between the UI widgets and the data layer, providing business logic
 `services/tag_service.py` — High-level tag CRUD with Qt signal integration.
 
 - Wraps `Database` tag operations into a service interface.
-- Emits `tagsChanged` signal on any tag mutation.
+- Emits `tags_changed` signal on any tag mutation.
 - Supports tri-state resolution for multi-selection tag checkboxes.
 
 ### SettingsService

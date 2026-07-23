@@ -39,7 +39,7 @@ def launch_editor(db: Database, file_path: Path, extension: str) -> None:
     """Look up command template, substitute file path, launch via subprocess.Popen.
 
     If no association found, falls back to OS default handler.
-    Non-blocking — uses Popen.
+    Non-blocking, uses Popen.
     """
     cmd_template = resolve_editor_command(db, extension)
 
@@ -49,6 +49,6 @@ def launch_editor(db: Database, file_path: Path, extension: str) -> None:
     else:
         # OS default handler
         if sys.platform == "win32":
-            os.startfile(str(file_path))  # type: ignore[attr-defined]
+            os.startfile(str(file_path))
         else:
             subprocess.Popen(["xdg-open", str(file_path)])

@@ -433,7 +433,7 @@ class TestRefreshPreservesSelection:
         bar._toggle_tag(tag_id)
         assert tag_id in bar.get_active_tag_ids()
 
-        # Refresh (e.g., due to tagsChanged signal)
+        # Refresh (e.g., due to tags_changed signal)
         bar._refresh_tags()
 
         # The active set should still contain the tag

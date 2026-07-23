@@ -21,13 +21,14 @@ from PySide6.QtWidgets import (
 
 from tarragon.db.database import Database
 from tarragon.gallery_controller import GalleryController
+from tarragon.logging import LogFormatter
 from tarragon.models.filter_state import FilterState
 from tarragon.models.thumbnail_model import ThumbnailModel
 from tarragon.services.query_service import QueryService
+from tarragon.services.settings import Settings
 from tarragon.services.settings_service import SettingsService
 from tarragon.services.tag_service import TagService
 from tarragon.services.thumbnail_service import ThumbnailService
-from tarragon.settings import Settings
 from tarragon.theme.constants import MULTI_PREVIEW_MAX_DEFAULT, SIDEBAR_WIDTH_PX
 from tarragon.widgets.color_filter_bar import ColorFilterBar
 from tarragon.widgets.filter_bar import FilterBar
@@ -311,10 +312,10 @@ class MainWindow(QMainWindow):
         # Create thumbnail service (skip if settings_service is None, e.g. in tests)
         if self._settings_service is not None:
             self._thumbnail_service = ThumbnailService(db, self._settings_service, parent=self)
-            self._thumbnail_service.thumbnailReady.connect(self._on_thumbnail_ready)
-            self._thumbnail_service.errorOccurred.connect(self._on_thumbnail_error)
+            self._thumbnail_service.thumbnail_ready.connect(self._on_thumbnail_ready)
+            self._thumbnail_service.error_occurred.connect(self._on_thumbnail_error)
             # Auto-color tags from thumbnail rendering should refresh the tag panel
-            self._thumbnail_service.tagsUpdated.connect(tag_service.tagsChanged.emit)
+            self._thumbnail_service.tags_updated.connect(tag_service.tags_changed.emit)
 
         # ── Search box (Deviation 4.5) ─────────────────────────────────
         self._search_edit = QLineEdit()
@@ -361,9 +362,7 @@ class MainWindow(QMainWindow):
 
         # Set up logging handler to route Python logs into the log panel
         self._log_handler = QtLogHandler(self.log_panel)
-        self._log_handler.setFormatter(
-            logging.Formatter("[%(asctime)s] %(levelname)-8s %(name)s: %(message)s", datefmt="%H:%M:%S")
-        )
+        self._log_handler.setFormatter(LogFormatter())
         root_logger = logging.getLogger()
         root_logger.addHandler(self._log_handler)
         apply_debug_level(self._settings_service.get_debug_mode() if self._settings_service else False)
@@ -378,8 +377,7 @@ class MainWindow(QMainWindow):
         multi_preview_cap = MULTI_PREVIEW_MAX_DEFAULT
         if self._settings_service is not None:
             setting_cap = self._settings_service.get_max_multi_preview()
-            if setting_cap is not None:
-                multi_preview_cap = setting_cap
+            multi_preview_cap = setting_cap
 
         self._gallery_controller = GalleryController(
             query_service=self._query_service,

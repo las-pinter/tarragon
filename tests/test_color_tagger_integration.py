@@ -135,7 +135,7 @@ class TestColorTagsExtractedOnRender:
         expected_tags = ["color:blue", "color:red"]
 
         emitted: list[tuple[str, object, object]] = []
-        service.thumbnailReady.connect(lambda p, i, r: emitted.append((p, i, r)))
+        service.thumbnail_ready.connect(lambda p, i, r: emitted.append((p, i, r)))
 
         # Act
         _run_render_all_resolutions(service, file_info, img, tmp_path, extract_return=expected_tags)
@@ -150,7 +150,7 @@ class TestColorTagsExtractedOnRender:
         for _, source in tag_entries:
             assert source == "auto_color"
 
-        # Assert — thumbnailReady emitted (full + smaller sizes)
+        # Assert — thumbnail_ready emitted (full + smaller sizes)
         assert len(emitted) >= 1
         assert emitted[0][0] == str(file_info.path)
         assert emitted[0][1] is img
@@ -283,7 +283,7 @@ class TestColorTaggingDisabled:
         img = _make_image()
 
         emitted: list[tuple[str, object, object]] = []
-        svc.thumbnailReady.connect(lambda p, i, r: emitted.append((p, i, r)))
+        svc.thumbnail_ready.connect(lambda p, i, r: emitted.append((p, i, r)))
 
         # Act
         with patch("tarragon.services.color_tagger.extract_dominant_color_tags") as mock_extract:
@@ -296,7 +296,7 @@ class TestColorTaggingDisabled:
         tag_entries = _get_file_tag_names(db, str(file_info.path))
         assert tag_entries == [], "No color tags should be persisted when disabled"
 
-        # Assert — thumbnailReady still emitted (pipeline not broken)
+        # Assert — thumbnail_ready still emitted (pipeline not broken)
         assert len(emitted) >= 1
         assert emitted[0][1] is img
 
@@ -316,7 +316,7 @@ class TestColorTaggingFailureIsolated:
         img = _make_image()
 
         emitted: list[tuple[str, object, object]] = []
-        service.thumbnailReady.connect(lambda p, i, r: emitted.append((p, i, r)))
+        service.thumbnail_ready.connect(lambda p, i, r: emitted.append((p, i, r)))
 
         with (
             patch("tarragon.services.thumbnail_service.render_plain_image", return_value=img),
@@ -343,7 +343,7 @@ class TestColorTaggingFailureIsolated:
         assert thumb["width"] == 128
         assert thumb["height"] == 64
 
-        # Assert — thumbnailReady still emitted
+        # Assert — thumbnail_ready still emitted
         assert len(emitted) >= 1
         assert emitted[0][0] == str(file_info.path)
         assert emitted[0][1] is img
@@ -364,7 +364,7 @@ class TestColorTaggingFailureIsolated:
         img = _make_image()
 
         emitted: list[tuple[str, object, object]] = []
-        service.thumbnailReady.connect(lambda p, i, r: emitted.append((p, i, r)))
+        service.thumbnail_ready.connect(lambda p, i, r: emitted.append((p, i, r)))
 
         with (
             patch("tarragon.services.thumbnail_service.render_plain_image", return_value=img),

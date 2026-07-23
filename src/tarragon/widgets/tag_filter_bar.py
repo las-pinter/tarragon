@@ -71,7 +71,7 @@ class TagFilterBar(QWidget):
         self._tag_menu = QMenu(self)
 
         # React to external tag changes (new tags created, tags deleted)
-        self._tag_service.tagsChanged.connect(self._refresh_tags)
+        self._tag_service.tags_changed.connect(self._refresh_tags)
 
         # Initial tag load
         self._refresh_tags()

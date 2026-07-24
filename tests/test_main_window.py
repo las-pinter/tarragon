@@ -268,10 +268,10 @@ def test_has_filters_includes_tag_filters(qapp: Any) -> None:  # noqa: ARG001
         window._current_folder = "/test/photos/"
 
         # Activate a tag filter via the tag_filter_bar's toggle API
-        window.tag_filter_bar._toggle_tag(tag_id)
+        window.filter_bar_tag._toggle_tag(tag_id)
 
         # Verify has_active_filters works on tag_filter_bar
-        assert window.tag_filter_bar.has_active_filters() is True
+        assert window.filter_bar_tag.has_active_filters() is True
 
         # Run filtered query — should only return the tagged file
         window._run_filtered_query()
@@ -312,8 +312,8 @@ def test_filtered_query_returns_empty_when_no_match(qapp: Any) -> None:  # noqa:
 
         # Create a tag and activate filter (but no files have it)
         tag_id = tag_service._get_or_create_tag("nonexistent")
-        window.tag_filter_bar._refresh_tags()
-        window.tag_filter_bar._toggle_tag(tag_id)
+        window.filter_bar_tag._refresh_tags()
+        window.filter_bar_tag._toggle_tag(tag_id)
 
         # Filtered query should return 0 results — no fallback to unfiltered
         window._run_filtered_query()
@@ -353,7 +353,7 @@ def test_global_scope_queries_entire_db(qapp: Any) -> None:  # noqa: ARG001
         window._current_folder = "/folder_a/"
 
         # Activate tag filter via tag_filter_bar's toggle API
-        window.tag_filter_bar._toggle_tag(tag_id)
+        window.filter_bar_tag._toggle_tag(tag_id)
 
         # In local mode, should only return files in /folder_a/
         window._run_filtered_query()
@@ -462,7 +462,7 @@ def test_folder_filter_in_global_mode(qapp: Any) -> None:  # noqa: ARG001
 
 
 def test_filter_bar_replaces_separate_bars(qapp: Any) -> None:  # noqa: ARG001
-    """MainWindow uses FilterBar instead of separate ColorFilterBar and TagFilterBar."""
+    """MainWindow uses FilterBar instead of separate FilterBarColor and FilterBarTag."""
     from pathlib import Path
 
     from tarragon.db.database import Database
@@ -481,16 +481,18 @@ def test_filter_bar_replaces_separate_bars(qapp: Any) -> None:  # noqa: ARG001
         assert isinstance(window.filter_bar, FilterBar)
 
         # Backward-compatible references still work
-        assert hasattr(window, "color_filter_bar")
-        assert hasattr(window, "tag_filter_bar")
-        assert window.color_filter_bar is window.filter_bar.color_filter_bar
-        assert window.tag_filter_bar is window.filter_bar.tag_filter_bar
+        assert hasattr(window, "filter_bar_color")
+        assert hasattr(window, "filter_bar_tag")
+        assert hasattr(window, "filter_bar_folder")
+        assert window.filter_bar_color is window.filter_bar.filter_bar_color
+        assert window.filter_bar_tag is window.filter_bar.filter_bar_tag
+        assert window.filter_bar_folder is window.filter_bar.filter_bar_folder
     finally:
         window.close()
 
 
 def test_scope_change_shows_folder_button(qapp: Any) -> None:  # noqa: ARG001
-    """Switching to global mode shows the Add Folder+ button in the FilterBar."""
+    """Switching to global mode shows the Add Folder button in the FilterBar."""
     from pathlib import Path
 
     from PySide6.QtWidgets import QPushButton
@@ -504,9 +506,9 @@ def test_scope_change_shows_folder_button(qapp: Any) -> None:  # noqa: ARG001
         tag_service = TagService(db=db)
         window.setup_widgets(db, tag_service)
 
-        # Find the Add Folder+ button in the filter bar
+        # Find the Add Folder button in the filter bar
         btns = window.filter_bar.findChildren(QPushButton)
-        folder_btns = [b for b in btns if b.text() == "Add Folder+"]
+        folder_btns = [b for b in btns if b.text() == "Add Folder"]
         assert len(folder_btns) == 1
         folder_btn = folder_btns[0]
 

@@ -1,4 +1,4 @@
-"""Thumbnail service — async orchestration for thumbnail generation and caching."""
+"""Async orchestration for thumbnail generation and caching."""
 
 from __future__ import annotations
 
@@ -338,7 +338,7 @@ class ThumbnailService(QObject):
             return
 
         # Get or create a per-folder UUID so all images in the same folder
-        # share a cache directory.  Atomic insert prevents race conditions
+        # share a cache directory. Atomic insert prevents race conditions
         # when two threads process images from the same folder simultaneously.
         folder_path = str(file_info.path.parent)
         cache_uuid = self._db.get_or_create_folder_uuid(folder_path, generate_cache_uuid())

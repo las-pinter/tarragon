@@ -24,7 +24,7 @@ class _ClickableLabel(QLabel):
         super().mousePressEvent(event)
 
 
-class _TagPillWidget(QWidget):
+class TagPillWidget(QWidget):
     """A tag pill widget with a hover-revealed remove (×) button.
 
     Contains a QLabel for the tag name and a small QPushButton ("×") that

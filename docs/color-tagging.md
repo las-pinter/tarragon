@@ -132,7 +132,7 @@ This replace-all approach ensures that re-rendering an updated file produces fre
 
 Color tags participate in the gallery filtering system via `QueryService`:
 
-- The `ColorFilterBar` widget provides clickable color swatches.
+- The `FilterBarColor` widget provides clickable color swatches.
 - Active color swatches produce a set of color tag names (e.g., `{"color:red", "color:blue"}`).
 - `QueryService.query()` applies color tag filters with **OR semantics** — a file matches if it has **any** of the selected color tags.
 - This is combined with other filters (folder scope, filename search, manual tags) via AND semantics.

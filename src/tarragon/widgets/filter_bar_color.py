@@ -1,40 +1,29 @@
-"""ColorFilterBar — horizontal scrollable row of clickable hue swatches.
-
-Represents the 10 color buckets used by the color tagger.  Each swatch is a
-colored square button; clicking it toggles an active state (amber border) and
-emits ``color_filter_changed`` with the set of currently active bucket names.
-"""
+"""Horizontal scrollable row of clickable hue swatches."""
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QHBoxLayout, QPushButton, QScrollArea, QWidget
 
 from tarragon.theme.color_buckets import BUCKET_HEX_COLORS
 from tarragon.theme.colors import AMBER_ACCENT
 from tarragon.theme.constants import SPACING_S, SPACING_XS
-
-# -- Style constants ----------------------------------------------------------
+from tarragon.widgets.filter_bar_filter import FilterBarFilter
 
 _SWATCH_SIZE = 36
 _ACTIVE_BORDER_COLOR: str = AMBER_ACCENT.name()
 _ACTIVE_BORDER_WIDTH = 2
-# TODO: #555555 has no matching color token — generic inactive border grey.
 _INACTIVE_BORDER_COLOR = "#555555"
 _INACTIVE_BORDER_WIDTH = 1
 
 
-class ColorFilterBar(QWidget):
+class FilterBarColor(FilterBarFilter):
     """A horizontal scrollable row of clickable color-bucket swatches.
 
-    Emits ``color_filter_changed(set)`` whenever a swatch is toggled.  The
-    payload is a ``set[str]`` of active bucket names in ``"color:<name>"``
-    format (e.g. ``{"color:red", "color:blue"}``).
+    Emits whenever a swatch is toggled.  The payload is a ``set[str]``
+    of active bucket names.
     """
 
-    color_filter_changed = Signal(set)  # set of "color:<bucket>" strings
-
-    # Representative hue colors for each bucket — sourced from color_buckets.
     BUCKET_HUES: dict[str, str] = dict(BUCKET_HEX_COLORS)
 
     def __init__(self, parent: QWidget | None = None) -> None:
@@ -43,7 +32,6 @@ class ColorFilterBar(QWidget):
         self._active_colors: set[str] = set()
         self._swatch_buttons: dict[str, QPushButton] = {}
 
-        # -- Layout -----------------------------------------------------------
         outer_layout = QHBoxLayout(self)
         outer_layout.setContentsMargins(SPACING_S, SPACING_XS, SPACING_S, SPACING_XS)
 
@@ -65,47 +53,6 @@ class ColorFilterBar(QWidget):
 
         self._layout.addStretch()
         scroll_area.setWidget(container)
-
-    # -- Public API -----------------------------------------------------------
-
-    def set_active_colors(self, color_names: set[str]) -> None:
-        """Set which colors are active (for programmatic control).
-
-        *color_names* should contain bare bucket names (e.g. ``"red"``) or
-        prefixed names (``"color:red"``).  Both forms are accepted.
-        """
-        bare_names: set[str] = set()
-        for name in color_names:
-            bare = name.removeprefix("color:") if name.startswith("color:") else name
-            if bare in self.BUCKET_HUES:
-                bare_names.add(bare)
-
-        self._active_colors = bare_names
-        self._refresh_all_swatches()
-        self._emit_signal()
-
-    def toggle_color(self, bucket_name: str) -> None:
-        """Toggle a specific color bucket on or off."""
-        bare = bucket_name.removeprefix("color:") if bucket_name.startswith("color:") else bucket_name
-        if bare not in self.BUCKET_HUES:
-            return
-
-        if bare in self._active_colors:
-            self._active_colors.discard(bare)
-        else:
-            self._active_colors.add(bare)
-
-        self._update_swatch_style(bare)
-        self._emit_signal()
-
-    def get_active_colors(self) -> set[str]:
-        """Return the set of currently active color bucket names.
-
-        Names are returned in ``"color:<bucket>"`` format.
-        """
-        return {f"color:{name}" for name in self._active_colors}
-
-    # -- Internal helpers -----------------------------------------------------
 
     def _create_swatch_button(self, bucket_name: str, hex_color: str) -> QPushButton:
         """Build a single swatch button for *bucket_name*."""
@@ -149,6 +96,39 @@ class ColorFilterBar(QWidget):
         for bucket_name in self.BUCKET_HUES:
             self._update_swatch_style(bucket_name)
 
-    def _emit_signal(self) -> None:
-        """Emit ``color_filter_changed`` with the current active set."""
-        self.color_filter_changed.emit(self.get_active_colors())
+    def set_active_colors(self, color_names: set[str]) -> None:
+        """Set which colors are active (for programmatic control).
+
+        *color_names* should contain bare bucket names (e.g. ``"red"``) or
+        prefixed names (``"color:red"``).  Both forms are accepted.
+        """
+        bare_names: set[str] = set()
+        for name in color_names:
+            bare = name.removeprefix("color:") if name.startswith("color:") else name
+            if bare in self.BUCKET_HUES:
+                bare_names.add(bare)
+
+        self._active_colors = bare_names
+        self._refresh_all_swatches()
+        self._emit_signal(self.get_active_colors())
+
+    def toggle_color(self, bucket_name: str) -> None:
+        """Toggle a specific color bucket on or off."""
+        bare = bucket_name.removeprefix("color:") if bucket_name.startswith("color:") else bucket_name
+        if bare not in self.BUCKET_HUES:
+            return
+
+        if bare in self._active_colors:
+            self._active_colors.discard(bare)
+        else:
+            self._active_colors.add(bare)
+
+        self._update_swatch_style(bare)
+        self._emit_signal(self.get_active_colors())
+
+    def get_active_colors(self) -> set[str]:
+        """Return the set of currently active color bucket names.
+
+        Names are returned in ``"color:<bucket>"`` format.
+        """
+        return {f"color:{name}" for name in self._active_colors}

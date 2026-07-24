@@ -31,7 +31,7 @@ from tarragon.theme.color_buckets import BUCKET_COLORS, BUCKET_HEX_COLORS
 from tarragon.theme.colors import BG_SECONDARY
 from tarragon.theme.constants import MULTI_PREVIEW_MAX_DEFAULT, SPACING_S, SPACING_XS
 from tarragon.widgets.flow_layout import FlowLayout
-from tarragon.widgets.tag_pill import _TagPillWidget
+from tarragon.widgets.tag_pill import TagPillWidget
 
 logger = logging.getLogger(__name__)
 
@@ -170,7 +170,7 @@ class PreviewPanel(QWidget):
         layout.addWidget(self._add_tag_btn, alignment=Qt.AlignmentFlag.AlignLeft)
 
         # Internal tracking for tag pill widgets
-        self._tag_pills: list[_TagPillWidget] = []
+        self._tag_pills: list[TagPillWidget] = []
 
         layout.addStretch()
 
@@ -520,7 +520,7 @@ class PreviewPanel(QWidget):
         # Force layout recalculation so the tags container resizes to fit
         self._tags_container.updateGeometry()
 
-    def _create_tag_pill(self, tag: dict[str, Any]) -> _TagPillWidget:
+    def _create_tag_pill(self, tag: dict[str, Any]) -> TagPillWidget:
         """Create a clickable tag pill widget with tri-state opacity support.
 
         Args:
@@ -532,7 +532,7 @@ class PreviewPanel(QWidget):
         """
         tag_name = str(tag.get("name", ""))
 
-        pill = _TagPillWidget(
+        pill = TagPillWidget(
             tag_name=tag_name,
             on_remove=partial(self._on_tag_remove_clicked, tag),
             on_toggle=partial(self._on_tag_pill_clicked, tag),

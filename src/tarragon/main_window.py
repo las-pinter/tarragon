@@ -30,14 +30,15 @@ from tarragon.services.settings_service import SettingsService
 from tarragon.services.tag_service import TagService
 from tarragon.services.thumbnail_service import ThumbnailService
 from tarragon.theme.constants import MULTI_PREVIEW_MAX_DEFAULT, SIDEBAR_WIDTH_PX
-from tarragon.widgets.color_filter_bar import ColorFilterBar
 from tarragon.widgets.filter_bar import FilterBar
+from tarragon.widgets.filter_bar_color import FilterBarColor
+from tarragon.widgets.filter_bar_folder import FilterBarFolder
+from tarragon.widgets.filter_bar_tag import FilterBarTag
 from tarragon.widgets.gallery_info_bar import GalleryInfoBar
 from tarragon.widgets.gallery_tabs import GalleryTabs
 from tarragon.widgets.log_panel import LogPanel, QtLogHandler, apply_debug_level
 from tarragon.widgets.preview_panel import PreviewPanel
 from tarragon.widgets.sidebar import SidebarWidget
-from tarragon.widgets.tag_filter_bar import TagFilterBar
 from tarragon.widgets.thumbnail_grid import ThumbnailGrid
 
 logger = logging.getLogger(__name__)
@@ -88,8 +89,9 @@ class MainWindow(QMainWindow):
         self._current_folder_value: str = ""
         self._gallery_controller: GalleryController | None = None
         self.filter_bar: FilterBar | None = None
-        self.color_filter_bar: ColorFilterBar | None = None
-        self.tag_filter_bar: TagFilterBar | None = None
+        self.filter_bar_color: FilterBarColor | None = None
+        self.filter_bar_tag: FilterBarTag | None = None
+        self.filter_bar_folder: FilterBarFolder | None = None
         self._gallery_tabs: GalleryTabs | None = None
         self._gallery_info_bar: GalleryInfoBar | None = None
         self.thumbnail_model: ThumbnailModel | None = None
@@ -332,8 +334,9 @@ class MainWindow(QMainWindow):
         # ── Combined filter bar (colour + tag + folder filters) ────
         self.filter_bar = FilterBar(tag_service, db, parent=self)
         # Backward-compatible references for existing code and tests
-        self.color_filter_bar = self.filter_bar.color_filter_bar
-        self.tag_filter_bar = self.filter_bar.tag_filter_bar
+        self.filter_bar_color = self.filter_bar.filter_bar_color
+        self.filter_bar_tag = self.filter_bar.filter_bar_tag
+        self.filter_bar_folder = self.filter_bar.filter_bar_folder
 
         # ── Gallery tabs (Folder / All Images) ─────────────────────────
         self._gallery_tabs = GalleryTabs(parent=self)
@@ -575,8 +578,8 @@ class MainWindow(QMainWindow):
         # otherwise load all paths directly.
         has_filters = (
             (self._search_edit is not None and self._search_edit.text())
-            or (self.color_filter_bar is not None and self.color_filter_bar.get_active_colors())
-            or (self.tag_filter_bar is not None and self.tag_filter_bar.has_active_filters())
+            or (self.filter_bar_color is not None and self.filter_bar_color.get_active_colors())
+            or (self.filter_bar_tag is not None and self.filter_bar_tag.has_active_filters())
         )
         if has_filters and self._query_service is not None:
             self._run_filtered_query()
@@ -607,8 +610,8 @@ class MainWindow(QMainWindow):
             self.sidebar_widget.set_current_folder(str(folder_path))
 
         # Refresh folder dropdown in the filter bar (new folders may have been scanned)
-        if self.filter_bar is not None:
-            self.filter_bar.refresh_folders()
+        if self.filter_bar_folder is not None:
+            self.filter_bar_folder.refresh_folders()
 
     def _on_favorite_clicked(self, folder_path: str) -> None:
         """Handle favorite folder selection."""

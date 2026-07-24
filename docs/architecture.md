@@ -17,7 +17,7 @@ main.py
         │     ├── preview_panel.py      — Preview panel (single/multi-image preview + tag management)
         │     ├── filter_bar.py         — Combined filter row (color + tag + folder filters)
         │     ├── color_filter_bar.py   — Color bucket swatches for gallery filtering
-        │     ├── tag_filter_bar.py     — Inline tag filter (Add Tag+ button + removable chips)
+        │     ├── tag_filter_bar.py     — Inline tag filter (Add Tag button + removable chips)
         │     ├── gallery_tabs.py       — Scope tabs (Folder / All Images)
         │     ├── gallery_info_bar.py   — Folder name, file count, active filter pill
         │     ├── log_panel.py          — Dockable log viewer with color-coded severity
@@ -100,9 +100,9 @@ Displays a single image preview with metadata (dimensions, file size, path) or a
 
 Composite filter widget hosting three sub-components in a single wrapping row (via `FlowLayout`):
 
-- **ColorFilterBar** — clickable color bucket swatches
-- **TagFilterBar** — "Add Tag+" button with removable filter chips
-- **Folder chips** — "Add Folder+" button with removable chips (visible only in "All Images" global scope)
+- **FilterBarColor** — clickable color bucket swatches
+- **FilterBarTag** — "Add Tag" button with removable filter chips
+- **Folder chips** — "Add Folder" button with removable chips (visible only in "All Images" global scope)
 
 Forwards child signals as `color_filter_changed`, `tag_filter_changed`, and `folder_filter_changed`.
 

@@ -1,19 +1,15 @@
-"""TagFilterBar — inline tag filter widget for the gallery top bar.
+"""Iinline tag filter widget for the gallery top bar.
 
-Provides an "Add Tag+" button that opens a context menu of checkable tag
+Provides an "Add Tag" button that opens a context menu of checkable tag
 actions, plus removable chips showing the currently active tag filters.
-Auto-color tags (``color:``) are excluded from the filter options.
-
-Design patterns:
-    - Observer pattern  — ``tag_filter_changed`` signal for filter changes
-    - Service Layer     — uses ``TagService``, never touches DB directly
 """
 
 from __future__ import annotations
 
+import logging
 from functools import partial
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QMenu,
@@ -24,36 +20,31 @@ from PySide6.QtWidgets import (
 from tarragon.services.tag_service import TagService
 from tarragon.theme.constants import SPACING_S
 from tarragon.widgets._chip_utils import create_removable_chip
+from tarragon.widgets.filter_bar_filter import FilterBarFilter
+
+logger = logging.getLogger(__name__)
 
 
-class TagFilterBar(QWidget):
-    """A compact tag filter widget with an Add Tag+ button and active-tag chips.
+class FilterBarTag(FilterBarFilter):
+    """A compact tag filter widget with an Add Tag button and active-tag chips.
 
-    Emits ``tag_filter_changed(set)`` whenever the set of active tag IDs
-    changes.  The payload is a ``set[int]`` of active filter tag IDs.
+    Emits whenever the set of active tag IDs changes.
+    The payload is a ``set[int]`` of active filter tag IDs.
     """
 
-    tag_filter_changed = Signal(set)  # set of int — active filter tag IDs
-
     def __init__(self, tag_service: TagService, parent: QWidget | None = None) -> None:
-        """Build the filter bar with an Add Tag+ button and chips container."""
+        """Build the filter bar with an Add Tag button and chips container."""
         super().__init__(parent)
         self._tag_service = tag_service
         self._active_tag_ids: set[int] = set()
-        self._available_tags: dict[int, str] = {}  # id -> name (excl. auto-color)
+        self._available_tags: dict[int, str] = {}
 
-        # ── Layout ──────────────────────────────────────────────────────
         layout = QHBoxLayout(self)
-        # No vertical margins — the parent FlowLayout handles vertical
-        # centering of items with different heights.  Keeping vertical
-        # margins here would push the Add Tag+ button below the baseline
-        # of sibling widgets (e.g. the Add Folder+ button) that have no
-        # such internal padding.
         layout.setContentsMargins(SPACING_S, 0, SPACING_S, 0)
         layout.setSpacing(SPACING_S)
 
-        # "Add Tag+" button — always visible, opens tag menu on click
-        self._add_button = QPushButton("Add Tag+")
+        # Add Tag button
+        self._add_button = QPushButton("Add Tag")
         self._add_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self._add_button.clicked.connect(self._show_tag_menu)
         layout.addWidget(self._add_button)
@@ -67,32 +58,14 @@ class TagFilterBar(QWidget):
 
         layout.addStretch()
 
-        # Tag menu (reused, cleared & repopulated on each show)
+        # Tag menu
         self._tag_menu = QMenu(self)
 
-        # React to external tag changes (new tags created, tags deleted)
+        # React to external tag changes
         self._tag_service.tags_changed.connect(self._refresh_tags)
 
         # Initial tag load
         self._refresh_tags()
-
-    # ── Public API ──────────────────────────────────────────────────────
-
-    def get_active_tag_ids(self) -> set[int]:
-        """Return the set of currently active tag filter IDs."""
-        return set(self._active_tag_ids)
-
-    def has_active_filters(self) -> bool:
-        """Return True if any tag filter is active."""
-        return len(self._active_tag_ids) > 0
-
-    def clear_filters(self) -> None:
-        """Remove all active tag filters and emit an empty set."""
-        self._active_tag_ids.clear()
-        self._update_chips()
-        self.tag_filter_changed.emit(set())
-
-    # ── Internal helpers ───────────────────────────────────────────────
 
     def _refresh_tags(self) -> None:
         """Rebuild the available tag list from the service.
@@ -114,11 +87,12 @@ class TagFilterBar(QWidget):
         for tag_id, tag_name in sorted(self._available_tags.items(), key=lambda x: x[1]):
             action = self._tag_menu.addAction(tag_name)
             action.setCheckable(True)
-            action.setChecked(tag_id in self._active_tag_ids)
+            checked = tag_id in self._active_tag_ids
+            action.setChecked(checked)
             action.setData(tag_id)
-            action.triggered.connect(lambda checked, tid=tag_id: self._toggle_tag(tid))
+            action.triggered.connect(lambda checked=checked, tid=tag_id: self._toggle_tag(tid))
 
-        # Show menu below the Add Tag+ button
+        # Show menu below the Add Tag button
         pos = self._add_button.mapToGlobal(self._add_button.rect().bottomLeft())
         self._tag_menu.popup(pos)
 
@@ -129,13 +103,13 @@ class TagFilterBar(QWidget):
         else:
             self._active_tag_ids.add(tag_id)
         self._update_chips()
-        self.tag_filter_changed.emit(set(self._active_tag_ids))
+        self._emit_signal(set(self._active_tag_ids))
 
     def _remove_tag(self, tag_id: int) -> None:
         """Remove a tag from the active filter set."""
         self._active_tag_ids.discard(tag_id)
         self._update_chips()
-        self.tag_filter_changed.emit(set(self._active_tag_ids))
+        self._emit_signal(set(self._active_tag_ids))
 
     def _update_chips(self) -> None:
         """Rebuild the displayed tag chips to match the active filter set."""
@@ -173,3 +147,17 @@ class TagFilterBar(QWidget):
             label_text=tag_name,
             on_remove=partial(self._remove_tag, tag_id),
         )
+
+    def get_active_tag_ids(self) -> set[int]:
+        """Return the set of currently active tag filter IDs."""
+        return set(self._active_tag_ids)
+
+    def has_active_filters(self) -> bool:
+        """Return True if any tag filter is active."""
+        return len(self._active_tag_ids) > 0
+
+    def clear_filters(self) -> None:
+        """Remove all active tag filters and emit an empty set."""
+        self._active_tag_ids.clear()
+        self._update_chips()
+        self._emit_signal(set())

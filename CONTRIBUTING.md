@@ -3,7 +3,8 @@
 ## Prerequisites
 
 - **Python 3.12+** — Tarragon requires Python 3.12 or later.
-- **pip** — For package installation.
+- **uv** (recommended) — Fast Python package and virtual environment manager. [Install uv](https://docs.astral.sh/uv/getting-started/installation/).
+- **pip** — Alternative to uv for package installation.
 - **Git** — For version control.
 
 ## Development Setup
@@ -15,30 +16,42 @@ git clone https://github.com/las-pinter/tarragon.git
 cd tarragon
 ```
 
-### 2. Create a Virtual Environment
+### 2. Create a Virtual Environment and Install Dependencies
+
+#### Using uv (recommended)
+
+```bash
+uv venv
+uv pip install -e ".[dev]"
+```
+
+#### Using pip
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate        # Linux/macOS
 # .venv\Scripts\activate         # Windows
+
+pip install -e ".[dev]"
 ```
 
-### 3. Install in Development Mode
+### 3. Verify Installation
 
 ```bash
-pip install -e .
-```
-
-### 4. Verify Installation
-
-```bash
-python -c "import tarragon; print('OK')"
+uv run python -c "import tarragon; print('OK')"
+# or, if using pip: python -c "import tarragon; print('OK')"
 ```
 
 ## Running the Application
 
 ```bash
-python -m tarragon.main
+uv run python -m tarragon
+```
+
+Or, if using pip with an activated virtual environment:
+
+```bash
+python -m tarragon
 ```
 
 This launches the Tarragon GUI. On first run, it creates the data directory and database at the platform-specific location (see [Architecture](docs/architecture.md) for paths).
@@ -46,25 +59,25 @@ This launches the Tarragon GUI. On first run, it creates the data directory and 
 ## Running Tests
 
 ```bash
-pytest
+uv run pytest
 ```
 
 Run a specific test file:
 
 ```bash
-pytest tests/test_thumbnail.py
+uv run pytest tests/test_thumbnail_model.py
 ```
 
 Run with verbose output:
 
 ```bash
-pytest -v
+uv run pytest -v
 ```
 
 Run with coverage (if pytest-cov is installed):
 
 ```bash
-pytest --cov=tarragon
+uv run pytest --cov=tarragon
 ```
 
 Test configuration is in `pyproject.toml`:
@@ -82,25 +95,25 @@ python_functions = ["test_*"]
 ### Linting
 
 ```bash
-ruff check .
+uv run ruff check .
 ```
 
 Auto-fix lint issues:
 
 ```bash
-ruff check --fix .
+uv run ruff check --fix .
 ```
 
 ### Formatting
 
 ```bash
-ruff format .
+uv run ruff format .
 ```
 
 Check formatting without changes:
 
 ```bash
-ruff format --check .
+uv run ruff format --check .
 ```
 
 ### Configuration
@@ -161,48 +174,68 @@ tarragon/
 │   ├── main.py                 # Application entry point, MainWindow subclass
 │   ├── main_window.py          # Base MainWindow with dock panels
 │   ├── app_paths.py            # Platform-aware directory resolution
-│   ├── db.py                   # SQLite schema and CRUD repository
+│   ├── gallery_controller.py   # Gallery filter orchestration & selection
+│   ├── image_utils.py          # Image utility functions
+│   ├── logging.py              # Logging configuration
 │   ├── migrations.py           # Schema migration framework
 │   ├── scanner.py              # Folder scanning and file discovery
-│   ├── thumbnail.py            # Image rendering pipeline (plain + PSD)
-│   ├── color_tagger.py         # Dominant color extraction algorithm
-│   ├── settings.py             # Typed key-value settings store
-│   ├── editors.py              # External editor launching
 │   ├── py.typed                # PEP 561 marker
+│   ├── db/                     # SQLite database package (mixins)
+│   │   ├── __init__.py
+│   │   ├── _base.py            # Base DB mixin (schema, CRUD basics)
+│   │   ├── _thumbnails.py      # Thumbnail CRUD mixin
+│   │   ├── _tags.py            # Tag CRUD mixin
+│   │   ├── _favorites.py       # Favorites CRUD mixin
+│   │   ├── _folder_cache.py    # Folder cache mixin
+│   │   ├── _editors.py         # Editor settings mixin
+│   │   ├── _settings.py        # Key-value settings mixin
+│   │   └── database.py         # Database class (combines all mixins)
 │   ├── models/
 │   │   ├── __init__.py
+│   │   ├── favorites_model.py  # Favorites data model
 │   │   ├── thumbnail_model.py  # Data model for thumbnail grid
 │   │   └── filter_state.py     # Filter state management
+│   ├── renderers/              # Image rendering pipeline
+│   │   ├── __init__.py
+│   │   ├── cache.py            # Thumbnail cache management
+│   │   ├── clip.py             # Clipboard rendering
+│   │   ├── plain.py            # Plain image rendering (JPEG, PNG, etc.)
+│   │   └── psd.py              # PSD/PSB file rendering
 │   ├── services/
 │   │   ├── __init__.py
-│   │   ├── thumbnail_service.py  # Async thumbnail orchestration
-│   │   ├── query_service.py      # SQL filter composition
-│   │   ├── tag_service.py        # Tag CRUD with Qt signals
-│   │   └── settings_service.py   # Typed settings validation
+│   │   ├── color_tagger.py     # Color tagging service
+│   │   ├── editors.py          # Editor launching service
+│   │   ├── query_service.py    # SQL filter composition
+│   │   ├── settings_service.py # Setting subclasses + SettingsService
+│   │   ├── tag_service.py      # Tag CRUD with Qt signals
+│   │   └── thumbnail_service.py # Async thumbnail orchestration
 │   ├── widgets/
 │   │   ├── __init__.py
-│   │   ├── sidebar.py            # Library panel
-│   │   ├── thumbnail_grid.py     # Gallery panel
-│   │   ├── preview_panel.py      # Preview panel with tag management
-│   │   ├── filter_bar.py         # Base filter bar widget
-│   │   ├── color_filter_bar.py   # Color filter swatches
-│   │   ├── tag_filter_bar.py     # Tag filter bar
-│   │   ├── gallery_info_bar.py   # Gallery info display
-│   │   ├── gallery_tabs.py       # Gallery tab widget
-│   │   ├── log_panel.py          # Log output panel
-│   │   ├── settings_dialog.py    # Settings dialog
-│   │   └── flow_layout.py        # Custom flow layout
+│   │   ├── _chip_utils.py      # Chip widget utilities
+│   │   ├── sidebar.py          # Library panel
+│   │   ├── thumbnail_grid.py   # Gallery panel
+│   │   ├── thumbnail_delegate.py # Thumbnail grid delegate
+│   │   ├── thumbnail_animator.py # Thumbnail animations
+│   │   ├── preview_panel.py    # Preview panel with tag management
+│   │   ├── tag_pill.py         # Tag pill widget
+│   │   ├── filter_bar.py       # Combined filter bar widget
+│   │   ├── filter_bar_color.py # Color filter swatches
+│   │   ├── filter_bar_filter.py # Filter bar filter component
+│   │   ├── filter_bar_folder.py # Folder filter dropdown
+│   │   ├── filter_bar_tag.py   # Tag filter bar
+│   │   ├── gallery_info_bar.py # Gallery info display
+│   │   ├── gallery_tabs.py     # Gallery tab widget
+│   │   ├── log_panel.py        # Log output panel
+│   │   ├── settings_dialog.py  # Settings dialog
+│   │   └── flow_layout.py      # Custom flow layout
 │   └── theme/
 │       ├── __init__.py
-│       ├── tokens.json           # Design token definitions
-│       ├── tokens.py             # Token loader
-│       ├── colors.py             # Color utilities
-│       ├── color_buckets.py      # Color bucket definitions
-│       ├── typography.py         # Typography settings
-│       ├── spacing.py            # Spacing constants
-│       ├── qss_generator.py      # QSS generation utilities
-│       ├── file_type_badge.py    # File type badge rendering
-│       ├── loader.py             # Theme loader
+│       ├── color_buckets.py    # Color bucket definitions
+│       ├── colors.py           # Color utilities
+│       ├── constants.py        # Theme constants
+│       ├── file_type_badge.py  # File type badge rendering
+│       ├── qss_generator.py    # QSS generation utilities
+│       ├── typography.py       # Typography settings
 │       └── icons/
 │           └── search.svg
 ├── tests/                        # Test suite
@@ -242,8 +275,8 @@ scripts\build.bat
 
 ## Before Submitting a PR
 
-1. All tests pass: `pytest`
-2. Linting passes: `ruff check .`
-3. Formatting is clean: `ruff format --check .`
+1. All tests pass: `uv run pytest`
+2. Linting passes: `uv run ruff check .`
+3. Formatting is clean: `uv run ruff format --check .`
 4. No TODO/FIXME comments in new code — implement fully or create a tracked issue.
 5. Documentation updated if the change affects public behavior.

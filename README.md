@@ -62,12 +62,37 @@ That's it. No library to set up. No database to configure. Just open a folder an
 
 ### From Source (Developer Setup)
 
-Tarragon requires Python 3.12 or later.
+Tarragon requires Python 3.12 or later. We recommend [uv](https://docs.astral.sh/uv/) for fast dependency management.
+
+#### Using uv (recommended)
 
 ```bash
 # Clone the repository
 git clone https://github.com/las-pinter/tarragon.git
 cd tarragon
+
+# Install uv (if not already installed)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Create virtual environment and install
+uv venv
+uv pip install -e .
+
+# Launch Tarragon
+uv run python -m tarragon
+```
+
+#### Using pip
+
+```bash
+# Clone the repository
+git clone https://github.com/las-pinter/tarragon.git
+cd tarragon
+
+# Create and activate a virtual environment
+python -m venv .venv
+source .venv/bin/activate        # Linux/macOS
+# .venv\Scripts\activate         # Windows
 
 # Install in editable mode
 pip install -e .

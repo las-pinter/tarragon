@@ -14,13 +14,13 @@ class SettingsMixin(MixinBase):
 
     def get_setting(self, key: str) -> str | None:
         """Read a raw string setting value; None if absent."""
-        logger.debug("get_setting: key=%s", key)
+        logger.debug("Retrieving setting from the Database - key=%s", key)
         row = self._execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
         return row["value"] if row else None
 
     def set_setting(self, key: str, value: str) -> None:
         """Persist a raw string setting."""
-        logger.debug("set_setting: key=%s", key)
+        logger.debug("Storing setting to the Database - key=%s, value%s", key, value)
         self._execute(
             "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
             (key, value),

@@ -1,4 +1,4 @@
-"""Gallery info bar — shows folder name, file count, and active filter pill."""
+"""Shows folder name, file count, and active filter pill."""
 
 from __future__ import annotations
 
@@ -54,10 +54,10 @@ class GalleryInfoBar(QWidget):
         """Update the active filter pill visibility and text.
 
         Args:
-            count: Number of active tag filters. Pill is hidden when 0.
+            count: Number of active filters. Pill is hidden when 0.
         """
         if count > 0:
-            self._filter_pill.setText(f"{count} tags active")
+            self._filter_pill.setText(f"{count} filters active")
             self._filter_pill.show()
         else:
             self._filter_pill.hide()

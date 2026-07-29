@@ -32,14 +32,14 @@ def db() -> Generator[Database, None, None]:
 def settings_mock() -> MagicMock:
     """Mock SettingsService with color tagging enabled and default parameters."""
     mock = MagicMock()
-    mock.get_cache_format.return_value = "png"
-    mock.get_max_psd_workers.return_value = 3
-    mock.get_large_canvas_threshold_mp.return_value = 20.0
-    mock.get_tile_grid_size.return_value = "2x2"
-    mock.get_color_tag_enabled.return_value = True
-    mock.get_color_tag_palette_size.return_value = 8
-    mock.get_color_tag_min_share.return_value = 0.10
-    mock.get_color_tag_neutral_s_threshold.return_value = 0.15
+    mock.cache_format.get.return_value = "PNG"
+    mock.max_psd_workers.get.return_value = 3
+    mock.large_canvas_threshold_mp.get.return_value = 20.0
+    mock.tile_grid_size.get.return_value = "2x2"
+    mock.color_tag_enabled.get.return_value = True
+    mock.color_tag_palette_size.get.return_value = 8
+    mock.color_tag_min_share.get.return_value = 0.10
+    mock.color_tag_neutral_s_threshold.get.return_value = 0.15
     return mock
 
 
@@ -269,11 +269,11 @@ class TestColorTaggingDisabled:
         """When color_tag_enabled is False, no color tags are extracted or persisted."""
         # Arrange — settings with color_tag_enabled=False
         settings_mock = MagicMock()
-        settings_mock.get_cache_format.return_value = "png"
-        settings_mock.get_max_psd_workers.return_value = 3
-        settings_mock.get_large_canvas_threshold_mp.return_value = 20.0
-        settings_mock.get_tile_grid_size.return_value = "2x2"
-        settings_mock.get_color_tag_enabled.return_value = False
+        settings_mock.cache_format.get.return_value = "PNG"
+        settings_mock.max_psd_workers.get.return_value = 3
+        settings_mock.large_canvas_threshold_mp.get.return_value = 20.0
+        settings_mock.tile_grid_size.get.return_value = "2x2"
+        settings_mock.color_tag_enabled.get.return_value = False
 
         with patch("tarragon.services.thumbnail_service.get_executor"):
             svc = ThumbnailService(db=db, settings_service=settings_mock)
@@ -410,14 +410,14 @@ class TestSettingsParametersUsed:
         """extract_dominant_color_tags receives the correct parameters from settings."""
         # Arrange — custom settings values
         settings_mock = MagicMock()
-        settings_mock.get_cache_format.return_value = "png"
-        settings_mock.get_max_psd_workers.return_value = 3
-        settings_mock.get_large_canvas_threshold_mp.return_value = 20.0
-        settings_mock.get_tile_grid_size.return_value = "2x2"
-        settings_mock.get_color_tag_enabled.return_value = True
-        settings_mock.get_color_tag_palette_size.return_value = 4
-        settings_mock.get_color_tag_min_share.return_value = 0.25
-        settings_mock.get_color_tag_neutral_s_threshold.return_value = 0.30
+        settings_mock.cache_format.get.return_value = "PNG"
+        settings_mock.max_psd_workers.get.return_value = 3
+        settings_mock.large_canvas_threshold_mp.get.return_value = 20.0
+        settings_mock.tile_grid_size.get.return_value = "2x2"
+        settings_mock.color_tag_enabled.get.return_value = True
+        settings_mock.color_tag_palette_size.get.return_value = 4
+        settings_mock.color_tag_min_share.get.return_value = 0.25
+        settings_mock.color_tag_neutral_s_threshold.get.return_value = 0.30
 
         with patch("tarragon.services.thumbnail_service.get_executor"):
             svc = ThumbnailService(db=db, settings_service=settings_mock)

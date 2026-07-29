@@ -149,7 +149,7 @@ QLineEdit {{
     font-size: {typography.CAPTION_SIZE}px;
     border: none;
     border-radius: {constants.RADIUS_M}px;
-    padding-left: 28px;
+    padding-left: {constants.SPACING_S}px;
     padding-right: {constants.SPACING_S}px;
     padding-top: {constants.SPACING_XS}px;
     padding-bottom: {constants.SPACING_XS}px;

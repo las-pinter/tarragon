@@ -22,13 +22,9 @@ def test_main_window_has_title(qapp: Any, tmp_path: Path) -> None:  # noqa: ARG0
 
     from tarragon.db.database import Database
     from tarragon.main import MainWindow
-    from tarragon.services.settings import Settings
 
-    settings_db = Database(tmp_path / "test_settings.db")
-    settings_db.init_schema()
-    settings = Settings(settings_db)
     database = Database(tmp_path / "test_main.db")
-    window = MainWindow(settings=settings, database=database)
+    window = MainWindow(database=database)
     try:
         assert window.windowTitle() == "Tarragon"
     finally:
@@ -40,13 +36,9 @@ def test_main_window_has_database(qapp: Any, tmp_path: Path) -> None:  # noqa: A
 
     from tarragon.db.database import Database
     from tarragon.main import MainWindow
-    from tarragon.services.settings import Settings
 
-    settings_db = Database(tmp_path / "test_settings2.db")
-    settings_db.init_schema()
-    settings = Settings(settings_db)
     database = Database(tmp_path / "test_main_dbref.db")
-    window = MainWindow(settings=settings, database=database)
+    window = MainWindow(database=database)
     try:
         assert hasattr(window, "_database")
         assert isinstance(window._database, Database)

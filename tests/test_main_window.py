@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
+from unittest.mock import MagicMock
 
 from PySide6.QtWidgets import QDockWidget, QMainWindow
 from tarragon.main_window import MainWindow
@@ -16,32 +17,14 @@ def test_main_window_is_qmainwindow() -> None:
     assert issubclass(MainWindow, QMainWindow)
 
 
-def test_main_window_instantiates_with_no_settings(qapp: Any) -> None:  # noqa: ARG001
-    """MainWindow can be created without a Settings instance (lazy init)."""
-    window = MainWindow()
+def test_main_window_instantiates_with_settings(
+    qapp: Any,  # noqa: ARG001
+    mock_settings: MagicMock,
+) -> None:
+    """MainWindow accepts a SettingsService-like object without error."""
+    window = MainWindow(settings_service=mock_settings)
     try:
-        assert window is not None
-        assert isinstance(window, QMainWindow)
-    finally:
-        window.close()
-
-
-def test_main_window_instantiates_with_settings(qapp: Any) -> None:  # noqa: ARG001
-    """MainWindow accepts a Settings-like object without error."""
-
-    class _FakeSettings:
-        def get(self, key: str) -> None:
-            return None
-
-        def set(self, key: str, value: object) -> None:
-            pass
-
-        def close(self) -> None:
-            pass
-
-    window = MainWindow(settings=_FakeSettings())  # type: ignore[arg-type]
-    try:
-        assert window._settings is not None
+        assert window._settings_service is not None
     finally:
         window.close()
 
@@ -49,9 +32,9 @@ def test_main_window_instantiates_with_settings(qapp: Any) -> None:  # noqa: ARG
 # ── Dock Widget Tests ──────────────────────────────────────────────────
 
 
-def test_three_docks_exist(qapp: Any) -> None:  # noqa: ARG001
+def test_three_docks_exist(qapp: Any, mock_settings: MagicMock) -> None:  # noqa: ARG001
     """MainWindow creates sidebar, grid, and preview docks."""
-    window = MainWindow()
+    window = MainWindow(settings_service=mock_settings)
     try:
         assert hasattr(window, "sidebar_dock")
         assert hasattr(window, "grid_dock")
@@ -64,9 +47,9 @@ def test_three_docks_exist(qapp: Any) -> None:  # noqa: ARG001
         window.close()
 
 
-def test_docks_have_correct_titles(qapp: Any) -> None:  # noqa: ARG001
+def test_docks_have_correct_titles(qapp: Any, mock_settings: MagicMock) -> None:  # noqa: ARG001
     """Each dock panel has the expected title."""
-    window = MainWindow()
+    window = MainWindow(settings_service=mock_settings)
     try:
         assert window.sidebar_dock.windowTitle() == "Library"
         assert window.grid_dock.windowTitle() == "Gallery"
@@ -75,9 +58,9 @@ def test_docks_have_correct_titles(qapp: Any) -> None:  # noqa: ARG001
         window.close()
 
 
-def test_docks_are_attached_to_window(qapp: Any) -> None:  # noqa: ARG001
+def test_docks_are_attached_to_window(qapp: Any, mock_settings: MagicMock) -> None:  # noqa: ARG001
     """All three docks are child widgets of the MainWindow."""
-    window = MainWindow()
+    window = MainWindow(settings_service=mock_settings)
     try:
         dock_widgets = [w for w in window.findChildren(QDockWidget)]
         assert len(dock_widgets) >= 3
@@ -93,9 +76,9 @@ def test_docks_are_attached_to_window(qapp: Any) -> None:  # noqa: ARG001
 # ── Menu Action Tests ──────────────────────────────────────────────────
 
 
-def test_open_folder_menu_exists(qapp: Any) -> None:  # noqa: ARG001
+def test_open_folder_menu_exists(qapp: Any, mock_settings: MagicMock) -> None:  # noqa: ARG001
     """The File menu exists and action callbacks are registered."""
-    window = MainWindow()
+    window = MainWindow(settings_service=mock_settings)
     try:
         menu_bar = window.menuBar()
         assert menu_bar is not None
@@ -114,11 +97,14 @@ def test_open_folder_menu_exists(qapp: Any) -> None:  # noqa: ARG001
         window.close()
 
 
-def test_open_folder_action_in_file_menu(qapp: Any) -> None:  # noqa: ARG001
+def test_open_folder_action_in_file_menu(
+    qapp: Any,  # noqa: ARG001
+    mock_settings: MagicMock,
+) -> None:
     """The 'Open Folder' action appears under the File menu in the menu bar."""
     from PySide6.QtWidgets import QMenu, QMenuBar
 
-    window = MainWindow()
+    window = MainWindow(settings_service=mock_settings)
     try:
         menu_bar = window.menuBar()
         assert isinstance(menu_bar, QMenuBar)
@@ -127,7 +113,7 @@ def test_open_folder_action_in_file_menu(qapp: Any) -> None:  # noqa: ARG001
         menus = menu_bar.findChildren(QMenu)
         file_menu: QMenu | None = None
         for menu in menus:
-            # Qt mnemonic prefix '&' is stripped for display but present on title.
+            # Qt mnemonic '&' is stripped for display but present on title.
             if "File" in menu.title():
                 file_menu = menu
                 break
@@ -150,9 +136,12 @@ def test_open_folder_action_in_file_menu(qapp: Any) -> None:  # noqa: ARG001
 # ── Default Size Tests ─────────────────────────────────────────────────
 
 
-def test_window_has_reasonable_default_size(qapp: Any) -> None:  # noqa: ARG001
+def test_window_has_reasonable_default_size(
+    qapp: Any,  # noqa: ARG001
+    mock_settings: MagicMock,
+) -> None:
     """MainWindow opens at approximately 1200x800."""
-    window = MainWindow()
+    window = MainWindow(settings_service=mock_settings)
     try:
         size = window.size()
         assert size.width() == 1200, f"Expected width 1200, got {size.width()}"
@@ -170,7 +159,10 @@ def test_default_size_constants_defined() -> None:
 # ── Bug 1 Regression: Filtered query must not clear gallery ────────────
 
 
-def test_run_filtered_query_does_not_clear_gallery_when_no_folder(qapp: Any) -> None:  # noqa: ARG001
+def test_run_filtered_query_does_not_clear_gallery_when_no_folder(
+    qapp: Any,  # noqa: ARG001
+    mock_settings: MagicMock,
+) -> None:
     """_run_filtered_query() must NOT clear the model when _current_folder is empty.
 
     Regression test for Bug 1: clicking a tag or thumbnail should not cause
@@ -181,7 +173,7 @@ def test_run_filtered_query_does_not_clear_gallery_when_no_folder(qapp: Any) -> 
     from tarragon.db.database import Database
     from tarragon.services.tag_service import TagService
 
-    window = MainWindow()
+    window = MainWindow(settings_service=mock_settings)
     try:
         db = Database(Path(":memory:"))
         db.init_schema()
@@ -203,14 +195,17 @@ def test_run_filtered_query_does_not_clear_gallery_when_no_folder(qapp: Any) -> 
         window.close()
 
 
-def test_run_filtered_query_works_when_folder_is_set(qapp: Any) -> None:  # noqa: ARG001
+def test_run_filtered_query_works_when_folder_is_set(
+    qapp: Any,  # noqa: ARG001
+    mock_settings: MagicMock,
+) -> None:
     """_run_filtered_query() queries the DB and updates the model when folder is set."""
     from pathlib import Path
 
     from tarragon.db.database import Database
     from tarragon.services.tag_service import TagService
 
-    window = MainWindow()
+    window = MainWindow(settings_service=mock_settings)
     try:
         db = Database(Path(":memory:"))
         db.init_schema()
@@ -241,14 +236,17 @@ def test_run_filtered_query_works_when_folder_is_set(qapp: Any) -> None:  # noqa
 # ── Bug 2 Regression: has_filters includes tag filters ─────────────────
 
 
-def test_has_filters_includes_tag_filters(qapp: Any) -> None:  # noqa: ARG001
+def test_has_filters_includes_tag_filters(
+    qapp: Any,  # noqa: ARG001
+    mock_settings: MagicMock,
+) -> None:
     """_on_open_folder detects active tag filters and runs filtered query."""
     from pathlib import Path
 
     from tarragon.db.database import Database
     from tarragon.services.tag_service import TagService
 
-    window = MainWindow()
+    window = MainWindow(settings_service=mock_settings)
     try:
         db = Database(Path(":memory:"))
         db.init_schema()
@@ -283,7 +281,10 @@ def test_has_filters_includes_tag_filters(qapp: Any) -> None:  # noqa: ARG001
 # ── Bug 2 Regression: Race condition fallback removed ─────────────────
 
 
-def test_filtered_query_returns_empty_when_no_match(qapp: Any) -> None:  # noqa: ARG001
+def test_filtered_query_returns_empty_when_no_match(
+    qapp: Any,  # noqa: ARG001
+    mock_settings: MagicMock,
+) -> None:
     """If filtered query returns empty, gallery shows 0 results (no fallback).
 
     Previously a race-condition guard would fall back to showing all
@@ -296,7 +297,7 @@ def test_filtered_query_returns_empty_when_no_match(qapp: Any) -> None:  # noqa:
     from tarragon.db.database import Database
     from tarragon.services.tag_service import TagService
 
-    window = MainWindow()
+    window = MainWindow(settings_service=mock_settings)
     try:
         db = Database(Path(":memory:"))
         db.init_schema()
@@ -326,14 +327,17 @@ def test_filtered_query_returns_empty_when_no_match(qapp: Any) -> None:  # noqa:
 # ── Bug 1 Regression: Global scope mode ────────────────────────────────
 
 
-def test_global_scope_queries_entire_db(qapp: Any) -> None:  # noqa: ARG001
+def test_global_scope_queries_entire_db(
+    qapp: Any,  # noqa: ARG001
+    mock_settings: MagicMock,
+) -> None:
     """In global mode, _run_filtered_query ignores folder constraint."""
     from pathlib import Path
 
     from tarragon.db.database import Database
     from tarragon.services.tag_service import TagService
 
-    window = MainWindow()
+    window = MainWindow(settings_service=mock_settings)
     try:
         db = Database(Path(":memory:"))
         db.init_schema()
@@ -372,14 +376,18 @@ def test_global_scope_queries_entire_db(qapp: Any) -> None:  # noqa: ARG001
 # ── Bug 2 Regression: _on_folder_navigated applies filters ─────────────
 
 
-def test_folder_navigated_applies_active_filters(qapp: Any, tmp_path: Path) -> None:  # noqa: ARG001
+def test_folder_navigated_applies_active_filters(
+    qapp: Any,  # noqa: ARG001
+    mock_settings: MagicMock,
+    tmp_path: Path,
+) -> None:
     """Navigating to a folder via sidebar applies active filters."""
     from pathlib import Path
 
     from tarragon.db.database import Database
     from tarragon.services.tag_service import TagService
 
-    window = MainWindow()
+    window = MainWindow(settings_service=mock_settings)
     try:
         db = Database(Path(":memory:"))
         db.init_schema()
@@ -413,14 +421,17 @@ def test_folder_navigated_applies_active_filters(qapp: Any, tmp_path: Path) -> N
 # ── Folder Filter in Global Mode ─────────────────────────────────────
 
 
-def test_folder_filter_in_global_mode(qapp: Any) -> None:  # noqa: ARG001
+def test_folder_filter_in_global_mode(
+    qapp: Any,  # noqa: ARG001
+    mock_settings: MagicMock,
+) -> None:
     """In global mode, the folder filter dropdown restricts results to a specific folder."""
     from pathlib import Path
 
     from tarragon.db.database import Database
     from tarragon.services.tag_service import TagService
 
-    window = MainWindow()
+    window = MainWindow(settings_service=mock_settings)
     try:
         db = Database(Path(":memory:"))
         db.init_schema()
@@ -461,7 +472,10 @@ def test_folder_filter_in_global_mode(qapp: Any) -> None:  # noqa: ARG001
         window.close()
 
 
-def test_filter_bar_replaces_separate_bars(qapp: Any) -> None:  # noqa: ARG001
+def test_filter_bar_replaces_separate_bars(
+    qapp: Any,  # noqa: ARG001
+    mock_settings: MagicMock,
+) -> None:
     """MainWindow uses FilterBar instead of separate FilterBarColor and FilterBarTag."""
     from pathlib import Path
 
@@ -469,7 +483,7 @@ def test_filter_bar_replaces_separate_bars(qapp: Any) -> None:  # noqa: ARG001
     from tarragon.services.tag_service import TagService
     from tarragon.widgets.filter_bar import FilterBar
 
-    window = MainWindow()
+    window = MainWindow(settings_service=mock_settings)
     try:
         db = Database(Path(":memory:"))
         db.init_schema()
@@ -491,7 +505,10 @@ def test_filter_bar_replaces_separate_bars(qapp: Any) -> None:  # noqa: ARG001
         window.close()
 
 
-def test_scope_change_shows_folder_button(qapp: Any) -> None:  # noqa: ARG001
+def test_scope_change_shows_folder_button(
+    qapp: Any,  # noqa: ARG001
+    mock_settings: MagicMock,
+) -> None:
     """Switching to global mode shows the Add Folder button in the FilterBar."""
     from pathlib import Path
 
@@ -499,7 +516,7 @@ def test_scope_change_shows_folder_button(qapp: Any) -> None:  # noqa: ARG001
     from tarragon.db.database import Database
     from tarragon.services.tag_service import TagService
 
-    window = MainWindow()
+    window = MainWindow(settings_service=mock_settings)
     try:
         db = Database(Path(":memory:"))
         db.init_schema()
@@ -530,8 +547,9 @@ def test_scope_change_shows_folder_button(qapp: Any) -> None:  # noqa: ARG001
 
 
 def test_filters_return_results_immediately_after_folder_open(
-    qapp: Any,
-    tmp_path: Path,  # noqa: ARG001
+    qapp: Any,  # noqa: ARG001
+    mock_settings: MagicMock,
+    tmp_path: Path,
 ) -> None:
     """After opening a folder, filtered queries return results without waiting for renders.
 
@@ -543,7 +561,7 @@ def test_filters_return_results_immediately_after_folder_open(
     from tarragon.db.database import Database
     from tarragon.services.tag_service import TagService
 
-    window = MainWindow()
+    window = MainWindow(settings_service=mock_settings)
     try:
         db = Database(Path(":memory:"))
         db.init_schema()

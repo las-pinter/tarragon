@@ -12,7 +12,6 @@ from tarragon.db.database import Database
 from tarragon.logging import LogFormatter
 from tarragon.main_window import MainWindow as _MainWindow
 from tarragon.migrations import MigrationRunner
-from tarragon.services.settings import Settings
 from tarragon.services.settings_service import SettingsService
 from tarragon.services.tag_service import TagService
 from tarragon.theme.colors import create_palette
@@ -27,7 +26,7 @@ class MainWindow(_MainWindow):
     (Settings, Database) into the UI layer during construction.
     """
 
-    def __init__(self, settings: Settings | None = None, database: Database | None = None) -> None:
+    def __init__(self, database: Database | None = None) -> None:
         """Initialize MainWindow with optional Settings and Database instances.
 
         Args:
@@ -52,25 +51,17 @@ class MainWindow(_MainWindow):
         if stale_count:
             logger.info("Cleaned up %d stale folder cache UUID entries", stale_count)
 
-        owned_settings: Settings | None = None
-        if settings is None:
-            owned_settings = Settings(self._database)
-            owned_settings.init_defaults()
-
-        resolved_settings = owned_settings or settings
-
         # Configure custom cache directory if set
-        if resolved_settings is not None:
-            settings_service = SettingsService(resolved_settings)
-            custom_cache = settings_service.get_cache_dir()
-            if custom_cache:
-                from pathlib import Path
+        settings_service = SettingsService(self._database)
+        custom_cache = settings_service.cache_dir.get()
+        if custom_cache:
+            from pathlib import Path
 
-                from tarragon.app_paths import set_cache_dir
+            from tarragon.app_paths import set_cache_dir
 
-                set_cache_dir(Path(custom_cache))
+            set_cache_dir(Path(custom_cache))
 
-        super().__init__(settings=resolved_settings)
+        super().__init__(settings_service)
 
         # Wire up content widgets (thumbnail grid, sidebar, preview, tags).
         tag_service = TagService(self._database)
@@ -90,8 +81,6 @@ class MainWindow(_MainWindow):
         # service, which writes through to the database. It must run
         # before the database connection below is closed.
         super().closeEvent(event)
-        if isinstance(self._settings, Settings):
-            self._settings.close()
         if isinstance(self._database, Database):
             self._database.close()
         # Force immediate exit. Bypasses atexit handlers that may hang

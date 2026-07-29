@@ -1,14 +1,4 @@
-"""LogPanel and QtLogHandler — dockable log viewer with color-coded levels.
-
-LogPanel displays application log messages in a read-only scrollable text area
-with color coding per severity.  QtLogHandler bridges Python's ``logging``
-module to the panel via Qt signals, ensuring thread-safe delivery from any
-worker thread.
-
-Design patterns:
-    - Observer pattern  — ``_log_signal`` for cross-thread message delivery
-    - Adapter pattern   — ``QtLogHandler`` adapts ``logging.Handler`` to Qt
-"""
+"""Dockable log viewer with color-coded levels."""
 
 from __future__ import annotations
 
@@ -34,7 +24,6 @@ from tarragon.theme.colors import (
 )
 from tarragon.theme.typography import LOG_SIZE
 
-# Color mapping: log level → display color (sourced from theme tokens)
 _LEVEL_COLORS: dict[int, str] = {
     logging.DEBUG: TEXT_TERTIARY.name(),
     logging.INFO: TEXT_PRIMARY.name(),
@@ -62,17 +51,15 @@ class LogPanel(QWidget):
     logging from background threads is delivered safely to the GUI thread.
     """
 
-    _log_signal = Signal(str, int)  # (formatted_message, log_level)
+    log_signal = Signal(str, int)  # (formatted_message, log_level)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
 
-        # ── Layout ──────────────────────────────────────────────────────
         layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)
         layout.setSpacing(4)
 
-        # ── Toolbar row ─────────────────────────────────────────────────
         toolbar = QHBoxLayout()
         toolbar.setContentsMargins(0, 0, 0, 0)
 
@@ -89,7 +76,6 @@ class LogPanel(QWidget):
 
         layout.addLayout(toolbar)
 
-        # ── Log text area ───────────────────────────────────────────────
         self._text_area = QPlainTextEdit()
         self._text_area.setObjectName("logText")
         self._text_area.setReadOnly(True)
@@ -102,15 +88,12 @@ class LogPanel(QWidget):
 
         layout.addWidget(self._text_area)
 
-        # ── Signal connection ───────────────────────────────────────────
-        self._log_signal.connect(self.append_log)
-
-    # ── Public slots / methods ──────────────────────────────────────────
+        self.log_signal.connect(self.append_log)
 
     def append_log(self, message: str, level: int) -> None:
         """Append a color-coded log line to the text area.
 
-        Called automatically via ``_log_signal`` — do **not** call directly
+        Called automatically via ``_log_signal``, do **not** call directly
         from background threads.
         """
         color = _LEVEL_COLORS.get(level, _DEFAULT_COLOR)
@@ -156,11 +139,15 @@ class QtLogHandler(logging.Handler):
             return
         try:
             msg = self.format(record)
-            self._log_panel._log_signal.emit(msg, record.levelno)
+            self._log_panel.log_signal.emit(msg, record.levelno)
         except RuntimeError:
-            # Widget destroyed — remove ourselves from loggers so we
+            # Widget destroyed, remove ourselves from loggers so we
             # never try to emit to a dead panel again.
-            for logger_name in [None, "tarragon", "tarragon.db"]:
+            logger = logging.getLogger(None)
+            if self in logger.handlers:
+                logger.removeHandler(self)
+
+            for logger_name in ["tarragon", "tarragon.db"]:
                 logger = logging.getLogger(logger_name)
                 if self in logger.handlers:
                     logger.removeHandler(self)

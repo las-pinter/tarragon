@@ -3,6 +3,7 @@
 import os
 from collections.abc import Generator
 from typing import Any
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -19,3 +20,24 @@ def qapp() -> Generator[Any, None, None]:
     if app is None:
         app = QApplication(["test"])
     yield app
+
+
+@pytest.fixture()
+def mock_settings() -> MagicMock:
+    """Mock SettingsService for tests that instantiate MainWindow.
+
+    MainWindow requires a settings_service argument. This fixture provides
+    a MagicMock with sensible defaults for all settings accessed during
+    __init__ and setup_widgets().
+    """
+    mock = MagicMock()
+    # Return falsy values so _restore_layout_state() skips restore
+    mock.window_geometry_state.get.return_value = ""
+    mock.window_layout_state.get.return_value = ""
+    # Settings accessed in setup_widgets()
+    mock.debug_mode.get.return_value = False
+    mock.max_multi_preview.get.return_value = 9
+    # Settings accessed by ThumbnailService (created in setup_widgets)
+    mock.cache_format.get.return_value = "PNG"
+    mock.max_psd_workers.get.return_value = 3
+    return mock

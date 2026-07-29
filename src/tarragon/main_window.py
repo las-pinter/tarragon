@@ -25,7 +25,6 @@ from tarragon.logging import LogFormatter
 from tarragon.models.filter_state import FilterState
 from tarragon.models.thumbnail_model import ThumbnailModel
 from tarragon.services.query_service import QueryService
-from tarragon.services.settings import Settings
 from tarragon.services.settings_service import SettingsService
 from tarragon.services.tag_service import TagService
 from tarragon.services.thumbnail_service import ThumbnailService
@@ -64,7 +63,7 @@ class MainWindow(QMainWindow):
     DEFAULT_WIDTH = 1200
     DEFAULT_HEIGHT = 800
 
-    def __init__(self, settings: Settings | None = None) -> None:
+    def __init__(self, settings_service: SettingsService) -> None:
         """Initialize the main window.
 
         Args:
@@ -72,8 +71,7 @@ class MainWindow(QMainWindow):
                        Stored as an attribute; not used until later milestones.
         """
         super().__init__()
-        self._settings = settings
-        self._settings_service = SettingsService(settings) if settings else None
+        self._settings_service = settings_service
         self.setWindowTitle("Tarragon")
         self.resize(self.DEFAULT_WIDTH, self.DEFAULT_HEIGHT)
 
@@ -227,10 +225,7 @@ class MainWindow(QMainWindow):
             otherwise (first run, corrupt data, or no settings service
             available).
         """
-        if self._settings_service is None:
-            return False
-
-        encoded_geometry = self._settings_service.get_window_geometry_state()
+        encoded_geometry = self._settings_service.window_geometry_state.get()
         if encoded_geometry:
             try:
                 geometry_raw = QByteArray.fromBase64(encoded_geometry.encode("ascii"))
@@ -240,7 +235,7 @@ class MainWindow(QMainWindow):
                 if not self.restoreGeometry(geometry_raw):
                     logger.warning("Failed to restore window geometry (incompatible or corrupt state)")
 
-        encoded_layout = self._settings_service.get_window_layout_state()
+        encoded_layout = self._settings_service.window_layout_state.get()
         if not encoded_layout:
             return False
         try:
@@ -255,16 +250,13 @@ class MainWindow(QMainWindow):
 
     def _save_layout_state(self) -> None:
         """Persist the current window geometry and dock arrangement."""
-        if self._settings_service is None:
-            return
-
         geometry_raw: QByteArray = self.saveGeometry()
         encoded_geometry = bytes(geometry_raw.toBase64().data()).decode("ascii")
-        self._settings_service.set_window_geometry_state(encoded_geometry)
+        self._settings_service.window_geometry_state.set(encoded_geometry)
 
         layout_raw: QByteArray = self.saveState()
         encoded_layout = bytes(layout_raw.toBase64().data()).decode("ascii")
-        self._settings_service.set_window_layout_state(encoded_layout)
+        self._settings_service.window_layout_state.set(encoded_layout)
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802
         """Save the dock layout before the window closes.
@@ -312,12 +304,11 @@ class MainWindow(QMainWindow):
         self.thumbnail_grid.set_model(self.thumbnail_model)
 
         # Create thumbnail service (skip if settings_service is None, e.g. in tests)
-        if self._settings_service is not None:
-            self._thumbnail_service = ThumbnailService(db, self._settings_service, parent=self)
-            self._thumbnail_service.thumbnail_ready.connect(self._on_thumbnail_ready)
-            self._thumbnail_service.error_occurred.connect(self._on_thumbnail_error)
-            # Auto-color tags from thumbnail rendering should refresh the tag panel
-            self._thumbnail_service.tags_updated.connect(tag_service.tags_changed.emit)
+        self._thumbnail_service = ThumbnailService(db, self._settings_service, parent=self)
+        self._thumbnail_service.thumbnail_ready.connect(self._on_thumbnail_ready)
+        self._thumbnail_service.error_occurred.connect(self._on_thumbnail_error)
+        # Auto-color tags from thumbnail rendering should refresh the tag panel
+        self._thumbnail_service.tags_updated.connect(tag_service.tags_changed.emit)
 
         # ── Search box (Deviation 4.5) ─────────────────────────────────
         self._search_edit = QLineEdit()
@@ -368,7 +359,7 @@ class MainWindow(QMainWindow):
         self._log_handler.setFormatter(LogFormatter())
         root_logger = logging.getLogger()
         root_logger.addHandler(self._log_handler)
-        apply_debug_level(self._settings_service.get_debug_mode() if self._settings_service else False)
+        apply_debug_level(self._settings_service.debug_mode.get())
 
         # Debounce timer for filename search (Deviation 4.5)
         self._search_timer = QTimer()
@@ -378,9 +369,8 @@ class MainWindow(QMainWindow):
         # ── Gallery Controller — filter orchestration & selection ───
         # Compute multi-select cap from settings
         multi_preview_cap = MULTI_PREVIEW_MAX_DEFAULT
-        if self._settings_service is not None:
-            setting_cap = self._settings_service.get_max_multi_preview()
-            multi_preview_cap = setting_cap
+        setting_cap = self._settings_service.max_multi_preview.get()
+        multi_preview_cap = setting_cap
 
         self._gallery_controller = GalleryController(
             query_service=self._query_service,
@@ -501,15 +491,13 @@ class MainWindow(QMainWindow):
         from tarragon.app_paths import set_cache_dir
         from tarragon.widgets.settings_dialog import SettingsDialog
 
-        if self._settings_service is None:
-            return
         dialog = SettingsDialog(self._settings_service, parent=self)
         if dialog.exec():
             # Settings were saved, apply changes
             # Update debug logging level
-            apply_debug_level(self._settings_service.get_debug_mode())
+            apply_debug_level(self._settings_service.debug_mode.get())
             # Apply cache dir change immediately
-            new_cache = self._settings_service.get_cache_dir()
+            new_cache = self._settings_service.cache_dir.get()
             set_cache_dir(Path(new_cache) if new_cache else None)
 
     def _apply_theme(self) -> None:

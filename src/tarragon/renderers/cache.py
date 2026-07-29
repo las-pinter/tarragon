@@ -111,25 +111,28 @@ def invalidate_cache_files(db: Any, source_path: str) -> None:
     )
 
 
-def save_to_cache(img: Image.Image, cache_path: Path, format_setting: str = "png") -> None:
+def save_to_cache(img: Image.Image, cache_path: Path, format_setting: str = "PNG") -> None:
     """Write a rendered thumbnail to the cache directory.
 
     The cache directory (``cache_path.parent``) is created on demand.
 
     Decision A: Format is configurable via *format_setting*:
-    * ``"png"`` (default): lossless, handles RGBA directly.
-    * ``"jpeg"``: smaller files; RGBA images are flattened onto a
+    * ``"PNG"`` (default): lossless, handles RGBA directly.
+    * ``"JPEG"``: smaller files; RGBA images are flattened onto a
       white background before saving.
     """
     cache_path.parent.mkdir(parents=True, exist_ok=True)
 
-    if format_setting == "jpeg":
-        # Flatten RGBA onto white background, JPEG does not support alpha.
-        if img.mode == "RGBA":
-            background = Image.new("RGB", img.size, (255, 255, 255))
-            background.paste(img, mask=img.split()[3])
+    if format_setting.upper() == "JPEG":
+        # Convert to RGB for JPEG — it does not support alpha or non-RGB modes.
+        if img.mode in ("RGBA", "LA", "PA"):
+            # Flatten alpha-bearing modes onto a white background.
+            rgba_img = img.convert("RGBA")
+            background = Image.new("RGB", rgba_img.size, (255, 255, 255))
+            background.paste(rgba_img, mask=rgba_img.split()[3])
             rgb_img = background
         else:
+            # L, P, or already RGB — convert to RGB (no-op for RGB).
             rgb_img = img.convert("RGB")
         rgb_img.save(cache_path, "JPEG", quality=90)
     else:

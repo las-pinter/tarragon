@@ -32,11 +32,11 @@ def test_qss_does_not_use_forbidden_properties() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_apply_theme_no_exception(qapp: Any) -> None:  # noqa: ARG001
+def test_apply_theme_no_exception(qapp: Any, mock_settings: Any) -> None:  # noqa: ARG001
     """MainWindow._apply_theme() applies stylesheet without raising."""
     from tarragon.main_window import MainWindow
 
-    window = MainWindow()
+    window = MainWindow(settings_service=mock_settings)
     try:
         window._apply_theme()
         # If we get here, no exception was raised.
@@ -44,12 +44,12 @@ def test_apply_theme_no_exception(qapp: Any) -> None:  # noqa: ARG001
         window.close()
 
 
-def test_apply_theme_sets_stylesheet(qapp: Any) -> None:  # noqa: ARG001
+def test_apply_theme_sets_stylesheet(qapp: Any, mock_settings: Any) -> None:  # noqa: ARG001
     """After _apply_theme(), the stylesheet is non-empty."""
     from PySide6.QtWidgets import QApplication
     from tarragon.main_window import MainWindow
 
-    window = MainWindow()
+    window = MainWindow(settings_service=mock_settings)
     try:
         window._apply_theme()
         app = QApplication.instance()

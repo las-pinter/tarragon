@@ -56,11 +56,15 @@ def db() -> Generator[Database, None, None]:
 
 
 @pytest.fixture()
-def main_window(qapp: Any, db: Database) -> Generator[MainWindow, None, None]:  # noqa: ARG001
+def main_window(
+    qapp: Any,  # noqa: ARG001
+    db: Database,
+    mock_settings: Any,
+) -> Generator[MainWindow, None, None]:
     """Provide a MainWindow with setup_widgets called."""
     from tarragon.services.tag_service import TagService
 
-    window = MainWindow()
+    window = MainWindow(settings_service=mock_settings)
     tag_service = TagService(db)
     window.setup_widgets(db, tag_service)
     yield window

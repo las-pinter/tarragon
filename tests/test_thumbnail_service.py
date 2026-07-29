@@ -42,14 +42,14 @@ def db_mock() -> MagicMock:
 def settings_mock() -> MagicMock:
     """Mock SettingsService with typed return values matching DEFAULTS."""
     mock = MagicMock()
-    mock.get_cache_format.return_value = "png"
-    mock.get_max_psd_workers.return_value = 3
-    mock.get_large_canvas_threshold_mp.return_value = 20.0
-    mock.get_tile_grid_size.return_value = "2x2"
-    mock.get_color_tag_enabled.return_value = True
-    mock.get_color_tag_palette_size.return_value = 8
-    mock.get_color_tag_min_share.return_value = 0.10
-    mock.get_color_tag_neutral_s_threshold.return_value = 0.15
+    mock.cache_format.get.return_value = "PNG"
+    mock.max_psd_workers.get.return_value = 3
+    mock.large_canvas_threshold_mp.get.return_value = 20.0
+    mock.tile_grid_size.get.return_value = "2x2"
+    mock.color_tag_enabled.get.return_value = True
+    mock.color_tag_palette_size.get.return_value = 8
+    mock.color_tag_min_share.get.return_value = 0.10
+    mock.color_tag_neutral_s_threshold.get.return_value = 0.15
     return mock
 
 
@@ -86,9 +86,9 @@ class TestInstantiation:
             svc = ThumbnailService(db=db_mock, settings_service=settings_mock)
         assert svc._db is db_mock
         assert svc._settings_service is settings_mock
-        assert svc._cache_format == "png"
-        settings_mock.get_cache_format.assert_called()
-        settings_mock.get_max_psd_workers.assert_called()
+        assert svc._cache_format == "PNG"
+        settings_mock.cache_format.get.assert_called()
+        settings_mock.max_psd_workers.get.assert_called()
         mockget_executor.assert_called_once_with(max_workers=3)
 
     def test_signals_exist(self, service: ThumbnailService) -> None:
@@ -98,7 +98,7 @@ class TestInstantiation:
 
     def test_cache_format_from_settings(self, service: ThumbnailService) -> None:
         """_cache_format is initialised from settings_service."""
-        assert service._cache_format == "png"
+        assert service._cache_format == "PNG"
 
 
 # =========================================================================
@@ -1298,11 +1298,11 @@ class TestAutoColorTagSignal:
     ) -> None:
         """When color_tag_enabled is False, tags_updated is NOT emitted."""
         disabled_settings = MagicMock()
-        disabled_settings.get_cache_format.return_value = "png"
-        disabled_settings.get_max_psd_workers.return_value = 3
-        disabled_settings.get_large_canvas_threshold_mp.return_value = 20.0
-        disabled_settings.get_tile_grid_size.return_value = "2x2"
-        disabled_settings.get_color_tag_enabled.return_value = False  # Disabled!
+        disabled_settings.cache_format.get.return_value = "PNG"
+        disabled_settings.max_psd_workers.get.return_value = 3
+        disabled_settings.large_canvas_threshold_mp.get.return_value = 20.0
+        disabled_settings.tile_grid_size.get.return_value = "2x2"
+        disabled_settings.color_tag_enabled.get.return_value = False  # Disabled!
 
         with patch("tarragon.services.thumbnail_service.get_executor"):
             svc = ThumbnailService(db=db_mock, settings_service=disabled_settings)

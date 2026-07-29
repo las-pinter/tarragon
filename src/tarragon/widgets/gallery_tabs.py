@@ -1,4 +1,4 @@
-"""Gallery scope tabs — Folder vs All Images."""
+"""Gallery scope tabs"""
 
 from __future__ import annotations
 

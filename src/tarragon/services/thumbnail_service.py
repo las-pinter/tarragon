@@ -77,12 +77,12 @@ class ThumbnailService(QObject):
         self._settings_service = settings_service
         self._cancel_event = threading.Event()
         self._threadpool = QThreadPool()
-        self._cache_format: str = self._settings_service.get_cache_format()
+        self._cache_format: str = self._settings_service.cache_format.get()
 
         # Pre-initialize the shared PSD ProcessPoolExecutor with the
         # user-configured worker count (falls back to RAM-adaptive default
         # when the setting is absent / None).
-        max_psd_workers = self._settings_service.get_max_psd_workers()
+        max_psd_workers = self._settings_service.max_psd_workers.get()
         get_executor(max_workers=max_psd_workers)
 
     def cancel_pending(self) -> None:
@@ -345,8 +345,8 @@ class ThumbnailService(QObject):
         cache_paths = generate_cache_paths(file_info.path, cache_uuid)
 
         if file_info.extension.lower() in {".psd", ".psb"}:
-            threshold = self._settings_service.get_large_canvas_threshold_mp()
-            grid_str = self._settings_service.get_tile_grid_size()
+            threshold = self._settings_service.large_canvas_threshold_mp.get()
+            grid_str = self._settings_service.tile_grid_size.get()
             grid_x, grid_y = (int(d) for d in grid_str.split("x"))
             full_img = render_psd_image(
                 file_info.path,
@@ -392,16 +392,16 @@ class ThumbnailService(QObject):
                 preview_path = cache_path_str
 
         # Extract and persist dominant color tags (from full resolution)
-        if self._settings_service.get_color_tag_enabled():
+        if self._settings_service.color_tag_enabled.get():
             try:
                 # Deferred import to avoid circular dependency
                 from tarragon.services.color_tagger import extract_dominant_color_tags
 
                 tags = extract_dominant_color_tags(
                     full_img,
-                    palette_size=self._settings_service.get_color_tag_palette_size(),
-                    min_share=self._settings_service.get_color_tag_min_share(),
-                    neutral_s_threshold=self._settings_service.get_color_tag_neutral_s_threshold(),
+                    palette_size=self._settings_service.color_tag_palette_size.get(),
+                    min_share=self._settings_service.color_tag_min_share.get(),
+                    neutral_s_threshold=self._settings_service.color_tag_neutral_s_threshold.get(),
                 )
                 self._db.replace_auto_color_tags(str(file_info.path), tags)
                 self.tags_updated.emit()

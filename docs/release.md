@@ -9,6 +9,7 @@ This document describes how to build and release Tarragon as a native binary.
 - Python 3.12+
 - C compiler (GCC on Linux, MSVC on Windows)
 - Linux: `sudo apt-get install python3-dev patchelf`
+- [uv](https://docs.astral.sh/uv/) (recommended) — fast Python package and project manager
 
 ## Building
 
@@ -42,7 +43,12 @@ The build scripts will:
 If you prefer to manage the environment yourself:
 
 ```bash
+# Install build dependencies with uv (recommended)
+uv pip install -e ".[build]"
+
+# Or with pip
 pip install -e ".[build]"
+
 python scripts/package_nuitka.py
 ```
 
@@ -61,8 +67,8 @@ dist\tarragon-viewer.exe --help
 
 ## Release Checklist
 
-- [ ] All tests pass: `pytest`
-- [ ] Linting passes: `ruff check .`
+- [ ] All tests pass: `uv run pytest tests/` (or `pytest tests/`)
+- [ ] Linting passes: `uv run ruff check .` (or `ruff check .`)
 - [ ] Build succeeds on target platform
 - [ ] Smoke test passes
 - [ ] Version bumped in `pyproject.toml`
@@ -97,3 +103,7 @@ Add `--include-package=<name>` for any missing packages.
 ### Large binary size
 
 Consider using `--standalone` mode and manually removing unused Qt plugins.
+
+### uv issues
+
+If `uv pip install` fails, ensure you're using a recent version of uv (`uv --version`). You can update with `uv self update`. If problems persist, fall back to `pip install -e ".[build]"`.

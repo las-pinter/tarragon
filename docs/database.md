@@ -145,9 +145,9 @@ CREATE TABLE IF NOT EXISTS settings (
 | `key` | TEXT (PK) | Setting name |
 | `value` | TEXT | JSON-serialized setting value |
 
-Values are JSON-serialized by the `Settings` class before storage and deserialized on read. The `SettingsService` provides typed accessors with validation and range clamping.
+Values are JSON-serialized by `Setting` subclasses before storage and deserialized on read. The `SettingsService` provides typed attribute access (e.g., `service.max_psd_workers.get()`) with per-setting validation and range clamping.
 
-**Default settings** (initialized on first run via `Settings.init_defaults()`):
+**Default settings** (returned by each `Setting` subclass when no persisted value exists):
 
 | Key | Default | Type | Description |
 |-----|---------|------|-------------|
@@ -159,7 +159,7 @@ Values are JSON-serialized by the `Settings` class before storage and deserializ
 | `color_tag_palette_size` | `8` | int | Number of colors in quantized palette |
 | `color_tag_min_share` | `0.10` | float | Minimum pixel share for a color tag (10%) |
 | `color_tag_neutral_s_threshold` | `0.15` | float | Saturation threshold for neutral classification |
-| `cache_format` | `"png"` | str | Cache image format (`"png"` or `"jpeg"`) |
+| `cache_format` | `"PNG"` | str | Cache image format (`"PNG"` or `"JPEG"`) |
 | `cache_dir` | `null` | str \| null | Custom cache directory path; `null` uses the platform default |
 | `debug_mode` | `false` | bool | Enable verbose (DEBUG-level) logging in the Log panel |
 | `window_layout_state` | `null` | str \| null | Base64-encoded `QMainWindow.saveState()` — persisted dock arrangement |
@@ -218,6 +218,8 @@ The `"*"` extension serves as a wildcard fallback. When launching an editor, the
 |-----------|--------|-------------|
 | Read | `get_setting(key)` | Raw string value, or None if absent |
 | Write | `set_setting(key, value)` | INSERT OR REPLACE |
+
+These are low-level CRUD methods on `Database` (via `SettingsMixin`). Application code uses `SettingsService` instead, which wraps each key in a typed `Setting` subclass with `get()` / `set()` methods, validation, and range clamping.
 
 ### Editor Associations
 

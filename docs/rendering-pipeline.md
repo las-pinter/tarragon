@@ -199,12 +199,24 @@ Directories are created on demand by `generate_cache_paths()` via `mkdir(parents
 
 ### Cache Format
 
-Configurable via the `cache_format` setting:
+Configurable via the `cache_format` setting (a `Setting` object accessed as `settings.cache_format.get()`). Values are **uppercase** strings.
 
 | Format | Extension | Notes |
 |--------|-----------|-------|
-| PNG (default) | `.png` | Lossless, supports RGBA natively |
-| JPEG | `.jpg` | Smaller files; RGBA flattened onto white background; quality=90 |
+| `"PNG"` (default) | `.png` | Lossless, handles all image modes including RGBA natively |
+| `"JPEG"` | `.jpg` | Smaller files; quality=90; requires RGB mode conversion (see below) |
+
+Valid values: `["PNG", "JPEG"]`. Setting an invalid value raises `ValueError`.
+
+**JPEG mode conversion** — Since JPEG does not support alpha channels or non-RGB modes, `save_to_cache()` performs automatic conversion before saving. The format check is **case-insensitive** (`format_setting.upper() == "JPEG"`):
+
+| Source Mode | Conversion |
+|-------------|------------|
+| `RGBA`, `LA`, `PA` | Flatten alpha onto a white background → `RGB` |
+| `L`, `P` | Direct conversion → `RGB` |
+| `RGB` | No conversion (no-op) |
+
+The alpha-flattening composites the image onto a solid white (`255, 255, 255`) background using the alpha channel as a mask, preserving transparency appearance without a checkerboard artifact.
 
 ### Cache Invalidation
 
@@ -262,3 +274,25 @@ The scanner (`scanner.py`) discovers files with the following extensions:
 | `.clip` | Clip Studio Paint | CLIP SQLite extraction |
 
 Extension matching is case-insensitive (`.JPG` matches `.jpg`).
+
+## Development Commands
+
+Common commands for working on the rendering pipeline:
+
+```bash
+# Run the full test suite
+uv run pytest
+
+# Run tests for the cache module specifically
+uv run pytest tests/test_cache.py -v
+
+# Run tests with coverage report
+uv run pytest --cov=tarragon/renderers --cov-report=term-missing
+
+# Type checking
+uv run mypy --strict src/tarragon/renderers/
+
+# Linting and formatting
+uv run ruff check src/tarragon/renderers/
+uv run ruff format src/tarragon/renderers/
+```

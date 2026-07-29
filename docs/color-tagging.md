@@ -102,14 +102,22 @@ def _rgb_to_hsv(r: float, g: float, b: float) -> tuple[float, float, float]:
 
 ## Configurable Parameters
 
-All parameters are stored in the `settings` database table and accessed via the `Settings` class:
+All parameters are stored in the `settings` database table and accessed via the `SettingsService` class. Each setting is a `Setting` object — read its value with `.get()` and update it with `.set(value)`:
 
-| Setting | Default | Range | Description |
+```python
+# Read a setting
+enabled = settings.color_tag_enabled.get()
+
+# Update a setting
+settings.color_tag_palette_size.set(12)
+```
+
+| Setting attribute | Default | Range | Description |
 |---------|---------|-------|-------------|
-| `color_tag_enabled` | `True` | bool | Master switch for automatic color tagging |
-| `color_tag_palette_size` | `8` | 2–32 | Number of colors in the quantized palette |
-| `color_tag_min_share` | `0.10` | 0.0–1.0 | Minimum pixel share for a color to produce a tag |
-| `color_tag_neutral_s_threshold` | `0.15` | 0.0–1.0 | Saturation below which a color is classified as neutral |
+| `settings.color_tag_enabled` | `True` | bool | Master switch for automatic color tagging |
+| `settings.color_tag_palette_size` | `8` | 2–32 | Number of colors in the quantized palette |
+| `settings.color_tag_min_share` | `0.10` | 0.0–1.0 | Minimum pixel share for a color to produce a tag |
+| `settings.color_tag_neutral_s_threshold` | `0.15` | 0.0–1.0 | Saturation below which a color is classified as neutral |
 
 ### Parameter Effects
 

@@ -9,8 +9,8 @@ from PySide6.QtWidgets import QHBoxLayout, QLabel, QWidget
 class GalleryInfoBar(QWidget):
     """Horizontal bar above the thumbnail grid showing folder info and active filter count.
 
-    Left side: ``"{folder_name} · {file_count} files"`` label (muted text).
-    Right side: ``"{count} tags active"`` pill (amber on dark, hidden when count is 0).
+    Left side: ``"{folder_name} - {file_count} files"`` label.
+    Right side: ``"{count} tags active"`` pill.
     """
 
     def __init__(self, parent: QWidget | None = None) -> None:
@@ -48,7 +48,7 @@ class GalleryInfoBar(QWidget):
             folder_name: Display name for the folder (e.g. "Photos" or "All Images").
             file_count: Number of files currently shown in the grid.
         """
-        self._folder_label.setText(f"{folder_name} \u00b7 {file_count} files")
+        self._folder_label.setText(f"{folder_name} - {file_count} files")
 
     def set_active_filter_count(self, count: int) -> None:
         """Update the active filter pill visibility and text.

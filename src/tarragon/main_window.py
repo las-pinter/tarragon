@@ -197,7 +197,7 @@ class MainWindow(QMainWindow):
         self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.sidebar_dock)
         self.splitDockWidget(self.sidebar_dock, self.grid_dock, Qt.Orientation.Horizontal)
         self.splitDockWidget(self.grid_dock, self.preview_dock, Qt.Orientation.Horizontal)
-        self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self.log_dock)
+        self.splitDockWidget(self.grid_dock, self.log_dock, Qt.Orientation.Vertical)
 
         # Set initial dock sizes — preview panel should be roughly half the
         # remaining width after the sidebar, matching the gallery area.
@@ -208,6 +208,9 @@ class MainWindow(QMainWindow):
             [sidebar_width, preview_width],
             Qt.Orientation.Horizontal,
         )
+
+        log_height = self.height() // 4  # 25% of window height
+        self.resizeDocks([self.log_dock], [log_height], Qt.Orientation.Vertical)
 
     # ── Layout Persistence ───────────────────────────────────────────────
 
@@ -481,6 +484,10 @@ class MainWindow(QMainWindow):
             action = dock.toggleViewAction()
             view_menu.addAction(action)
 
+        view_menu.addSeparator()
+        reset_action = view_menu.addAction("Reset Window Layout")
+        reset_action.triggered.connect(self._reset_window_layout)
+
         # ── Settings menu ─────────────────────────────────────────────
         settings_menu: QMenu = menubar.addMenu("&Settings")
         preferences_action: QAction = settings_menu.addAction("&Preferences...")
@@ -604,3 +611,16 @@ class MainWindow(QMainWindow):
     def _on_favorite_clicked(self, folder_path: str) -> None:
         """Handle favorite folder selection."""
         self._on_folder_navigated(folder_path)
+
+    def _reset_window_layout(self) -> None:
+        """Reset all dock widgets to their initial positions and sizes"""
+        self._settings_service.window_layout_state.set(None)
+        self._settings_service.window_geometry_state.set(None)
+
+        # Re-dock everything to default positions
+        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.sidebar_dock)
+        self.splitDockWidget(self.sidebar_dock, self.grid_dock, Qt.Orientation.Horizontal)
+        self.splitDockWidget(self.grid_dock, self.preview_dock, Qt.Orientation.Horizontal)
+        self.splitDockWidget(self.grid_dock, self.log_dock, Qt.Orientation.Vertical)
+
+        self.log_dock.hide()

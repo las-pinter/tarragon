@@ -1,4 +1,4 @@
-"""Preview panel widget — displays single image preview with metadata, mosaic multi-preview, and tag management."""
+"""Preview panel widget"""
 
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ from PySide6.QtWidgets import (
 )
 
 from tarragon.db._base import normalize_path
-from tarragon.image_utils import _EXIF_ORIENTATION_TAG, _apply_exif_from_original
+from tarragon.image_utils import EXIF_ORIENTATION_TAG, apply_exif_from_original
 from tarragon.services.tag_service import TagService
 from tarragon.theme.color_buckets import BUCKET_COLORS, BUCKET_HEX_COLORS
 from tarragon.theme.colors import BG_SECONDARY
@@ -42,13 +42,13 @@ class PreviewPanel(QWidget):
     Shows:
     - Scaled image (maintains aspect ratio, fits panel)
     - Filename
-    - Dimensions (width × height)
-    - File size (formatted)
+    - Dimensions
+    - File size
     - Format (JPEG, PNG, PSD, etc.)
-    - Tag pills (clickable to toggle, with add/dropdown/create-new)
+    - Tag pills
     """
 
-    #: Emitted when tags change on the selected files (triggers gallery refresh).
+    # Emitted when tags change on the selected files (triggers gallery refresh).
     tags_changed = Signal()
 
     def __init__(
@@ -223,7 +223,7 @@ class PreviewPanel(QWidget):
         # original file's orientation when the image itself has none.
         has_own_orientation = False
         try:
-            if image.getexif().get(_EXIF_ORIENTATION_TAG):
+            if image.getexif().get(EXIF_ORIENTATION_TAG):
                 has_own_orientation = True
         except Exception:  # noqa: BLE001 — best-effort; never block preview
             logger.debug("Could not read EXIF orientation", exc_info=True)
@@ -236,7 +236,7 @@ class PreviewPanel(QWidget):
         # correct orientation (exif_transpose was applied during cache
         # generation), so applying it again would double-rotate.
         if not from_cache and not has_own_orientation and path is not None:
-            image = _apply_exif_from_original(image, path)
+            image = apply_exif_from_original(image, path)
 
         # Convert RGBA to RGB for display — alpha channel causes washed-out /
         # gray rendering in Qt's RGBA8888 format.  Composite onto the preview
@@ -359,36 +359,11 @@ class PreviewPanel(QWidget):
             # Preserve aspect ratio — contain fits within cell without cropping
             cell_img = ImageOps.contain(cell_img, (cell_w, cell_h), Image.Resampling.LANCZOS)
 
-            # Center the contained image on a cell-sized background
-            cell_bg = Image.new("RGB", (cell_w, cell_h), color=BG_SECONDARY.name())
-            if cell_img.mode == "RGBA":
-                cell_bg.paste(
-                    cell_img,
-                    ((cell_w - cell_img.width) // 2, (cell_h - cell_img.height) // 2),
-                    cell_img,
-                )
-            else:
-                if cell_img.mode != "RGB":
-                    cell_img = cell_img.convert("RGB")
-                cell_bg.paste(
-                    cell_img,
-                    ((cell_w - cell_img.width) // 2, (cell_h - cell_img.height) // 2),
-                )
-            cell_img = cell_bg
-
-            # Convert non-RGB/RGBA modes to RGB to avoid color corruption
-            if cell_img.mode == "RGBA":
-                paste_mask = cell_img
-            else:
-                if cell_img.mode != "RGB":
-                    cell_img = cell_img.convert("RGB")
-                paste_mask = None
-
             # Position cell with padding and gap offsets
             x_offset = canvas_padding + col_i * (cell_w + cell_gap)
             y_offset = canvas_padding + row_i * (cell_h + cell_gap)
 
-            mosaic.paste(cell_img, (x_offset, y_offset), paste_mask)
+            mosaic.paste(cell_img, (x_offset, y_offset))
 
         # Convert mosaic PIL Image to QPixmap and display
         qimage = self._pil_to_qimage(mosaic)

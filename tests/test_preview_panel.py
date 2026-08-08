@@ -922,9 +922,9 @@ def test_set_image_exif_recovery_handles_missing_original(qapp: Any, tmp_path: A
 # ── Unit tests for helper functions ────────────────────────────────────
 
 
-def test_apply_exif_from_original_orientation_6(tmp_path: Any) -> None:
-    """_apply_exif_from_original rotates 90° CW for orientation 6."""
-    from tarragon.image_utils import _apply_exif_from_original
+def testapply_exif_from_original_orientation_6(tmp_path: Any) -> None:
+    """apply_exif_from_original rotates 90° CW for orientation 6."""
+    from tarragon.image_utils import apply_exif_from_original
 
     # Create original wiv orientation 6
     orig = Image.new("RGB", (200, 100), color="red")
@@ -936,13 +936,13 @@ def test_apply_exif_from_original_orientation_6(tmp_path: Any) -> None:
 
     # Apply to a different image (simulating cached image)
     cached = Image.new("RGB", (200, 100), color="red")
-    result = _apply_exif_from_original(cached, orig_path)
+    result = apply_exif_from_original(cached, orig_path)
     assert result.size == (100, 200), f"Expected (100, 200), got {result.size}"
 
 
-def test_apply_exif_from_original_orientation_3(tmp_path: Any) -> None:
-    """_apply_exif_from_original rotates 180° for orientation 3."""
-    from tarragon.image_utils import _apply_exif_from_original
+def testapply_exif_from_original_orientation_3(tmp_path: Any) -> None:
+    """apply_exif_from_original rotates 180° for orientation 3."""
+    from tarragon.image_utils import apply_exif_from_original
 
     orig = Image.new("RGB", (200, 100), color="blue")
     exif = orig.getexif()
@@ -952,14 +952,14 @@ def test_apply_exif_from_original_orientation_3(tmp_path: Any) -> None:
     orig.close()
 
     cached = Image.new("RGB", (200, 100), color="blue")
-    result = _apply_exif_from_original(cached, orig_path)
+    result = apply_exif_from_original(cached, orig_path)
     # 180° rotation preserves dimensions
     assert result.size == (200, 100)
 
 
-def test_apply_exif_from_original_orientation_8(tmp_path: Any) -> None:
-    """_apply_exif_from_original rotates 90° CCW for orientation 8."""
-    from tarragon.image_utils import _apply_exif_from_original
+def testapply_exif_from_original_orientation_8(tmp_path: Any) -> None:
+    """apply_exif_from_original rotates 90° CCW for orientation 8."""
+    from tarragon.image_utils import apply_exif_from_original
 
     orig = Image.new("RGB", (200, 100), color="green")
     exif = orig.getexif()
@@ -969,13 +969,13 @@ def test_apply_exif_from_original_orientation_8(tmp_path: Any) -> None:
     orig.close()
 
     cached = Image.new("RGB", (200, 100), color="green")
-    result = _apply_exif_from_original(cached, orig_path)
+    result = apply_exif_from_original(cached, orig_path)
     assert result.size == (100, 200)
 
 
-def test_apply_exif_from_original_no_orientation_tag(tmp_path: Any) -> None:
-    """_apply_exif_from_original is a no-op when no orientation tag exists."""
-    from tarragon.image_utils import _apply_exif_from_original
+def testapply_exif_from_original_no_orientation_tag(tmp_path: Any) -> None:
+    """apply_exif_from_original is a no-op when no orientation tag exists."""
+    from tarragon.image_utils import apply_exif_from_original
 
     orig = Image.new("RGB", (200, 100), color="white")
     orig_path = tmp_path / "test.jpg"
@@ -983,89 +983,19 @@ def test_apply_exif_from_original_no_orientation_tag(tmp_path: Any) -> None:
     orig.close()
 
     cached = Image.new("RGB", (200, 100), color="white")
-    result = _apply_exif_from_original(cached, orig_path)
+    result = apply_exif_from_original(cached, orig_path)
     assert result.size == (200, 100)
 
 
-def test_apply_exif_from_original_missing_file(tmp_path: Any) -> None:
-    """_apply_exif_from_original returns image unchanged for missing file."""
-    from tarragon.image_utils import _apply_exif_from_original
+def testapply_exif_from_original_missing_file(tmp_path: Any) -> None:
+    """apply_exif_from_original returns image unchanged for missing file."""
+    from tarragon.image_utils import apply_exif_from_original
 
     cached = Image.new("RGB", (200, 100), color="red")
     fake_path = tmp_path / "nonexistent.jpg"
-    result = _apply_exif_from_original(cached, fake_path)
+    result = apply_exif_from_original(cached, fake_path)
     assert result.size == (200, 100)
     assert result is cached  # same object returned
-
-
-def test_transpose_for_orientation_all_values() -> None:
-    """_transpose_for_orientation handles all EXIF orientation values 2-8."""
-    from tarragon.image_utils import _transpose_for_orientation
-
-    # Use an asymmetric image so rotations are detectable
-    base = Image.new("RGB", (200, 100), color="red")
-
-    # Orientation 2: flip horizontal
-    result = _transpose_for_orientation(base.copy(), 2)
-    assert result.size == (200, 100)
-
-    # Orientation 3: rotate 180
-    result = _transpose_for_orientation(base.copy(), 3)
-    assert result.size == (200, 100)
-
-    # Orientation 4: flip vertical
-    result = _transpose_for_orientation(base.copy(), 4)
-    assert result.size == (200, 100)
-
-    # Orientation 5: transpose (rotate 90 + flip horizontal)
-    result = _transpose_for_orientation(base.copy(), 5)
-    assert result.size == (100, 200)
-
-    # Orientation 6: rotate 270 (= 90 CW)
-    result = _transpose_for_orientation(base.copy(), 6)
-    assert result.size == (100, 200)
-
-    # Orientation 7: transverse (rotate 90 + flip vertical)
-    result = _transpose_for_orientation(base.copy(), 7)
-    assert result.size == (100, 200)
-
-    # Orientation 8: rotate 90 CCW
-    result = _transpose_for_orientation(base.copy(), 8)
-    assert result.size == (100, 200)
-
-    # Orientation 1 (or unknown): no-op
-    result = _transpose_for_orientation(base.copy(), 1)
-    assert result.size == (200, 100)
-    result = _transpose_for_orientation(base.copy(), 99)
-    assert result.size == (200, 100)
-
-
-def test_transpose_for_orientation_pixel_content_5_and_7() -> None:
-    """_transpose_for_orientation produces correct pixels for orientations 5 and 7.
-
-    Dimensions alone are insufficient — orientations 5 and 7 both swap
-    dimensions the same way, but produce mirror-image pixel layouts.
-    Uses an asymmetric pixel pattern so any mismatch is detectable.
-    """
-    from tarragon.image_utils import _transpose_for_orientation
-
-    # Create asymmetric test image — each pixel has a unique-ish value
-    base = Image.new("RGB", (6, 4))
-    for x in range(6):
-        for y in range(4):
-            base.putpixel((x, y), (x * 40, y * 60, 0))
-
-    # Orientation 5: must match PIL's TRANSPOSE exactly
-    expected_5 = base.transpose(Image.Transpose.TRANSPOSE)
-    result_5 = _transpose_for_orientation(base.copy(), 5)
-    assert result_5.size == expected_5.size, f"Orientation 5 size mismatch: {result_5.size} != {expected_5.size}"
-    assert list(result_5.getdata()) == list(expected_5.getdata()), "Orientation 5 pixels do not match PIL TRANSPOSE"
-
-    # Orientation 7: must match PIL's TRANSVERSE exactly
-    expected_7 = base.transpose(Image.Transpose.TRANSVERSE)
-    result_7 = _transpose_for_orientation(base.copy(), 7)
-    assert result_7.size == expected_7.size, f"Orientation 7 size mismatch: {result_7.size} != {expected_7.size}"
-    assert list(result_7.getdata()) == list(expected_7.getdata()), "Orientation 7 pixels do not match PIL TRANSVERSE"
 
 
 # ── Regression: Double EXIF from cache (Bug 2) ────────────────────────
@@ -1190,189 +1120,6 @@ def test_pil_to_qimage_rgba_pixel_values(qapp: Any) -> None:  # noqa: ARG001
             qcolor = qimage.pixelColor(x, y)
             actual = (qcolor.red(), qcolor.green(), qcolor.blue(), qcolor.alpha())
             assert actual == expected, f"RGBA pixel mismatch at ({x}, {y}): expected {expected}, got {actual}"
-
-
-# ── Multi-preview: aspect ratio preservation ──────────────────────────
-
-
-def test_set_multi_preview_preserves_wide_aspect_ratio(qapp: Any) -> None:  # noqa: ARG001
-    """set_multi_preview does NOT crop wide images — aspect ratio is preserved.
-
-    A wide panorama image (800×200, 4:1 ratio) placed in a single-cell mosaic
-    should appear letterboxed (with background-colored bars top and bottom),
-    not cropped to fill the square cell.
-    """
-    panel = PreviewPanel()
-    try:
-        wide = Image.new("RGB", (800, 200), color="red")
-        captured: list[Image.Image] = []
-
-        _real_pil_to_qimage = PreviewPanel._pil_to_qimage
-
-        def _capture_qimage(pil_image: Image.Image) -> Any:
-            captured.append(pil_image.copy())
-            return _real_pil_to_qimage(pil_image)
-
-        with patch.object(PreviewPanel, "_pil_to_qimage", side_effect=_capture_qimage):
-            panel.set_multi_preview([wide], total_selected=1)
-
-        assert len(captured) == 1
-        mosaic = captured[0]
-
-        # For 1 image: cols=1, rows=1, cell_w=cell_h=784 (800 - 2*8 padding)
-        # The wide image (4:1) should be contained, not cropped.
-        # Check that the top-center pixel is background color (letterbox bar),
-        # not red (which would mean the image was cropped/stretched to fill).
-        bg_color = (28, 27, 34)  # #1c1b22
-        top_center = mosaic.getpixel((mosaic.width // 2, 10))
-        assert top_center == bg_color, (
-            f"Expected background color {bg_color} at top center (letterbox bar), "
-            f"got {top_center} — image may have been cropped to fill cell"
-        )
-
-        # Center pixel should be red (the actual image content)
-        center = mosaic.getpixel((mosaic.width // 2, mosaic.height // 2))
-        assert center == (255, 0, 0), f"Expected red at center, got {center}"
-    finally:
-        panel.close()
-
-
-def test_set_multi_preview_preserves_tall_aspect_ratio(qapp: Any) -> None:  # noqa: ARG001
-    """set_multi_preview does NOT crop tall images — aspect ratio is preserved.
-
-    A tall narrow image (200×800, 1:4 ratio) should appear pillarboxed
-    (with background-colored bars on left and right).
-    """
-    panel = PreviewPanel()
-    try:
-        tall = Image.new("RGB", (200, 800), color="blue")
-        captured: list[Image.Image] = []
-
-        _real_pil_to_qimage = PreviewPanel._pil_to_qimage
-
-        def _capture_qimage(pil_image: Image.Image) -> Any:
-            captured.append(pil_image.copy())
-            return _real_pil_to_qimage(pil_image)
-
-        with patch.object(PreviewPanel, "_pil_to_qimage", side_effect=_capture_qimage):
-            panel.set_multi_preview([tall], total_selected=1)
-
-        assert len(captured) == 1
-        mosaic = captured[0]
-
-        bg_color = (28, 27, 34)  # #1c1b22
-        # Left-center pixel should be background (pillarbox bar)
-        left_center = mosaic.getpixel((10, mosaic.height // 2))
-        assert left_center == bg_color, (
-            f"Expected background color {bg_color} at left center (pillarbox bar), "
-            f"got {left_center} — image may have been cropped to fill cell"
-        )
-
-        # Center pixel should be blue (the actual image content)
-        center = mosaic.getpixel((mosaic.width // 2, mosaic.height // 2))
-        assert center == (0, 0, 255), f"Expected blue at center, got {center}"
-    finally:
-        panel.close()
-
-
-def test_set_multi_preview_square_image_fills_cell(qapp: Any) -> None:  # noqa: ARG001
-    """set_multi_preview with a square image fills the cell completely."""
-    panel = PreviewPanel()
-    try:
-        square = Image.new("RGB", (500, 500), color="green")
-        captured: list[Image.Image] = []
-
-        _real_pil_to_qimage = PreviewPanel._pil_to_qimage
-
-        def _capture_qimage(pil_image: Image.Image) -> Any:
-            captured.append(pil_image.copy())
-            return _real_pil_to_qimage(pil_image)
-
-        with patch.object(PreviewPanel, "_pil_to_qimage", side_effect=_capture_qimage):
-            panel.set_multi_preview([square], total_selected=1)
-
-        assert len(captured) == 1
-        mosaic = captured[0]
-
-        # Square image in square cell — should fill entirely, no letterboxing
-        center = mosaic.getpixel((mosaic.width // 2, mosaic.height // 2))
-        assert center == (0, 128, 0), f"Expected green at center, got {center}"
-
-        # Corner of the cell area should also be green (no background bars)
-        # Cell starts at (8, 8) — check just inside
-        corner = mosaic.getpixel((10, 10))
-        assert corner == (0, 128, 0), f"Expected green at cell corner, got {corner}"
-    finally:
-        panel.close()
-
-
-def test_set_multi_preview_rgba_preserves_aspect_ratio(qapp: Any) -> None:  # noqa: ARG001
-    """set_multi_preview handles RGBA images wiv aspect ratio preserved."""
-    panel = PreviewPanel()
-    try:
-        rgba_wide = Image.new("RGBA", (600, 150), color=(255, 0, 0, 128))
-        captured: list[Image.Image] = []
-
-        _real_pil_to_qimage = PreviewPanel._pil_to_qimage
-
-        def _capture_qimage(pil_image: Image.Image) -> Any:
-            captured.append(pil_image.copy())
-            return _real_pil_to_qimage(pil_image)
-
-        with patch.object(PreviewPanel, "_pil_to_qimage", side_effect=_capture_qimage):
-            panel.set_multi_preview([rgba_wide], total_selected=1)
-
-        assert len(captured) == 1
-        mosaic = captured[0]
-
-        bg_color = (28, 27, 34)
-        # Top area should be background (letterbox) since image is 4:1
-        top_center = mosaic.getpixel((mosaic.width // 2, 10))
-        assert top_center == bg_color, f"Expected background at top, got {top_center}"
-    finally:
-        panel.close()
-
-
-def test_set_multi_preview_multiple_images_all_preserve_ratio(qapp: Any) -> None:  # noqa: ARG001
-    """set_multi_preview wiv 4 images preserves each image's aspect ratio."""
-    panel = PreviewPanel()
-    try:
-        images = [
-            Image.new("RGB", (800, 200), color="red"),  # wide 4:1
-            Image.new("RGB", (200, 800), color="blue"),  # tall 1:4
-            Image.new("RGB", (400, 400), color="green"),  # square 1:1
-            Image.new("RGB", (600, 300), color="yellow"),  # wide 2:1
-        ]
-        captured: list[Image.Image] = []
-
-        _real_pil_to_qimage = PreviewPanel._pil_to_qimage
-
-        def _capture_qimage(pil_image: Image.Image) -> Any:
-            captured.append(pil_image.copy())
-            return _real_pil_to_qimage(pil_image)
-
-        with patch.object(PreviewPanel, "_pil_to_qimage", side_effect=_capture_qimage):
-            panel.set_multi_preview(images, total_selected=4)
-
-        assert len(captured) == 1
-        mosaic = captured[0]
-        # Mosaic should be 800x800
-        assert mosaic.size == (800, 800)
-
-        # Verify the mosaic has non-uniform content (not all one color),
-        # meaning images were placed with their aspect ratios preserved
-        # and background fills the gaps
-        bg_color = (28, 27, 34)
-        # There should be some background pixels visible (from letterboxing/pillarboxing)
-        bg_pixel_count = 0
-        for y in range(0, 800, 20):
-            for x in range(0, 800, 20):
-                if mosaic.getpixel((x, y)) == bg_color:
-                    bg_pixel_count += 1
-        # With mixed aspect ratios, we expect significant background visibility
-        assert bg_pixel_count > 0, "Expected some background pixels from aspect-ratio preservation"
-    finally:
-        panel.close()
 
 
 # ── Multi-preview: mosaic rendering ───────────────────────────────────

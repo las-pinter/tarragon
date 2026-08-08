@@ -44,9 +44,9 @@ class FilterBarTag(FilterBarFilter):
         layout.setSpacing(SPACING_S)
 
         # Add Tag button
-        self._add_button = QPushButton("Add Tag")
+        self._add_button = QPushButton("Filter Tags")
         self._add_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._add_button.clicked.connect(self._show_tag_menu)
+        self._add_button.clicked.connect(self._show_menu)
         layout.addWidget(self._add_button)
 
         # Container for active tag chips
@@ -80,7 +80,7 @@ class FilterBarTag(FilterBarFilter):
         self._active_tag_ids &= set(self._available_tags.keys())
         self._update_chips()
 
-    def _show_tag_menu(self) -> None:
+    def _show_menu(self) -> None:
         """Show context menu with available tags as checkable actions."""
         self._tag_menu.clear()
 
@@ -92,7 +92,7 @@ class FilterBarTag(FilterBarFilter):
             action.setData(tag_id)
             action.triggered.connect(lambda checked=checked, tid=tag_id: self._toggle_tag(tid))
 
-        # Show menu below the Add Tag button
+        # Show menu below the button
         pos = self._add_button.mapToGlobal(self._add_button.rect().bottomLeft())
         self._tag_menu.popup(pos)
 

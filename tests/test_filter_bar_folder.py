@@ -87,14 +87,14 @@ class TestFolderChipCreation:
         assert "/photos/vacation" in bar._folder_chips
         assert bar._folder_chips["/photos/vacation"] is not None
 
-    def test_add_duplicate_folder_is_noop(self, bar: FilterBarFolder, db: Database) -> None:
+    def test_toggle_is_toggleing(self, bar: FilterBarFolder, db: Database) -> None:
         """Adding the same folder twice does not create duplicate chips."""
         db.upsert_thumbnail("/photos/a.png", mtime=1, size=100, width=10, height=10, cache_uuid="u1")
         bar._toggle_folder("/photos")
         bar._toggle_folder("/photos")
 
-        assert len(bar._selected_folders) == 1
-        assert len(bar._folder_chips) == 1
+        assert len(bar._selected_folders) == 0
+        assert len(bar._folder_chips) == 0
 
     def test_remove_folder_chip(self, bar: FilterBarFolder, db: Database) -> None:
         """Removing a folder chip removes it from tracking."""

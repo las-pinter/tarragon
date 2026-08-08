@@ -509,7 +509,7 @@ def test_scope_change_shows_folder_button(
     qapp: Any,  # noqa: ARG001
     mock_settings: MagicMock,
 ) -> None:
-    """Switching to global mode shows the Add Folder button in the FilterBar."""
+    """Switching to global mode shows the Filter Folders button in the FilterBar."""
     from pathlib import Path
 
     from PySide6.QtWidgets import QPushButton
@@ -523,9 +523,9 @@ def test_scope_change_shows_folder_button(
         tag_service = TagService(db=db)
         window.setup_widgets(db, tag_service)
 
-        # Find the Add Folder button in the filter bar
+        # Find the Filter Folders button in the filter bar
         btns = window.filter_bar.findChildren(QPushButton)
-        folder_btns = [b for b in btns if b.text() == "Add Folder"]
+        folder_btns = [b for b in btns if b.text() == "Filter Folders"]
         assert len(folder_btns) == 1
         folder_btn = folder_btns[0]
 

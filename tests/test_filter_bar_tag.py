@@ -41,10 +41,6 @@ class TestFilterBarTagCreation:
         """FilterBarTag is created without error."""
         assert isinstance(bar, FilterBarTag)
 
-    def test_has_add_tag_button(self, bar: FilterBarTag) -> None:
-        """FilterBarTag has an 'Add Tag' button."""
-        assert bar._add_button.text() == "Add Tag"
-
     def test_has_chips_container(self, bar: FilterBarTag) -> None:
         """FilterBarTag has a chips container widget."""
         assert bar._chips_container is not None

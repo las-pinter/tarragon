@@ -86,7 +86,7 @@ class TestAutoColorFiltering:
         service._get_or_create_tag("portrait")
         bar._refresh_tags()
 
-        bar._show_tag_menu()
+        bar._show_menu()
         menu_actions = bar._tag_menu.actions()
         action_texts = [a.text() for a in menu_actions]
 
@@ -103,7 +103,7 @@ class TestTagMenu:
         service._get_or_create_tag("beta")
         bar._refresh_tags()
 
-        bar._show_tag_menu()
+        bar._show_menu()
         actions = bar._tag_menu.actions()
         assert len(actions) == 2
         assert actions[0].text() == "alpha"
@@ -114,7 +114,7 @@ class TestTagMenu:
         service._get_or_create_tag("test-tag")
         bar._refresh_tags()
 
-        bar._show_tag_menu()
+        bar._show_menu()
         for action in bar._tag_menu.actions():
             assert action.isCheckable()
 
@@ -124,7 +124,7 @@ class TestTagMenu:
         bar._refresh_tags()
         bar._toggle_tag(tag_id)
 
-        bar._show_tag_menu()
+        bar._show_menu()
         actions = bar._tag_menu.actions()
         active_action = next(a for a in actions if a.data() == tag_id)
         assert active_action.isChecked()
@@ -136,7 +136,7 @@ class TestTagMenu:
         service._get_or_create_tag("mango")
         bar._refresh_tags()
 
-        bar._show_tag_menu()
+        bar._show_menu()
         action_texts = [a.text() for a in bar._tag_menu.actions()]
         assert action_texts == ["apple", "mango", "zebra"]
 

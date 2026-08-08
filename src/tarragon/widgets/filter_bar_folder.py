@@ -45,10 +45,10 @@ class FilterBarFolder(FilterBarFilter):
         layout.setSpacing(SPACING_S)
 
         # Add Folder button
-        self._add_folder_btn = QPushButton("Add Folder")
+        self._add_folder_btn = QPushButton("Filter Folders")
         self._add_folder_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._add_folder_btn.setToolTip("Filter by folder")
-        self._add_folder_btn.clicked.connect(self._show_folder_menu)
+        self._add_folder_btn.clicked.connect(self._show_menu)
         layout.addWidget(self._add_folder_btn)
 
         # Container for active folder chips
@@ -71,8 +71,8 @@ class FilterBarFolder(FilterBarFilter):
         """Refresh the folder menu"""
         self._prune_stale_chips()
 
-    def _show_folder_menu(self) -> None:
-        """Show a menu of available folders not yet selected."""
+    def _show_menu(self) -> None:
+        """Show a menu of available folders."""
         self._folder_menu.clear()
 
         try:
@@ -84,6 +84,7 @@ class FilterBarFolder(FilterBarFilter):
                 action = self._folder_menu.addAction(display_name)
                 action.setCheckable(True)
                 checked = folder_path in self._selected_folders
+                action.setChecked(checked)
                 action.setData(display_name)
                 action.triggered.connect(lambda checked=checked, fp=folder_path: self._toggle_folder(fp))
 

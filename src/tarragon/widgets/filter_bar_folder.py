@@ -67,6 +67,10 @@ class FilterBarFolder(FilterBarFilter):
         self._add_folder_btn.hide()
         self._chips_container.hide()
 
+    def refresh_folders(self) -> None:
+        """Refresh the folder menu"""
+        self._prune_stale_chips()
+
     def _show_folder_menu(self) -> None:
         """Show a menu of available folders not yet selected."""
         self._folder_menu.clear()
@@ -92,20 +96,21 @@ class FilterBarFolder(FilterBarFilter):
             return
 
     def _toggle_folder(self, folder_path: str) -> None:
-        """Add a folder as a selected chip and emit the updated set.
+        """Toggle a folde in the folders set.
 
         Args:
-            folder_path: Full folder path to add.
+            folder_path: Full folder path to toggle.
         """
-        if folder_path in self._selected_folders:
-            return  # Already selected
 
-        self._selected_folders.add(folder_path)
-        chip = self._create_folder_chip(folder_path)
-        self._folder_chips[folder_path] = chip
-        self._chips_layout.addWidget(chip)
-        self._update_folder_chips_visibility()
-        self._emit_signal(set(self._selected_folders))
+        if folder_path in self._selected_folders:
+            self._remove_folder(folder_path)
+        else:
+            self._selected_folders.add(folder_path)
+            chip = self._create_folder_chip(folder_path)
+            self._folder_chips[folder_path] = chip
+            self._chips_layout.addWidget(chip)
+            self._update_chips()
+            self._emit_signal(set(self._selected_folders))
 
     def _remove_folder(self, folder_path: str) -> None:
         """Remove a folder chip and emit the updated set.
@@ -118,7 +123,7 @@ class FilterBarFolder(FilterBarFilter):
         if chip is not None:
             self._chips_layout.removeWidget(chip)
             chip.deleteLater()
-        self._update_folder_chips_visibility()
+        self._update_chips()
         self._emit_signal(set(self._selected_folders))
 
     def _create_folder_chip(self, folder_path: str) -> QWidget:
@@ -139,7 +144,7 @@ class FilterBarFolder(FilterBarFilter):
             tooltip=folder_path,
         )
 
-    def _update_folder_chips_visibility(self) -> None:
+    def _update_chips(self) -> None:
         """Show or hide the folder chips container based on selection."""
         has_chips = len(self._selected_folders) > 0
         self._chips_container.setVisible(has_chips)
@@ -182,8 +187,4 @@ class FilterBarFolder(FilterBarFilter):
         self._add_folder_btn.setVisible(is_global)
         # Folder chips remain visible if folders are selected, regardless of scope
         if is_global:
-            self._update_folder_chips_visibility()
-
-    def refresh_folders(self) -> None:
-        """Refresh the folder menu"""
-        self._prune_stale_chips()
+            self._update_chips()

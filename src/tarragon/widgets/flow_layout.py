@@ -143,7 +143,7 @@ class FlowLayout(QLayout):
         return self.minimumSize()
 
     def minimumSize(self) -> QSize:  # noqa: N802
-        """Return the minimum size — the largest single item plus margins."""
+        """Return the minimum size - the largest single item plus margins."""
         size = QSize()
         for item in self._item_list:
             size = size.expandedTo(item.minimumSize())

@@ -75,3 +75,8 @@ exclude = ["dist/"]
 [[tool.mypy.overrides]]
 module = ["PIL.*", "psd_tools.*"]
 ignore_missing_imports = true
+
+[dependency-groups]
+dev = [
+    "pytest-xdist>=3.8.0",
+]

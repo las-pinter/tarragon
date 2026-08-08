@@ -23,3 +23,13 @@ repos:
         pass_filenames: false
         require_serial: true
         args: ["--config-file=pyproject.toml", "src/tarragon"]
+
+  - repo: local
+    hooks:
+      - id: pytest
+        name: pytest
+        entry: uv run pytest tests/ -q
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]

@@ -15,6 +15,7 @@ from PIL import Image
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QLineEdit
 
+from tarragon.common import ImageInfo
 from tarragon.db.database import Database
 from tarragon.models.filter_state import FilterState
 from tarragon.models.thumbnail_model import ThumbnailModel
@@ -151,8 +152,6 @@ class GalleryController:
         and we are NOT in global mode, the method returns without modifying
         the model to avoid clearing the gallery.
         """
-        if self._query_service is None:
-            return
 
         start = time.perf_counter()
 
@@ -249,37 +248,29 @@ class GalleryController:
 
         Updates the preview panel (single image or mosaic) and tag display
         based on the current selection.
-
-        For single selections, prefers the cached master image (Deviation 1.3)
-        to avoid re-compositing PSDs on every click.
         """
         if len(paths) == 0:
             self._preview_panel.clear()
         elif len(paths) == 1:
-            # Single selection — load image and show
+            # Single selection
             path = Path(paths[0])
             try:
                 img, orig_w, orig_h = self._load_preview_image(path)
-                self._preview_panel.set_image(
-                    img,
-                    path,
-                    original_width=orig_w,
-                    original_height=orig_h,
-                )
+                self._preview_panel.set_image(ImageInfo(img, path, orig_w, orig_h))
             except Exception:
                 logger.warning("Failed to load preview for %s", path, exc_info=True)
                 self._preview_panel.clear()
         else:
-            # Multi-select — load multiple images for mosaic
-            images_to_show = min(len(paths), self._max_multi_preview)
-            images: list[Image.Image] = []
-            for p in paths[:images_to_show]:
+            # Multi-select
+            image_infos: list[ImageInfo] = []
+            for p in paths:
+                path = Path(p)
                 try:
-                    img, _orig_w, _orig_h = self._load_preview_image(Path(p))
-                    images.append(img)
+                    img, _orig_w, _orig_h = self._load_preview_image(path)
+                    image_infos.append(ImageInfo(img, path, _orig_w, _orig_h))
                 except Exception:
                     logger.debug("Failed to load preview for multi-select: %s", p, exc_info=True)
-            self._preview_panel.set_multi_preview(images, len(paths), self._max_multi_preview)
+            self._preview_panel.set_multi_preview(image_infos)
 
         # Update tags in preview panel
         self.update_preview_tags(paths)

@@ -20,20 +20,48 @@ from PySide6.QtWidgets import (
     QMenu,
     QPushButton,
     QSizePolicy,
+    QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
 
+from tarragon.common import ImageInfo
 from tarragon.db._base import normalize_path
-from tarragon.image_utils import EXIF_ORIENTATION_TAG, apply_exif_from_original
+from tarragon.services.settings_service import SettingsService
 from tarragon.services.tag_service import TagService
 from tarragon.theme.color_buckets import BUCKET_COLORS, BUCKET_HEX_COLORS
-from tarragon.theme.colors import BG_SECONDARY
-from tarragon.theme.constants import MULTI_PREVIEW_MAX_DEFAULT, SPACING_S, SPACING_XS
+from tarragon.theme.constants import SPACING_S, SPACING_XS
 from tarragon.widgets.flow_layout import FlowLayout
+from tarragon.widgets.metadata import DimensionsMeta, FilenameMeta, FormatMeta, MetadataGrid, SizeMeta
 from tarragon.widgets.tag_pill import TagPillWidget
 
 logger = logging.getLogger(__name__)
+
+
+class _MosaicCellLabel(QLabel):
+    """A grid cell that keeps its own unscaled pixmap and rescales on resize."""
+
+    def __init__(self, pixmap: QPixmap, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._source_pixmap = pixmap
+        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.setMinimumSize(1, 1)
+        self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored)
+        self._rescale()
+
+    def resizeEvent(self, event: QResizeEvent) -> None:  # noqa: N802
+        super().resizeEvent(event)
+        self._rescale()
+
+    def _rescale(self) -> None:
+        if self._source_pixmap.isNull():
+            return
+        scaled = self._source_pixmap.scaled(
+            self.size(),
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+        self.setPixmap(scaled)
 
 
 class PreviewPanel(QWidget):
@@ -53,6 +81,7 @@ class PreviewPanel(QWidget):
 
     def __init__(
         self,
+        settings_service: SettingsService,
         tag_service: TagService | None = None,
         parent: QWidget | None = None,
     ) -> None:
@@ -60,25 +89,61 @@ class PreviewPanel(QWidget):
 
         Args:
             tag_service: TagService for tag CRUD operations. When None, tag
-                management features are disabled (display-only mode).
+                management features are disabled.
             parent: Optional parent widget.
         """
         super().__init__(parent)
         self._tag_service = tag_service
+        self._settings_service = settings_service
+
         self._current_tags: list[dict[str, Any]] = []
         self._selected_paths: list[str] = []
         self._cached_file_tags: dict[str, set[int]] = {}
+        self._mosaic_container = QWidget()
+        self._mosaic_grid = QGridLayout(self._mosaic_container)
+        self._mosaic_labels: list[QLabel] = []
+        self._mosaic_row_widgets: list[QWidget] = []
+
+        self._metadata_grid: MetadataGrid
         self._tag_input: QLineEdit | None = None
-        self._setup_ui()
         self._current_image: Image.Image | None = None
         self._current_path: Path | None = None
         self._cached_pixmap: QPixmap | None = None
-        self._original_width: int | None = None
-        self._original_height: int | None = None
+
+        self._setup_ui()
 
         # React to external tag changes (e.g. from thumbnail auto-color)
         if self._tag_service is not None:
             self._tag_service.tags_changed.connect(self._on_external_tags_changed)
+
+    def _build_metadata_grid(self) -> MetadataGrid:
+        metadata_grid = MetadataGrid()
+        metadata_grid.add_metadata(FilenameMeta())
+        metadata_grid.add_metadata(DimensionsMeta())
+        metadata_grid.add_metadata(SizeMeta())
+        metadata_grid.add_metadata(FormatMeta())
+        return metadata_grid
+
+    def _build_mosaic_row(self, row_pixmaps: list[QPixmap], cols: int) -> QWidget:
+        """Build one horizontal row of image cells, centered if not full width."""
+        row_widget = QWidget()
+        row_layout = QHBoxLayout(row_widget)
+        row_layout.setContentsMargins(0, 0, 0, 0)
+        row_layout.setSpacing(6)
+
+        side_stretch = cols - len(row_pixmaps)
+        if side_stretch > 0:
+            row_layout.addStretch(side_stretch)
+
+        for pixmap in row_pixmaps:
+            cell = _MosaicCellLabel(pixmap)
+            row_layout.addWidget(cell, stretch=2)
+            self._mosaic_labels.append(cell)
+
+        if side_stretch > 0:
+            row_layout.addStretch(side_stretch)
+
+        return row_widget
 
     def _setup_ui(self) -> None:
         """Build the UI layout."""
@@ -86,65 +151,38 @@ class PreviewPanel(QWidget):
         layout.setContentsMargins(SPACING_S, SPACING_S, SPACING_S, SPACING_S)
         layout.setSpacing(SPACING_S)
 
-        # ── Image label (centered, scaled) ────────────────────────────
+        # Image label
         self._image_label = QLabel()
         self._image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._image_label.setMinimumSize(200, 200)
-        self._image_label.setSizePolicy(
-            QSizePolicy.Policy.Ignored,
-            QSizePolicy.Policy.Ignored,
-        )
+        self._image_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored)
         self._image_label.setText("No preview")
         self._image_label.setObjectName("previewImageLabel")
-        layout.addWidget(self._image_label, stretch=1)
 
-        # ── Metadata section ──────────────────────────────────────────
+        self._mosaic_container = QWidget()
+        self._mosaic_rows_layout = QVBoxLayout(self._mosaic_container)
+        self._mosaic_rows_layout.setSpacing(SPACING_S)
+        self._mosaic_rows_layout.setContentsMargins(SPACING_S, SPACING_S, SPACING_S, SPACING_S)
+
+        self._preview_stack = QStackedWidget()
+        self._preview_stack.addWidget(self._image_label)
+        self._preview_stack.addWidget(self._mosaic_container)
+        layout.addWidget(self._preview_stack, stretch=1)
+
+        # Metadata section
         self._metadata_header = QLabel("Metadata")
         self._metadata_header.setObjectName("previewSectionHeader")
         layout.addWidget(self._metadata_header)
 
-        self._metadata_grid = QGridLayout()
-        self._metadata_grid.setHorizontalSpacing(SPACING_S)
-        self._metadata_grid.setVerticalSpacing(2)
+        self._metadata_grid = self._build_metadata_grid()
+        layout.addLayout(self._metadata_grid.get_widget())
 
-        # Key labels (left column — muted)
-        self._filename_key = QLabel("File")
-        self._filename_key.setObjectName("previewMetaLabel")
-        self._dimensions_key = QLabel("Dimensions")
-        self._dimensions_key.setObjectName("previewMetaLabel")
-        self._size_key = QLabel("Size")
-        self._size_key.setObjectName("previewMetaLabel")
-        self._format_key = QLabel("Format")
-        self._format_key.setObjectName("previewMetaLabel")
-
-        # Value labels (right column — tertiary)
-        self._filename_label = QLabel()
-        self._filename_label.setObjectName("previewMetaValue")
-        self._filename_label.setWordWrap(True)
-        self._dimensions_label = QLabel()
-        self._dimensions_label.setObjectName("previewMetaValue")
-        self._size_label = QLabel()
-        self._size_label.setObjectName("previewMetaValue")
-        self._format_label = QLabel()
-        self._format_label.setObjectName("previewMetaValue")
-
-        self._metadata_grid.addWidget(self._filename_key, 0, 0)
-        self._metadata_grid.addWidget(self._filename_label, 0, 1)
-        self._metadata_grid.addWidget(self._dimensions_key, 1, 0)
-        self._metadata_grid.addWidget(self._dimensions_label, 1, 1)
-        self._metadata_grid.addWidget(self._size_key, 2, 0)
-        self._metadata_grid.addWidget(self._size_label, 2, 1)
-        self._metadata_grid.addWidget(self._format_key, 3, 0)
-        self._metadata_grid.addWidget(self._format_label, 3, 1)
-        self._metadata_grid.setColumnStretch(1, 1)
-        layout.addLayout(self._metadata_grid)
-
-        # ── Tags section ──────────────────────────────────────────────
+        #  Tags section
         self._tags_header = QLabel("Tags")
         self._tags_header.setObjectName("previewSectionHeader")
         layout.addWidget(self._tags_header)
 
-        # Color squares row — 10 colored squares, always visible
+        # Color squares row
         self._color_squares_container = QWidget()
         self._color_squares_layout = QHBoxLayout(self._color_squares_container)
         self._color_squares_layout.setContentsMargins(0, 0, 0, 0)
@@ -176,94 +214,6 @@ class PreviewPanel(QWidget):
 
         self.setObjectName("previewPanel")
 
-    def set_image(
-        self,
-        image: Image.Image,
-        path: Path | None = None,
-        original_width: int | None = None,
-        original_height: int | None = None,
-    ) -> None:
-        """Set the image to display.
-
-        Args:
-            image: PIL Image to display
-            path: Optional file path for metadata display and EXIF recovery
-            original_width: Original image width in pixels (before caching/thumbnailing).
-                When provided, displayed in metadata instead of the (possibly downscaled)
-                image's actual pixel width.
-            original_height: Original image height in pixels (before caching/thumbnailing).
-                When provided, displayed in metadata instead of the (possibly downscaled)
-                image's actual pixel height.
-
-        Raises:
-            TypeError: If ``image`` is None.
-        """
-        if image is None:
-            raise TypeError("image must be a PIL Image, not None")
-
-        self._original_width = original_width
-        self._original_height = original_height
-
-        logger.debug(
-            "set_image: path=%s, size=%s, from_cache=%s",
-            path,
-            image.size,
-            getattr(image, "_from_cache", False),
-        )
-
-        # Apply EXIF orientation so phone-camera images display upright.
-        original_format = image.format
-
-        # Check if image came from cache BEFORE exif_transpose (which may
-        # return a new image object, losing custom attributes).
-        from_cache = getattr(image, "_from_cache", False)
-
-        # Detect whether the image carries its own EXIF orientation tag.
-        # Cached PNG thumbnails strip EXIF, so we fall back to reading the
-        # original file's orientation when the image itself has none.
-        has_own_orientation = False
-        try:
-            if image.getexif().get(EXIF_ORIENTATION_TAG):
-                has_own_orientation = True
-        except Exception:  # noqa: BLE001 — best-effort; never block preview
-            logger.debug("Could not read EXIF orientation", exc_info=True)
-
-        image = ImageOps.exif_transpose(image) or image
-
-        # If the image had no EXIF of its own (likely loaded from cache),
-        # recover orientation from the original source file — but ONLY if
-        # the image was not loaded from cache.  Cached images already have
-        # correct orientation (exif_transpose was applied during cache
-        # generation), so applying it again would double-rotate.
-        if not from_cache and not has_own_orientation and path is not None:
-            image = apply_exif_from_original(image, path)
-
-        # Convert RGBA to RGB for display — alpha channel causes washed-out /
-        # gray rendering in Qt's RGBA8888 format.  Composite onto the preview
-        # background color so transparency is visually preserved.
-        if image.mode == "RGBA":
-            background = Image.new("RGB", image.size, BG_SECONDARY.name())
-            background.paste(image, mask=image.split()[3])  # alpha as mask
-            image = background
-        elif image.mode != "RGB":
-            image = image.convert("RGB")
-
-        # exif_transpose returns a fresh copy that loses the .format attribute
-        if image.format is None and original_format is not None:
-            image.format = original_format
-        self._current_image = image
-        self._current_path = path
-
-        # Convert PIL Image to QPixmap and CACHE it (avoids re-conversion on resize)
-        qimage = self._pil_to_qimage(image)
-        self._cached_pixmap = QPixmap.fromImage(qimage)
-
-        # Scale to fit label
-        self._update_display()
-
-        # Update metadata (only once, not on resize)
-        self._update_metadata(image, path)
-
     def _update_display(self) -> None:
         """Re-scale cached pixmap to fit current label size."""
         if self._cached_pixmap:
@@ -274,6 +224,86 @@ class PreviewPanel(QWidget):
                 Qt.TransformationMode.SmoothTransformation,
             )
             self._image_label.setPixmap(scaled_pixmap)
+
+    def _clear_mosaic_cells(self) -> None:
+        """Remove all mosaic cell widgets from the grid."""
+        for row_widget in self._mosaic_row_widgets:
+            self._mosaic_rows_layout.removeWidget(row_widget)
+            row_widget.deleteLater()
+        self._mosaic_row_widgets.clear()
+        self._mosaic_labels.clear()
+
+    def set_image(
+        self,
+        image_info: ImageInfo,
+    ) -> None:
+        """Set the image to display.
+
+        Args:
+            image_info: Info object of the image to be diisplayed
+        """
+
+        logger.debug(
+            "set_image: path=%s, size=%s, from_cache=%s",
+            image_info.path,
+            image_info.image.size,
+            getattr(image_info.image, "_from_cache", False),
+        )
+
+        self._current_image = image_info.image
+        self._current_path = image_info.path
+
+        # Convert PIL Image to QPixmap and CACHE it (avoids re-conversion on resize)
+        qimage = self._pil_to_qimage(image_info.image)
+        self._cached_pixmap = QPixmap.fromImage(qimage)
+        self._preview_stack.setCurrentWidget(self._image_label)
+
+        # Scale to fit label
+        self._update_display()
+
+        # Update metadata
+        self._metadata_grid.update([image_info])
+
+    def set_multi_preview(self, image_infos: list[ImageInfo]) -> None:
+        """Render N-up mosaic when multiple files are selected.
+
+        Args:
+            images: List of images to display
+
+        Clears single-image preview state.
+        """
+        # Clear single-image state
+        self._current_image = None
+        self._current_path = None
+        self._cached_pixmap = None
+
+        if not image_infos:
+            self.clear()
+            return
+
+        # Cap the number of images to display
+        cap = self._settings_service.max_multi_preview.get()
+        image_infos_capped = image_infos[:cap]
+        n = len(image_infos_capped)
+        cols = math.ceil(math.sqrt(n))
+        self._clear_mosaic_cells()
+
+        pixmaps: list[QPixmap] = []
+        for image_info in image_infos_capped:
+            img = ImageOps.exif_transpose(image_info.image) or image_info.image.copy()
+            if img.mode not in ("RGB", "RGBA"):
+                img = img.convert("RGB")
+            pixmaps.append(QPixmap.fromImage(self._pil_to_qimage(img)))
+
+        for i in range(0, n, cols):
+            row_widget = self._build_mosaic_row(pixmaps[i : i + cols], cols)
+            self._mosaic_rows_layout.addWidget(row_widget, stretch=1)
+            self._mosaic_row_widgets.append(row_widget)
+
+        self._preview_stack.setCurrentWidget(self._mosaic_container)
+
+        # Update metadata
+        self._metadata_grid.update(image_infos)
 
     def clear(self) -> None:
         """Clear the preview and metadata."""
@@ -287,164 +317,16 @@ class PreviewPanel(QWidget):
         self._cached_file_tags = {}
         self._image_label.clear()
         self._image_label.setText("No preview")
-        self._filename_label.clear()
-        self._dimensions_label.clear()
-        self._size_label.clear()
-        self._format_label.clear()
+        self._metadata_grid.clear()
         self._clear_tag_pills()
         # Reset all color squares to inactive
         self._update_color_squares(set())
+        self._preview_stack.setCurrentWidget(self._image_label)
+        self._clear_mosaic_cells()
 
-    def set_multi_preview(
-        self,
-        images: list[Image.Image],
-        total_selected: int,
-        cap: int = MULTI_PREVIEW_MAX_DEFAULT,
-    ) -> None:
-        """Render N-up mosaic when multiple files are selected.
-
-        Args:
-            images: List of PIL Images to display (capped at ``cap``).
-            total_selected: Total number of selected files (may exceed len(images)).
-            cap: Maximum number of images to show in mosaic (default 9).
-
-        Creates a grid layout:
-            - cols = ceil(sqrt(N)) where N = min(len(images), cap)
-            - rows = ceil(N / cols)
-            - Each cell gets the image scaled to fit
-            - If total_selected > cap, show caption: "Showing {cap} of {total_selected} selected"
-
-        Clears single-image preview state.
-        """
-        # Clear single-image state
-        self._current_image = None
-        self._current_path = None
-        self._cached_pixmap = None
-
-        if not images:
-            self.clear()
-            return
-
-        # Cap the number of images to display
-        display_images = images[:cap]
-        n = len(display_images)
-
-        # Calculate grid dimensions
-        cols = math.ceil(math.sqrt(n))
-        rows = math.ceil(n / cols)
-
-        # Layout constants — padding around canvas edge, gap between cells
-        canvas_size = 800
-        canvas_padding = 8
-        cell_gap = 6
-
-        # Cell size accounts for padding on both sides and gaps between cells
-        total_gap_w = cell_gap * (cols - 1)
-        total_gap_h = cell_gap * (rows - 1)
-        available_w = canvas_size - 2 * canvas_padding - total_gap_w
-        available_h = canvas_size - 2 * canvas_padding - total_gap_h
-        cell_w = available_w // cols
-        cell_h = available_h // rows
-
-        # Create the mosaic canvas (dark background)
-        mosaic = Image.new("RGB", (canvas_size, canvas_size), color=BG_SECONDARY.name())
-
-        for idx, img in enumerate(display_images):
-            row_i = idx // cols
-            col_i = idx % cols
-
-            # Apply EXIF orientation so phone-camera images display upright
-            cell_img = ImageOps.exif_transpose(img) or img.copy()
-
-            # Preserve aspect ratio — contain fits within cell without cropping
-            cell_img = ImageOps.contain(cell_img, (cell_w, cell_h), Image.Resampling.LANCZOS)
-
-            # Position cell with padding and gap offsets
-            x_offset = canvas_padding + col_i * (cell_w + cell_gap)
-            y_offset = canvas_padding + row_i * (cell_h + cell_gap)
-
-            mosaic.paste(cell_img, (x_offset, y_offset))
-
-        # Convert mosaic PIL Image to QPixmap and display
-        qimage = self._pil_to_qimage(mosaic)
-        pixmap = QPixmap.fromImage(qimage)
-
-        # Scale to fit label
-        label_size = self._image_label.size()
-        scaled_pixmap = pixmap.scaled(
-            label_size,
-            Qt.AspectRatioMode.KeepAspectRatio,
-            Qt.TransformationMode.SmoothTransformation,
-        )
-        self._image_label.setPixmap(scaled_pixmap)
-
-        # Update metadata labels for multi-select
-        self._filename_label.setText(f"{total_selected} files selected")
-        self._dimensions_label.clear()
-        self._size_label.clear()
-        self._format_label.clear()
-
-        # Hide key labels for multi-select (keys are self-explanatory)
-        for key_label in (
-            self._filename_key,
-            self._dimensions_key,
-            self._size_key,
-            self._format_key,
-        ):
-            key_label.hide()
-
-        # Show caption if capped
-        if total_selected > cap:
-            self._format_label.setText(f"Showing {cap} of {total_selected} selected")
-
-    def _update_metadata(self, image: Image.Image, path: Path | None) -> None:
-        """Update metadata labels with image info."""
-        logger.debug("_update_metadata: path=%s, dimensions=%s", path, image.size)
-
-        # Show key labels for single-image view
-        for key_label in (
-            self._filename_key,
-            self._dimensions_key,
-            self._size_key,
-            self._format_key,
-        ):
-            key_label.show()
-
-        if path:
-            self._filename_label.setText(path.name)
-            # File size
-            try:
-                size_bytes = path.stat().st_size
-                self._size_label.setText(f"Size: {self._format_size(size_bytes)}")
-            except OSError:
-                logger.warning("Could not read file size for %s", path, exc_info=True)
-                self._size_label.setText("Size: Unknown")
-        else:
-            self._filename_label.setText("Unknown file")
-            self._size_label.setText("Size: Unknown")
-
-        # Dimensions — use original dimensions if provided (cached thumbnails
-        # are downscaled, so image.size would show the thumbnail size, not the
-        # original image dimensions).
-        if self._original_width is not None and self._original_height is not None:
-            width = self._original_width
-            height = self._original_height
-        else:
-            width, height = image.size
-        self._dimensions_label.setText(f"Dimensions: {width} × {height}")
-
-        # Format — always derive from original file path, not cached image.
-        # Cached PNG thumbnails report format="PNG" regardless of the original
-        # file type, so we prefer the path extension when available.
-        if path:
-            format_name = path.suffix.lstrip(".").upper()
-        elif image.format:
-            format_name = image.format
-        else:
-            format_name = "Unknown"
-        self._format_label.setText(f"Format: {format_name}")
-
-    # ── Tag display & management ────────────────────────────────────────────
+    # -------------------------------------------------------------------------
+    # Tag display & management
+    # -------------------------------------------------------------------------
 
     def set_tags(
         self,
@@ -591,7 +473,9 @@ class PreviewPanel(QWidget):
         )
         # tags_changed signal from service triggers _on_external_tags_changed
 
-    # ── Color squares ────────────────────────────────────────────────────────
+    # -------------------------------------------------------------------------
+    #  Color squares
+    # -------------------------------------------------------------------------
 
     _COLOR_SQUARE_SIZE = 24
 
@@ -753,9 +637,6 @@ class PreviewPanel(QWidget):
             ),
         )
 
-        if action is None:
-            return
-
         if action.data() == "create_new":
             self._show_inline_tag_input()
         elif action.data() is not None:
@@ -874,16 +755,6 @@ class PreviewPanel(QWidget):
         self._tag_pills.clear()
         # Force layout recalculation so the tags container shrinks back
         self._tags_container.updateGeometry()
-
-    @staticmethod
-    def _format_size(size_bytes: int) -> str:
-        """Format file size in human-readable form."""
-        value: float = size_bytes
-        for unit in ("B", "KB", "MB", "GB"):
-            if value < 1024:
-                return f"{value:.1f} {unit}" if unit != "B" else f"{size_bytes} {unit}"
-            value /= 1024
-        return f"{value:.1f} TB"
 
     @staticmethod
     def _pil_to_qimage(pil_image: Image.Image) -> QImage:

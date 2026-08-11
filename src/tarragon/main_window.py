@@ -298,7 +298,7 @@ class MainWindow(QMainWindow):
         self.sidebar_widget.favorite_clicked.connect(self._on_favorite_clicked)
 
         # Preview panel (wiv tag management)
-        self.preview_panel = PreviewPanel(tag_service=tag_service, parent=self)
+        self.preview_panel = PreviewPanel(settings_service=self._settings_service, tag_service=tag_service, parent=self)
         self.preview_dock.setWidget(self.preview_panel)
 
         # Thumbnail model and grid

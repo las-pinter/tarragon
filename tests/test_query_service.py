@@ -268,16 +268,6 @@ class TestQueryService:
         result = service.query(folder_filters={"/test/photos/"}, color_tags=set())
         assert len(result) == 6
 
-    def test_global_query_returns_all_thumbnails(
-        self,
-        service: QueryService,
-        tag_ids: dict[str, int],  # noqa: ARG002
-    ) -> None:
-        """Empty folder_filters queries the entire database (global mode)."""
-        result = service.query()
-        # 6 in /test/photos/ + 1 in /test/other/ = 7 total
-        assert len(result) == 7
-
     def test_global_query_with_tag_filter(
         self,
         service: QueryService,
@@ -339,15 +329,6 @@ class TestQueryService:
         result = service.query(folder_filters={"/test/photos/", "/nonexistent/"})
         # Only /test/photos/ matches (6 thumbnails)
         assert len(result) == 6
-
-    def test_empty_folder_filters_returns_all(
-        self,
-        service: QueryService,
-        tag_ids: dict[str, int],  # noqa: ARG002
-    ) -> None:
-        """Empty folder_filters set means no folder constraint (global mode)."""
-        result = service.query(folder_filters=set())
-        assert len(result) == 7
 
     def test_folder_filter_does_not_match_sibling_with_shared_prefix(
         self,

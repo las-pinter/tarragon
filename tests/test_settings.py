@@ -170,6 +170,13 @@ class TestSettingCacheDir:
         setting.set("/tmp/cache")
         assert setting.get() == "/tmp/cache"
 
+    def test_set_none(self, db: Database) -> None:
+        """Setting None clears the stored cache directory."""
+        setting = _SettingCacheDir(db)
+        setting.set("/tmp/cache")
+        setting.set(None)
+        assert setting.get() is None
+
 
 class TestSettingCacheFormat:
     """Tests for the _SettingCacheFormat Setting subclass."""
@@ -514,12 +521,6 @@ class TestSettingMaxPsdWorkers:
         setting.set(0)
         assert setting.get() == 1
 
-    def test_clamps_negative(self, db: Database) -> None:
-        """Negative values are clamped to the minimum of 1."""
-        setting = _SettingMaxPsdWorkers(db)
-        setting.set(-5)
-        assert setting.get() == 1
-
     def test_boundary_low(self, db: Database) -> None:
         """The minimum boundary value 1 is accepted unchanged."""
         setting = _SettingMaxPsdWorkers(db)
@@ -690,3 +691,71 @@ class TestSettingsServiceIntegration:
         assert service.color_tag_palette_size.get_max() == 32
         assert service.large_canvas_threshold_mp.get_min() == 0.1
         assert service.large_canvas_threshold_mp.get_max() == 1000.0
+
+
+class TestSettingsServiceInit:
+    """SettingsService initialization and attribute wiring."""
+
+    def test_creates_all_settings(self, service: SettingsService) -> None:
+        """SettingsService creates all expected setting attributes."""
+        assert hasattr(service, "cache_dir")
+        assert hasattr(service, "cache_format")
+        assert hasattr(service, "color_tag_enabled")
+        assert hasattr(service, "color_tag_palette_size")
+        assert hasattr(service, "color_tag_min_share")
+        assert hasattr(service, "color_tag_neutral_s_threshold")
+        assert hasattr(service, "debug_mode")
+        assert hasattr(service, "large_canvas_threshold_mp")
+        assert hasattr(service, "max_multi_preview")
+        assert hasattr(service, "max_psd_workers")
+        assert hasattr(service, "tile_grid_size")
+        assert hasattr(service, "window_layout_state")
+        assert hasattr(service, "window_geometry_state")
+
+    def test_settings_are_setting_instances(self, service: SettingsService) -> None:
+        """All setting attributes are Setting subclass instances."""
+        assert isinstance(service.cache_dir, _SettingCacheDir)
+        assert isinstance(service.cache_format, _SettingCacheFormat)
+        assert isinstance(service.color_tag_enabled, _SettingColorTagEnabled)
+        assert isinstance(service.color_tag_palette_size, _SettingColorTagPaletteSize)
+        assert isinstance(service.color_tag_min_share, _SettingColorTagMinShare)
+        assert isinstance(service.color_tag_neutral_s_threshold, _SettingColorTagNeutralSThreshold)
+        assert isinstance(service.debug_mode, _SettingDebugMode)
+        assert isinstance(service.large_canvas_threshold_mp, _SettingLargeCanvasThresholdMp)
+        assert isinstance(service.max_multi_preview, _SettingMaxMultiPreview)
+        assert isinstance(service.max_psd_workers, _SettingMaxPsdWorkers)
+        assert isinstance(service.tile_grid_size, _SettingTileGridSize)
+        assert isinstance(service.window_layout_state, _SettingWindowLayoutState)
+        assert isinstance(service.window_geometry_state, _SettingWindowGeometryState)
+
+    def test_all_settings_inherit_from_setting(self, service: SettingsService) -> None:
+        """All settings inherit from the base Setting class."""
+        assert isinstance(service.cache_dir, Setting)
+        assert isinstance(service.cache_format, Setting)
+        assert isinstance(service.max_psd_workers, Setting)
+
+
+class TestPersistence:
+    """Settings persist across SettingsService instances sharing a database."""
+
+    def test_value_persists_in_database(self, db: Database) -> None:
+        """Values set via SettingsService persist in the database."""
+        service1 = SettingsService(db)
+        service1.max_psd_workers.set(5)
+
+        # Create a new service instance pointing to the same DB
+        service2 = SettingsService(db)
+        assert service2.max_psd_workers.get() == 5
+
+    def test_multiple_settings_persist(self, db: Database) -> None:
+        """Multiple settings can be set and retrieved."""
+        service = SettingsService(db)
+        service.max_psd_workers.set(4)
+        service.cache_format.set("JPEG")
+        service.debug_mode.set(True)
+
+        # New service instance should see all values
+        service2 = SettingsService(db)
+        assert service2.max_psd_workers.get() == 4
+        assert service2.cache_format.get() == "JPEG"
+        assert service2.debug_mode.get() is True

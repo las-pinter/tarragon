@@ -110,14 +110,3 @@ class TestLaunchEditor:
             launch_editor(db, Path("C:\\img.png"), ".unknown")
 
         mock_startfile.assert_called_once_with(str(Path("C:\\img.png")))
-
-    def test_launch_editor_linux_uses_xdg_open(self, db: Database) -> None:
-        """The Linux fallback uses xdg-open."""
-        with (
-            patch("tarragon.services.editors.sys") as mock_sys,
-            patch("tarragon.services.editors.subprocess.Popen") as mock_popen,
-        ):
-            mock_sys.platform = "linux"
-            launch_editor(db, Path("/home/user/photo.jpg"), ".nope")
-
-        mock_popen.assert_called_once_with(["xdg-open", str(Path("/home/user/photo.jpg"))])

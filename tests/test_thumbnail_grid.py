@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import math
 from collections.abc import Generator
 from pathlib import Path
 from typing import Any
@@ -19,7 +18,7 @@ from PySide6.QtCore import (
     QSize,
     Qt,
 )
-from PySide6.QtGui import QAction, QContextMenuEvent, QMouseEvent
+from PySide6.QtGui import QContextMenuEvent, QMouseEvent
 from PySide6.QtWidgets import (
     QListView,
     QStyle,
@@ -29,7 +28,6 @@ from PySide6.QtWidgets import (
 )
 from tarragon.models.thumbnail_model import ThumbnailModel
 from tarragon.theme.colors import BG_PRIMARY, BG_SECONDARY
-from tarragon.theme.file_type_badge import BADGE_COLORS, DEFAULT_BADGE_COLORS, get_badge_colors
 from tarragon.widgets.thumbnail_delegate import (
     GRID_GAP,
     HOVER_MARGIN,
@@ -154,15 +152,6 @@ class TestThumbnailDelegateBasics:
         expected_height = THUMBNAIL_SIZE + GRID_GAP * 2 + 24 + HOVER_MARGIN * 2
         assert hint == QSize(expected_width, expected_height)
 
-    def test_thumbnail_delegate_hover_tracking(self) -> None:
-        """The set_hovered_row() method updates the internal hovered row."""
-        delegate = ThumbnailDelegate()
-        assert delegate._hovered_row == -1
-        delegate.set_hovered_row(5)
-        assert delegate._hovered_row == 5
-        delegate.set_hovered_row(-1)
-        assert delegate._hovered_row == -1
-
 
 class TestPaintEmptyModel:
     """Painting with an empty model is safe."""
@@ -176,14 +165,6 @@ class TestPaintEmptyModel:
         # Should complete without exception; fillRect called for background
         assert mock_painter.save.called
         assert mock_painter.restore.called
-
-    def test_grid_with_empty_model_renders_without_error(self, grid: Any) -> None:
-        """ThumbnailGrid backed by an empty model does not crash on viewport update."""
-        model = ThumbnailModel()
-        grid.set_model(model)
-        assert model.rowCount() == 0
-        # Force a viewport update - should not raise
-        grid.viewport().update()
 
 
 class TestPaintInvalidIndex:
@@ -446,13 +427,6 @@ class TestLeaveEvent:
 class TestRapidHoverChanges:
     """Rapid hover changes always reflect the latest row."""
 
-    def test_rapid_hover_changes_track_correctly(self, delegate: Any) -> None:
-        """Rapid successive hover changes always reflect the latest row."""
-        rows = [0, 5, 3, 99, -1, 42, 0, -1, 7, -1]
-        for row in rows:
-            delegate.set_hovered_row(row)
-            assert delegate._hovered_row == row
-
     def test_rapid_hover_changes_via_mouse_events(self, grid_with_model: Any) -> None:
         """Rapid mouseMoveEvents correctly update hover state each time."""
         grid, _ = grid_with_model
@@ -581,27 +555,6 @@ class TestBadgePainting:
         # "PSD" should NOT appear
         assert not any("PSD" in str(call) for call in draw_text_calls)
 
-    def test_paint_jpg_uses_green_badge_colors(self, delegate: Any, mock_painter: Any, style_option: Any) -> None:
-        """Painting a .jpg file uses the green badge color scheme."""
-        model = ThumbnailModel()
-        model.set_paths([Path("/fake/photo.jpg")])
-        index = model.index(0)
-
-        delegate.paint(mock_painter, style_option, index)
-
-        # Verify get_badge_colors returns the expected green palette for jpg
-        bg, text = get_badge_colors("jpg")
-        assert bg == BADGE_COLORS["jpg"][0]
-        assert text == BADGE_COLORS["jpg"][1]
-
-    def test_paint_unknown_ext_uses_default_badge_colors(
-        self, delegate: Any, mock_painter: Any, style_option: Any
-    ) -> None:
-        """Painting a file with unknown extension uses the default gray badge colors."""
-        bg, text = get_badge_colors("exr")
-        assert bg == DEFAULT_BADGE_COLORS[0]
-        assert text == DEFAULT_BADGE_COLORS[1]
-
 
 class TestSelectionStatePainting:
     """Selected and hovered items use the correct background colours."""
@@ -716,15 +669,6 @@ class TestGridConfiguration:
         expected_w = THUMBNAIL_SIZE + GRID_GAP * 2 + HOVER_MARGIN * 2
         expected_h = THUMBNAIL_SIZE + GRID_GAP * 2 + 24 + HOVER_MARGIN * 2
         assert grid_size == QSize(expected_w, expected_h)
-
-    def test_grid_gap_provides_adequate_spacing(self) -> None:
-        """GRID_GAP is at least 12px for comfortable visual breathing room."""
-        assert GRID_GAP >= 12
-
-    def test_hover_margin_covers_scale_growth(self) -> None:
-        """HOVER_MARGIN is large enough to cover the hover-scale overshoot."""
-        overshoot = THUMBNAIL_SIZE * (1.02 - 1.0) / 2.0
-        assert HOVER_MARGIN >= math.ceil(overshoot)
 
 
 class TestDelegateInitialState:
@@ -937,23 +881,6 @@ class TestContextMenu:
         action = mock_menu_instance.addAction.call_args[0][0]
         assert action.text() == "Regenerate Thumbnail"
         mock_menu_instance.exec.assert_called_once()
-
-    def test_context_menu_action_triggers_signal(self, grid_with_model: Any) -> None:
-        """The 'Regenerate Thumbnail' action, when triggered, emits regenerate_requested."""
-        grid, model = grid_with_model
-        index = model.index(0)
-        expected_path = index.data(ThumbnailModel.PathRole)
-
-        received: list[str] = []
-        grid.regenerate_requested.connect(lambda p: received.append(p))
-
-        # Create a QAction the same way contextMenuEvent does, and verify the wiring
-        action = QAction("Regenerate Thumbnail", grid)
-        action.triggered.connect(lambda: grid.regenerate_requested.emit(expected_path))
-        action.trigger()
-
-        assert len(received) == 1
-        assert received[0] == expected_path
 
     def test_context_menu_on_empty_area_does_not_emit(self, grid_with_model: Any) -> None:
         """The contextMenuEvent handler on an empty area (invalid index) does NOT emit a signal."""

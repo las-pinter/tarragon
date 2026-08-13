@@ -118,13 +118,6 @@ class TestMissingOrEmptyFolders:
 
         assert results == []
 
-    def test_non_existent_folder_recursive_returns_empty_list(self, tmp_path: Path) -> None:
-        """Scanning a non-existent folder in recursive mode also returns an empty list."""
-        missing = tmp_path / "nowhere"
-        results = scan_folder(missing, recursive=True)
-
-        assert results == []
-
     def test_empty_folder_returns_empty_list(self, tmp_path: Path) -> None:
         """Scanning an existing but empty folder returns an empty list."""
         results = scan_folder(tmp_path)

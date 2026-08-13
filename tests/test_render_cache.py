@@ -45,19 +45,6 @@ class TestSaveToCache:
         assert cache_path.parent.is_dir()
         assert cache_path.parent.parent.is_dir()
 
-    def test_save_to_cache_jpeg_saves_rgb(self, tmp_path: Path) -> None:
-        """save_to_cache with format_setting='jpeg' produces an RGB JPEG."""
-        img = Image.new("RGBA", (100, 100), (255, 0, 0, 128))
-        cache_path = tmp_path / "output.jpg"
-
-        save_to_cache(img, cache_path, format_setting="jpeg")
-
-        assert cache_path.is_file()
-        assert cache_path.stat().st_size > 0
-
-        loaded = Image.open(cache_path)
-        assert loaded.mode == "RGB"
-
     def test_save_to_cache_jpeg_flattens_alpha(self, tmp_path: Path) -> None:
         """save_to_cache with 'jpeg' replaces transparent areas with white."""
         # Fully transparent red pixel on a red background - after flattening

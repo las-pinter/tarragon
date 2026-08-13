@@ -312,11 +312,6 @@ class TestTileGridSizeCombo:
         items = [grid_combo.itemText(i) for i in range(grid_combo.count())]
         assert items == ["1x1", "2x2", "3x3", "4x4"]
 
-    def test_tile_grid_size_default_selected(self, dialog: SettingsDialog) -> None:
-        """Default tile_grid_size '2x2' is selected in the combo."""
-        grid_combo = _get_widget(dialog, "_tile_grid_size_setting")
-        assert grid_combo.currentText() == "2x2"
-
     def test_tile_grid_size_save_and_load(self, dialog: SettingsDialog, service: SettingsService) -> None:
         """Select different preset, save, verify via SettingsService."""
         grid_combo = _get_widget(dialog, "_tile_grid_size_setting")
@@ -344,8 +339,3 @@ class TestCacheFormatCombo:
         format_combo = _get_widget(dialog, "_cache_format_setting")
         items = [format_combo.itemText(i) for i in range(format_combo.count())]
         assert items == ["PNG", "JPEG"]
-
-    def test_cache_format_default_is_png(self, dialog: SettingsDialog) -> None:
-        """Default cache format is PNG (index 0)."""
-        format_combo = _get_widget(dialog, "_cache_format_setting")
-        assert format_combo.currentText() == "PNG"

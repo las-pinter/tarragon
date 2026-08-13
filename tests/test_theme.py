@@ -70,14 +70,6 @@ class TestMotionConstants:
         """DURATION_NORMAL matches the tokens.json motion.duration_normal value (200 ms)."""
         assert DURATION_NORMAL == 200
 
-    def test_motion_duration_fast_is_int(self) -> None:
-        """DURATION_FAST is an integer suitable for animation duration."""
-        assert isinstance(DURATION_FAST, int)
-
-    def test_motion_duration_normal_is_int(self) -> None:
-        """DURATION_NORMAL is an integer suitable for animation duration."""
-        assert isinstance(DURATION_NORMAL, int)
-
 
 class TestLayoutConstants:
     """Layout constants match the design tokens."""

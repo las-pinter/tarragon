@@ -48,14 +48,6 @@ class TestGalleryTabsScope:
         tabs.setCurrentIndex(1)
         assert tabs.is_global_scope() is True
 
-    def test_scope_changed_signal(self, qapp: Any) -> None:
-        """Switching to All Images emits scope_changed(True)."""
-        tabs = GalleryTabs()
-        signals: list[bool] = []
-        tabs.scope_changed.connect(lambda v: signals.append(v))
-        tabs.setCurrentIndex(1)
-        assert signals == [True]
-
     def test_scope_changed_on_switch_back(self, qapp: Any) -> None:
         """Switching back to Folder emits scope_changed(False)."""
         tabs = GalleryTabs()

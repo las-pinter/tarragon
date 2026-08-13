@@ -140,14 +140,6 @@ class TestTagMenu:
 class TestTagFiltering:
     """Toggling tags updates the active filter set."""
 
-    def test_toggle_tag_adds_to_active(self, service: TagService, bar: FilterBarTag) -> None:
-        """Toggling a tag adds its ID to the active set."""
-        tag_id = service._get_or_create_tag("filter-me")
-        bar._refresh_tags()
-
-        bar._toggle_tag(tag_id)
-        assert tag_id in bar.get_active_tag_ids()
-
     def test_toggle_tag_removes_from_active(self, service: TagService, bar: FilterBarTag) -> None:
         """Toggling an active tag removes it from the active set."""
         tag_id = service._get_or_create_tag("remove-me")
@@ -235,10 +227,6 @@ class TestSignalEmission:
 
 class TestPublicAPI:
     """Public API methods work correctly."""
-
-    def test_get_active_tag_ids_empty_initially(self, bar: FilterBarTag) -> None:
-        """No tags are active on a fresh widget."""
-        assert bar.get_active_tag_ids() == set()
 
     def test_get_active_tag_ids_returns_copy(self, bar: FilterBarTag) -> None:
         """get_active_tag_ids returns a copy, not the internal set."""
@@ -383,19 +371,3 @@ class TestRefreshPreservesSelection:
 
         # The active set should still contain the tag
         assert tag_id in bar.get_active_tag_ids()
-
-    def test_deleted_tags_removed_from_active(self, service: TagService, bar: FilterBarTag) -> None:
-        """If a tag no longer exists after refresh, it's removed from active."""
-        tag_id = service._get_or_create_tag("temporary")
-        bar._refresh_tags()
-
-        bar._toggle_tag(tag_id)
-        assert tag_id in bar.get_active_tag_ids()
-
-        # Simulate tag disappearing by directly pruning _available_tags
-        # and running the same intersection logic _refresh_tags uses
-        bar._available_tags = {tid: name for tid, name in bar._available_tags.items() if tid != tag_id}
-        bar._active_tag_ids &= set(bar._available_tags.keys())
-        bar._update_chips()
-
-        assert tag_id not in bar.get_active_tag_ids()

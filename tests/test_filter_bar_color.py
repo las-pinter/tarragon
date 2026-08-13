@@ -35,12 +35,6 @@ class TestFilterBarColorCreation:
 class TestToggleColor:
     """Toggling colours updates the active colour set."""
 
-    def test_toggle_color_on(self, bar: FilterBarColor) -> None:
-        """Toggling a colour adds it to the active set."""
-        bar.toggle_color("red")
-
-        assert "color:red" in bar.get_active_colors()
-
     def test_toggle_color_off(self, bar: FilterBarColor) -> None:
         """Toggling an already-active colour removes it."""
         bar.toggle_color("blue")

@@ -6,7 +6,6 @@ from collections.abc import Generator
 from pathlib import Path
 
 import pytest
-from PySide6.QtWidgets import QComboBox
 from tarragon.db.database import Database
 from tarragon.services.tag_service import TagService
 from tarragon.widgets.filter_bar import FilterBar
@@ -51,11 +50,6 @@ class TestFilterBarCreation:
     def test_has_tag_filter_bar(self, bar: FilterBar) -> None:
         """FilterBar contains a FilterBarTag sub-widget."""
         assert isinstance(bar.filter_bar_tag, FilterBarTag)
-
-    def test_no_qcombobox(self, bar: FilterBar) -> None:
-        """FilterBar no longer contains a QComboBox (replaced by chips)."""
-        combos = bar.findChildren(QComboBox)
-        assert len(combos) == 0
 
 
 class TestSignalForwarding:

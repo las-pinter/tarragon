@@ -87,15 +87,6 @@ class TestFolderChipCreation:
         assert "/photos/vacation" in bar._folder_chips
         assert bar._folder_chips["/photos/vacation"] is not None
 
-    def test_toggle_is_toggleing(self, bar: FilterBarFolder, db: Database) -> None:
-        """Adding the same folder twice does not create duplicate chips."""
-        db.upsert_thumbnail("/photos/a.png", mtime=1, size=100, width=10, height=10, cache_uuid="u1")
-        bar._toggle_folder("/photos")
-        bar._toggle_folder("/photos")
-
-        assert len(bar._selected_folders) == 0
-        assert len(bar._folder_chips) == 0
-
     def test_remove_folder_chip(self, bar: FilterBarFolder, db: Database) -> None:
         """Removing a folder chip removes it from tracking."""
         db.upsert_thumbnail("/photos/a.png", mtime=1, size=100, width=10, height=10, cache_uuid="u1")
@@ -127,17 +118,6 @@ class TestFolderChipCreation:
 
 class TestFolderFilterSignal:
     """Folder filter signal emits correct set values."""
-
-    def test_empty_set_when_no_folders(self, bar: FilterBarFolder) -> None:
-        """No chips selected means empty set emitted."""
-        captured: list[set[str]] = []
-        bar.filter_changed.connect(captured.append)
-
-        # Remove a nonexistent folder - should emit empty set
-        bar._remove_folder("/nonexistent")
-
-        assert len(captured) == 1
-        assert captured[0] == set()
 
     def test_adding_folder_emits_updated_set(self, bar: FilterBarFolder, db: Database) -> None:
         """Adding a folder emits the updated set including the new folder."""

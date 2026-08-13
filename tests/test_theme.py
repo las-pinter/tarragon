@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from PySide6.QtWidgets import QApplication
+
 from tarragon.main_window import MainWindow
 from tarragon.theme import colors as color_mod
 from tarragon.theme.constants import (

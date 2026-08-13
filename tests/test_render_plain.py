@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from PIL import Image, ImageCms
+
 from tarragon.renderers.cache import MASTER_LONG_EDGE
 from tarragon.renderers.plain import render_plain_image
 

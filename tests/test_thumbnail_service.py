@@ -11,6 +11,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from PIL import Image
+
 from tarragon.renderers.cache import RESOLUTION_FULL, RESOLUTION_PREVIEW, RESOLUTION_THUMBNAIL, invalidate_cache_files
 from tarragon.renderers.psd import render_psd_image
 from tarragon.scanner import FileInfo

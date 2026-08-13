@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from PIL import Image
+
 from tarragon.db._base import normalize_path
 from tarragon.db.database import Database
 from tarragon.renderers.cache import RESOLUTION_PREVIEW, RESOLUTION_THUMBNAIL

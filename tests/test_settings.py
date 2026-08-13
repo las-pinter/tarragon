@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+
 from tarragon.db.database import Database
 from tarragon.services.settings_service import (
     Setting,

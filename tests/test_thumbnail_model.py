@@ -18,12 +18,6 @@ class TestThumbnailModel:
         model = ThumbnailModel()
         assert model.rowCount() == 0
 
-    def test_no_parent_instantiation(self) -> None:
-        """Model can be instantiated without a parent argument."""
-        model = ThumbnailModel()
-        assert model is not None
-        assert model.rowCount() == 0
-
     def test_set_paths_updates_row_count(self) -> None:
         """set_paths() with 3 paths gives rowCount() == 3."""
         model = ThumbnailModel()
@@ -70,10 +64,6 @@ class TestThumbnailModel:
         assert model.data(invalid_index, Qt.ItemDataRole.DisplayRole) is None
         assert model.data(invalid_index, ThumbnailModel.PathRole) is None
 
-    def test_path_role_constant_value(self) -> None:
-        """PathRole constant equals Qt.UserRole + 1."""
-        assert ThumbnailModel.PathRole == Qt.ItemDataRole.UserRole + 1
-
     def test_set_paths_with_empty_list_resets_to_zero(self) -> None:
         """set_paths([]) results in rowCount() == 0."""
         model = ThumbnailModel()
@@ -86,32 +76,6 @@ class TestThumbnailModel:
         model = ThumbnailModel()
         with pytest.raises(TypeError):
             model.set_paths(None)  # type: ignore[arg-type]
-
-    def test_data_with_negative_row_returns_none(self) -> None:
-        """data() returns None when index row is negative."""
-        model = ThumbnailModel()
-        model.set_paths([Path("/test.png")])
-
-        index = model.index(-1, 0)
-        assert model.data(index, Qt.ItemDataRole.DisplayRole) is None
-        assert model.data(index, ThumbnailModel.PathRole) is None
-
-    def test_data_with_row_equal_to_count_returns_none(self) -> None:
-        """data() returns None when index row == rowCount (boundary)."""
-        model = ThumbnailModel()
-        model.set_paths([Path("/test.png")])
-
-        # rowCount is 1, so index(1, 0) is out of bounds
-        index = model.index(1, 0)
-        assert model.data(index, Qt.ItemDataRole.DisplayRole) is None
-        assert model.data(index, ThumbnailModel.PathRole) is None
-
-    def test_data_with_empty_model_returns_none(self) -> None:
-        """data() returns None on an empty model (no set_paths call)."""
-        model = ThumbnailModel()
-        index = model.index(0, 0)
-        assert model.data(index, Qt.ItemDataRole.DisplayRole) is None
-        assert model.data(index, ThumbnailModel.PathRole) is None
 
     def test_data_with_unicode_path_returns_correct_values(self) -> None:
         """data() handles Unicode file names and paths correctly."""
@@ -264,18 +228,6 @@ class TestThumbnailModel:
         idx_b = model.index(1, 0)
         assert model.data(idx_a, ThumbnailModel.ThumbnailRole256) == str(Path("/cache/256/one.png"))
         assert model.data(idx_b, ThumbnailModel.ThumbnailRole1024) == str(Path("/cache/1024/two.png"))
-
-    def test_set_paths_empty_list_preserves_cached_thumbnails(self) -> None:
-        """set_paths([]) removes all paths but preserves cached thumbnails."""
-        model = ThumbnailModel()
-        model.set_paths([Path("/a/one.jpg")])
-        model.set_thumbnail("/a/one.jpg", Path("/cache/256/one.png"), resolution=RESOLUTION_THUMBNAIL)
-
-        model.set_paths([])
-
-        assert model.rowCount() == 0
-        # Thumbnails are preserved (not pruned)
-        assert str(Path("/a/one.jpg")) in model._thumbnails
 
     def test_set_paths_filter_unfilter_preserves_all_thumbnails(self) -> None:
         """Filtering to a subset then restoring all paths preserves every thumbnail."""

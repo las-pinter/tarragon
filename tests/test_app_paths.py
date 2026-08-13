@@ -32,20 +32,6 @@ class TestDataDir:
 class TestPathConstruction:
     """The db_path() and cache_dir() functions resolve under the data directory."""
 
-    def test_db_path_under_data_dir(self) -> None:
-        """The db_path() function resolves to <data_dir>/tarragon.db."""
-        with patch("tarragon.app_paths.platformdirs.user_data_dir", return_value=MOCK_DATA):
-            result = db_path()
-
-        assert result == Path(MOCK_DATA) / "tarragon.db"
-
-    def test_cache_dir_under_data_dir(self) -> None:
-        """The cache_dir() function resolves to <data_dir>/cache."""
-        with patch("tarragon.app_paths.platformdirs.user_data_dir", return_value=MOCK_DATA):
-            result = cache_dir()
-
-        assert result == Path(MOCK_DATA) / "cache"
-
     @pytest.mark.parametrize(
         "platform_path,expected_db,expected_cache",
         [

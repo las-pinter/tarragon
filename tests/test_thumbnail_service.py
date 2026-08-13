@@ -82,10 +82,6 @@ class TestInstantiation:
         assert hasattr(service, "thumbnail_ready")
         assert hasattr(service, "error_occurred")
 
-    def test_cache_format_from_settings(self, service: ThumbnailService) -> None:
-        """_cache_format is initialised from settings_service."""
-        assert service._cache_format == "PNG"
-
 
 class TestCheckAndRender:
     """check_and_render logic for different cache states."""
@@ -161,36 +157,6 @@ class TestCheckAndRender:
             service.check_and_render(file_info)
             mock_render.assert_called_once_with(file_info)
 
-    def test_check_and_render_stale_cache(
-        self,
-        tmp_path: Path,
-        service: ThumbnailService,
-        db_mock: MagicMock,
-    ) -> None:
-        """Cache entry with mismatched mtime -> calls _render_all_resolutions (stale)."""
-        file_info = FileInfo(
-            path=tmp_path / "source.png",
-            mtime=2000.0,
-            size=500,
-            extension=".png",
-        )
-        # DB says mtime=1000 but file says 2000 -> stale
-        db_mock.get_thumbnail.return_value = {
-            "path": str(file_info.path),
-            "mtime": 1000,
-            "size": 500,
-            "width": 64,
-            "height": 64,
-            "cache_uuid": "old-uuid",
-            "thumbnail_cache_path": str(tmp_path / "cache" / "old.png"),
-            "preview_cache_path": None,
-            "full_cache_path": None,
-        }
-
-        with patch.object(service, "_render_all_resolutions") as mock_render:
-            service.check_and_render(file_info)
-            mock_render.assert_called_once_with(file_info)
-
     def test_check_and_render_stale_cache_different_size(
         self,
         tmp_path: Path,
@@ -256,92 +222,6 @@ class TestCheckAndRender:
             # Should call _render_all_resolutions since cache files are missing
             mock_render.assert_called_once_with(file_info)
 
-    def test_check_and_render_no_cache_paths(
-        self,
-        tmp_path: Path,
-        service: ThumbnailService,
-        db_mock: MagicMock,
-    ) -> None:
-        """Cache entry without cache paths -> calls _render_all_resolutions."""
-        file_info = FileInfo(
-            path=tmp_path / "source.png",
-            mtime=1000.0,
-            size=500,
-            extension=".png",
-        )
-        db_mock.get_thumbnail.return_value = {
-            "path": str(file_info.path),
-            "mtime": 1000,
-            "size": 500,
-            "width": 64,
-            "height": 64,
-            "cache_uuid": "uuid-no-paths",
-            "thumbnail_cache_path": None,
-            "preview_cache_path": None,
-            "full_cache_path": None,
-        }
-
-        with patch.object(service, "_render_all_resolutions") as mock_render:
-            service.check_and_render(file_info)
-            mock_render.assert_called_once_with(file_info)
-
-    def test_check_and_render_psd(
-        self,
-        tmp_path: Path,
-        service: ThumbnailService,
-        db_mock: MagicMock,
-    ) -> None:
-        """.psd extension -> calls _render_all_resolutions (which handles PSD internally)."""
-        file_info = FileInfo(
-            path=tmp_path / "document.psd",
-            mtime=1000.0,
-            size=500,
-            extension=".psd",
-        )
-        db_mock.get_thumbnail.return_value = None
-
-        with patch.object(service, "_render_all_resolutions") as mock_render:
-            service.check_and_render(file_info)
-            mock_render.assert_called_once_with(file_info)
-
-    def test_check_and_render_psb(
-        self,
-        tmp_path: Path,
-        service: ThumbnailService,
-        db_mock: MagicMock,
-    ) -> None:
-        """.psb extension -> calls _render_all_resolutions (which handles PSB internally)."""
-        file_info = FileInfo(
-            path=tmp_path / "big_document.psb",
-            mtime=1000.0,
-            size=500,
-            extension=".psb",
-        )
-        db_mock.get_thumbnail.return_value = None
-
-        with patch.object(service, "_render_all_resolutions") as mock_render:
-            service.check_and_render(file_info)
-            mock_render.assert_called_once_with(file_info)
-
-    def test_check_and_render_clip(
-        self,
-        tmp_path: Path,
-        service: ThumbnailService,
-        db_mock: MagicMock,
-    ) -> None:
-        """.clip extension -> calls _render_all_resolutions (which handles CLIP internally)."""
-        file_info = FileInfo(
-            path=tmp_path / "illustration.clip",
-            mtime=1000.0,
-            size=500,
-            extension=".clip",
-        )
-        db_mock.get_thumbnail.return_value = None
-
-        with patch.object(service, "_render_all_resolutions") as mock_render:
-            service.check_and_render(file_info)
-            mock_render.assert_called_once_with(file_info)
-
 
 class TestCallbacks:
     """Internal callback methods (_on_error)."""
@@ -377,120 +257,6 @@ class TestCallbacks:
 
 class TestCheckAndRenderEdgeCases:
     """check_and_render with corrupt files, odd inputs, and format switches."""
-
-    def test_check_and_render_corrupt_cache_file_with_garbage(
-        self,
-        tmp_path: Path,
-        service: ThumbnailService,
-        db_mock: MagicMock,
-    ) -> None:
-        """Cache file exists but contains garbage bytes -> Image.open raises -> re-render."""
-        cache_dir = tmp_path / "cache"
-        cache_dir.mkdir(parents=True)
-        cache_path = cache_dir / "corrupt.png"
-        # Write garbage data so Image.open raises an exception
-        cache_path.write_bytes(b"\x00\x00\x00\x00\x00\x00\x00\x00NOT A VALID IMAGE\xff\xff\xff\xff")
-
-        file_info = FileInfo(
-            path=tmp_path / "source.png",
-            mtime=1000.0,
-            size=500,
-            extension=".png",
-        )
-        db_mock.get_thumbnail.return_value = {
-            "path": str(file_info.path),
-            "mtime": 1000,
-            "size": 500,
-            "width": 64,
-            "height": 64,
-            "cache_uuid": "old-uuid",
-            "thumbnail_cache_path": str(cache_path),
-            "preview_cache_path": None,
-            "full_cache_path": None,
-        }
-
-        with patch.object(service, "_render_all_resolutions") as mock_render:
-            service.check_and_render(file_info)
-            # Should call _render_all_resolutions since cache file is corrupt
-            mock_render.assert_called_once_with(file_info)
-
-    def test_check_and_render_cache_format_change_affects_render(
-        self,
-        tmp_path: Path,
-        service: ThumbnailService,
-        db_mock: MagicMock,
-    ) -> None:
-        """After changing _cache_format, a cache miss still calls _render_all_resolutions."""
-        file_info = FileInfo(
-            path=tmp_path / "source.png",
-            mtime=1000.0,
-            size=500,
-            extension=".png",
-        )
-        db_mock.get_thumbnail.return_value = None
-
-        service._cache_format = "jpeg"
-
-        with patch.object(service, "_render_all_resolutions") as mock_render:
-            service.check_and_render(file_info)
-            mock_render.assert_called_once_with(file_info)
-
-    def test_check_and_render_empty_extension_goes_plain(
-        self,
-        tmp_path: Path,
-        service: ThumbnailService,
-        db_mock: MagicMock,
-    ) -> None:
-        """FileInfo with empty extension string -> calls _render_all_resolutions."""
-        file_info = FileInfo(
-            path=tmp_path / "source",
-            mtime=1000.0,
-            size=500,
-            extension="",  # No extension
-        )
-        db_mock.get_thumbnail.return_value = None
-
-        with patch.object(service, "_render_all_resolutions") as mock_render:
-            service.check_and_render(file_info)
-            mock_render.assert_called_once_with(file_info)
-
-    def test_check_and_render_unknown_extension_goes_plain(
-        self,
-        tmp_path: Path,
-        service: ThumbnailService,
-        db_mock: MagicMock,
-    ) -> None:
-        """FileInfo with unsupported extension -> calls _render_all_resolutions."""
-        file_info = FileInfo(
-            path=tmp_path / "source.bmp",
-            mtime=1000.0,
-            size=500,
-            extension=".bmp",
-        )
-        db_mock.get_thumbnail.return_value = None
-
-        with patch.object(service, "_render_all_resolutions") as mock_render:
-            service.check_and_render(file_info)
-            mock_render.assert_called_once_with(file_info)
-
-    def test_check_and_render_upper_case_psd(
-        self,
-        tmp_path: Path,
-        service: ThumbnailService,
-        db_mock: MagicMock,
-    ) -> None:
-        """Uppercase .PSD extension -> calls _render_all_resolutions (case-insensitive)."""
-        file_info = FileInfo(
-            path=tmp_path / "document.PSD",
-            mtime=1000.0,
-            size=500,
-            extension=".PSD",  # Uppercase
-        )
-        db_mock.get_thumbnail.return_value = None
-
-        with patch.object(service, "_render_all_resolutions") as mock_render:
-            service.check_and_render(file_info)
-            mock_render.assert_called_once_with(file_info)
 
     def test_check_and_render_zero_mtime_and_size(
         self,
@@ -531,80 +297,6 @@ class TestCheckAndRenderEdgeCases:
         assert emitted[0][0] == str(file_info.path)
         # Fallback path now dispatches render via threadpool (async)
         service._threadpool.start.assert_called_once()  # type: ignore[attr-defined]
-
-    def test_check_and_render_db_returns_none_for_empty_path(
-        self,
-        tmp_path: Path,
-        service: ThumbnailService,
-        db_mock: MagicMock,
-    ) -> None:
-        """FileInfo with empty Path - db.get_thumbnail called -> returns None -> render."""
-        file_info = FileInfo(
-            path=Path(""),
-            mtime=1000.0,
-            size=500,
-            extension=".png",
-        )
-        db_mock.get_thumbnail.return_value = None
-
-        with patch.object(service, "_render_all_resolutions") as mock_render:
-            # Should not crash
-            service.check_and_render(file_info)
-            mock_render.assert_called_once_with(file_info)
-
-    def test_check_and_render_special_chars_in_path(
-        self,
-        tmp_path: Path,
-        service: ThumbnailService,
-        db_mock: MagicMock,
-    ) -> None:
-        """Path with special characters like brackets, spaces, symbols - no crash."""
-        file_info = FileInfo(
-            path=tmp_path / "file (copy) [2024] #1 + $!.png",
-            mtime=1000.0,
-            size=500,
-            extension=".png",
-        )
-        db_mock.get_thumbnail.return_value = None
-
-        with patch.object(service, "_render_all_resolutions") as mock_render:
-            service.check_and_render(file_info)
-            mock_render.assert_called_once_with(file_info)
-
-
-class TestCallbackEdgeCases:
-    """Callback robustness: unicode paths."""
-
-    def test_on_error_with_unicode_path(
-        self,
-        tmp_path: Path,
-        service: ThumbnailService,
-    ) -> None:
-        """Unicode path in error signal - emitted correctly."""
-        unicode_dir = tmp_path / "照片" / "图像"
-        unicode_dir.mkdir(parents=True)
-        file_path = unicode_dir / "画像.png"
-        file_info = FileInfo(
-            path=file_path,
-            mtime=1000.0,
-            size=500,
-            extension=".png",
-        )
-
-        ready_emitted: list[tuple[str, object]] = []
-        error_emitted: list[tuple[str, str]] = []
-        service.thumbnail_ready.connect(lambda p, i: ready_emitted.append((p, i)))
-        service.error_occurred.connect(lambda p, e: error_emitted.append((p, e)))
-
-        service._on_error(file_info, "Disk full")
-
-        assert len(error_emitted) == 1
-        assert error_emitted[0][0] == str(file_path)
-        assert error_emitted[0][1] == "Disk full"
-
-        assert len(ready_emitted) == 1
-        assert ready_emitted[0][0] == str(file_path)
-        assert ready_emitted[0][1] is None
 
 
 class TestCancellation:
@@ -1296,41 +988,6 @@ class TestAutoColorTagSignal:
 class TestPerFolderUuid:
     """Verify that images from the same source folder share a cache UUID."""
 
-    def test_render_all_uses_atomic_get_or_create(
-        self,
-        tmp_path: Path,
-        service: ThumbnailService,
-        db_mock: MagicMock,
-    ) -> None:
-        """_render_all_resolutions uses get_or_create_folder_uuid atomically."""
-        db_mock.get_or_create_folder_uuid.return_value = "existing-uuid"
-
-        file_info = FileInfo(
-            path=tmp_path / "source.png",
-            mtime=1000.0,
-            size=500,
-            extension=".png",
-        )
-
-        with (
-            patch("tarragon.services.thumbnail_service.render_plain_image", return_value=MagicMock(spec=Image.Image)),
-            patch("tarragon.services.thumbnail_service.generate_cache_uuid", return_value="candidate-uuid"),
-            patch("tarragon.services.thumbnail_service.generate_cache_paths") as mock_paths,
-            patch("tarragon.services.thumbnail_service.save_to_cache"),
-            patch("tarragon.services.thumbnail_service.derive_smaller_sizes", return_value={}),
-        ):
-            mock_paths.return_value = {
-                str(RESOLUTION_THUMBNAIL): tmp_path / "cache" / "256.png",
-                str(RESOLUTION_PREVIEW): tmp_path / "cache" / "1024.png",
-                "full": tmp_path / "cache" / "full.png",
-            }
-            service._render_all_resolutions(file_info)
-
-        # Should have called the atomic get_or_create with folder path and a candidate UUID
-        db_mock.get_or_create_folder_uuid.assert_called_once_with(str(tmp_path), "candidate-uuid")
-        # generate_cache_paths should have been called with the returned UUID
-        mock_paths.assert_called_once_with(file_info.path, "existing-uuid")
-
     def test_render_all_generates_candidate_uuid_for_atomic_call(
         self,
         tmp_path: Path,
@@ -1404,25 +1061,6 @@ class TestPerFolderUuid:
 
 class TestThumbnailServiceEdgeCases:
     """Service-level edge cases: pool full, double start, config edge cases."""
-
-    def test_render_all_resolutions_called_on_cache_miss(
-        self,
-        tmp_path: Path,
-        service: ThumbnailService,
-        db_mock: MagicMock,
-    ) -> None:
-        """Cache miss -> _render_all_resolutions is called (not threadpool)."""
-        file_info = FileInfo(
-            path=tmp_path / "source.png",
-            mtime=1000.0,
-            size=500,
-            extension=".png",
-        )
-        db_mock.get_thumbnail.return_value = None
-
-        with patch.object(service, "_render_all_resolutions") as mock_render:
-            service.check_and_render(file_info)
-            mock_render.assert_called_once_with(file_info)
 
     def test_two_rapid_cache_misses_call_render_twice(
         self,

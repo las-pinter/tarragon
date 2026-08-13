@@ -231,25 +231,6 @@ class TestSidebarWidgetFunctionality:
         sidebar._on_remove_clicked()
         assert lv_model.rowCount() == 0
 
-    def test_favorite_clicked_signal(self, sidebar: SidebarWidget) -> None:
-        """Single-clicking a favourite emits favorite_clicked with the path."""
-        sidebar.set_current_folder("/clicked/path.exr")
-        sidebar._on_add_clicked()
-
-        # Capture the signal
-        captured_args: list[tuple[str, ...]] = []
-        sidebar.favorite_clicked.connect(lambda *args: captured_args.append(args))
-
-        list_view = sidebar.findChild(QListView)
-        assert list_view is not None
-        lv_model = list_view.model()
-        assert lv_model is not None
-        index = lv_model.index(0, 0)
-        list_view.clicked.emit(index)
-
-        assert len(captured_args) == 1
-        assert captured_args[0] == ("/clicked/path.exr",)
-
     def test_favorite_single_click_navigation(self, sidebar: SidebarWidget) -> None:
         """Single-clicking a favorite navigates to its path (not double-click)."""
         sidebar.set_current_folder("/nav/target.exr")

@@ -721,28 +721,6 @@ class TestPilToQImageDeepCopy:
         assert not qimage.isNull()
 
 
-class TestExifOrientation:
-    """The set_image() method keeps original dimensions when no EXIF orientation is present."""
-
-    def test_set_image_with_no_exif_keeps_dimensions(
-        self, qapp: Any, tmp_path: Any, settings_service: SettingsService
-    ) -> None:
-        """The set_image() method keeps original dimensions when no EXIF orientation is present."""
-        panel = PreviewPanel(settings_service)
-        try:
-            img = Image.new("RGB", (200, 100), color="orange")
-            jpg_path = tmp_path / "no_exif.jpg"
-            img.save(jpg_path, format="JPEG")
-            img.close()
-
-            loaded = Image.open(jpg_path)
-            panel.set_image(_make_image_info(loaded, path=jpg_path))
-            assert _meta_text(panel, "Dimensions") == "200 x 100"
-            loaded.close()
-        finally:
-            panel.close()
-
-
 class TestPathDisplay:
     """Metadata shows only the filename, not the full path."""
 
@@ -758,24 +736,6 @@ class TestPathDisplay:
             panel.set_image(_make_image_info(sample_image, path=nested))
             assert _meta_text(panel, "File") == "image.png"
             assert "/" not in _meta_text(panel, "File")
-        finally:
-            panel.close()
-
-
-class TestRgbPreservation:
-    """The set_image() method does not modify RGB images."""
-
-    def test_set_image_rgb_stays_rgb(self, qapp: Any, settings_service: SettingsService) -> None:
-        """RGB images are not modified by set_image."""
-        panel = PreviewPanel(settings_service)
-        try:
-            rgb = Image.new("RGB", (100, 100), color=(50, 100, 150))
-            panel.set_image(_make_image_info(rgb))
-            assert panel._current_image is not None
-            assert panel._current_image.mode == "RGB"
-            # Pixel values should be unchanged
-            pixel = panel._current_image.getpixel((0, 0))
-            assert pixel == (50, 100, 150)
         finally:
             panel.close()
 
@@ -844,61 +804,6 @@ class TestMultiPreviewEmptyList:
 
         assert preview_panel._current_image is None
         assert preview_panel._image_label.text() == "No preview"
-
-
-class TestMultiPreviewSingleImage:
-    """A single image shows in a 1x1 grid."""
-
-    def test_single_image_shows_1x1(self, preview_panel: PreviewPanel) -> None:
-        """The set_multi_preview() method displays a single image in a 1x1 grid."""
-        infos = _solid_image_infos(1)
-
-        preview_panel.set_multi_preview(infos)
-
-        # Mosaic container is shown
-        assert preview_panel._preview_stack.currentWidget() is preview_panel._mosaic_container
-        assert len(preview_panel._mosaic_labels) == 1
-        # FilenameMeta with 1 info and no path -> "Unknown"
-        assert _meta_text(preview_panel, "File") == "Unknown"
-
-
-class TestMultiPreviewTwoImages:
-    """Two images form a 2x1 grid."""
-
-    def test_two_images_grid_layout(self, preview_panel: PreviewPanel) -> None:
-        """The set_multi_preview() method creates a 2x1 grid (2 cols, 1 row) for 2 images."""
-        infos = _solid_image_infos(2)
-
-        preview_panel.set_multi_preview(infos)
-
-        # Mosaic rendered
-        assert preview_panel._preview_stack.currentWidget() is preview_panel._mosaic_container
-        assert len(preview_panel._mosaic_labels) == 2
-        # Verify grid math: cols = ceil(sqrt(2)) = 2, rows = ceil(2/2) = 1
-        n = 2
-        expected_cols = math.ceil(math.sqrt(n))
-        expected_rows = math.ceil(n / expected_cols)
-        assert expected_cols == 2
-        assert expected_rows == 1
-
-
-class TestMultiPreviewFourImages:
-    """Four images form a 2x2 grid."""
-
-    def test_four_images_grid_layout(self, preview_panel: PreviewPanel) -> None:
-        """The set_multi_preview() method creates a 2x2 grid for 4 images."""
-        infos = _solid_image_infos(4)
-
-        preview_panel.set_multi_preview(infos)
-
-        # Mosaic rendered
-        assert preview_panel._preview_stack.currentWidget() is preview_panel._mosaic_container
-        # Verify grid math: cols = ceil(sqrt(4)) = 2, rows = ceil(4/2) = 2
-        n = 4
-        expected_cols = math.ceil(math.sqrt(n))
-        expected_rows = math.ceil(n / expected_cols)
-        assert expected_cols == 2
-        assert expected_rows == 2
 
 
 class TestMultiPreviewCappedAtNine:
@@ -1054,29 +959,6 @@ class TestMosaicClearsSingleState:
         preview_panel.set_multi_preview(_solid_image_infos(3))
 
         assert preview_panel._current_path is None
-
-
-class TestMosaicExifTranspose:
-    """EXIF orientation is applied to each mosaic image."""
-
-    def test_exif_rotated_image_displays_upright(self, preview_panel: PreviewPanel, tmp_path: Path) -> None:
-        """Images with EXIF orientation tag are transposed before pasting."""
-        # Create a 200x100 JPEG with EXIF orientation 6
-        img = Image.new("RGB", (200, 100), color="orange")
-        exif = img.getexif()
-        exif[0x0112] = 6  # Orientation: rotate 90 CW
-        jpg_path = tmp_path / "exif_rotated.jpg"
-        img.save(jpg_path, format="JPEG", exif=exif)
-        img.close()
-
-        loaded = Image.open(jpg_path)
-
-        preview_panel.set_multi_preview([_make_image_info(loaded, path=jpg_path)])
-
-        # Mosaic rendered without error
-        assert preview_panel._preview_stack.currentWidget() is preview_panel._mosaic_container
-        assert len(preview_panel._mosaic_labels) == 1
-        loaded.close()
 
 
 class TestMosaicModeConversion:

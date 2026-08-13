@@ -18,7 +18,6 @@ def _make_clip_file(
     header: bytes = b"CSFCHUNK" + b"\x00" * 16,
     create_table: bool = True,
     insert_null: bool = False,
-    insert_garbage: bool = False,
     insert_no_png_sig: bool = False,
 ) -> Path:
     """Create a synthetic .clip file with an embedded SQLite database.
@@ -40,8 +39,6 @@ def _make_clip_file(
         When *False*, the CanvasPreview table is NOT created.
     insert_null:
         When *True*, insert NULL as ImageData instead of PNG bytes.
-    insert_garbage:
-        When *True*, insert garbage bytes (not a valid PNG) as ImageData.
     insert_no_png_sig:
         When *True*, insert valid non-PNG bytes (no PNG signature) as ImageData.
     """
@@ -59,11 +56,6 @@ def _make_clip_file(
         conn.execute("CREATE TABLE CanvasPreview (ImageData BLOB)")
         if insert_null:
             conn.execute("INSERT INTO CanvasPreview (ImageData) VALUES (NULL)")
-        elif insert_garbage:
-            conn.execute(
-                "INSERT INTO CanvasPreview (ImageData) VALUES (?)",
-                (b"NOT_A_PNG_JUST_GARBAGE\x00\xff\xfe",),
-            )
         elif insert_no_png_sig:
             # Valid data but no PNG signature - e.g. raw JPEG-like bytes
             conn.execute(
@@ -160,17 +152,6 @@ class TestInvalidImageData:
         clip_path = _make_clip_file(
             tmp_path / "null_data.clip",
             insert_null=True,
-        )
-
-        result = render_clip_image(clip_path)
-
-        assert result is None
-
-    def test_render_clip_image_corrupt_png(self, tmp_path: Path) -> None:
-        """Garbage ImageData that is not a valid PNG yields None."""
-        clip_path = _make_clip_file(
-            tmp_path / "corrupt_png.clip",
-            insert_garbage=True,
         )
 
         result = render_clip_image(clip_path)

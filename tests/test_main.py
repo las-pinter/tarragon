@@ -5,18 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-import tarragon.main as main_module
 from tarragon.db.database import Database
-from tarragon.main import MainWindow, main
-
-
-class TestMainModule:
-    """The main module imports cleanly."""
-
-    def test_main_module_imports_cleanly(self) -> None:
-        """The main module imports without side effects or errors."""
-        assert hasattr(main_module, "MainWindow")
-        assert hasattr(main_module, "main")
+from tarragon.main import MainWindow
 
 
 class TestMainWindow:
@@ -40,11 +30,3 @@ class TestMainWindow:
             assert isinstance(window._database, Database)
         finally:
             window.close()
-
-
-class TestEntryPoint:
-    """The main() entry point exists."""
-
-    def test_main_function_exists(self) -> None:
-        """The main() function is callable."""
-        assert callable(main)

@@ -109,6 +109,66 @@ class TestThumbnailUpsert:
         assert result["full_cache_path"] is None
 
 
+class TestBulkUpsertStubs:
+    """The bulk_upsert_stubs() method populates and updates thumbnail stubs."""
+
+    def test_bulk_upsert_stubs_inserts_and_updates(self, db: Database) -> None:
+        """The bulk_upsert_stubs() method inserts new records and updates existing ones."""
+        # Insert stubs
+        db.bulk_upsert_stubs(
+            [
+                ("/test/a.png", 100, 500),
+                ("/test/b.png", 200, 600),
+            ]
+        )
+
+        # Verify stubs were inserted with placeholder values
+        rec_a = db.get_thumbnail("/test/a.png")
+        assert rec_a is not None
+        assert rec_a["mtime"] == 100
+        assert rec_a["size"] == 500
+        assert rec_a["width"] == 0
+        assert rec_a["height"] == 0
+        assert rec_a["cache_uuid"] == ""
+        assert rec_a["thumbnail_cache_path"] is None
+
+        # Update stubs (simulating a re-scan with new mtime/size)
+        db.bulk_upsert_stubs(
+            [
+                ("/test/a.png", 999, 777),
+            ]
+        )
+        rec_a_updated = db.get_thumbnail("/test/a.png")
+        assert rec_a_updated is not None
+        assert rec_a_updated["mtime"] == 999
+        assert rec_a_updated["size"] == 777
+
+        # Verify upsert_thumbnail (from render) overwrites stub correctly
+        db.upsert_thumbnail(
+            path="/test/a.png",
+            mtime=999,
+            size=777,
+            width=1920,
+            height=1080,
+            cache_uuid="real-uuid",
+            thumbnail_cache_path="/cache/thumb.png",
+            preview_cache_path="/cache/preview.png",
+            full_cache_path="/cache/full.png",
+        )
+        rec_a_final = db.get_thumbnail("/test/a.png")
+        assert rec_a_final is not None
+        assert rec_a_final["width"] == 1920
+        assert rec_a_final["height"] == 1080
+        assert rec_a_final["cache_uuid"] == "real-uuid"
+        assert rec_a_final["thumbnail_cache_path"] == "/cache/thumb.png"
+
+    def test_bulk_upsert_stubs_empty_list_is_noop(self, db: Database) -> None:
+        """The bulk_upsert_stubs() method does nothing and does not error when given an empty list."""
+        db.bulk_upsert_stubs([])
+        # No error, no records
+        assert db.fetch_all("SELECT COUNT(*) as cnt FROM thumbnails")[0]["cnt"] == 0
+
+
 class TestThumbnailDelete:
     """delete_thumbnail removes thumbnail records."""
 

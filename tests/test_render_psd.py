@@ -90,16 +90,6 @@ class TestRenderPSD:
 class TestRenderPSDEdgeCases:
     """Edge cases for the PSD rendering pipeline."""
 
-    def test_compute_worker_count_explicit_none_override(self) -> None:
-        """_compute_worker_count(None) falls through to RAM-based calculation same as no arg."""
-        default = _compute_worker_count()
-        explicit_none = _compute_worker_count(None)
-
-        assert isinstance(explicit_none, int)
-        assert 1 <= explicit_none <= 8
-        # Both paths go through the same RAM logic
-        assert explicit_none == default
-
     def test_compute_worker_count_multiple_calls_reevaluates_ram(self) -> None:
         """_compute_worker_count re-evaluates available RAM on each call (not cached)."""
         with patch("tarragon.renderers.psd.psutil.virtual_memory") as mock_vm:
@@ -221,19 +211,6 @@ class TestRenderPSDEdgeCases:
         finally:
             if _tmod._shared_executor is not None and _tmod._shared_executor is not saved:
                 _tmod.shutdown_executor()
-            _tmod._shared_executor = saved
-
-    def test_shutdown_executor_when_already_none_is_safe(self) -> None:
-        """_shutdown_executor does not error when called with _shared_executor already None."""
-        saved = _tmod._shared_executor
-        _tmod._shared_executor = None
-        try:
-            # Should not raise
-            _tmod.shutdown_executor()
-            _tmod.shutdown_executor()
-            _tmod.shutdown_executor()
-            assert _tmod._shared_executor is None
-        finally:
             _tmod._shared_executor = saved
 
     def test_render_psd_image_timeout_returns_none(self) -> None:

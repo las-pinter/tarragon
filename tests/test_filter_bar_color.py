@@ -6,6 +6,7 @@ from collections.abc import Generator
 
 import pytest
 from PySide6.QtWidgets import QPushButton
+
 from tarragon.widgets.filter_bar_color import FilterBarColor
 
 

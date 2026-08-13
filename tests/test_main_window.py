@@ -7,6 +7,7 @@ from typing import Any
 from unittest.mock import MagicMock
 
 from PySide6.QtWidgets import QDockWidget, QMainWindow, QMenu, QMenuBar, QPushButton
+
 from tarragon.db.database import Database
 from tarragon.main_window import MainWindow
 from tarragon.services.tag_service import TagService
@@ -175,9 +176,9 @@ class TestFilteredQueryRegression:
             window._run_filtered_query()
 
             # Model should still have 2 paths
-            assert (
-                window.thumbnail_model.rowCount() == 2
-            ), "_run_filtered_query() cleared the gallery when _current_folder was empty"
+            assert window.thumbnail_model.rowCount() == 2, (
+                "_run_filtered_query() cleared the gallery when _current_folder was empty"
+            )
         finally:
             window.close()
 

@@ -11,9 +11,10 @@ from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
-import tarragon.renderers.psd as _tmod
 from PIL import Image
 from psd_tools import PSDImage
+
+import tarragon.renderers.psd as _tmod
 from tarragon.renderers.cache import MASTER_LONG_EDGE
 from tarragon.renderers.psd import (
     _composite_psd_in_process,

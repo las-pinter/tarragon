@@ -92,9 +92,9 @@ class TestBuildCommand:
         # The entry point should be the last argument
         entry_point = cmd[-1]
         assert entry_point.endswith("main.py"), f"Last argument should be main.py entry point, got: {entry_point}"
-        assert (
-            "src" in entry_point and "tarragon" in entry_point
-        ), f"Entry point path should contain src/tarragon, got: {entry_point}"
+        assert "src" in entry_point and "tarragon" in entry_point, (
+            f"Entry point path should contain src/tarragon, got: {entry_point}"
+        )
 
     def test_build_command_includes_tarragon_package(self, package_module: Any) -> None:
         """The Nuitka command includes the tarragon package."""
@@ -103,9 +103,9 @@ class TestBuildCommand:
 
         mock_run.assert_called_once()
         cmd = mock_run.call_args[0][0]
-        assert (
-            "--include-package=tarragon" in cmd
-        ), "Nuitka command must include --include-package=tarragon to bundle the application package"
+        assert "--include-package=tarragon" in cmd, (
+            "Nuitka command must include --include-package=tarragon to bundle the application package"
+        )
 
     def test_build_command_includes_python_path(self, package_module: Any) -> None:
         """The Nuitka build sets PYTHONPATH to the src directory."""

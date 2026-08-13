@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 from PySide6.QtWidgets import QLabel, QPushButton
+
 from tarragon.db.database import Database
 from tarragon.services.tag_service import TagService
 from tarragon.widgets.filter_bar_tag import FilterBarTag

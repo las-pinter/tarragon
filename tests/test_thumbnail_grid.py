@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
     QStyleOptionViewItem,
     QToolTip,
 )
+
 from tarragon.models.thumbnail_model import ThumbnailModel
 from tarragon.theme.colors import BG_PRIMARY, BG_SECONDARY
 from tarragon.widgets.thumbnail_delegate import (

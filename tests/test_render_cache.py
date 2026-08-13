@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 import pytest
 from PIL import Image
+
 from tarragon.renderers.cache import (
     RESOLUTION_PREVIEW,
     RESOLUTION_THUMBNAIL,

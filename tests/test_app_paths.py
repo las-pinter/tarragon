@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 import tarragon.app_paths as app_paths_module
 from tarragon.app_paths import cache_dir, data_dir, db_path, ensure_dirs
 

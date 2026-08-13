@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
 from tarragon.common import ImageInfo
 from tarragon.db.database import Database
 from tarragon.services.settings_service import SettingsService
@@ -1464,9 +1465,9 @@ class TestTagsContainerLayout:
         """Tags container has a minimum height even when no tags are present."""
         panel = PreviewPanel(settings_service)
         try:
-            assert (
-                panel._tags_container.minimumHeight() > 0
-            ), "Tags container should have a minimum height to remain visible when empty"
+            assert panel._tags_container.minimumHeight() > 0, (
+                "Tags container should have a minimum height to remain visible when empty"
+            )
         finally:
             panel.close()
 
@@ -1606,9 +1607,9 @@ class TestColorSquares:
             for name, btn in panel._color_square_buttons.items():
                 effect = btn.graphicsEffect()
                 assert isinstance(effect, QGraphicsOpacityEffect), f"Square '{name}' has no opacity effect"
-                assert (
-                    abs(effect.opacity() - 0.3) < 0.01
-                ), f"Square '{name}' opacity is {effect.opacity()}, expected 0.3"
+                assert abs(effect.opacity() - 0.3) < 0.01, (
+                    f"Square '{name}' opacity is {effect.opacity()}, expected 0.3"
+                )
         finally:
             panel.close()
 
@@ -1671,9 +1672,9 @@ class TestColorSquares:
         panel = PreviewPanel(settings_service)
         try:
             for name, btn in panel._color_square_buttons.items():
-                assert (
-                    btn.cursor().shape() == Qt.CursorShape.PointingHandCursor
-                ), f"Color square '{name}' should have PointingHandCursor"
+                assert btn.cursor().shape() == Qt.CursorShape.PointingHandCursor, (
+                    f"Color square '{name}' should have PointingHandCursor"
+                )
         finally:
             panel.close()
 
@@ -1682,9 +1683,9 @@ class TestColorSquares:
         panel = PreviewPanel(settings_service)
         try:
             for name, btn in panel._color_square_buttons.items():
-                assert (
-                    btn.property("colorSquare") is True
-                ), f"Color square '{name}' should have colorSquare=True property"
+                assert btn.property("colorSquare") is True, (
+                    f"Color square '{name}' should have colorSquare=True property"
+                )
         finally:
             panel.close()
 

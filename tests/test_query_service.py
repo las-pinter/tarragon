@@ -1,4 +1,4 @@
-"""Tests for tarragon.services.query_service — QueryService filter composition."""
+"""Tests for QueryService"""
 
 from __future__ import annotations
 
@@ -8,15 +8,13 @@ import pytest
 from tarragon.db.database import Database
 from tarragon.services.query_service import QueryService
 
-# ── Helpers ──────────────────────────────────────────────────────────────
-
 
 def _populate_test_data(db: Database) -> dict[str, int]:
     """Populate the in-memory DB with test thumbnails, tags, and file tags.
 
-    Returns a mapping of tag name → tag id for use in tests.
+    Returns a mapping of tag name -> tag id for use in tests.
     """
-    # ── Thumbnails ────────────────────────────────────────────────────
+    # Thumbnails
     # Folder: /test/photos/
     db.upsert_thumbnail("/test/photos/sunset_beach.png", mtime=1, size=100, width=800, height=600, cache_uuid="u1")
     db.upsert_thumbnail("/test/photos/forest_path.jpg", mtime=2, size=200, width=1024, height=768, cache_uuid="u2")
@@ -28,7 +26,7 @@ def _populate_test_data(db: Database) -> dict[str, int]:
     # Folder: /test/other/
     db.upsert_thumbnail("/test/other/beach.png", mtime=7, size=120, width=800, height=600, cache_uuid="u7")
 
-    # ── Tags (manual = 'user' source, colour = 'auto_color' source) ───
+    # Tags (manual = 'user' source, colour = 'auto_color' source)
     tag_ids: dict[str, int] = {}
 
     # Manual tags
@@ -42,40 +40,37 @@ def _populate_test_data(db: Database) -> dict[str, int]:
     tag_ids["green"] = db.ensure_tag("green")
     tag_ids["blue"] = db.ensure_tag("blue")
 
-    # ── File-tag associations ─────────────────────────────────────────
-    # sunset_beach.png  — beach (user), vacation (user), warm (auto_color)
+    # File-tag associations
+    # sunset_beach.png  - beach (user), vacation (user), warm (auto_color)
     db.add_file_tags(["/test/photos/sunset_beach.png"], tag_ids["beach"], source="user")
     db.add_file_tags(["/test/photos/sunset_beach.png"], tag_ids["vacation"], source="user")
     db.add_file_tags(["/test/photos/sunset_beach.png"], tag_ids["warm"], source="auto_color")
 
-    # forest_path.jpg   — nature (user), hiking (user), green (auto_color)
+    # forest_path.jpg   - nature (user), hiking (user), green (auto_color)
     db.add_file_tags(["/test/photos/forest_path.jpg"], tag_ids["nature"], source="user")
     db.add_file_tags(["/test/photos/forest_path.jpg"], tag_ids["hiking"], source="user")
     db.add_file_tags(["/test/photos/forest_path.jpg"], tag_ids["green"], source="auto_color")
 
-    # blue_ocean.jpg    — beach (user), vacation (user), blue (auto_color)
+    # blue_ocean.jpg    - beach (user), vacation (user), blue (auto_color)
     db.add_file_tags(["/test/photos/blue_ocean.jpg"], tag_ids["beach"], source="user")
     db.add_file_tags(["/test/photos/blue_ocean.jpg"], tag_ids["vacation"], source="user")
     db.add_file_tags(["/test/photos/blue_ocean.jpg"], tag_ids["blue"], source="auto_color")
 
-    # green_valley.png  — nature (user), green (auto_color)
+    # green_valley.png  - nature (user), green (auto_color)
     db.add_file_tags(["/test/photos/green_valley.png"], tag_ids["nature"], source="user")
     db.add_file_tags(["/test/photos/green_valley.png"], tag_ids["green"], source="auto_color")
 
-    # mountain_top.jpg  — hiking (user), blue (auto_color)
+    # mountain_top.jpg  - hiking (user), blue (auto_color)
     db.add_file_tags(["/test/photos/mountain_top.jpg"], tag_ids["hiking"], source="user")
     db.add_file_tags(["/test/photos/mountain_top.jpg"], tag_ids["blue"], source="auto_color")
 
-    # doc.txt — no tags at all
+    # doc.txt - no tags at all
 
-    # /test/other/beach.png  — beach (user), warm (auto_color)
+    # /test/other/beach.png  - beach (user), warm (auto_color)
     db.add_file_tags(["/test/other/beach.png"], tag_ids["beach"], source="user")
     db.add_file_tags(["/test/other/beach.png"], tag_ids["warm"], source="auto_color")
 
     return tag_ids
-
-
-# ── Fixtures ─────────────────────────────────────────────────────────────
 
 
 @pytest.fixture(scope="module")
@@ -86,7 +81,7 @@ def db() -> Database:
     return database
 
 
-@pytest.fixture()
+@pytest.fixture
 def service(db: Database) -> QueryService:
     """Provide a QueryService wired to the in-memory database."""
     return QueryService(db)
@@ -94,11 +89,8 @@ def service(db: Database) -> QueryService:
 
 @pytest.fixture(scope="module")
 def tag_ids(db: Database) -> dict[str, int]:
-    """Populate test data once per module and return tag name → id mapping."""
+    """Populate test data once per module and return tag name -> id mapping."""
     return _populate_test_data(db)
-
-
-# ── Tests ───────────────────────────────────────────────────────────────
 
 
 class TestQueryService:
@@ -109,7 +101,7 @@ class TestQueryService:
         service: QueryService,
         tag_ids: dict[str, int],  # noqa: ARG002
     ) -> None:
-        """No filters at all — returns every path under the folder."""
+        """No filters at all - returns every path under the folder."""
         result = service.query(folder_filters={"/test/photos/"})
 
         assert len(result) == 6
@@ -167,7 +159,7 @@ class TestQueryService:
 
         # Also test that a path containing these chars won't match accidentally
         result2 = service.query(folder_filters={"/test/photos/"}, filename_filter="do_")
-        # "doc.txt" — the '_' should be literal, so "do_" won't match "doc.txt"
+        # "doc.txt" - the '_' should be literal, so "do_" won't match "doc.txt"
         # 'c' != '_', so no match
         assert result2 == []
 
@@ -218,16 +210,13 @@ class TestQueryService:
 
         paths = {str(p) for p in result}
         # No file has BOTH green AND blue colour tags
-        # green → forest_path.jpg, green_valley.png
-        # blue  → blue_ocean.jpg, mountain_top.jpg
+        # green -> forest_path.jpg, green_valley.png
+        # blue  -> blue_ocean.jpg, mountain_top.jpg
         # Intersection: empty
         assert paths == set()
 
     def test_tag_and_color_combined(self, service: QueryService, tag_ids: dict[str, int]) -> None:
-        """Both tag AND colour filters applied together (AND between groups).
-
-        File must have ALL manual tags AND ALL of the colour tags.
-        """
+        """Both tag and colour filters applied together (AND between groups)."""
         result = service.query(
             folder_filters={"/test/photos/"},
             tag_ids={tag_ids["nature"]},
@@ -235,8 +224,8 @@ class TestQueryService:
         )
 
         paths = {str(p) for p in result}
-        # forest_path.jpg → nature (user) + green (auto_color)  ✓
-        # green_valley.png → nature (user) + green (auto_color) ✓
+        # forest_path.jpg -> nature (user) + green (auto_color)
+        # green_valley.png -> nature (user) + green (auto_color)
         assert paths == {
             str(Path("/test/photos/forest_path.jpg")),
             str(Path("/test/photos/green_valley.png")),
@@ -278,8 +267,6 @@ class TestQueryService:
         """Empty color_tags set is treated as no color filter (returns all)."""
         result = service.query(folder_filters={"/test/photos/"}, color_tags=set())
         assert len(result) == 6
-
-    # ── Bug 1: Global query (empty folder_filters) ────────────────────
 
     def test_global_query_returns_all_thumbnails(
         self,
@@ -333,8 +320,6 @@ class TestQueryService:
             str(Path("/test/other/beach.png")),
         }
 
-    # ── Multi-folder OR logic ─────────────────────────────────────────
-
     def test_multi_folder_or_logic(
         self,
         service: QueryService,
@@ -350,7 +335,7 @@ class TestQueryService:
         service: QueryService,
         tag_ids: dict[str, int],  # noqa: ARG002
     ) -> None:
-        """Multiple folders where only some match — returns union of matches."""
+        """Multiple folders where only some match - returns union of matches."""
         result = service.query(folder_filters={"/test/photos/", "/nonexistent/"})
         # Only /test/photos/ matches (6 thumbnails)
         assert len(result) == 6
@@ -363,8 +348,6 @@ class TestQueryService:
         """Empty folder_filters set means no folder constraint (global mode)."""
         result = service.query(folder_filters=set())
         assert len(result) == 7
-
-    # ── Folder prefix collision ───────────────────────────────────────
 
     def test_folder_filter_does_not_match_sibling_with_shared_prefix(
         self,
@@ -379,15 +362,8 @@ class TestQueryService:
         paths = {str(p) for p in result}
         assert paths == {str(Path("/photos/img.png"))}
 
-    # ── Windows path separator normalization ──────────────────────
-
     def test_folder_filter_with_backslash_paths(self, db: Database) -> None:
-        """Folder filter works when both stored paths and filter use backslashes.
-
-        This reproduces the original bug: on Windows, paths stored as
-        ``D:\\Dropbox\\...\\image.jpg`` were not matched by a LIKE pattern
-        ``D:\\Dropbox\\.../%`` because ``/`` != ``\\``.
-        """
+        """Folder filter works when both stored paths and filter use backslashes."""
         svc = QueryService(db)
         # Simulate Windows-style paths being stored (they get normalized to '/')
         db.upsert_thumbnail(
@@ -415,7 +391,7 @@ class TestQueryService:
             cache_uuid="w3",
         )
 
-        # Query with backslash folder path — this was the bug
+        # Query with backslash folder path - this was the bug
         result = svc.query(folder_filters={"D:\\Dropbox\\Art\\Speedpaintings"})
         paths = {str(p) for p in result}
         assert paths == {

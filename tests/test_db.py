@@ -1,4 +1,4 @@
-"""Tests for src/tarragon/db.py — schema init and all CRUD operations."""
+"""Tests for Database"""
 
 from __future__ import annotations
 
@@ -9,10 +9,8 @@ from pathlib import Path
 import pytest
 from tarragon.db.database import Database
 
-# ── Fixtures ────────────────────────────────────────────────────
 
-
-@pytest.fixture()
+@pytest.fixture
 def db() -> Generator[Database, None, None]:
     """Provide an in-memory database for each test (isolated)."""
     conn = Database(Path(":memory:"))
@@ -21,10 +19,9 @@ def db() -> Generator[Database, None, None]:
     conn.close()
 
 
-# ── Schema Init ────────────────────────────────────────────────
-
-
 class TestInitSchema:
+    """init_schema() creates the expected tables and is idempotent."""
+
     def test_creates_all_8_tables(self, db: Database) -> None:
         """init_schema() creates all 8 expected tables (excluding internal sqlite_sequence)."""
         cursor = db._conn.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
@@ -50,6 +47,8 @@ class TestInitSchema:
 
 
 class TestSchemaVersion:
+    """Schema version get/set roundtrip behaviour."""
+
     def test_version_defaults_to_zero(self, db: Database) -> None:
         """get_schema_version returns 0 before any version is set."""
         assert db.get_schema_version() == 0
@@ -68,10 +67,9 @@ class TestSchemaVersion:
         assert db.get_schema_version() == 10
 
 
-# ── Thumbnail CRUD ─────────────────────────────────────────────
-
-
 class TestThumbnailUpsert:
+    """upsert_thumbnail inserts and updates thumbnail records."""
+
     def test_insert_new_thumbnail(self, db: Database) -> None:
         """upsert_thumbnail inserts a new record and get_thumbnail returns it."""
         path = "/images/cat.png"
@@ -112,6 +110,8 @@ class TestThumbnailUpsert:
 
 
 class TestThumbnailDelete:
+    """delete_thumbnail removes thumbnail records."""
+
     def test_delete_existing(self, db: Database) -> None:
         """delete_thumbnail removes the record; get returns None."""
         path = "/images/delete_me.png"
@@ -126,7 +126,10 @@ class TestThumbnailDelete:
 
 
 class TestThumbnailGet:
+    """get_thumbnail returns thumbnail records."""
+
     def test_missing_path_returns_none(self, db: Database) -> None:
+        """get_thumbnail returns None for a path with no record."""
         assert db.get_thumbnail("/nonexistent/path.jpg") is None
 
     def test_created_at_default_is_set(self, db: Database) -> None:
@@ -139,6 +142,8 @@ class TestThumbnailGet:
 
 
 class TestThumbnailListForFolder:
+    """list_thumbnails_for_folder returns paths under a folder."""
+
     def test_returns_matching_paths(self, db: Database) -> None:
         """list_thumbnails_for_folder returns only paths under the given folder."""
         db.upsert_thumbnail("/photos/2024/cat.png", mtime=1, size=100, width=10, height=10, cache_uuid="u1")
@@ -152,6 +157,7 @@ class TestThumbnailListForFolder:
         assert "/photos/2024/dog.png" in paths
 
     def test_empty_folder_returns_empty_list(self, db: Database) -> None:
+        """list_thumbnails_for_folder returns an empty list for an empty folder."""
         result = db.list_thumbnails_for_folder("/nonexistent/folder/")
         assert result == []
 
@@ -165,34 +171,40 @@ class TestThumbnailListForFolder:
         assert paths == {"/photos/img.png"}
 
 
-# ── Tag CRUD ───────────────────────────────────────────────────
-
-
 class TestEnsureTag:
+    """ensure_tag creates tags and returns stable IDs."""
+
     def test_creates_new_tag(self, db: Database) -> None:
+        """ensure_tag creates a new tag and returns a positive ID."""
         tag_id = db.ensure_tag("red")
         assert isinstance(tag_id, int)
         assert tag_id > 0
 
     def test_returns_same_id_on_repeat(self, db: Database) -> None:
+        """ensure_tag returns the same ID for the same tag name."""
         id1 = db.ensure_tag("blue")
         id2 = db.ensure_tag("blue")
         assert id1 == id2
 
     def test_different_tags_get_different_ids(self, db: Database) -> None:
+        """Different tag names receive different IDs."""
         id_green = db.ensure_tag("green")
         id_yellow = db.ensure_tag("yellow")
         assert id_green != id_yellow
 
 
 class TestAddFileTags:
+    """add_file_tags associates tags with file paths."""
+
     def test_adds_single_tag_to_path(self, db: Database) -> None:
+        """add_file_tags associates one tag with a path."""
         tag_id = db.ensure_tag("important")
         db.add_file_tags(["/a.png"], tag_id)
 
         assert db.get_file_tag_ids("/a.png") == {tag_id}
 
     def test_adds_same_tag_to_multiple_paths(self, db: Database) -> None:
+        """add_file_tags associates a tag with multiple paths."""
         tag_id = db.ensure_tag("urgent")
         paths = ["/x.png", "/y.png", "/z.png"]
         db.add_file_tags(paths, tag_id)
@@ -201,6 +213,7 @@ class TestAddFileTags:
             assert db.get_file_tag_ids(p) == {tag_id}
 
     def test_default_source_is_user(self, db: Database) -> None:
+        """add_file_tags defaults the association source to 'user'."""
         tag_id = db.ensure_tag("manual")
         db.add_file_tags(["/file.png"], tag_id)
 
@@ -209,7 +222,10 @@ class TestAddFileTags:
 
 
 class TestRemoveFileTags:
+    """remove_file_tags removes tag associations."""
+
     def test_removes_specific_tag(self, db: Database) -> None:
+        """remove_file_tags removes the given tag association only."""
         id_a = db.ensure_tag("alpha")
         id_b = db.ensure_tag("beta")
         db.add_file_tags(["/t.png"], tag_id=id_a)
@@ -219,6 +235,7 @@ class TestRemoveFileTags:
         assert db.get_file_tag_ids("/t.png") == {id_b}
 
     def test_does_not_remove_other_tags(self, db: Database) -> None:
+        """remove_file_tags leaves other paths and tags untouched."""
         id_x = db.ensure_tag("x")
         id_y = db.ensure_tag("y")
         db.add_file_tags(["/u.png"], tag_id=id_x)
@@ -229,10 +246,14 @@ class TestRemoveFileTags:
 
 
 class TestGetFileTagIds:
+    """get_file_tag_ids returns the tag IDs for a path."""
+
     def test_empty_for_missing_path(self, db: Database) -> None:
+        """get_file_tag_ids returns an empty set for a missing path."""
         assert db.get_file_tag_ids("/ghost.png") == set()
 
     def test_multiple_tags_as_set(self, db: Database) -> None:
+        """get_file_tag_ids returns all tag IDs as a set."""
         id_1 = db.ensure_tag("one")
         id_2 = db.ensure_tag("two")
         db.add_file_tags(["/multi.png"], tag_id=id_1)
@@ -242,6 +263,8 @@ class TestGetFileTagIds:
 
 
 class TestReplaceAutoColorTags:
+    """replace_auto_color_tags swaps auto-color tags for a path."""
+
     def test_replaces_old_auto_color_with_new(self, db: Database) -> None:
         """Old auto_color tags are deleted and new ones inserted."""
         old_id = db.ensure_tag("old_red")
@@ -277,6 +300,8 @@ class TestReplaceAutoColorTags:
 
 
 class TestDeleteTag:
+    """delete_tag removes tags and cascades to file tags."""
+
     def test_delete_tag_removes_tag(self, db: Database) -> None:
         """delete_tag removes the tag from the tags table."""
         tag_id = db.ensure_tag("deleteme")
@@ -324,6 +349,8 @@ class TestDeleteTag:
 
 
 class TestGetTagName:
+    """get_tag_name resolves tag IDs to names."""
+
     def test_get_tag_name_returns_name(self, db: Database) -> None:
         """get_tag_name returns the correct name for an existing tag."""
         tag_id = db.ensure_tag("test-tag")
@@ -341,11 +368,11 @@ class TestGetTagName:
         assert db.get_tag_name(id_b) == "beta"
 
 
-# ── Favorites CRUD ─────────────────────────────────────────────
-
-
 class TestAddFavorite:
+    """add_favorite inserts favourite entries."""
+
     def test_adds_favorite(self, db: Database) -> None:
+        """add_favorite stores a favourite with label and sort order."""
         db.add_favorite("/fav.png", label="sunrise", sort_order=1)
 
         favorites = db.list_favorites()
@@ -355,6 +382,7 @@ class TestAddFavorite:
         assert favorites[0]["sort_order"] == 1
 
     def test_default_label_and_sort_order(self, db: Database) -> None:
+        """add_favorite defaults label to None and sort_order to 0."""
         db.add_favorite("/default.png")
 
         fav = db.list_favorites()[0]
@@ -363,18 +391,25 @@ class TestAddFavorite:
 
 
 class TestRemoveFavorite:
+    """remove_favorite deletes favourite entries."""
+
     def test_removes_existing(self, db: Database) -> None:
+        """remove_favorite deletes an existing favourite."""
         db.add_favorite("/gone.png")
         db.remove_favorite("/gone.png")
 
         assert len(db.list_favorites()) == 0
 
     def test_no_error_on_missing_path(self, db: Database) -> None:
+        """remove_favorite silently ignores a missing path."""
         db.remove_favorite("/nowhere.png")  # Should not raise
 
 
 class TestListFavorites:
+    """list_favorites returns favourites in display order."""
+
     def test_ordered_by_sort_order_then_path(self, db: Database) -> None:
+        """list_favorites sorts by sort_order, then by path."""
         db.add_favorite("/b.png", sort_order=1)
         db.add_favorite("/a.png", sort_order=1)
         db.add_favorite("/c.png", sort_order=2)
@@ -383,49 +418,53 @@ class TestListFavorites:
         assert paths == ["/a.png", "/b.png", "/c.png"]
 
 
-# ── Settings CRUD ──────────────────────────────────────────────
-
-
 class TestSettingsCrud:
+    """Settings can be stored, read, and overwritten."""
+
     def test_get_missing_returns_none(self, db: Database) -> None:
+        """get_setting returns None for an unset key."""
         assert db.get_setting("no_such_key") is None
 
     def test_set_and_get_roundtrip(self, db: Database) -> None:
+        """set_setting stores a value that get_setting reads back."""
         db.set_setting("theme", "dark")
         assert db.get_setting("theme") == "dark"
 
     def test_overwrite_value(self, db: Database) -> None:
+        """set_setting overwrites an existing value."""
         db.set_setting("mode", "fast")
         db.set_setting("mode", "slow")
         assert db.get_setting("mode") == "slow"
 
 
-# ── Editor Associations CRUD ───────────────────────────────────
-
-
 class TestEditorAssociations:
+    """Editor associations can be upserted, read, and removed."""
+
     def test_get_missing_returns_none(self, db: Database) -> None:
+        """get_editor_command returns None for an unknown extension."""
         assert db.get_editor_command(".xyz") is None
 
     def test_upsert_and_get(self, db: Database) -> None:
+        """upsert_editor_association stores a command that get_editor_command reads."""
         db.upsert_editor_association(".psd", "gimp {file}")
         assert db.get_editor_command(".psd") == "gimp {file}"
 
     def test_overwrite_template(self, db: Database) -> None:
+        """upsert_editor_association overwrites an existing template."""
         db.upsert_editor_association(".xcf", "paint.net {file}")
         db.upsert_editor_association(".xcf", "krita {file}")
         assert db.get_editor_command(".xcf") == "krita {file}"
 
     def test_remove(self, db: Database) -> None:
+        """remove_editor_association deletes the stored command."""
         db.upsert_editor_association(".svg", "inkscape {file}")
         db.remove_editor_association(".svg")
         assert db.get_editor_command(".svg") is None
 
 
-# ── Folder Cache UUIDs ─────────────────────────────────────────
-
-
 class TestFolderCacheUuids:
+    """Folder UUID mappings can be stored and retrieved."""
+
     def test_get_folder_uuid_returns_none_when_absent(self, db: Database) -> None:
         """get_folder_uuid returns None for an unmapped folder."""
         assert db.get_folder_uuid("/photos/vacation") is None
@@ -450,6 +489,8 @@ class TestFolderCacheUuids:
 
 
 class TestGetOrCreateFolderUuid:
+    """get_or_create_folder_uuid returns a stable UUID per folder."""
+
     def test_creates_new_entry_when_absent(self, db: Database) -> None:
         """get_or_create_folder_uuid inserts and returns the candidate UUID for a new folder."""
         result = db.get_or_create_folder_uuid("/photos/new", "candidate-uuid")
@@ -479,6 +520,8 @@ class TestGetOrCreateFolderUuid:
 
 
 class TestCleanupStaleFolderUuids:
+    """cleanup_stale_folder_uuids removes mappings for missing folders."""
+
     def test_removes_entries_where_folder_missing(self, db: Database, tmp_path: Path) -> None:
         """Entries pointing to non-existent folders are deleted."""
         existing_dir = str(tmp_path / "exists")
@@ -511,7 +554,7 @@ class TestCleanupStaleFolderUuids:
         assert db.get_folder_uuid(dir_b) == "uuid-b"
 
     def test_returns_zero_when_table_empty(self, db: Database) -> None:
-        """No entries → returns 0, no error."""
+        """No entries -> returns 0, no error."""
         assert db.cleanup_stale_folder_uuids() == 0
 
     def test_removes_multiple_stale_entries(self, db: Database) -> None:
@@ -528,10 +571,9 @@ class TestCleanupStaleFolderUuids:
         assert db.get_folder_uuid("/gone/three") is None
 
 
-# ── Context Manager ────────────────────────────────────────────
-
-
 class TestContextManager:
+    """Database works as a context manager and closes on exit."""
+
     def test_closes_connection_on_exit(self, tmp_path: Path) -> None:
         """Database as context manager closes the connection."""
         db_file = tmp_path / "cm.db"
@@ -539,17 +581,16 @@ class TestContextManager:
             d.init_schema()
             d.set_setting("test", "1")
 
-        # Connection should be closed — executing raises an error
+        # Connection should be closed - executing raises an error
         with pytest.raises(sqlite3.ProgrammingError):
             d._conn.execute("SELECT 1")
 
 
-# ── Distinct Folders ───────────────────────────────────────────
-
-
 class TestListDistinctFolders:
+    """list_distinct_folders returns unique parent folders."""
+
     def test_empty_db_returns_empty_list(self, db: Database) -> None:
-        """No thumbnails → no folders."""
+        """No thumbnails -> no folders."""
         assert db.list_distinct_folders() == []
 
     def test_returns_distinct_parent_folders(self, db: Database) -> None:
@@ -578,9 +619,6 @@ class TestListDistinctFolders:
         folders = db.list_distinct_folders()
         assert "" not in folders
         assert "/valid" in folders
-
-
-# ── Windows Path Normalization ─────────────────────────────────
 
 
 class TestWindowsPathNormalization:
@@ -644,7 +682,7 @@ class TestWindowsPathNormalization:
             height=10,
             cache_uuid="u2",
         )
-        # Query with backslash separator — this was the original bug
+        # Query with backslash separator - this was the original bug
         results = db.list_thumbnails_for_folder("D:\\Dropbox\\Art")
         assert len(results) == 2
 

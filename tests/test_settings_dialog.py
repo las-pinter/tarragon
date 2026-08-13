@@ -1,4 +1,4 @@
-"""Tests for SettingsDialog — widget creation, save/load roundtrip, and enable/disable logic."""
+"""Tests for SettingsDialog"""
 
 from __future__ import annotations
 
@@ -20,10 +20,8 @@ from tarragon.db.database import Database
 from tarragon.services.settings_service import SettingsService
 from tarragon.widgets.settings_dialog import SettingsDialog
 
-# ── Fixtures ──────────────────────────────────────────────────────────────────
 
-
-@pytest.fixture()
+@pytest.fixture
 def service() -> SettingsService:
     """SettingsService backed by in-memory database."""
     db = Database(Path(":memory:"))
@@ -31,15 +29,12 @@ def service() -> SettingsService:
     return SettingsService(db)
 
 
-@pytest.fixture()
+@pytest.fixture
 def dialog(qapp: Any, service: SettingsService) -> Generator[SettingsDialog, None, None]:
     """SettingsDialog instance backed by the in-memory service."""
     d = SettingsDialog(service)
     yield d
     d.close()
-
-
-# ── Helpers ───────────────────────────────────────────────────────────────────
 
 
 def _get_widget(dialog: SettingsDialog, attr: str) -> Any:
@@ -48,10 +43,9 @@ def _get_widget(dialog: SettingsDialog, attr: str) -> Any:
     return wrapper.get_widget()
 
 
-# ── A. Dialog Creation ────────────────────────────────────────────────────────
-
-
 class TestDialogCreation:
+    """SettingsDialog construction and initial widget state."""
+
     def test_dialog_creates_without_error(self, dialog: SettingsDialog) -> None:
         """Basic instantiation succeeds and window title is correct."""
         assert dialog is not None
@@ -89,10 +83,9 @@ class TestDialogCreation:
         assert debug_check.isChecked() is False
 
 
-# ── B. Widget Types ───────────────────────────────────────────────────────────
-
-
 class TestWidgetTypes:
+    """Each setting is backed by the expected Qt widget type."""
+
     def test_performance_section_has_correct_widgets(self, dialog: SettingsDialog) -> None:
         """QSpinBox for ints, QDoubleSpinBox for floats in Performance."""
         assert isinstance(_get_widget(dialog, "_max_psd_workers_setting"), QSpinBox)
@@ -128,10 +121,9 @@ class TestWidgetTypes:
         assert isinstance(_get_widget(dialog, "_debug_mode_setting"), QCheckBox)
 
 
-# ── C. Save/Load Roundtrip ────────────────────────────────────────────────────
-
-
 class TestSaveLoadRoundtrip:
+    """Saving and canceling roundtrip values to SettingsService."""
+
     def test_save_updates_settings_service(self, dialog: SettingsDialog, service: SettingsService) -> None:
         """Change values, click OK, verify SettingsService has new values."""
         psd_workers = _get_widget(dialog, "_max_psd_workers_setting")
@@ -200,7 +192,7 @@ class TestSaveLoadRoundtrip:
 
     def test_cache_dir_default_preserved_on_save(self, dialog: SettingsDialog, service: SettingsService) -> None:
         """When cache_dir text matches platform default, service stores None."""
-        # Don't change the cache_dir — it shows the platform default
+        # Don't change the cache_dir, it shows the platform default
         dialog._on_accept()
 
         assert service.cache_dir.get() is None
@@ -217,12 +209,11 @@ class TestSaveLoadRoundtrip:
         assert service.cache_dir.get() == "/tmp/custom_cache"
 
 
-# ── D. Color Tagging Enable/Disable ───────────────────────────────────────────
-
-
 class TestColorTagEnableDisable:
+    """Color tagging sub-widgets enable and disable with the checkbox."""
+
     def test_color_tagging_widgets_disabled_when_unchecked(self, dialog: SettingsDialog) -> None:
-        """Uncheck color_tag_enabled → sub-widgets become disabled."""
+        """Unchecking color_tag_enabled disables the sub-widgets."""
         checkbox = _get_widget(dialog, "_color_tag_enabled_setting")
         checkbox.setChecked(False)
 
@@ -235,7 +226,7 @@ class TestColorTagEnableDisable:
         assert neutral_s_widget.isEnabled() is False
 
     def test_color_tagging_widgets_enabled_when_checked(self, dialog: SettingsDialog) -> None:
-        """Check color_tag_enabled → sub-widgets become enabled."""
+        """Checking color_tag_enabled enables the sub-widgets."""
         checkbox = _get_widget(dialog, "_color_tag_enabled_setting")
 
         # Toggle off first, then back on
@@ -264,10 +255,9 @@ class TestColorTagEnableDisable:
         assert neutral_s_widget.isEnabled() is True
 
 
-# ── E. Validation/Clamping ────────────────────────────────────────────────────
-
-
 class TestValidationClamping:
+    """Widget ranges and service clamping enforce setting bounds."""
+
     def test_spinbox_ranges_match_service_constraints(self, dialog: SettingsDialog) -> None:
         """QSpinBox/QDoubleSpinBox ranges align with SettingsService limits."""
         psd_workers = _get_widget(dialog, "_max_psd_workers_setting")
@@ -313,10 +303,9 @@ class TestValidationClamping:
         assert service.color_tag_palette_size.get() == 32
 
 
-# ── F. Tile Grid Size Combo ───────────────────────────────────────────────────
-
-
 class TestTileGridSizeCombo:
+    """Tile grid size combo presets, defaults, and save behavior."""
+
     def test_tile_grid_size_combobox_has_presets(self, dialog: SettingsDialog) -> None:
         """Verify combo has '1x1', '2x2', '3x3', '4x4'."""
         grid_combo = _get_widget(dialog, "_tile_grid_size_setting")
@@ -347,10 +336,9 @@ class TestTileGridSizeCombo:
         assert service.tile_grid_size.get() == "4x4"
 
 
-# ── G. Cache Format Combo ─────────────────────────────────────────────────────
-
-
 class TestCacheFormatCombo:
+    """Cache format combo presets and default selection."""
+
     def test_cache_format_combobox_has_uppercase_items(self, dialog: SettingsDialog) -> None:
         """Verify cache format combo has ['PNG', 'JPEG'] (uppercase)."""
         format_combo = _get_widget(dialog, "_cache_format_setting")

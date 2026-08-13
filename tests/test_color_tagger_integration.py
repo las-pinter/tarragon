@@ -1,8 +1,4 @@
-"""Integration tests for color tagger in the thumbnail pipeline.
-
-WAAAGH! Wrenchbasha's integration tests — verifies dat color tags flow
-from render → color extraction → DB persistence without breakin' anything!
-"""
+"""Tests for color tagger integration"""
 
 from __future__ import annotations
 
@@ -19,7 +15,7 @@ from tarragon.scanner import FileInfo
 from tarragon.services.thumbnail_service import ThumbnailService
 
 
-@pytest.fixture()
+@pytest.fixture
 def db() -> Generator[Database, None, None]:
     """Provide an in-memory database for each test (isolated)."""
     conn = Database(Path(":memory:"))
@@ -28,7 +24,7 @@ def db() -> Generator[Database, None, None]:
     conn.close()
 
 
-@pytest.fixture()
+@pytest.fixture
 def settings_mock() -> MagicMock:
     """Mock SettingsService with color tagging enabled and default parameters."""
     mock = MagicMock()
@@ -43,7 +39,7 @@ def settings_mock() -> MagicMock:
     return mock
 
 
-@pytest.fixture()
+@pytest.fixture
 def service(db: Database, settings_mock: MagicMock) -> ThumbnailService:
     """Create a ThumbnailService with real DB, mock settings_service, and mock threadpool."""
     with patch("tarragon.services.thumbnail_service.get_executor"):
@@ -92,7 +88,7 @@ def _run_render_all_resolutions(
 ) -> None:
     """Helper to run _render_all_resolutions with mocked render/save functions.
 
-    This simulates the full render pipeline: render → save → color tag → DB upsert.
+    This simulates the full render pipeline: render -> save -> color tag -> DB upsert.
     """
     cache_path = tmp_path / "cache" / "full.png"
 
@@ -129,7 +125,6 @@ class TestColorTagsExtractedOnRender:
         db: Database,
     ) -> None:
         """After _render_all_resolutions, color tags from extract_dominant_color_tags are in the DB."""
-        # Arrange
         file_info = _make_file_info(tmp_path)
         img = _make_image()
         expected_tags = ["color:blue", "color:red"]
@@ -137,20 +132,19 @@ class TestColorTagsExtractedOnRender:
         emitted: list[tuple[str, object, object]] = []
         service.thumbnail_ready.connect(lambda p, i, r: emitted.append((p, i, r)))
 
-        # Act
         _run_render_all_resolutions(service, file_info, img, tmp_path, extract_return=expected_tags)
 
-        # Assert — tags persisted in DB
+        # Tags persisted in DB
         tag_entries = _get_file_tag_names(db, str(file_info.path))
         tag_names = [name for name, _ in tag_entries]
         assert "color:red" in tag_names
         assert "color:blue" in tag_names
 
-        # Assert — all tags have source='auto_color'
+        # All tags have source='auto_color'
         for _, source in tag_entries:
             assert source == "auto_color"
 
-        # Assert — thumbnail_ready emitted (full + smaller sizes)
+        # thumbnail_ready emitted (full + smaller sizes)
         assert len(emitted) >= 1
         assert emitted[0][0] == str(file_info.path)
         assert emitted[0][1] is img
@@ -166,11 +160,10 @@ class TestColorTagsReplacedOnRerender:
         db: Database,
     ) -> None:
         """Re-rendering replaces old auto_color tags with new ones."""
-        # Arrange
         file_info = _make_file_info(tmp_path)
         img = _make_image()
 
-        # First render — produces red and green tags
+        # First render - produces red and green tags
         _run_render_all_resolutions(
             service,
             file_info,
@@ -185,7 +178,7 @@ class TestColorTagsReplacedOnRerender:
         assert "color:red" in first_names
         assert "color:green" in first_names
 
-        # Act — second render produces different tags (blue and yellow)
+        # Second render produces different tags (blue and yellow)
         _run_render_all_resolutions(
             service,
             file_info,
@@ -194,7 +187,7 @@ class TestColorTagsReplacedOnRerender:
             extract_return=["color:blue", "color:yellow"],
         )
 
-        # Assert — old tags gone, new tags present
+        # Old tags gone, new tags present
         final_tags = _get_file_tag_names(db, str(file_info.path))
         final_names = [name for name, _ in final_tags]
         assert "color:red" not in final_names, "Old auto_color tag should be removed"
@@ -213,7 +206,7 @@ class TestManualTagsPreserved:
         db: Database,
     ) -> None:
         """Manual tags survive auto-color tag replacement."""
-        # Arrange — manually add a user tag to the file
+        # Manually add a user tag to the file
         file_info = _make_file_info(tmp_path)
         img = _make_image()
         path_str = str(file_info.path)
@@ -226,7 +219,7 @@ class TestManualTagsPreserved:
         pre_tags = _get_file_tag_names(db, path_str)
         assert ("favorite", "user") in pre_tags
 
-        # Act — render with auto color tags
+        # Render with auto color tags
         _run_render_all_resolutions(
             service,
             file_info,
@@ -235,13 +228,13 @@ class TestManualTagsPreserved:
             extract_return=["color:red"],
         )
 
-        # Assert — manual tag still present alongside auto_color tags
+        # Manual tag still present alongside auto_color tags
         post_tags = _get_file_tag_names(db, path_str)
         post_names_with_source = [(name, src) for name, src in post_tags]
         assert ("favorite", "user") in post_names_with_source, "Manual tag must be preserved"
         assert ("color:red", "auto_color") in post_names_with_source
 
-        # Act again — re-render with different auto_color tags
+        # Re-render with different auto_color tags
         _run_render_all_resolutions(
             service,
             file_info,
@@ -250,7 +243,7 @@ class TestManualTagsPreserved:
             extract_return=["color:blue"],
         )
 
-        # Assert — manual tag STILL present, old auto_color replaced
+        # Manual tag STILL present, old auto_color replaced
         final_tags = _get_file_tag_names(db, path_str)
         final_with_source = [(name, src) for name, src in final_tags]
         assert ("favorite", "user") in final_with_source, "Manual tag must survive re-render"
@@ -267,7 +260,7 @@ class TestColorTaggingDisabled:
         db: Database,
     ) -> None:
         """When color_tag_enabled is False, no color tags are extracted or persisted."""
-        # Arrange — settings with color_tag_enabled=False
+        # Settings with color_tag_enabled=False
         settings_mock = MagicMock()
         settings_mock.cache_format.get.return_value = "PNG"
         settings_mock.max_psd_workers.get.return_value = 3
@@ -285,18 +278,17 @@ class TestColorTaggingDisabled:
         emitted: list[tuple[str, object, object]] = []
         svc.thumbnail_ready.connect(lambda p, i, r: emitted.append((p, i, r)))
 
-        # Act
         with patch("tarragon.services.color_tagger.extract_dominant_color_tags") as mock_extract:
             _run_render_all_resolutions(svc, file_info, img, tmp_path)
 
-        # Assert — extract was never called
+        # Extract was never called
         mock_extract.assert_not_called()
 
-        # Assert — no tags in DB for this file
+        # No tags in DB for this file
         tag_entries = _get_file_tag_names(db, str(file_info.path))
         assert tag_entries == [], "No color tags should be persisted when disabled"
 
-        # Assert — thumbnail_ready still emitted (pipeline not broken)
+        # thumbnail_ready still emitted (pipeline not broken)
         assert len(emitted) >= 1
         assert emitted[0][1] is img
 
@@ -311,7 +303,6 @@ class TestColorTaggingFailureIsolated:
         db: Database,
     ) -> None:
         """If extract_dominant_color_tags raises, thumbnail is still persisted and signal emitted."""
-        # Arrange
         file_info = _make_file_info(tmp_path)
         img = _make_image()
 
@@ -334,21 +325,21 @@ class TestColorTaggingFailureIsolated:
                 str(RESOLUTION_PREVIEW): tmp_path / "cache" / "1024.png",
                 "full": tmp_path / "cache" / "full.png",
             }
-            # Act — should NOT raise
+            # Should NOT raise
             service._render_all_resolutions(file_info)
 
-        # Assert — thumbnail was still persisted to DB
+        # Thumbnail was still persisted to DB
         thumb = db.get_thumbnail(str(file_info.path))
         assert thumb is not None, "Thumbnail must be persisted even if color tagging fails"
         assert thumb["width"] == 128
         assert thumb["height"] == 64
 
-        # Assert — thumbnail_ready still emitted
+        # thumbnail_ready still emitted
         assert len(emitted) >= 1
         assert emitted[0][0] == str(file_info.path)
         assert emitted[0][1] is img
 
-        # Assert — no color tags in DB (extraction failed)
+        # No color tags in DB (extraction failed)
         tag_entries = _get_file_tag_names(db, str(file_info.path))
         assert tag_entries == []
 
@@ -359,7 +350,6 @@ class TestColorTaggingFailureIsolated:
         db: Database,
     ) -> None:
         """If replace_auto_color_tags raises, thumbnail is still persisted and signal emitted."""
-        # Arrange
         file_info = _make_file_info(tmp_path)
         img = _make_image()
 
@@ -387,14 +377,14 @@ class TestColorTaggingFailureIsolated:
                 str(RESOLUTION_PREVIEW): tmp_path / "cache" / "1024.png",
                 "full": tmp_path / "cache" / "full.png",
             }
-            # Act — should NOT raise
+            # Should NOT raise
             service._render_all_resolutions(file_info)
 
-        # Assert — thumbnail was still persisted
+        # Thumbnail was still persisted
         thumb = db.get_thumbnail(str(file_info.path))
         assert thumb is not None
 
-        # Assert — signal still emitted
+        # Signal still emitted
         assert len(emitted) >= 1
         assert emitted[0][1] is img
 
@@ -408,7 +398,7 @@ class TestSettingsParametersUsed:
         db: Database,
     ) -> None:
         """extract_dominant_color_tags receives the correct parameters from settings."""
-        # Arrange — custom settings values
+        # Custom settings values
         settings_mock = MagicMock()
         settings_mock.cache_format.get.return_value = "PNG"
         settings_mock.max_psd_workers.get.return_value = 3
@@ -426,7 +416,6 @@ class TestSettingsParametersUsed:
         file_info = _make_file_info(tmp_path)
         img = _make_image()
 
-        # Act
         with (
             patch("tarragon.services.thumbnail_service.render_plain_image", return_value=img),
             patch("tarragon.services.thumbnail_service.generate_cache_uuid", return_value="test-uuid"),
@@ -445,7 +434,7 @@ class TestSettingsParametersUsed:
             }
             svc._render_all_resolutions(file_info)
 
-        # Assert — extract called with correct parameters from settings
+        # Extract called with correct parameters from settings
         mock_extract.assert_called_once_with(
             img,
             palette_size=4,
@@ -459,11 +448,9 @@ class TestSettingsParametersUsed:
         service: ThumbnailService,
     ) -> None:
         """Default settings values are passed correctly to extract_dominant_color_tags."""
-        # Arrange
         file_info = _make_file_info(tmp_path)
         img = _make_image()
 
-        # Act
         with (
             patch("tarragon.services.thumbnail_service.render_plain_image", return_value=img),
             patch("tarragon.services.thumbnail_service.generate_cache_uuid", return_value="test-uuid"),
@@ -482,7 +469,7 @@ class TestSettingsParametersUsed:
             }
             service._render_all_resolutions(file_info)
 
-        # Assert — default parameter values from settings fixture
+        # Default parameter values from settings fixture
         mock_extract.assert_called_once_with(
             img,
             palette_size=8,
@@ -501,17 +488,14 @@ class TestColorTaggingForValidImage:
         db: Database,
     ) -> None:
         """When render returns None, color tagging is not attempted."""
-        # Arrange
         file_info = _make_file_info(tmp_path)
 
         with patch("tarragon.services.color_tagger.extract_dominant_color_tags") as mock_extract:
             with patch("tarragon.services.thumbnail_service.render_plain_image", return_value=None):
                 with patch("tarragon.services.thumbnail_service.generate_cache_uuid", return_value="test-uuid"):
                     with patch("tarragon.services.thumbnail_service.generate_cache_paths"):
-                        # Act
                         service._render_all_resolutions(file_info)
 
-        # Assert
         mock_extract.assert_not_called()
         tag_entries = _get_file_tag_names(db, str(file_info.path))
         assert tag_entries == []
@@ -522,17 +506,10 @@ class TestColorTaggingForValidImage:
         service: ThumbnailService,
         db: Database,
     ) -> None:
-        """When render succeeds but save fails, color tagging is still attempted.
-
-        Note: In the new implementation, color tagging happens in _render_all_resolutions
-        after the render succeeds, regardless of save_to_cache. This test verifies that
-        if render_plain_image returns None, no color tagging occurs.
-        """
-        # Arrange
+        """When render succeeds, color tagging is attempted."""
         file_info = _make_file_info(tmp_path)
         img = _make_image()
 
-        # When render returns a valid image, color tagging IS attempted
         with (
             patch("tarragon.services.thumbnail_service.render_plain_image", return_value=img),
             patch("tarragon.services.thumbnail_service.generate_cache_uuid", return_value="test-uuid"),
@@ -551,5 +528,5 @@ class TestColorTaggingForValidImage:
             }
             service._render_all_resolutions(file_info)
 
-        # Assert — extract WAS called since render succeeded
+        # Extract WAS called since render succeeded
         mock_extract.assert_called_once()

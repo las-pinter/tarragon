@@ -1,25 +1,10 @@
-"""Tests for FlowLayout — wrapping layout widget.
-
-Covers:
-    - Single-line placement when width is sufficient
-    - Wrapping to next line when width is narrow
-    - Height-for-width calculation
-    - Minimum size computation
-    - count() / itemAt() / takeAt() item tracking
-    - Empty layout behaviour
-    - Spacing configuration
-    - Multiple-line wrapping
-"""
+"""Tests for FlowLayout"""
 
 from __future__ import annotations
 
 from PySide6.QtCore import QRect
 from PySide6.QtWidgets import QLabel, QWidget
 from tarragon.widgets.flow_layout import FlowLayout
-
-# =========================================================================
-# TestFlowLayout
-# =========================================================================
 
 
 class TestFlowLayout:
@@ -30,7 +15,7 @@ class TestFlowLayout:
         container = QWidget()
         layout = FlowLayout(container, margin=0, spacing=6)
 
-        # Three 100px-wide labels — need 100+6+100+6+100 = 312px on one line
+        # Three 100px-wide labels - need 100+6+100+6+100 = 312px on one line
         labels = [QLabel(f"Item {i}") for i in range(3)]
         for lbl in labels:
             lbl.setFixedSize(100, 30)
@@ -74,9 +59,9 @@ class TestFlowLayout:
             lbl.setFixedSize(100, 30)
             layout.addWidget(lbl)
 
-        # Wide: all 4 on one line → height ≈ 30
+        # Wide: all 4 on one line -> height ~ 30
         wide_height = layout.heightForWidth(500)
-        # Narrow: forces wrapping → height > 30
+        # Narrow: forces wrapping -> height > 30
         narrow_height = layout.heightForWidth(150)
 
         assert narrow_height > wide_height
@@ -182,7 +167,7 @@ class TestFlowLayout:
         container = QWidget()
         layout = FlowLayout(container, margin=0, spacing=6)
 
-        # Six 100px items — only room for 1 per line at width=100
+        # Six 100px items - only room for 1 per line at width=100
         labels = [QLabel(f"Item {i}") for i in range(6)]
         for lbl in labels:
             lbl.setFixedSize(100, 30)

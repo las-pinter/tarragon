@@ -1,18 +1,10 @@
-"""Tests for tarragon.services.color_tagger — dominant color tag extraction.
-
-WAAAGH! Wrenchbasha's torture chamber for da color tagger!
-Uses synthetic PIL images — no external files needed.
-"""
+"""Tests for ColorTagger"""
 
 from __future__ import annotations
 
 import pytest
 from PIL import Image
 from tarragon.services.color_tagger import extract_dominant_color_tags
-
-# =========================================================================
-# Test Helpers — synthetic image factories
-# =========================================================================
 
 
 def _hsv_to_rgb(h: float, s: float, v: float) -> tuple[int, int, int]:
@@ -83,117 +75,6 @@ def _quad_image(
     return img
 
 
-# =========================================================================
-# Tests — Arrange-Act-Assert pattern
-# =========================================================================
-
-
-def test_mostly_red_image() -> None:
-    """Solid red image should produce ['color:red']."""
-    # Arrange — red at hue=10, vivid but not too bright (V=0.7 < 0.92)
-    img = _solid_image(h=10, s=0.8, v=0.7)
-
-    # Act
-    tags = extract_dominant_color_tags(img)
-
-    # Assert
-    assert tags == ["color:red"]
-
-
-def test_mostly_blue_image() -> None:
-    """Solid blue image should produce ['color:blue']."""
-    # Arrange — blue at hue=170 (center of 140-200 bucket)
-    img = _solid_image(h=170, s=0.8, v=0.7)
-
-    # Act
-    tags = extract_dominant_color_tags(img)
-
-    # Assert
-    assert tags == ["color:blue"]
-
-
-def test_gray_image_is_neutral() -> None:
-    """Gray image (zero saturation) should produce ['color:neutral']."""
-    # Arrange — mid-gray: R=G=B=128
-    img = Image.new("RGB", (100, 100), (128, 128, 128))
-
-    # Act
-    tags = extract_dominant_color_tags(img)
-
-    # Assert
-    assert tags == ["color:neutral"]
-
-
-def test_two_dominant_colors() -> None:
-    """60% green / 40% blue should produce both tags with default threshold."""
-    # Arrange — green at hue=70, blue at hue=170
-    img = _split_image(
-        h1=70,
-        s1=0.8,
-        v1=0.7,  # green
-        h2=170,
-        s2=0.8,
-        v2=0.7,  # blue
-        ratio=0.6,
-    )
-
-    # Act
-    tags = extract_dominant_color_tags(img)
-
-    # Assert — both colors above 10% threshold
-    assert "color:green" in tags
-    assert "color:blue" in tags
-    assert len(tags) == 2
-
-
-def test_tiny_accent_below_threshold() -> None:
-    """5% red accent on 95% gray should not produce a red tag."""
-    # Arrange — 95% gray, 5% red
-    img = _split_image(
-        h1=0,
-        s1=0.0,
-        v1=0.5,  # gray (S=0 → neutral)
-        h2=10,
-        s2=0.8,
-        v2=0.7,  # red
-        ratio=0.95,
-    )
-
-    # Act
-    tags = extract_dominant_color_tags(img)
-
-    # Assert — red at 5% is below 10% threshold
-    assert "color:red" not in tags
-    assert "color:neutral" in tags
-
-
-def test_low_saturation_is_neutral() -> None:
-    """Beige / low-saturation color should be classified as neutral."""
-    # Arrange — beige: hue=30, S=0.1 (< 0.15 threshold), V=0.7
-    img = _solid_image(h=30, s=0.1, v=0.7)
-
-    # Act
-    tags = extract_dominant_color_tags(img)
-
-    # Assert
-    assert tags == ["color:neutral"]
-
-
-def test_empty_image_returns_empty() -> None:
-    """A zero-size image should return an empty list."""
-    # Arrange
-    img = Image.new("RGB", (0, 0))
-
-    # Act
-    tags = extract_dominant_color_tags(img)
-
-    # Assert
-    assert tags == []
-
-
-# -- Parametrized bucket coverage ------------------------------------------
-
-# Center hue of each bucket, with S=0.8 and V=0.7 to stay clearly colorful
 _BUCKET_CASES = [
     (10, "color:red"),  # red: 0-15
     (24, "color:orange"),  # orange: 15-33
@@ -207,72 +88,130 @@ _BUCKET_CASES = [
 ]
 
 
-@pytest.mark.parametrize(
-    ("hue", "expected_tag"),
-    _BUCKET_CASES,
-    ids=[name for _, name in _BUCKET_CASES],
-)
-def test_all_buckets_covered(hue: float, expected_tag: str) -> None:
-    """Each color bucket should be reachable with a solid-color image."""
-    # Arrange — solid image at bucket center hue, vivid saturation
-    img = _solid_image(h=hue, s=0.8, v=0.7)
+class TestSolidColorExtraction:
+    """Solid-color images produce the expected dominant color tag."""
 
-    # Act
-    tags = extract_dominant_color_tags(img)
+    def test_mostly_red_image(self) -> None:
+        """A solid red image produces the 'color:red' tag."""
+        img = _solid_image(h=10, s=0.8, v=0.7)
+        tags = extract_dominant_color_tags(img)
+        assert tags == ["color:red"]
 
-    # Assert
-    assert tags == [expected_tag]
+    def test_mostly_blue_image(self) -> None:
+        """A solid blue image produces the 'color:blue' tag."""
+        img = _solid_image(h=170, s=0.8, v=0.7)
+        tags = extract_dominant_color_tags(img)
+        assert tags == ["color:blue"]
+
+    def test_gray_image_is_neutral(self) -> None:
+        """A gray image produces the 'color:neutral' tag."""
+        img = Image.new("RGB", (100, 100), (128, 128, 128))
+        tags = extract_dominant_color_tags(img)
+        assert tags == ["color:neutral"]
+
+    def test_low_saturation_is_neutral(self) -> None:
+        """A low-saturation beige image is classified as neutral."""
+        img = _solid_image(h=30, s=0.1, v=0.7)
+        tags = extract_dominant_color_tags(img)
+        assert tags == ["color:neutral"]
 
 
-# -- Parameter variation tests ---------------------------------------------
+class TestMultiColorImages:
+    """Images with multiple colors produce multiple dominant color tags."""
+
+    def test_two_dominant_colors(self) -> None:
+        """A green/blue split image produces both color tags."""
+        img = _split_image(
+            h1=70,
+            s1=0.8,
+            v1=0.7,  # green
+            h2=170,
+            s2=0.8,
+            v2=0.7,  # blue
+            ratio=0.6,
+        )
+        tags = extract_dominant_color_tags(img)
+        assert "color:green" in tags
+        assert "color:blue" in tags
+        assert len(tags) == 2
 
 
-def test_custom_palette_size() -> None:
-    """Different palette_size should affect the number of resulting tags."""
-    # Arrange — 4 distinct colors in quadrants
-    img = _quad_image(
-        [
-            (10, 0.8, 0.7),  # red
-            (70, 0.8, 0.7),  # green
-            (170, 0.8, 0.7),  # blue
-            (290, 0.8, 0.7),  # magenta
-        ]
+class TestEdgeCases:
+    """Edge cases: tiny color shares and empty images."""
+
+    def test_tiny_accent_below_threshold(self) -> None:
+        """A small red accent on gray does not produce a red tag."""
+        img = _split_image(
+            h1=0,
+            s1=0.0,
+            v1=0.5,  # gray (S=0 -> neutral)
+            h2=10,
+            s2=0.8,
+            v2=0.7,  # red
+            ratio=0.95,
+        )
+        tags = extract_dominant_color_tags(img)
+        assert "color:red" not in tags
+        assert "color:neutral" in tags
+
+    def test_empty_image_returns_empty(self) -> None:
+        """A zero-size image returns an empty list."""
+        img = Image.new("RGB", (0, 0))
+        tags = extract_dominant_color_tags(img)
+        assert tags == []
+
+
+class TestBucketCoverage:
+    """Every hue bucket is reachable with a solid-color image."""
+
+    @pytest.mark.parametrize(
+        ("hue", "expected_tag"),
+        _BUCKET_CASES,
+        ids=[name for _, name in _BUCKET_CASES],
     )
-
-    # Act
-    tags_few = extract_dominant_color_tags(img, palette_size=2)
-    tags_many = extract_dominant_color_tags(img, palette_size=8)
-
-    # Assert — more palette slots → at least as many tags
-    assert len(tags_few) <= len(tags_many)
-    # With 4 distinct colors and palette_size=8, all 4 should be found
-    assert len(tags_many) == 4
+    def test_all_buckets_covered(self, hue: float, expected_tag: str) -> None:
+        """Each color bucket is reachable with a solid-color image."""
+        img = _solid_image(h=hue, s=0.8, v=0.7)
+        tags = extract_dominant_color_tags(img)
+        assert tags == [expected_tag]
 
 
-def test_custom_min_share() -> None:
-    """Different min_share threshold should filter tags differently."""
-    # Arrange — 70% green, 30% blue
-    img = _split_image(
-        h1=70,
-        s1=0.8,
-        v1=0.7,  # green
-        h2=170,
-        s2=0.8,
-        v2=0.7,  # blue
-        ratio=0.7,
-    )
+class TestCustomizationOptions:
+    """Custom palette_size and min_share options control tag extraction."""
 
-    # Act & Assert
-    # Low threshold: both colors pass
-    tags_low = extract_dominant_color_tags(img, min_share=0.10)
-    assert "color:green" in tags_low
-    assert "color:blue" in tags_low
+    def test_custom_palette_size(self) -> None:
+        """A larger palette_size returns at least as many tags."""
+        img = _quad_image(
+            [
+                (10, 0.8, 0.7),  # red
+                (70, 0.8, 0.7),  # green
+                (170, 0.8, 0.7),  # blue
+                (290, 0.8, 0.7),  # magenta
+            ]
+        )
+        tags_few = extract_dominant_color_tags(img, palette_size=2)
+        tags_many = extract_dominant_color_tags(img, palette_size=8)
+        assert len(tags_few) <= len(tags_many)
+        assert len(tags_many) == 4
 
-    # Medium threshold: only green passes (70% > 50%, 30% < 50%)
-    tags_mid = extract_dominant_color_tags(img, min_share=0.50)
-    assert "color:green" in tags_mid
-    assert "color:blue" not in tags_mid
+    def test_custom_min_share(self) -> None:
+        """Higher min_share thresholds filter out smaller color shares."""
+        img = _split_image(
+            h1=70,
+            s1=0.8,
+            v1=0.7,  # green
+            h2=170,
+            s2=0.8,
+            v2=0.7,  # blue
+            ratio=0.7,
+        )
+        tags_low = extract_dominant_color_tags(img, min_share=0.10)
+        assert "color:green" in tags_low
+        assert "color:blue" in tags_low
 
-    # High threshold: neither passes (70% < 80%)
-    tags_high = extract_dominant_color_tags(img, min_share=0.80)
-    assert tags_high == []
+        tags_mid = extract_dominant_color_tags(img, min_share=0.50)
+        assert "color:green" in tags_mid
+        assert "color:blue" not in tags_mid
+
+        tags_high = extract_dominant_color_tags(img, min_share=0.80)
+        assert tags_high == []

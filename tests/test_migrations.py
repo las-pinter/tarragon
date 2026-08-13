@@ -1,4 +1,4 @@
-"""Tests for src/tarragon/migrations.py — schema migration runner."""
+"""Tests for migrations"""
 
 from __future__ import annotations
 
@@ -8,8 +8,6 @@ from pathlib import Path
 import pytest
 from tarragon.db.database import Database
 from tarragon.migrations import MigrationRunner
-
-# ── Fixtures ────────────────────────────────────────────────────
 
 
 @pytest.fixture()
@@ -21,10 +19,9 @@ def db() -> Generator[Database, None, None]:
     conn.close()
 
 
-# ── MigrationRunner ─────────────────────────────────────────────
-
-
 class TestMigrationRunnerBootstrap:
+    """MigrationRunner bootstraps a fresh database to the current version."""
+
     def test_bootstrap_sets_version_to_1(self, db: Database) -> None:
         """Fresh database (version 0) is bootstrapped to current version 2."""
         runner = MigrationRunner(db)

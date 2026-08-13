@@ -1,4 +1,4 @@
-"""Pytest configuration — ensures headless operation for Qt tests."""
+"""Pytest configuration - ensures headless operation for Qt tests."""
 
 import os
 from collections.abc import Generator
@@ -22,14 +22,9 @@ def qapp() -> Generator[Any, None, None]:
     yield app
 
 
-@pytest.fixture()
+@pytest.fixture
 def mock_settings() -> MagicMock:
-    """Mock SettingsService for tests that instantiate MainWindow.
-
-    MainWindow requires a settings_service argument. This fixture provides
-    a MagicMock with sensible defaults for all settings accessed during
-    __init__ and setup_widgets().
-    """
+    """Mock SettingsService for tests that instantiate MainWindow."""
     mock = MagicMock()
     # Return falsy values so _restore_layout_state() skips restore
     mock.window_geometry_state.get.return_value = ""

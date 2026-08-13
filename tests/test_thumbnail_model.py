@@ -1,4 +1,4 @@
-"""Tests for ThumbnailModel — non-GUI unit tests for model logic."""
+"""Tests for ThumbnailModel"""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from tarragon.renderers.cache import RESOLUTION_FULL, RESOLUTION_PREVIEW, RESOLU
 
 
 class TestThumbnailModel:
-    """ThumbnailModel unit tests — no QApplication required."""
+    """ThumbnailModel behavior including edge cases, multi-resolution thumbnails, and caching."""
 
     def test_empty_model_row_count(self) -> None:
         """A freshly-constructed model has rowCount() == 0."""
@@ -73,10 +73,6 @@ class TestThumbnailModel:
     def test_path_role_constant_value(self) -> None:
         """PathRole constant equals Qt.UserRole + 1."""
         assert ThumbnailModel.PathRole == Qt.ItemDataRole.UserRole + 1
-
-    # ------------------------------------------------------------------
-    # Edge case tests — Gutslicka da Painboy's special brew
-    # ------------------------------------------------------------------
 
     def test_set_paths_with_empty_list_resets_to_zero(self) -> None:
         """set_paths([]) results in rowCount() == 0."""
@@ -191,10 +187,6 @@ class TestThumbnailModel:
         assert model.data(index, Qt.ItemDataRole.DisplayRole) == "file_49.jpg"
         assert model.data(index, ThumbnailModel.PathRole) == str(Path("/path/file_49.jpg"))
 
-    # ------------------------------------------------------------------
-    # Multi-resolution thumbnail role tests
-    # ------------------------------------------------------------------
-
     def test_set_thumbnail_with_resolution_256(self) -> None:
         """set_thumbnail with resolution=RESOLUTION_THUMBNAIL stores path in ThumbnailRole256 only."""
         model = ThumbnailModel()
@@ -222,10 +214,6 @@ class TestThumbnailModel:
         assert model.data(index, ThumbnailModel.ThumbnailRole1024) == str(Path("/cache/1024/test/image.png"))
         assert model.data(index, ThumbnailModel.ThumbnailRoleFull) == str(Path("/cache/full/test/image.png"))
 
-    # ------------------------------------------------------------------
-    # Bug 3 regression: set_paths preserves cached thumbnails
-    # ------------------------------------------------------------------
-
     def test_set_paths_preserves_thumbnails_for_remaining_paths(self) -> None:
         """set_paths() keeps cached thumbnails for paths still in the list."""
         model = ThumbnailModel()
@@ -246,12 +234,7 @@ class TestThumbnailModel:
         assert model.data(idx_b, ThumbnailModel.ThumbnailRole256) == str(Path("/cache/256/two.png"))
 
     def test_set_paths_preserves_thumbnails_for_removed_paths(self) -> None:
-        """set_paths() keeps cached thumbnails even for paths no longer in the list.
-
-        Regression test: previously set_paths() pruned _thumbnails for paths
-        not in the new list, causing thumbnails to disappear when a color
-        filter was removed and the full path list restored.
-        """
+        """set_paths() keeps cached thumbnails even for paths no longer in the list."""
         model = ThumbnailModel()
         model.set_paths([Path("/a/one.jpg"), Path("/b/two.jpg")])
         model.set_thumbnail("/a/one.jpg", Path("/cache/256/one.png"), resolution=RESOLUTION_THUMBNAIL)
@@ -283,11 +266,7 @@ class TestThumbnailModel:
         assert model.data(idx_b, ThumbnailModel.ThumbnailRole1024) == str(Path("/cache/1024/two.png"))
 
     def test_set_paths_empty_list_preserves_cached_thumbnails(self) -> None:
-        """set_paths([]) removes all paths but preserves cached thumbnails.
-
-        Cached thumbnails are retained so that re-populating the model with
-        the same paths (e.g. removing a filter) doesn't lose thumbnails.
-        """
+        """set_paths([]) removes all paths but preserves cached thumbnails."""
         model = ThumbnailModel()
         model.set_paths([Path("/a/one.jpg")])
         model.set_thumbnail("/a/one.jpg", Path("/cache/256/one.png"), resolution=RESOLUTION_THUMBNAIL)
@@ -299,11 +278,7 @@ class TestThumbnailModel:
         assert str(Path("/a/one.jpg")) in model._thumbnails
 
     def test_set_paths_filter_unfilter_preserves_all_thumbnails(self) -> None:
-        """Simulates color filter: filter to subset, then restore — all thumbnails survive.
-
-        Regression test for Bug 1: filtering to 10 files pruned cache for the
-        other 90, so removing the filter showed files without thumbnails.
-        """
+        """Filtering to a subset then restoring all paths preserves every thumbnail."""
         model = ThumbnailModel()
         all_paths = [Path(f"/img/file_{i:03d}.jpg") for i in range(100)]
         model.set_paths(all_paths)
@@ -318,7 +293,7 @@ class TestThumbnailModel:
         model.set_paths(filtered_paths)
         assert model.rowCount() == 10
 
-        # Remove filter — restore all 100 paths
+        # Remove filter - restore all 100 paths
         model.set_paths(all_paths)
         assert model.rowCount() == 100
 

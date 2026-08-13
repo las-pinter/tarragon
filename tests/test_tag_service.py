@@ -1,7 +1,4 @@
-"""Tests for TagService — service-layer tag CRUD operations.
-
-WAAAGH! Wrenchbasha's torture chamber for da TagService!
-"""
+"""Tests for TagService"""
 
 from __future__ import annotations
 
@@ -10,10 +7,6 @@ from pathlib import Path
 import pytest
 from tarragon.db.database import Database
 from tarragon.services.tag_service import TagService
-
-# =========================================================================
-# Fixtures
-# =========================================================================
 
 
 @pytest.fixture
@@ -30,13 +23,8 @@ def service(db: Database) -> TagService:
     return TagService(db=db)
 
 
-# =========================================================================
-# _get_or_create_tag
-# =========================================================================
-
-
 class TestGetOrCreateTag:
-    """_get_or_create_tag — create vs. retrieve idempotency."""
+    """_get_or_create_tag - create vs. retrieve idempotency."""
 
     def test_get_or_create_tag_creates_and_returns_id(self, service: TagService) -> None:
         """First call creates a tag, second call returns the *same* id."""
@@ -54,16 +42,11 @@ class TestGetOrCreateTag:
         assert id_a != id_b
 
 
-# =========================================================================
-# add_tags_to_files
-# =========================================================================
-
-
 class TestAddTagsToFiles:
-    """add_tags_to_files — batch tagging."""
+    """add_tags_to_files - batch tagging."""
 
     def test_add_tags_to_files_adds_tags_to_multiple_paths(self, service: TagService) -> None:
-        """Adding tags to multiple files — verify via get_tags_for_file."""
+        """Adding tags to multiple files - verify via get_tags_for_file."""
         paths = ["/img/a.png", "/img/b.png"]
         service.add_tags_to_files(paths, ["character", "landscape"])
 
@@ -91,16 +74,11 @@ class TestAddTagsToFiles:
         assert tags[0]["name"] == "dupe"
 
 
-# =========================================================================
-# remove_tags_from_files
-# =========================================================================
-
-
 class TestRemoveTagsFromFiles:
-    """remove_tags_from_files — batch tag removal."""
+    """remove_tags_from_files - batch tag removal."""
 
     def test_remove_tags_from_files_removes_specified_tags(self, service: TagService) -> None:
-        """Add tags then remove them — verify they're gone."""
+        """Add tags then remove them - verify they're gone."""
         paths = ["/img/a.png", "/img/b.png"]
         service.add_tags_to_files(paths, ["character", "landscape"])
 
@@ -136,13 +114,8 @@ class TestRemoveTagsFromFiles:
         assert tags[0]["name"] == "keep"
 
 
-# =========================================================================
-# get_tags_for_file
-# =========================================================================
-
-
 class TestGetTagsForFile:
-    """get_tags_for_file — querying tags attached to a file."""
+    """get_tags_for_file - querying tags attached to a file."""
 
     def test_get_tags_for_file_returns_tag_list(self, service: TagService) -> None:
         """Returned list entries have id, name, source keys."""
@@ -175,13 +148,8 @@ class TestGetTagsForFile:
         assert "auto_color" in sources
 
 
-# =========================================================================
-# get_all_tags
-# =========================================================================
-
-
 class TestGetAllTags:
-    """get_all_tags — listing all tags with usage counts."""
+    """get_all_tags - listing all tags with usage counts."""
 
     def test_get_all_tags_returns_all_tags(self, service: TagService) -> None:
         """Multiple tags created; all returned with correct counts."""
@@ -207,7 +175,7 @@ class TestGetAllTags:
                 assert tag["usage_count"] == 0
 
     def test_get_all_tags_empty(self, service: TagService) -> None:
-        """No tags exist → empty list."""
+        """No tags exist -> empty list."""
         assert service.get_all_tags() == []
 
     def test_get_all_tags_ordered_by_name(self, service: TagService) -> None:
@@ -221,13 +189,8 @@ class TestGetAllTags:
         assert names == ["alpha", "beta", "zebra"]
 
 
-# =========================================================================
-# get_all_tags with folder_path (Bug 1 — local scoped counts)
-# =========================================================================
-
-
 class TestGetAllTagsScoped:
-    """get_all_tags with folder_path — local vs global usage counts."""
+    """get_all_tags with folder_path - local vs global usage counts."""
 
     def test_global_counts_all_files(self, service: TagService) -> None:
         """Without folder_path, usage_count spans the entire database."""
@@ -279,13 +242,8 @@ class TestGetAllTagsScoped:
         assert tags[0]["usage_count"] == 1
 
 
-# =========================================================================
-# get_tag_name
-# =========================================================================
-
-
 class TestGetTagName:
-    """get_tag_name — retrieve tag name by ID."""
+    """get_tag_name - retrieve tag name by ID."""
 
     def test_get_tag_name_returns_name(self, service: TagService) -> None:
         """get_tag_name returns the correct name for an existing tag."""

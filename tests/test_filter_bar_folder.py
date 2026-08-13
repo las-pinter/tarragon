@@ -19,7 +19,7 @@ def db() -> Generator[Database, None, None]:
     database.close()
 
 
-@pytest.fixture()
+@pytest.fixture
 def bar(db: Database) -> Generator[FilterBarFolder, None, None]:
     """Provide a FilterBarFolder that is closed after the test."""
     w = FilterBarFolder(db)
@@ -133,7 +133,7 @@ class TestFolderFilterSignal:
         captured: list[set[str]] = []
         bar.filter_changed.connect(captured.append)
 
-        # Remove a nonexistent folder — should emit empty set
+        # Remove a nonexistent folder - should emit empty set
         bar._remove_folder("/nonexistent")
 
         assert len(captured) == 1
@@ -211,7 +211,7 @@ class TestRefreshFolders:
         db.upsert_thumbnail("/photos/vacation/a.png", mtime=1, size=100, width=10, height=10, cache_uuid="u1")
         bar._toggle_folder("/photos/vacation")
 
-        # Connect signal after adding — should not fire during refresh
+        # Connect signal after adding - should not fire during refresh
         # since the folder still exists in DB
         captured: list[set[str]] = []
         bar.filter_changed.connect(captured.append)

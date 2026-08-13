@@ -7,15 +7,21 @@ from unittest.mock import patch
 
 import pytest
 from PIL import Image
+from tarragon.renderers.cache import (
+    RESOLUTION_PREVIEW,
+    RESOLUTION_THUMBNAIL,
+    derive_smaller_sizes,
+    generate_cache_paths,
+    generate_cache_uuid,
+    save_to_cache,
+)
 
 
 class TestSaveToCache:
-    """Tests for saving to the cache"""
+    """Saving rendered images to the cache."""
 
     def test_save_to_cache_writes_valid_png(self, tmp_path: Path) -> None:
         """save_to_cache writes a valid PNG file that can be re-opened."""
-        from tarragon.renderers.cache import save_to_cache
-
         img = Image.new("RGBA", (100, 100), color="green")
         cache_path = tmp_path / "output.png"
 
@@ -30,8 +36,6 @@ class TestSaveToCache:
 
     def test_save_to_cache_creates_parent_directories(self, tmp_path: Path) -> None:
         """save_to_cache creates intermediate directories when they don't exist."""
-        from tarragon.renderers.cache import save_to_cache
-
         img = Image.new("RGBA", (50, 50), color="blue")
         cache_path = tmp_path / "deep" / "nested" / "output.png"
 
@@ -43,8 +47,6 @@ class TestSaveToCache:
 
     def test_save_to_cache_jpeg_saves_rgb(self, tmp_path: Path) -> None:
         """save_to_cache with format_setting='jpeg' produces an RGB JPEG."""
-        from tarragon.renderers.cache import save_to_cache
-
         img = Image.new("RGBA", (100, 100), (255, 0, 0, 128))
         cache_path = tmp_path / "output.jpg"
 
@@ -58,9 +60,7 @@ class TestSaveToCache:
 
     def test_save_to_cache_jpeg_flattens_alpha(self, tmp_path: Path) -> None:
         """save_to_cache with 'jpeg' replaces transparent areas with white."""
-        from tarragon.renderers.cache import save_to_cache
-
-        # Fully transparent red pixel on a red background — after flattening
+        # Fully transparent red pixel on a red background - after flattening
         # on white, the result should be white (255, 255, 255).
         img = Image.new("RGBA", (100, 100), (255, 0, 0, 0))
         cache_path = tmp_path / "output.jpg"
@@ -73,8 +73,6 @@ class TestSaveToCache:
 
     def test_save_to_cache_jpeg_handles_rgb_input(self, tmp_path: Path) -> None:
         """save_to_cache with 'jpeg' works when the input image is already RGB."""
-        from tarragon.renderers.cache import save_to_cache
-
         img = Image.new("RGB", (50, 50), color="green")
         cache_path = tmp_path / "output.jpg"
 
@@ -87,8 +85,6 @@ class TestSaveToCache:
 
     def test_save_to_cache_png_handles_rgba(self, tmp_path: Path) -> None:
         """save_to_cache with default PNG preserves RGBA transparency."""
-        from tarragon.renderers.cache import save_to_cache
-
         # Semi-transparent red
         img = Image.new("RGBA", (50, 50), (255, 0, 0, 64))
         cache_path = tmp_path / "output.png"
@@ -103,10 +99,10 @@ class TestSaveToCache:
 
 
 class TestSaveToCacheEdgeCases:
+    """Edge cases when saving to the cache."""
+
     def test_save_to_cache_unknown_format_defaults_to_png(self, tmp_path: Path) -> None:
         """save_to_cache with an unknown format_setting defaults to PNG saving behavior."""
-        from tarragon.renderers.cache import save_to_cache
-
         img = Image.new("RGBA", (50, 50), (255, 0, 0, 128))
         cache_path = tmp_path / "output.unknown"
 
@@ -120,8 +116,6 @@ class TestSaveToCacheEdgeCases:
 
     def test_save_to_cache_parent_is_file_not_directory(self, tmp_path: Path) -> None:
         """save_to_cache raises an error when the parent of cache_path is a file, not a directory."""
-        from tarragon.renderers.cache import save_to_cache
-
         # Create a file where we'd expect a directory
         parent_file = tmp_path / "i_am_a_file"
         parent_file.write_text("not a directory")
@@ -134,8 +128,6 @@ class TestSaveToCacheEdgeCases:
 
     def test_save_to_cache_jpeg_with_grayscale_image(self, tmp_path: Path) -> None:
         """save_to_cache with 'jpeg' saves a grayscale image as RGB JPEG."""
-        from tarragon.renderers.cache import save_to_cache
-
         img = Image.new("L", (50, 50), color=128)
         cache_path = tmp_path / "grayscale.jpg"
 
@@ -143,13 +135,11 @@ class TestSaveToCacheEdgeCases:
 
         assert cache_path.is_file()
         loaded = Image.open(cache_path)
-        # JPEG save path takes L → .convert("RGB") → RGB JPEG
+        # JPEG save path takes L -> .convert("RGB") -> RGB JPEG
         assert loaded.mode == "RGB"
 
     def test_save_to_cache_jpeg_with_palette_image(self, tmp_path: Path) -> None:
         """save_to_cache with 'jpeg' converts palette image to RGB before saving."""
-        from tarragon.renderers.cache import save_to_cache
-
         img = Image.new("P", (50, 50), color=0)
         cache_path = tmp_path / "palette.jpg"
 
@@ -161,8 +151,6 @@ class TestSaveToCacheEdgeCases:
 
     def test_save_to_cache_png_with_grayscale_image(self, tmp_path: Path) -> None:
         """save_to_cache with default PNG saves any image mode as PNG."""
-        from tarragon.renderers.cache import save_to_cache
-
         img = Image.new("L", (50, 50), color=128)
         cache_path = tmp_path / "grayscale.png"
 
@@ -175,27 +163,25 @@ class TestSaveToCacheEdgeCases:
 
 
 class TestGenerateCacheUUID:
+    """Generating unique cache UUIDs."""
+
     def test_generate_cache_uuid_returns_8_char_hex(self) -> None:
         """generate_cache_uuid returns an 8-character lowercase hex string."""
-        from tarragon.renderers.cache import generate_cache_uuid
-
         uuid = generate_cache_uuid()
         assert len(uuid) == 8
         assert all(c in "0123456789abcdef" for c in uuid)
 
     def test_generate_cache_uuid_unique(self) -> None:
         """generate_cache_uuid returns unique values across 100 calls."""
-        from tarragon.renderers.cache import generate_cache_uuid
-
         uuids = [generate_cache_uuid() for _ in range(100)]
         assert len(set(uuids)) == 100  # All unique
 
 
 class TestGenerateCachePaths:
+    """Generating cache file paths and directories."""
+
     def test_generate_cache_paths_structure(self, tmp_path: Path) -> None:
         """generate_cache_paths returns correct paths and creates directories."""
-        from tarragon.renderers.cache import RESOLUTION_PREVIEW, RESOLUTION_THUMBNAIL, generate_cache_paths
-
         source = Path("/photos/vacation/sunset.jpg")
 
         with patch("tarragon.renderers.cache.cache_dir", return_value=tmp_path):
@@ -220,13 +206,13 @@ class TestGenerateCachePaths:
 
 
 class TestDeriveSmallerSizes:
+    """Deriving smaller resolution variants of an image."""
+
     def test_derive_smaller_sizes_no_upscaling(self) -> None:
         """derive_smaller_sizes includes small images as-is (no upscaling) for all target sizes."""
-        from tarragon.renderers.cache import RESOLUTION_PREVIEW, RESOLUTION_THUMBNAIL, derive_smaller_sizes
-
         small_img = Image.new("RGB", (100, 100))
         result = derive_smaller_sizes(small_img, [RESOLUTION_THUMBNAIL, RESOLUTION_PREVIEW])
-        # All target sizes are included — image is copied as-is, not upscaled
+        # All target sizes are included - image is copied as-is, not upscaled
         assert set(result.keys()) == {RESOLUTION_THUMBNAIL, RESOLUTION_PREVIEW}
         assert result[RESOLUTION_THUMBNAIL].size == (100, 100)  # Original size preserved
         assert result[RESOLUTION_PREVIEW].size == (100, 100)  # Original size preserved
@@ -236,8 +222,6 @@ class TestDeriveSmallerSizes:
 
     def test_derive_smaller_sizes_correct_sizes(self) -> None:
         """derive_smaller_sizes produces correctly sized images preserving aspect ratio."""
-        from tarragon.renderers.cache import RESOLUTION_PREVIEW, RESOLUTION_THUMBNAIL, derive_smaller_sizes
-
         large_img = Image.new("RGB", (2000, 1500))
         result = derive_smaller_sizes(large_img, [RESOLUTION_THUMBNAIL, RESOLUTION_PREVIEW])
 

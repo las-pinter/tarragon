@@ -12,10 +12,8 @@ from tarragon.db.database import Database
 from tarragon.models.favorites_model import FavoritesModel
 from tarragon.widgets.sidebar import SidebarWidget
 
-# ── Fixtures ──────────────────────────────────────────────────────────
 
-
-@pytest.fixture()
+@pytest.fixture
 def db() -> Generator[Database, None, None]:
     """Provide an isolated in-memory database with schema initialised."""
     conn = Database(Path(":memory:"))
@@ -24,27 +22,27 @@ def db() -> Generator[Database, None, None]:
     conn.close()
 
 
-@pytest.fixture()
+@pytest.fixture
 def populated_db(db: Database) -> Database:
     """Return a database pre-loaded with two favourite entries."""
     db.add_favorite("/photos/landscape.png", label="Landscapes")
-    db.add_favorite("/photos/portrait.jpg")  # no label — should use filename
+    db.add_favorite("/photos/portrait.jpg")  # no label - should use filename
     return db
 
 
-@pytest.fixture()
+@pytest.fixture
 def model(db: Database) -> FavoritesModel:
     """Provide a FavoritesModel backed by an empty database."""
     return FavoritesModel(db)
 
 
-@pytest.fixture()
+@pytest.fixture
 def populated_model(populated_db: Database) -> FavoritesModel:
     """Provide a FavoritesModel backed by a database with two favourites."""
     return FavoritesModel(populated_db)
 
 
-@pytest.fixture()
+@pytest.fixture
 def sidebar(db: Database) -> Generator[SidebarWidget, None, None]:
     """Provide a SidebarWidget that is cleaned up after the test."""
     w = SidebarWidget(db)
@@ -52,10 +50,9 @@ def sidebar(db: Database) -> Generator[SidebarWidget, None, None]:
     w.close()
 
 
-# ── FavoritesModel: loading ──────────────────────────────────────────
-
-
 class TestFavoritesModelLoad:
+    """FavoritesModel loads favourites from the database."""
+
     def test_loads_from_db(self, populated_model: FavoritesModel) -> None:
         """Model loads favourites from DB on construction."""
         assert populated_model.rowCount() == 2
@@ -65,10 +62,9 @@ class TestFavoritesModelLoad:
         assert model.rowCount() == 0
 
 
-# ── FavoritesModel: data roles ───────────────────────────────────────
-
-
 class TestFavoritesModelData:
+    """FavoritesModel data() returns the correct role values."""
+
     def test_display_role_returns_label(self, populated_model: FavoritesModel) -> None:
         """DisplayRole returns the user-provided label when available."""
         index = populated_model.index(0)
@@ -105,10 +101,9 @@ class TestFavoritesModelData:
         assert result is None
 
 
-# ── FavoritesModel: add / remove ─────────────────────────────────────
-
-
 class TestFavoritesModelMutate:
+    """Adding and removing favourites through the model."""
+
     def test_add_favorite(self, model: FavoritesModel) -> None:
         """Adding a favourite via the model increases rowCount."""
         model.add_favorite("/new/path.png", label="New One")
@@ -151,10 +146,9 @@ class TestFavoritesModelMutate:
         assert model.index(0).data(Qt.ItemDataRole.DisplayRole) == "External"
 
 
-# ── SidebarWidget: structure ─────────────────────────────────────────
-
-
 class TestSidebarWidgetStructure:
+    """SidebarWidget construction and basic structure."""
+
     def test_creation(self, sidebar: SidebarWidget) -> None:
         """SidebarWidget is created without error and has expected children."""
         assert isinstance(sidebar, SidebarWidget)
@@ -189,10 +183,9 @@ class TestSidebarWidgetStructure:
         assert isinstance(list_view.model(), FavoritesModel)
 
 
-# ── SidebarWidget: functionality ─────────────────────────────────────
-
-
 class TestSidebarWidgetFunctionality:
+    """SidebarWidget add, remove, and navigation behaviour."""
+
     def test_add_current_folder(self, sidebar: SidebarWidget) -> None:
         """Setting the current folder and clicking 'Add' adds it to the model."""
         sidebar.set_current_folder("/my/folder")
@@ -309,7 +302,7 @@ class TestSidebarWidgetFunctionality:
         """Clicking Remove with no selection does not crash."""
         sidebar.set_current_folder("/safe/path")
         sidebar._on_add_clicked()
-        # Don't select anything — just click Remove
+        # Don't select anything - just click Remove
         sidebar._on_remove_clicked()
         list_view = sidebar.findChild(QListView)
         assert list_view is not None

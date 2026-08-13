@@ -1,8 +1,4 @@
-"""Tests for src/tarragon/services/settings_service.py — typed Setting classes.
-
-Tests the new Setting base class and all subclasses directly:
-default values, get/set roundtrips, JSON persistence, clamping, and validation.
-"""
+"""Tests for SettingsService"""
 
 from __future__ import annotations
 
@@ -31,10 +27,8 @@ from tarragon.services.settings_service import (
     _SettingWindowLayoutState,
 )
 
-# ── Fixtures ──────────────────────────────────────────────────────────────────
 
-
-@pytest.fixture()
+@pytest.fixture
 def db() -> Generator[Database, None, None]:
     """Provide an in-memory database for each test (isolated)."""
     database = Database(Path(":memory:"))
@@ -43,13 +37,10 @@ def db() -> Generator[Database, None, None]:
     database.close()
 
 
-@pytest.fixture()
+@pytest.fixture
 def service(db: Database) -> SettingsService:
     """SettingsService backed by an in-memory database."""
     return SettingsService(db)
-
-
-# ── Setting base class ────────────────────────────────────────────────────────
 
 
 class TestSettingBase:
@@ -160,58 +151,65 @@ class TestSettingBase:
         assert result == value
 
 
-# ── _SettingCacheDir ─────────────────────────────────────────────────────────
-
-
 class TestSettingCacheDir:
+    """Tests for the _SettingCacheDir Setting subclass."""
+
     def test_default_value(self, db: Database) -> None:
+        """cache_dir defaults to None when no value is stored."""
         setting = _SettingCacheDir(db)
         assert setting.get() is None
 
     def test_get_key(self, db: Database) -> None:
+        """get_key() returns 'cache_dir'."""
         setting = _SettingCacheDir(db)
         assert setting.get_key() == "cache_dir"
 
     def test_set_and_get(self, db: Database) -> None:
+        """Setting a cache directory persists and reads back the path."""
         setting = _SettingCacheDir(db)
         setting.set("/tmp/cache")
         assert setting.get() == "/tmp/cache"
 
 
-# ── _SettingCacheFormat ──────────────────────────────────────────────────────
-
-
 class TestSettingCacheFormat:
+    """Tests for the _SettingCacheFormat Setting subclass."""
+
     def test_default_value(self, db: Database) -> None:
+        """cache_format defaults to 'PNG'."""
         setting = _SettingCacheFormat(db)
         assert setting.get() == "PNG"
 
     def test_get_key(self, db: Database) -> None:
+        """get_key() returns 'cache_format'."""
         setting = _SettingCacheFormat(db)
         assert setting.get_key() == "cache_format"
 
     def test_set_png(self, db: Database) -> None:
+        """Setting 'PNG' is accepted and stored."""
         setting = _SettingCacheFormat(db)
         setting.set("PNG")
         assert setting.get() == "PNG"
 
     def test_set_jpeg(self, db: Database) -> None:
+        """Setting 'JPEG' is accepted and stored."""
         setting = _SettingCacheFormat(db)
         setting.set("JPEG")
         assert setting.get() == "JPEG"
 
     def test_invalid_format_raises(self, db: Database) -> None:
+        """Setting an unsupported format raises ValueError."""
         setting = _SettingCacheFormat(db)
         with pytest.raises(ValueError, match="Invalid cache_format"):
             setting.set("BMP")
 
     def test_lowercase_invalid(self, db: Database) -> None:
-        """Validation is case-sensitive — lowercase is rejected."""
+        """Validation is case-sensitive; lowercase is rejected."""
         setting = _SettingCacheFormat(db)
         with pytest.raises(ValueError, match="Invalid cache_format"):
             setting.set("png")
 
     def test_get_valid_formats(self, db: Database) -> None:
+        """get_valid_formats() returns the supported formats."""
         setting = _SettingCacheFormat(db)
         assert setting.get_valid_formats() == ["PNG", "JPEG"]
 
@@ -223,290 +221,333 @@ class TestSettingCacheFormat:
         assert db.get_setting("cache_format") is None
 
 
-# ── _SettingColorTagEnabled ──────────────────────────────────────────────────
-
-
 class TestSettingColorTagEnabled:
+    """Tests for the _SettingColorTagEnabled Setting subclass."""
+
     def test_default_value(self, db: Database) -> None:
+        """color_tag_enabled defaults to True."""
         setting = _SettingColorTagEnabled(db)
         assert setting.get() is True
 
     def test_get_key(self, db: Database) -> None:
+        """get_key() returns 'color_tag_enabled'."""
         setting = _SettingColorTagEnabled(db)
         assert setting.get_key() == "color_tag_enabled"
 
     def test_set_false(self, db: Database) -> None:
+        """Setting False disables color tagging."""
         setting = _SettingColorTagEnabled(db)
         setting.set(False)
         assert setting.get() is False
 
     def test_set_true_after_false(self, db: Database) -> None:
+        """Setting True after False re-enables color tagging."""
         setting = _SettingColorTagEnabled(db)
         setting.set(False)
         setting.set(True)
         assert setting.get() is True
 
 
-# ── _SettingColorTagPaletteSize ──────────────────────────────────────────────
-
-
 class TestSettingColorTagPaletteSize:
+    """Tests for the _SettingColorTagPaletteSize Setting subclass."""
+
     def test_default_value(self, db: Database) -> None:
+        """color_tag_palette_size defaults to 8."""
         setting = _SettingColorTagPaletteSize(db)
         assert setting.get() == 8
 
     def test_get_key(self, db: Database) -> None:
+        """get_key() returns 'color_tag_palette_size'."""
         setting = _SettingColorTagPaletteSize(db)
         assert setting.get_key() == "color_tag_palette_size"
 
     def test_set_and_get(self, db: Database) -> None:
+        """Setting a palette size within bounds persists the value."""
         setting = _SettingColorTagPaletteSize(db)
         setting.set(16)
         assert setting.get() == 16
 
     def test_clamps_above_max(self, db: Database) -> None:
+        """Values above the maximum are clamped to 32."""
         setting = _SettingColorTagPaletteSize(db)
         setting.set(100)
         assert setting.get() == 32
 
     def test_clamps_below_min(self, db: Database) -> None:
+        """Values below the minimum are clamped to 2."""
         setting = _SettingColorTagPaletteSize(db)
         setting.set(0)
         assert setting.get() == 2
 
     def test_boundary_low(self, db: Database) -> None:
+        """The minimum boundary value 2 is accepted unchanged."""
         setting = _SettingColorTagPaletteSize(db)
         setting.set(2)
         assert setting.get() == 2
 
     def test_boundary_high(self, db: Database) -> None:
+        """The maximum boundary value 32 is accepted unchanged."""
         setting = _SettingColorTagPaletteSize(db)
         setting.set(32)
         assert setting.get() == 32
 
 
-# ── _SettingColorTagMinShare ─────────────────────────────────────────────────
-
-
 class TestSettingColorTagMinShare:
+    """Tests for the _SettingColorTagMinShare Setting subclass."""
+
     def test_default_value(self, db: Database) -> None:
+        """color_tag_min_share defaults to 0.10."""
         setting = _SettingColorTagMinShare(db)
         assert setting.get() == pytest.approx(0.10)
 
     def test_get_key(self, db: Database) -> None:
+        """get_key() returns 'color_tag_min_share'."""
         setting = _SettingColorTagMinShare(db)
         assert setting.get_key() == "color_tag_min_share"
 
     def test_set_and_get(self, db: Database) -> None:
+        """Setting a share within bounds persists the value."""
         setting = _SettingColorTagMinShare(db)
         setting.set(0.25)
         assert setting.get() == pytest.approx(0.25)
 
     def test_clamps_above_max(self, db: Database) -> None:
+        """Values above the maximum are clamped to 1.0."""
         setting = _SettingColorTagMinShare(db)
         setting.set(1.5)
         assert setting.get() == pytest.approx(1.0)
 
     def test_clamps_below_min(self, db: Database) -> None:
+        """Values below the minimum are clamped to 0.0."""
         setting = _SettingColorTagMinShare(db)
         setting.set(-0.5)
         assert setting.get() == pytest.approx(0.0)
 
     def test_boundary_zero(self, db: Database) -> None:
+        """The minimum boundary value 0.0 is accepted unchanged."""
         setting = _SettingColorTagMinShare(db)
         setting.set(0.0)
         assert setting.get() == pytest.approx(0.0)
 
     def test_boundary_one(self, db: Database) -> None:
+        """The maximum boundary value 1.0 is accepted unchanged."""
         setting = _SettingColorTagMinShare(db)
         setting.set(1.0)
         assert setting.get() == pytest.approx(1.0)
 
 
-# ── _SettingColorTagNeutralSThreshold ────────────────────────────────────────
-
-
 class TestSettingColorTagNeutralSThreshold:
+    """Tests for the _SettingColorTagNeutralSThreshold Setting subclass."""
+
     def test_default_value(self, db: Database) -> None:
+        """color_tag_neutral_s_threshold defaults to 0.15."""
         setting = _SettingColorTagNeutralSThreshold(db)
         assert setting.get() == pytest.approx(0.15)
 
     def test_get_key(self, db: Database) -> None:
+        """get_key() returns 'color_tag_neutral_s_threshold'."""
         setting = _SettingColorTagNeutralSThreshold(db)
         assert setting.get_key() == "color_tag_neutral_s_threshold"
 
     def test_set_and_get(self, db: Database) -> None:
+        """Setting a threshold within bounds persists the value."""
         setting = _SettingColorTagNeutralSThreshold(db)
         setting.set(0.30)
         assert setting.get() == pytest.approx(0.30)
 
     def test_clamps_above_max(self, db: Database) -> None:
+        """Values above the maximum are clamped to 1.0."""
         setting = _SettingColorTagNeutralSThreshold(db)
         setting.set(2.0)
         assert setting.get() == pytest.approx(1.0)
 
     def test_clamps_below_min(self, db: Database) -> None:
+        """Values below the minimum are clamped to 0.0."""
         setting = _SettingColorTagNeutralSThreshold(db)
         setting.set(-1.0)
         assert setting.get() == pytest.approx(0.0)
 
 
-# ── _SettingDebugMode ────────────────────────────────────────────────────────
-
-
 class TestSettingDebugMode:
+    """Tests for the _SettingDebugMode Setting subclass."""
+
     def test_default_value(self, db: Database) -> None:
+        """debug_mode defaults to False."""
         setting = _SettingDebugMode(db)
         assert setting.get() is False
 
     def test_get_key(self, db: Database) -> None:
+        """get_key() returns 'debug_mode'."""
         setting = _SettingDebugMode(db)
         assert setting.get_key() == "debug_mode"
 
     def test_set_true(self, db: Database) -> None:
+        """Setting True enables debug mode."""
         setting = _SettingDebugMode(db)
         setting.set(True)
         assert setting.get() is True
 
     def test_set_false_after_true(self, db: Database) -> None:
+        """Setting False after True disables debug mode."""
         setting = _SettingDebugMode(db)
         setting.set(True)
         setting.set(False)
         assert setting.get() is False
 
 
-# ── _SettingLargeCanvasThresholdMp ───────────────────────────────────────────
-
-
 class TestSettingLargeCanvasThresholdMp:
+    """Tests for the _SettingLargeCanvasThresholdMp Setting subclass."""
+
     def test_default_value(self, db: Database) -> None:
+        """large_canvas_threshold_mp defaults to 20.0."""
         setting = _SettingLargeCanvasThresholdMp(db)
         assert setting.get() == pytest.approx(20.0)
 
     def test_get_key(self, db: Database) -> None:
+        """get_key() returns 'large_canvas_threshold_mp'."""
         setting = _SettingLargeCanvasThresholdMp(db)
         assert setting.get_key() == "large_canvas_threshold_mp"
 
     def test_set_and_get(self, db: Database) -> None:
+        """Setting a threshold within bounds persists the value."""
         setting = _SettingLargeCanvasThresholdMp(db)
         setting.set(50.5)
         assert setting.get() == pytest.approx(50.5)
 
     def test_clamps_above_max(self, db: Database) -> None:
+        """Values above the maximum are clamped to 1000.0."""
         setting = _SettingLargeCanvasThresholdMp(db)
         setting.set(9999.0)
         assert setting.get() == pytest.approx(1000.0)
 
     def test_clamps_below_min(self, db: Database) -> None:
+        """Values below the minimum are clamped to 0.1."""
         setting = _SettingLargeCanvasThresholdMp(db)
         setting.set(0.0)
         assert setting.get() == pytest.approx(0.1)
 
     def test_boundary_low(self, db: Database) -> None:
+        """The minimum boundary value 0.1 is accepted unchanged."""
         setting = _SettingLargeCanvasThresholdMp(db)
         setting.set(0.1)
         assert setting.get() == pytest.approx(0.1)
 
     def test_boundary_high(self, db: Database) -> None:
+        """The maximum boundary value 1000.0 is accepted unchanged."""
         setting = _SettingLargeCanvasThresholdMp(db)
         setting.set(1000.0)
         assert setting.get() == pytest.approx(1000.0)
 
 
-# ── _SettingMaxMultiPreview ──────────────────────────────────────────────────
-
-
 class TestSettingMaxMultiPreview:
+    """Tests for the _SettingMaxMultiPreview Setting subclass."""
+
     def test_default_value(self, db: Database) -> None:
+        """max_multi_preview defaults to 9."""
         setting = _SettingMaxMultiPreview(db)
         assert setting.get() == 9
 
     def test_get_key(self, db: Database) -> None:
+        """get_key() returns 'max_multi_preview'."""
         setting = _SettingMaxMultiPreview(db)
         assert setting.get_key() == "max_multi_preview"
 
     def test_set_and_get(self, db: Database) -> None:
+        """Setting a preview count within bounds persists the value."""
         setting = _SettingMaxMultiPreview(db)
         setting.set(25)
         assert setting.get() == 25
 
     def test_clamps_above_max(self, db: Database) -> None:
+        """Values above the maximum are clamped to 100."""
         setting = _SettingMaxMultiPreview(db)
         setting.set(200)
         assert setting.get() == 100
 
     def test_clamps_below_min(self, db: Database) -> None:
+        """Values below the minimum are clamped to 1."""
         setting = _SettingMaxMultiPreview(db)
         setting.set(0)
         assert setting.get() == 1
 
     def test_boundary_low(self, db: Database) -> None:
+        """The minimum boundary value 1 is accepted unchanged."""
         setting = _SettingMaxMultiPreview(db)
         setting.set(1)
         assert setting.get() == 1
 
     def test_boundary_high(self, db: Database) -> None:
+        """The maximum boundary value 100 is accepted unchanged."""
         setting = _SettingMaxMultiPreview(db)
         setting.set(100)
         assert setting.get() == 100
 
 
-# ── _SettingMaxPsdWorkers ────────────────────────────────────────────────────
-
-
 class TestSettingMaxPsdWorkers:
+    """Tests for the _SettingMaxPsdWorkers Setting subclass."""
+
     def test_default_value(self, db: Database) -> None:
+        """max_psd_workers defaults to 3."""
         setting = _SettingMaxPsdWorkers(db)
         assert setting.get() == 3
 
     def test_get_key(self, db: Database) -> None:
+        """get_key() returns 'max_psd_workers'."""
         setting = _SettingMaxPsdWorkers(db)
         assert setting.get_key() == "max_psd_workers"
 
     def test_set_and_get(self, db: Database) -> None:
+        """Setting a worker count within bounds persists the value."""
         setting = _SettingMaxPsdWorkers(db)
         setting.set(5)
         assert setting.get() == 5
 
     def test_clamps_above_max(self, db: Database) -> None:
+        """Values above the maximum are clamped to 8."""
         setting = _SettingMaxPsdWorkers(db)
         setting.set(99)
         assert setting.get() == 8
 
     def test_clamps_below_min(self, db: Database) -> None:
+        """Values below the minimum are clamped to 1."""
         setting = _SettingMaxPsdWorkers(db)
         setting.set(0)
         assert setting.get() == 1
 
     def test_clamps_negative(self, db: Database) -> None:
+        """Negative values are clamped to the minimum of 1."""
         setting = _SettingMaxPsdWorkers(db)
         setting.set(-5)
         assert setting.get() == 1
 
     def test_boundary_low(self, db: Database) -> None:
+        """The minimum boundary value 1 is accepted unchanged."""
         setting = _SettingMaxPsdWorkers(db)
         setting.set(1)
         assert setting.get() == 1
 
     def test_boundary_high(self, db: Database) -> None:
+        """The maximum boundary value 8 is accepted unchanged."""
         setting = _SettingMaxPsdWorkers(db)
         setting.set(8)
         assert setting.get() == 8
 
 
-# ── _SettingTileGridSize ─────────────────────────────────────────────────────
-
-
 class TestSettingTileGridSize:
+    """Tests for the _SettingTileGridSize Setting subclass."""
+
     def test_default_value(self, db: Database) -> None:
+        """tile_grid_size defaults to '2x2'."""
         setting = _SettingTileGridSize(db)
         assert setting.get() == "2x2"
 
     def test_get_key(self, db: Database) -> None:
+        """get_key() returns 'tile_grid_size'."""
         setting = _SettingTileGridSize(db)
         assert setting.get_key() == "tile_grid_size"
 
     def test_set_and_get(self, db: Database) -> None:
+        """Setting a valid grid size persists the value."""
         setting = _SettingTileGridSize(db)
         setting.set("3x3")
         assert setting.get() == "3x3"
@@ -518,16 +559,19 @@ class TestSettingTileGridSize:
         assert setting.get() == "4x2"
 
     def test_invalid_format_raises(self, db: Database) -> None:
+        """Setting a non-grid string raises ValueError."""
         setting = _SettingTileGridSize(db)
         with pytest.raises(ValueError, match="Invalid tile_grid_size"):
             setting.set("abc")
 
     def test_invalid_empty_raises(self, db: Database) -> None:
+        """Setting an empty string raises ValueError."""
         setting = _SettingTileGridSize(db)
         with pytest.raises(ValueError, match="Invalid tile_grid_size"):
             setting.set("")
 
     def test_invalid_single_number_raises(self, db: Database) -> None:
+        """Setting a single number raises ValueError."""
         setting = _SettingTileGridSize(db)
         with pytest.raises(ValueError, match="Invalid tile_grid_size"):
             setting.set("4")
@@ -540,47 +584,49 @@ class TestSettingTileGridSize:
         assert db.get_setting("tile_grid_size") is None
 
     def test_get_valid_formats(self, db: Database) -> None:
+        """get_valid_formats() returns all supported grid sizes."""
         setting = _SettingTileGridSize(db)
         assert setting.get_valid_formats() == ["1x1", "2x2", "3x3", "4x4"]
 
 
-# ── _SettingWindowLayoutState ────────────────────────────────────────────────
-
-
 class TestSettingWindowLayoutState:
+    """Tests for the _SettingWindowLayoutState Setting subclass."""
+
     def test_default_value(self, db: Database) -> None:
+        """window_layout_state defaults to None."""
         setting = _SettingWindowLayoutState(db)
         assert setting.get() is None
 
     def test_get_key(self, db: Database) -> None:
+        """get_key() returns 'window_layout_state'."""
         setting = _SettingWindowLayoutState(db)
         assert setting.get_key() == "window_layout_state"
 
     def test_set_and_get(self, db: Database) -> None:
+        """Setting a layout blob persists the value."""
         setting = _SettingWindowLayoutState(db)
         setting.set("layout_blob_data")
         assert setting.get() == "layout_blob_data"
 
 
-# ── _SettingWindowGeometryState ──────────────────────────────────────────────
-
-
 class TestSettingWindowGeometryState:
+    """Tests for the _SettingWindowGeometryState Setting subclass."""
+
     def test_default_value(self, db: Database) -> None:
+        """window_geometry_state defaults to None."""
         setting = _SettingWindowGeometryState(db)
         assert setting.get() is None
 
     def test_get_key(self, db: Database) -> None:
+        """get_key() returns 'window_geometry_state'."""
         setting = _SettingWindowGeometryState(db)
         assert setting.get_key() == "window_geometry_state"
 
     def test_set_and_get(self, db: Database) -> None:
+        """Setting a geometry blob persists the value."""
         setting = _SettingWindowGeometryState(db)
         setting.set("geometry_blob_data")
         assert setting.get() == "geometry_blob_data"
-
-
-# ── SettingsService integration ──────────────────────────────────────────────
 
 
 class TestSettingsServiceIntegration:

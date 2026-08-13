@@ -137,11 +137,6 @@ class TestTagMenu:
         assert action_texts == ["apple", "mango", "zebra"]
 
 
-# =========================================================================
-# TestTagFiltering
-# =========================================================================
-
-
 class TestTagFiltering:
     """Toggling tags updates the active filter set."""
 
@@ -191,11 +186,6 @@ class TestTagFiltering:
         assert bar.get_active_tag_ids() == {id1, id2}
 
 
-# =========================================================================
-# TestSignalEmission
-# =========================================================================
-
-
 class TestSignalEmission:
     """tag_filter_changed signal is emitted correctly."""
 
@@ -241,11 +231,6 @@ class TestSignalEmission:
 
         assert len(captured) == 1
         assert tag_id not in captured[0]
-
-
-# =========================================================================
-# TestPublicAPI
-# =========================================================================
 
 
 class TestPublicAPI:
@@ -304,11 +289,6 @@ class TestPublicAPI:
         assert captured[0] == set()
 
 
-# =========================================================================
-# TestChipDisplay
-# =========================================================================
-
-
 class TestChipDisplay:
     """Active tags are displayed as removable chips."""
 
@@ -348,7 +328,7 @@ class TestChipDisplay:
         assert any(lbl.text() == "my-special-tag" for lbl in labels)
 
     def test_chip_has_remove_button(self, service: TagService, bar: FilterBarTag) -> None:
-        """Each chip has a remove button with '×' text."""
+        """Each chip has a remove button with 'x' text."""
         tag_id = service._get_or_create_tag("has-btn")
         bar._refresh_tags()
         bar._toggle_tag(tag_id)
@@ -385,11 +365,6 @@ class TestChipDisplay:
 
         bar.clear_filters()
         assert bar._chips_layout.count() == 0
-
-
-# =========================================================================
-# TestRefreshPreservesSelection
-# =========================================================================
 
 
 class TestRefreshPreservesSelection:

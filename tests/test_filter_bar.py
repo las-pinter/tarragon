@@ -1,13 +1,4 @@
-"""Tests for FilterBar — combined filter row widget.
-
-Covers:
-    - Widget creation with sub-widgets (FilterBarColor, FilterBarTag, folder chips)
-    - Signal forwarding from child widgets
-    - Folder chip visibility toggle via set_scope()
-    - Folder chip creation and removal
-    - Folder filter signal emission (set[str])
-    - Add Folder menu population
-"""
+"""Tests for FilterBar"""
 
 from __future__ import annotations
 
@@ -15,18 +6,15 @@ from collections.abc import Generator
 from pathlib import Path
 
 import pytest
+from PySide6.QtWidgets import QComboBox
 from tarragon.db.database import Database
 from tarragon.services.tag_service import TagService
 from tarragon.widgets.filter_bar import FilterBar
 from tarragon.widgets.filter_bar_color import FilterBarColor
 from tarragon.widgets.filter_bar_tag import FilterBarTag
 
-# =========================================================================
-# Fixtures
-# =========================================================================
 
-
-@pytest.fixture()
+@pytest.fixture
 def db() -> Generator[Database, None, None]:
     """Provide an in-memory Database with initialised schema."""
     database = Database(Path(":memory:"))
@@ -35,23 +23,18 @@ def db() -> Generator[Database, None, None]:
     database.close()
 
 
-@pytest.fixture()
+@pytest.fixture
 def tag_service(db: Database) -> TagService:
     """Create a TagService backed by the in-memory database."""
     return TagService(db=db)
 
 
-@pytest.fixture()
+@pytest.fixture
 def bar(tag_service: TagService, db: Database) -> Generator[FilterBar, None, None]:
     """Provide a FilterBar that is closed after the test."""
     w = FilterBar(tag_service, db)
     yield w
     w.close()
-
-
-# =========================================================================
-# TestFilterBarCreation
-# =========================================================================
 
 
 class TestFilterBarCreation:
@@ -71,15 +54,8 @@ class TestFilterBarCreation:
 
     def test_no_qcombobox(self, bar: FilterBar) -> None:
         """FilterBar no longer contains a QComboBox (replaced by chips)."""
-        from PySide6.QtWidgets import QComboBox
-
         combos = bar.findChildren(QComboBox)
         assert len(combos) == 0
-
-
-# =========================================================================
-# TestSignalForwarding
-# =========================================================================
 
 
 class TestSignalForwarding:
@@ -109,7 +85,7 @@ class TestSignalForwarding:
         assert tag_id in captured[0]
 
     def test_folder_filter_changed_forwarded(self, bar: FilterBar, db: Database) -> None:
-        """tag_filter_changed signal is forwarded from FilterBarTag."""
+        """folder_filter_changed signal is forwarded from FilterBarFolder."""
         db.upsert_thumbnail("/photos/vacation/a.png", mtime=1, size=100, width=10, height=10, cache_uuid="u1")
 
         captured: list[set[int]] = []

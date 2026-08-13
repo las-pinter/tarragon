@@ -1,56 +1,50 @@
-"""Tests for the application entry point."""
+"""Tests for Main"""
+
+from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
 
-# ── Import Tests ───────────────────────────────────────────────────────
+import tarragon.main as main_module
+from tarragon.db.database import Database
+from tarragon.main import MainWindow, main
 
 
-def test_main_module_imports_cleanly() -> None:
-    """main.py can be imported without side effects or errors."""
-    from tarragon import main  # noqa: F401
+class TestMainModule:
+    """The main module imports cleanly."""
 
-    assert hasattr(main, "MainWindow")
-    assert hasattr(main, "main")
-
-
-# ── MainWindow Class Tests ─────────────────────────────────────────────
+    def test_main_module_imports_cleanly(self) -> None:
+        """The main module imports without side effects or errors."""
+        assert hasattr(main_module, "MainWindow")
+        assert hasattr(main_module, "main")
 
 
-def test_main_window_has_title(qapp: Any, tmp_path: Path) -> None:  # noqa: ARG001
-    """MainWindow sets a title on initialization (with services at temp paths)."""
+class TestMainWindow:
+    """MainWindow initializes with title and database."""
 
-    from tarragon.db.database import Database
-    from tarragon.main import MainWindow
+    def test_main_window_has_title(self, qapp: Any, tmp_path: Path) -> None:
+        """MainWindow sets a title on initialization."""
+        database = Database(tmp_path / "test_main.db")
+        window = MainWindow(database=database)
+        try:
+            assert window.windowTitle() == "Tarragon"
+        finally:
+            window.close()
 
-    database = Database(tmp_path / "test_main.db")
-    window = MainWindow(database=database)
-    try:
-        assert window.windowTitle() == "Tarragon"
-    finally:
-        window.close()
-
-
-def test_main_window_has_database(qapp: Any, tmp_path: Path) -> None:  # noqa: ARG001
-    """MainWindow (from main.py) stores a Database reference."""
-
-    from tarragon.db.database import Database
-    from tarragon.main import MainWindow
-
-    database = Database(tmp_path / "test_main_dbref.db")
-    window = MainWindow(database=database)
-    try:
-        assert hasattr(window, "_database")
-        assert isinstance(window._database, Database)
-    finally:
-        window.close()
+    def test_main_window_has_database(self, qapp: Any, tmp_path: Path) -> None:
+        """MainWindow stores a Database reference."""
+        database = Database(tmp_path / "test_main_dbref.db")
+        window = MainWindow(database=database)
+        try:
+            assert hasattr(window, "_database")
+            assert isinstance(window._database, Database)
+        finally:
+            window.close()
 
 
-# ── Entry Point Tests ──────────────────────────────────────────────────
+class TestEntryPoint:
+    """The main() entry point exists."""
 
-
-def test_main_function_exists() -> None:
-    """main() function is callable."""
-    from tarragon.main import main
-
-    assert callable(main)
+    def test_main_function_exists(self) -> None:
+        """The main() function is callable."""
+        assert callable(main)

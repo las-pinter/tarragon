@@ -1,4 +1,4 @@
-"""Tests for render_clip_image — thumbnail extraction from Clip Studio .clip files."""
+"""Tests for render_clip_image"""
 
 from __future__ import annotations
 
@@ -8,10 +8,6 @@ from pathlib import Path
 
 from PIL import Image
 from tarragon.renderers.clip import render_clip_image
-
-# =========================================================================
-# Helper — build a synthetic .clip file
-# =========================================================================
 
 
 def _make_clip_file(
@@ -69,7 +65,7 @@ def _make_clip_file(
                 (b"NOT_A_PNG_JUST_GARBAGE\x00\xff\xfe",),
             )
         elif insert_no_png_sig:
-            # Valid data but no PNG signature — e.g. raw JPEG-like bytes
+            # Valid data but no PNG signature - e.g. raw JPEG-like bytes
             conn.execute(
                 "INSERT INTO CanvasPreview (ImageData) VALUES (?)",
                 (b"\xff\xd8\xff\xe0" + b"\x00" * 100,),
@@ -91,106 +87,103 @@ def _make_clip_file(
     return dest
 
 
-# =========================================================================
-# Tests
-# =========================================================================
+class TestThumbnailExtraction:
+    """Valid .clip files render thumbnails from embedded image data."""
+
+    def test_render_clip_image_extracts_thumbnail(self, tmp_path: Path) -> None:
+        """A valid .clip file yields a thumbnail with the embedded image size."""
+        clip_path = _make_clip_file(
+            tmp_path / "test.clip",
+            image_size=(100, 80),
+            image_color="blue",
+        )
+
+        result = render_clip_image(clip_path)
+
+        assert result is not None
+        assert isinstance(result, Image.Image)
+        assert result.size == (100, 80)
+        assert result.mode in ("RGB", "RGBA")
+
+    def test_render_clip_image_resize(self, tmp_path: Path) -> None:
+        """The target_size option resizes the thumbnail while preserving the aspect ratio."""
+        clip_path = _make_clip_file(
+            tmp_path / "resize.clip",
+            image_size=(200, 160),
+        )
+
+        result = render_clip_image(clip_path, target_size=50)
+
+        assert result is not None
+        assert max(result.size) == 50
+        ratio = result.size[0] / result.size[1]
+        assert abs(ratio - 200 / 160) < 0.05, f"Aspect ratio changed: {ratio}"
 
 
-def test_render_clip_image_extracts_thumbnail(tmp_path: Path) -> None:
-    """render_clip_image extracts a valid PNG thumbnail from a synthetic .clip file."""
-    clip_path = _make_clip_file(
-        tmp_path / "test.clip",
-        image_size=(100, 80),
-        image_color="blue",
-    )
+class TestUnusableFiles:
+    """Missing or structurally invalid .clip files yield None."""
 
-    result = render_clip_image(clip_path)
+    def test_render_clip_image_missing_file(self, tmp_path: Path) -> None:
+        """A missing file yields None."""
+        nonexistent = tmp_path / "does_not_exist.clip"
 
-    assert result is not None
-    assert isinstance(result, Image.Image)
-    assert result.size == (100, 80)
-    assert result.mode in ("RGB", "RGBA")
+        result = render_clip_image(nonexistent)
 
+        assert result is None
 
-def test_render_clip_image_resize(tmp_path: Path) -> None:
-    """render_clip_image resizes the image when target_size is specified."""
-    clip_path = _make_clip_file(
-        tmp_path / "resize.clip",
-        image_size=(200, 160),
-    )
+    def test_render_clip_image_no_sqlite_header(self, tmp_path: Path) -> None:
+        """A file without an embedded SQLite database yields None."""
+        clip_path = tmp_path / "no_sqlite.clip"
+        clip_path.write_bytes(b"THIS IS JUST RANDOM GARBAGE DATA WITH NO SQLITE HEADER")
 
-    result = render_clip_image(clip_path, target_size=50)
+        result = render_clip_image(clip_path)
 
-    assert result is not None
-    # One dimension should be 50 (the long side is shrunk to target_size)
-    assert max(result.size) == 50
-    # Aspect ratio should be preserved: 200/160 = 1.25
-    ratio = result.size[0] / result.size[1]
-    assert abs(ratio - 200 / 160) < 0.05, f"Aspect ratio changed: {ratio}"
+        assert result is None
 
+    def test_render_clip_image_no_canvas_preview_table(self, tmp_path: Path) -> None:
+        """A database without the CanvasPreview table yields None."""
+        clip_path = _make_clip_file(
+            tmp_path / "no_table.clip",
+            create_table=False,
+        )
 
-def test_render_clip_image_missing_file(tmp_path: Path) -> None:
-    """render_clip_image returns None when the file does not exist."""
-    nonexistent = tmp_path / "does_not_exist.clip"
+        result = render_clip_image(clip_path)
 
-    result = render_clip_image(nonexistent)
-
-    assert result is None
+        assert result is None
 
 
-def test_render_clip_image_no_sqlite_header(tmp_path: Path) -> None:
-    """render_clip_image returns None when the file has no embedded SQLite database."""
-    clip_path = tmp_path / "no_sqlite.clip"
-    clip_path.write_bytes(b"THIS IS JUST RANDOM GARBAGE DATA WITH NO SQLITE HEADER")
+class TestInvalidImageData:
+    """Invalid embedded image data yields None."""
 
-    result = render_clip_image(clip_path)
+    def test_render_clip_image_empty_image_data(self, tmp_path: Path) -> None:
+        """NULL ImageData yields None."""
+        clip_path = _make_clip_file(
+            tmp_path / "null_data.clip",
+            insert_null=True,
+        )
 
-    assert result is None
+        result = render_clip_image(clip_path)
 
+        assert result is None
 
-def test_render_clip_image_no_canvas_preview_table(tmp_path: Path) -> None:
-    """render_clip_image returns None when the SQLite database lacks CanvasPreview table."""
-    clip_path = _make_clip_file(
-        tmp_path / "no_table.clip",
-        create_table=False,
-    )
+    def test_render_clip_image_corrupt_png(self, tmp_path: Path) -> None:
+        """Garbage ImageData that is not a valid PNG yields None."""
+        clip_path = _make_clip_file(
+            tmp_path / "corrupt_png.clip",
+            insert_garbage=True,
+        )
 
-    result = render_clip_image(clip_path)
+        result = render_clip_image(clip_path)
 
-    assert result is None
+        assert result is None
 
+    def test_render_clip_image_no_png_signature(self, tmp_path: Path) -> None:
+        """ImageData without a PNG signature yields None."""
+        clip_path = _make_clip_file(
+            tmp_path / "no_png_sig.clip",
+            insert_no_png_sig=True,
+        )
 
-def test_render_clip_image_empty_image_data(tmp_path: Path) -> None:
-    """render_clip_image returns None when ImageData is NULL."""
-    clip_path = _make_clip_file(
-        tmp_path / "null_data.clip",
-        insert_null=True,
-    )
+        result = render_clip_image(clip_path)
 
-    result = render_clip_image(clip_path)
-
-    assert result is None
-
-
-def test_render_clip_image_corrupt_png(tmp_path: Path) -> None:
-    """render_clip_image returns None when ImageData contains garbage (not a valid PNG)."""
-    clip_path = _make_clip_file(
-        tmp_path / "corrupt_png.clip",
-        insert_garbage=True,
-    )
-
-    result = render_clip_image(clip_path)
-
-    assert result is None
-
-
-def test_render_clip_image_no_png_signature(tmp_path: Path) -> None:
-    """render_clip_image returns None when ImageData has no PNG signature bytes."""
-    clip_path = _make_clip_file(
-        tmp_path / "no_png_sig.clip",
-        insert_no_png_sig=True,
-    )
-
-    result = render_clip_image(clip_path)
-
-    assert result is None
+        assert result is None

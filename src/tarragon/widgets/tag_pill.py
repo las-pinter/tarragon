@@ -1,4 +1,4 @@
-"""Tag pill widget — a clickable tag chip with hover-revealed remove button."""
+"""A clickable tag chip with hover-revealed remove button."""
 
 from __future__ import annotations
 
@@ -25,11 +25,11 @@ class _ClickableLabel(QLabel):
 
 
 class TagPillWidget(QWidget):
-    """A tag pill widget with a hover-revealed remove (×) button.
+    """A tag pill widget with a hover-revealed remove (x) button.
 
-    Contains a QLabel for the tag name and a small QPushButton ("×") that
+    Contains a QLabel for the tag name and a small QPushButton ("x") that
     is hidden by default and shown when the mouse enters the widget.
-    Clicking the × button removes the tag; clicking the pill body toggles it.
+    Clicking the x button removes the tag; clicking the pill body toggles it.
     """
 
     def __init__(
@@ -53,7 +53,11 @@ class TagPillWidget(QWidget):
         self._label.clicked.connect(self._on_toggle)
         layout.addWidget(self._label)
 
-        self._remove_btn = QPushButton("×")
+        # All pills in the flow layout are user-created (primary role)
+        self.setProperty("tagRole", "primary")
+        self._label.setProperty("tagRole", "primary")
+
+        self._remove_btn = QPushButton("x")
         self._remove_btn.setFixedSize(16, 16)
         self._remove_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._remove_btn.setObjectName("tagPillRemoveBtn")

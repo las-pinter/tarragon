@@ -5,7 +5,7 @@ from __future__ import annotations
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QHBoxLayout, QPushButton, QScrollArea, QWidget
 
-from tarragon.theme.color_buckets import BUCKET_HEX_COLORS
+from tarragon.theme.color_buckets import BUCKET_HEX_COLORS, ColorBucket
 from tarragon.theme.colors import AMBER_ACCENT
 from tarragon.theme.constants import SPACING_S, SPACING_XS
 from tarragon.widgets.filter_bar_filter import FilterBarFilter
@@ -24,12 +24,12 @@ class FilterBarColor(FilterBarFilter):
     of active bucket names.
     """
 
-    BUCKET_HUES: dict[str, str] = dict(BUCKET_HEX_COLORS)
+    BUCKET_HUES: dict[ColorBucket, str] = dict(BUCKET_HEX_COLORS)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         """Create the filter bar with one swatch per color bucket."""
         super().__init__(parent)
-        self._active_colors: set[str] = set()
+        self._active_colors: set[ColorBucket] = set()
         self._swatch_buttons: dict[str, QPushButton] = {}
 
         outer_layout = QHBoxLayout(self)
@@ -46,22 +46,22 @@ class FilterBarColor(FilterBarFilter):
         self._layout.setContentsMargins(SPACING_XS, SPACING_XS, SPACING_XS, SPACING_XS)
         self._layout.setSpacing(SPACING_XS)
 
-        for bucket_name, hex_color in self.BUCKET_HUES.items():
-            btn = self._create_swatch_button(bucket_name, hex_color)
-            self._swatch_buttons[bucket_name] = btn
+        for color_bucket, hex_color in self.BUCKET_HUES.items():
+            btn = self._create_swatch_button(color_bucket, hex_color)
+            self._swatch_buttons[color_bucket] = btn
             self._layout.addWidget(btn)
 
         self._layout.addStretch()
         scroll_area.setWidget(container)
 
-    def _create_swatch_button(self, bucket_name: str, hex_color: str) -> QPushButton:
-        """Build a single swatch button for *bucket_name*."""
+    def _create_swatch_button(self, color_bucket: ColorBucket, hex_color: str) -> QPushButton:
+        """Build a single swatch button for *color_bucket*."""
         btn = QPushButton()
         btn.setFixedSize(_SWATCH_SIZE, _SWATCH_SIZE)
-        btn.setToolTip(f"color:{bucket_name}")
-        btn.setProperty("bucket_name", bucket_name)
+        btn.setToolTip(color_bucket)
+        btn.setProperty("color_bucket", color_bucket)
         btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn.clicked.connect(lambda _checked=False, name=bucket_name: self.toggle_color(name))
+        btn.clicked.connect(lambda _checked=False, name=color_bucket: self.toggle_color(name))
         self._apply_swatch_style(btn, hex_color, active=False)
         return btn
 
@@ -84,51 +84,41 @@ class FilterBarColor(FilterBarFilter):
             f"}}"
         )
 
-    def _update_swatch_style(self, bucket_name: str) -> None:
+    def _update_swatch_style(self, color_bucket: ColorBucket) -> None:
         """Refresh the visual style of a single swatch to match its state."""
-        btn = self._swatch_buttons[bucket_name]
-        hex_color = self.BUCKET_HUES[bucket_name]
-        active = bucket_name in self._active_colors
+        btn = self._swatch_buttons[color_bucket]
+        hex_color = self.BUCKET_HUES[color_bucket]
+        active = color_bucket in self._active_colors
         self._apply_swatch_style(btn, hex_color, active=active)
 
     def _refresh_all_swatches(self) -> None:
         """Refresh visual styles for every swatch."""
-        for bucket_name in self.BUCKET_HUES:
-            self._update_swatch_style(bucket_name)
+        for color_bucket in self.BUCKET_HUES:
+            self._update_swatch_style(color_bucket)
 
-    def set_active_colors(self, color_names: set[str]) -> None:
+    def set_active_colors(self, color_buckets: set[ColorBucket]) -> None:
         """Set which colors are active (for programmatic control).
 
         *color_names* should contain bare bucket names (e.g. ``"red"``) or
         prefixed names (``"color:red"``).  Both forms are accepted.
         """
-        bare_names: set[str] = set()
-        for name in color_names:
-            bare = name.removeprefix("color:") if name.startswith("color:") else name
-            if bare in self.BUCKET_HUES:
-                bare_names.add(bare)
-
-        self._active_colors = bare_names
+        self._active_colors = color_buckets
         self._refresh_all_swatches()
         self._emit_signal(self.get_active_colors())
 
-    def toggle_color(self, bucket_name: str) -> None:
+    def toggle_color(self, color_bucket: ColorBucket) -> None:
         """Toggle a specific color bucket on or off."""
-        bare = bucket_name.removeprefix("color:") if bucket_name.startswith("color:") else bucket_name
-        if bare not in self.BUCKET_HUES:
-            return
-
-        if bare in self._active_colors:
-            self._active_colors.discard(bare)
+        if color_bucket in self._active_colors:
+            self._active_colors.discard(color_bucket)
         else:
-            self._active_colors.add(bare)
+            self._active_colors.add(color_bucket)
 
-        self._update_swatch_style(bare)
+        self._update_swatch_style(color_bucket)
         self._emit_signal(self.get_active_colors())
 
-    def get_active_colors(self) -> set[str]:
+    def get_active_colors(self) -> set[ColorBucket]:
         """Return the set of currently active color bucket names.
 
-        Names are returned in ``"color:<bucket>"`` format.
+        Names are returned in ``"<bucket>"`` format.
         """
-        return {f"color:{name}" for name in self._active_colors}
+        return {bucket for bucket in self._active_colors}

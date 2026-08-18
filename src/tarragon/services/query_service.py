@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from tarragon.db._base import normalize_path
+from tarragon.db.common.tag import Tag
 from tarragon.db.database import Database
 
 logger = logging.getLogger(__name__)
@@ -34,8 +35,8 @@ class QueryService:
         self,
         folder_filters: set[str] | None = None,
         filename_filter: str = "",
-        tag_ids: set[int] | None = None,
-        color_tags: set[str] | None = None,
+        tags: set[Tag] | None = None,
+        color_tags: set[Tag] | None = None,
     ) -> list[Path]:
         """Query thumbnails with optional filters.
 
@@ -65,13 +66,13 @@ class QueryService:
         start = time.perf_counter()
         folder_filters = folder_filters or set()
         logger.debug(
-            "Query start: folders=%s, filename_filter=%s, color_tags=%s, tag_ids=%s",
+            "Query start: folders: %s, filename_filter: %s, color_tags: %s, tags: %s",
             folder_filters,
             filename_filter,
             color_tags,
-            tag_ids,
+            tags,
         )
-        tag_ids = tag_ids or set()
+        tags = tags or set()
         color_tags = color_tags or set()
 
         conditions: list[str] = []
@@ -95,8 +96,8 @@ class QueryService:
             params.append(f"%{escaped}%")
 
         # Tag ID filter
-        if tag_ids:
-            placeholders = ",".join("?" * len(tag_ids))
+        if tags:
+            placeholders = ",".join("?" * len(tags))
             conditions.append(
                 "path IN ("
                 "SELECT ft.path FROM file_tags ft "
@@ -105,8 +106,8 @@ class QueryService:
                 "HAVING COUNT(DISTINCT ft.tag_id) = ?"
                 ")"
             )
-            params.extend(sorted(tag_ids))
-            params.append(len(tag_ids))
+            params.extend(sorted([t.get_id() for t in tags]))
+            params.append(len(tags))
 
         #  Color tag filter
         if color_tags:
@@ -120,7 +121,7 @@ class QueryService:
                 "HAVING COUNT(DISTINCT t.name) = ?"
                 ")"
             )
-            params.extend(sorted(color_tags))
+            params.extend(sorted([t.get_name() for t in color_tags]))
             params.append(len(color_tags))
 
         if conditions:
@@ -131,5 +132,5 @@ class QueryService:
         rows = self._db.fetch_all(sql, tuple(params))
         elapsed = time.perf_counter() - start
         results = [Path(row["path"]) for row in rows]
-        logger.debug("Query returned %d results in %.3fs", len(results), elapsed)
+        logger.debug("returned %d results in %.3fs", len(results), elapsed)
         return results

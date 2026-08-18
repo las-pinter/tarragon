@@ -46,10 +46,19 @@ def settings_mock() -> MagicMock:
 
 
 @pytest.fixture
-def service(db_mock: MagicMock, settings_mock: MagicMock) -> ThumbnailService:
+def tag_service_mock() -> MagicMock:
+    """Mock TagService"""
+    mock = MagicMock()
+    mock.replace_auto_color_tags.return_value = None
+    mock.create_tag.side_effect = lambda color, source: color
+    return mock
+
+
+@pytest.fixture
+def service(db_mock: MagicMock, settings_mock: MagicMock, tag_service_mock: MagicMock) -> ThumbnailService:
     """Create a ThumbnailService with mocked DB, settings_service, and QThreadPool."""
     with patch("tarragon.services.thumbnail_service.get_executor"):
-        svc = ThumbnailService(db=db_mock, settings_service=settings_mock)
+        svc = ThumbnailService(db=db_mock, settings_service=settings_mock, tag_service=tag_service_mock)
     # Replace the real QThreadPool with a mock that executes tasks synchronously
     # so tests can verify render_func dispatch through check_and_render().
     # QThreadPool.start() returns None (void) in real Qt - mock matches that.
@@ -67,12 +76,15 @@ def _run_task(task: object) -> None:
 class TestInstantiation:
     """ThumbnailService creation and basic structure."""
 
-    def test_service_instantiation(self, db_mock: MagicMock, settings_mock: MagicMock) -> None:
+    def test_service_instantiation(
+        self, db_mock: MagicMock, settings_mock: MagicMock, tag_service_mock: MagicMock
+    ) -> None:
         """Creating a ThumbnailService stores dependencies, reads cache_format, and initializes PSD pool."""
         with patch("tarragon.services.thumbnail_service.get_executor") as mockget_executor:
-            svc = ThumbnailService(db=db_mock, settings_service=settings_mock)
+            svc = ThumbnailService(db=db_mock, settings_service=settings_mock, tag_service=tag_service_mock)
         assert svc._db is db_mock
         assert svc._settings_service is settings_mock
+        assert svc._tag_service is tag_service_mock
         assert svc._cache_format == "PNG"
         settings_mock.cache_format.get.assert_called()
         settings_mock.max_psd_workers.get.assert_called()
@@ -858,6 +870,7 @@ class TestAutoColorTagSignal:
         service: ThumbnailService,
         db_mock: MagicMock,
         settings_mock: MagicMock,
+        tag_service_mock: MagicMock,
     ) -> None:
         """_render_all_resolutions emits tags_updated after persisting auto-color tags."""
         file_info = FileInfo(
@@ -880,7 +893,7 @@ class TestAutoColorTagSignal:
             patch("tarragon.services.thumbnail_service.generate_cache_paths") as mock_paths,
             patch("tarragon.services.thumbnail_service.save_to_cache"),
             patch("tarragon.services.thumbnail_service.derive_smaller_sizes", return_value={}),
-            patch("tarragon.services.color_tagger.extract_dominant_color_tags", return_value=["red", "blue"]),
+            patch("tarragon.services.thumbnail_service.extract_dominant_colors", return_value={"red", "blue"}),
         ):
             mock_paths.return_value = {
                 str(RESOLUTION_THUMBNAIL): tmp_path / "cache" / "256.png",
@@ -891,13 +904,14 @@ class TestAutoColorTagSignal:
 
         # tags_updated should have been emitted exactly once
         assert len(emitted) == 1, f"tags_updated should be emitted once after auto-tagging, got {len(emitted)}"
-        # DB method should have been called
-        db_mock.replace_auto_color_tags.assert_called_once_with(str(file_info.path), ["red", "blue"])
+        # Tag service method should have been called
+        tag_service_mock.replace_auto_color_tags.assert_called_once_with(str(file_info.path), {"red", "blue"})
 
     def test_render_all_no_tags_updated_when_color_tagging_disabled(
         self,
         tmp_path: Path,
         db_mock: MagicMock,
+        tag_service_mock: MagicMock,
     ) -> None:
         """When color_tag_enabled is False, tags_updated is NOT emitted."""
         disabled_settings = MagicMock()
@@ -908,7 +922,7 @@ class TestAutoColorTagSignal:
         disabled_settings.color_tag_enabled.get.return_value = False  # Disabled!
 
         with patch("tarragon.services.thumbnail_service.get_executor"):
-            svc = ThumbnailService(db=db_mock, settings_service=disabled_settings)
+            svc = ThumbnailService(db=db_mock, settings_service=disabled_settings, tag_service=tag_service_mock)
 
         file_info = FileInfo(
             path=tmp_path / "source.png",
@@ -970,7 +984,7 @@ class TestAutoColorTagSignal:
             patch("tarragon.services.thumbnail_service.save_to_cache"),
             patch("tarragon.services.thumbnail_service.derive_smaller_sizes", return_value={}),
             patch(
-                "tarragon.services.color_tagger.extract_dominant_color_tags",
+                "tarragon.services.thumbnail_service.extract_dominant_colors",
                 side_effect=RuntimeError("Color extraction failed"),
             ),
         ):

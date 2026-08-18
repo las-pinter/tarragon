@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from PIL import Image
 
-from tarragon.theme.color_buckets import COLOR_BUCKETS
+from tarragon.theme.color_buckets import COLOR_BUCKETS, ColorBucket
 
 
 def _rgb_to_hsv(r: float, g: float, b: float) -> tuple[float, float, float]:
@@ -35,25 +35,25 @@ def _rgb_to_hsv(r: float, g: float, b: float) -> tuple[float, float, float]:
     return h, s, v
 
 
-def _hue_to_bucket(hue: float) -> str | None:
+def _hue_to_bucket(hue: float) -> ColorBucket | None:
     """Map a hue value (0-360) to a color bucket name.
 
     Returns None if the hue falls in a gap between buckets (310-345).
     """
-    for name, ranges in COLOR_BUCKETS.items():
+    for bucket, ranges in COLOR_BUCKETS.items():
         for h_min, h_max in ranges:
             if h_min <= hue < h_max:
-                return name
+                return bucket
     return None
 
 
-def extract_dominant_color_tags(
+def extract_dominant_colors(
     image: Image.Image,
     palette_size: int = 8,
     min_share: float = 0.10,
     neutral_s_threshold: float = 0.15,
-) -> list[str]:
-    """Extract dominant color tags from a PIL image.
+) -> set[ColorBucket]:
+    """Extract dominant colors from a PIL image.
 
     Algorithm:
     1. Convert to RGB
@@ -64,12 +64,11 @@ def extract_dominant_color_tags(
     6. Map to color bucket
     7. Filter by min_share threshold
 
-    Returns list of tag strings like ["color:red", "color:blue"],
-    sorted alphabetically.
+    Returns a set of color strings like {"red", "blue"}.
     """
     # Handle empty images
     if image.width == 0 or image.height == 0:
-        return []
+        return set()
 
     # 1. Convert to RGB
     rgb = image.convert("RGB")
@@ -84,15 +83,15 @@ def extract_dominant_color_tags(
     rgb_quantized = quantized.convert("RGB")
     colors = rgb_quantized.getcolors()
     if not colors:
-        return []
+        return set()
 
     # 5. Calculate total pixels
     total_pixels = sum(count for count, _ in colors)
     if total_pixels == 0:
-        return []
+        return set()
 
     # 6. For each color: convert to HSV, map to bucket, accumulate share
-    bucket_shares: dict[str, float] = {}
+    bucket_shares: dict[ColorBucket, float] = {}
     for count, color in colors:
         # getcolors() is typed to allow a bare int/float pixel value for
         # some image modes; since rgb_quantized was explicitly converted
@@ -105,14 +104,15 @@ def extract_dominant_color_tags(
 
         # Neutral check: low saturation, very bright, or very dark
         if s <= neutral_s_threshold or v >= 0.92 or v <= 0.08:
-            bucket = "neutral"
+            bucket = ColorBucket.NEUTRAL
         else:
-            bucket = _hue_to_bucket(h) or "neutral"
+            bucket = _hue_to_bucket(h) or ColorBucket.NEUTRAL
 
         bucket_shares[bucket] = bucket_shares.get(bucket, 0.0) + count / total_pixels
 
-    # 7. Filter by min_share and format as tags
-    tags = [f"color:{name}" for name, share in bucket_shares.items() if share >= min_share]
-
-    # 8. Sort alphabetically
-    return sorted(tags)
+    # 7. Filter by min_share
+    buckets: set[ColorBucket] = set()
+    for name, share in bucket_shares.items():
+        if share >= min_share:
+            buckets.add(name)
+    return buckets

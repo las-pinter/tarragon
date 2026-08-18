@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from tarragon.db.common.tag import TagSource
 from tarragon.db.database import Database
 
 
@@ -230,203 +231,6 @@ class TestThumbnailListForFolder:
         results = db.list_thumbnails_for_folder("/photos")
         paths = {r["path"] for r in results}
         assert paths == {"/photos/img.png"}
-
-
-class TestEnsureTag:
-    """ensure_tag creates tags and returns stable IDs."""
-
-    def test_creates_new_tag(self, db: Database) -> None:
-        """ensure_tag creates a new tag and returns a positive ID."""
-        tag_id = db.ensure_tag("red")
-        assert isinstance(tag_id, int)
-        assert tag_id > 0
-
-    def test_returns_same_id_on_repeat(self, db: Database) -> None:
-        """ensure_tag returns the same ID for the same tag name."""
-        id1 = db.ensure_tag("blue")
-        id2 = db.ensure_tag("blue")
-        assert id1 == id2
-
-    def test_different_tags_get_different_ids(self, db: Database) -> None:
-        """Different tag names receive different IDs."""
-        id_green = db.ensure_tag("green")
-        id_yellow = db.ensure_tag("yellow")
-        assert id_green != id_yellow
-
-
-class TestAddFileTags:
-    """add_file_tags associates tags with file paths."""
-
-    def test_adds_single_tag_to_path(self, db: Database) -> None:
-        """add_file_tags associates one tag with a path."""
-        tag_id = db.ensure_tag("important")
-        db.add_file_tags(["/a.png"], tag_id)
-
-        assert db.get_file_tag_ids("/a.png") == {tag_id}
-
-    def test_adds_same_tag_to_multiple_paths(self, db: Database) -> None:
-        """add_file_tags associates a tag with multiple paths."""
-        tag_id = db.ensure_tag("urgent")
-        paths = ["/x.png", "/y.png", "/z.png"]
-        db.add_file_tags(paths, tag_id)
-
-        for p in paths:
-            assert db.get_file_tag_ids(p) == {tag_id}
-
-    def test_default_source_is_user(self, db: Database) -> None:
-        """add_file_tags defaults the association source to 'user'."""
-        tag_id = db.ensure_tag("manual")
-        db.add_file_tags(["/file.png"], tag_id)
-
-        row = db._conn.execute("SELECT source FROM file_tags WHERE path='/file.png' AND tag_id=?", (tag_id,)).fetchone()
-        assert row["source"] == "user"
-
-
-class TestRemoveFileTags:
-    """remove_file_tags removes tag associations."""
-
-    def test_removes_specific_tag(self, db: Database) -> None:
-        """remove_file_tags removes the given tag association only."""
-        id_a = db.ensure_tag("alpha")
-        id_b = db.ensure_tag("beta")
-        db.add_file_tags(["/t.png"], tag_id=id_a)
-        db.add_file_tags(["/t.png"], tag_id=id_b)
-
-        db.remove_file_tags(["/t.png"], tag_id=id_a)
-        assert db.get_file_tag_ids("/t.png") == {id_b}
-
-    def test_does_not_remove_other_tags(self, db: Database) -> None:
-        """remove_file_tags leaves other paths and tags untouched."""
-        id_x = db.ensure_tag("x")
-        id_y = db.ensure_tag("y")
-        db.add_file_tags(["/u.png"], tag_id=id_x)
-        db.add_file_tags(["/v.png"], tag_id=id_y)
-
-        db.remove_file_tags(["/u.png"], tag_id=id_x)
-        assert db.get_file_tag_ids("/v.png") == {id_y}
-
-
-class TestGetFileTagIds:
-    """get_file_tag_ids returns the tag IDs for a path."""
-
-    def test_empty_for_missing_path(self, db: Database) -> None:
-        """get_file_tag_ids returns an empty set for a missing path."""
-        assert db.get_file_tag_ids("/ghost.png") == set()
-
-    def test_multiple_tags_as_set(self, db: Database) -> None:
-        """get_file_tag_ids returns all tag IDs as a set."""
-        id_1 = db.ensure_tag("one")
-        id_2 = db.ensure_tag("two")
-        db.add_file_tags(["/multi.png"], tag_id=id_1)
-        db.add_file_tags(["/multi.png"], tag_id=id_2)
-
-        assert db.get_file_tag_ids("/multi.png") == {id_1, id_2}
-
-
-class TestReplaceAutoColorTags:
-    """replace_auto_color_tags swaps auto-color tags for a path."""
-
-    def test_replaces_old_auto_color_with_new(self, db: Database) -> None:
-        """Old auto_color tags are deleted and new ones inserted."""
-        old_id = db.ensure_tag("old_red")
-        new_id_a = db.ensure_tag("new_red")
-        new_id_b = db.ensure_tag("new_blue")
-
-        # Set up: old auto_color tag + a user tag
-        db.add_file_tags(["/scene.png"], tag_id=old_id, source="auto_color")
-        db.add_file_tags(["/scene.png"], tag_id=new_id_a, source="user")
-
-        result_before = db.get_file_tag_ids("/scene.png")
-        assert old_id in result_before
-
-        # Replace with new auto_color tags
-        db.replace_auto_color_tags("/scene.png", ["new_red", "new_blue"])
-
-        result_after = db.get_file_tag_ids("/scene.png")
-        assert old_id not in result_after
-        assert new_id_a in result_after  # user tag survives
-        assert new_id_b in result_after
-
-    def test_clears_auto_color_when_empty_list(self, db: Database) -> None:
-        """Passing an empty list removes all auto_color tags for the path."""
-        id_a = db.ensure_tag("a")
-        id_b = db.ensure_tag("b")
-        db.add_file_tags(["/clear.png"], tag_id=id_a, source="auto_color")
-        db.add_file_tags(["/clear.png"], tag_id=id_b, source="user")
-
-        db.replace_auto_color_tags("/clear.png", [])
-
-        assert id_a not in db.get_file_tag_ids("/clear.png")
-        assert id_b in db.get_file_tag_ids("/clear.png")
-
-
-class TestDeleteTag:
-    """delete_tag removes tags and cascades to file tags."""
-
-    def test_delete_tag_removes_tag(self, db: Database) -> None:
-        """delete_tag removes the tag from the tags table."""
-        tag_id = db.ensure_tag("deleteme")
-        db.delete_tag(tag_id)
-
-        # Verify tag is gone
-        row = db._conn.execute("SELECT * FROM tags WHERE id = ?", (tag_id,)).fetchone()
-        assert row is None
-
-    def test_delete_tag_cascades_to_file_tags(self, db: Database) -> None:
-        """Deleting a tag CASCADE-deletes all file-tag associations."""
-        tag_id = db.ensure_tag("cascade-test")
-        db.add_file_tags(["/a.png", "/b.png", "/c.png"], tag_id)
-
-        # Verify associations exist
-        assert db.get_file_tag_ids("/a.png") == {tag_id}
-        assert db.get_file_tag_ids("/b.png") == {tag_id}
-        assert db.get_file_tag_ids("/c.png") == {tag_id}
-
-        # Delete the tag
-        db.delete_tag(tag_id)
-
-        # All associations should be gone
-        assert db.get_file_tag_ids("/a.png") == set()
-        assert db.get_file_tag_ids("/b.png") == set()
-        assert db.get_file_tag_ids("/c.png") == set()
-
-    def test_delete_tag_nonexistent_does_not_error(self, db: Database) -> None:
-        """Deleting a non-existent tag silently succeeds."""
-        db.delete_tag(99999)  # Should not raise
-
-    def test_delete_tag_preserves_other_tags(self, db: Database) -> None:
-        """Deleting one tag does not affect other tags."""
-        id_keep = db.ensure_tag("keep")
-        id_delete = db.ensure_tag("delete")
-        db.add_file_tags(["/x.png"], id_keep)
-        db.add_file_tags(["/x.png"], id_delete)
-
-        db.delete_tag(id_delete)
-
-        # keep tag should still exist
-        assert db.get_file_tag_ids("/x.png") == {id_keep}
-        row = db._conn.execute("SELECT * FROM tags WHERE id = ?", (id_keep,)).fetchone()
-        assert row is not None
-
-
-class TestGetTagName:
-    """get_tag_name resolves tag IDs to names."""
-
-    def test_get_tag_name_returns_name(self, db: Database) -> None:
-        """get_tag_name returns the correct name for an existing tag."""
-        tag_id = db.ensure_tag("test-tag")
-        assert db.get_tag_name(tag_id) == "test-tag"
-
-    def test_get_tag_name_returns_none_for_missing(self, db: Database) -> None:
-        """get_tag_name returns None for a non-existent tag id."""
-        assert db.get_tag_name(99999) is None
-
-    def test_get_tag_name_multiple_tags(self, db: Database) -> None:
-        """get_tag_name returns correct names for different tags."""
-        id_a = db.ensure_tag("alpha")
-        id_b = db.ensure_tag("beta")
-        assert db.get_tag_name(id_a) == "alpha"
-        assert db.get_tag_name(id_b) == "beta"
 
 
 class TestAddFavorite:
@@ -688,21 +492,21 @@ class TestWindowsPathNormalization:
     def test_upsert_normalizes_backslashes(self, db: Database) -> None:
         """upsert_thumbnail stores paths with forward slashes even when given backslashes."""
         db.upsert_thumbnail(
-            "D:\\Dropbox\\Art\\image.png",
+            "D:\\Test\\Art\\image.png",
             mtime=1,
             size=100,
             width=10,
             height=10,
             cache_uuid="u1",
         )
-        result = db.get_thumbnail("D:/Dropbox/Art/image.png")
+        result = db.get_thumbnail("D:/Test/Art/image.png")
         assert result is not None
-        assert result["path"] == "D:/Dropbox/Art/image.png"
+        assert result["path"] == "D:/Test/Art/image.png"
 
     def test_get_thumbnail_normalizes_backslashes(self, db: Database) -> None:
         """get_thumbnail finds records regardless of the separator used in the query."""
         db.upsert_thumbnail(
-            "D:/Dropbox/Art/image.png",
+            "D:/Test/Art/image.png",
             mtime=1,
             size=100,
             width=10,
@@ -710,25 +514,25 @@ class TestWindowsPathNormalization:
             cache_uuid="u1",
         )
         # Query with backslashes should still find the record
-        result = db.get_thumbnail("D:\\Dropbox\\Art\\image.png")
+        result = db.get_thumbnail("D:\\Test\\Art\\image.png")
         assert result is not None
 
     def test_bulk_upsert_normalizes_backslashes(self, db: Database) -> None:
         """bulk_upsert_stubs normalizes backslash paths to forward slashes."""
         files = [
-            ("D:\\Dropbox\\Art\\a.png", 1, 100),
-            ("D:\\Dropbox\\Art\\b.png", 2, 200),
+            ("D:\\Test\\Art\\a.png", 1, 100),
+            ("D:\\Test\\Art\\b.png", 2, 200),
         ]
         db.bulk_upsert_stubs(files)
 
         # Should be findable with forward-slash paths
-        assert db.get_thumbnail("D:/Dropbox/Art/a.png") is not None
-        assert db.get_thumbnail("D:/Dropbox/Art/b.png") is not None
+        assert db.get_thumbnail("D:/Test/Art/a.png") is not None
+        assert db.get_thumbnail("D:/Test/Art/b.png") is not None
 
     def test_list_thumbnails_for_folder_with_backslashes(self, db: Database) -> None:
         """list_thumbnails_for_folder works when folder_path uses backslashes."""
         db.upsert_thumbnail(
-            "D:/Dropbox/Art/a.png",
+            "D:/Test/Art/a.png",
             mtime=1,
             size=100,
             width=10,
@@ -736,7 +540,7 @@ class TestWindowsPathNormalization:
             cache_uuid="u1",
         )
         db.upsert_thumbnail(
-            "D:/Dropbox/Art/b.png",
+            "D:/Test/Art/b.png",
             mtime=2,
             size=200,
             width=10,
@@ -744,26 +548,26 @@ class TestWindowsPathNormalization:
             cache_uuid="u2",
         )
         # Query with backslash separator - this was the original bug
-        results = db.list_thumbnails_for_folder("D:\\Dropbox\\Art")
+        results = db.list_thumbnails_for_folder("D:\\Test\\Art")
         assert len(results) == 2
 
     def test_delete_thumbnails_by_folder_with_backslashes(self, db: Database) -> None:
         """delete_thumbnails_by_folder works when folder_path uses backslashes."""
         db.upsert_thumbnail(
-            "D:/Dropbox/Art/a.png",
+            "D:/Test/Art/a.png",
             mtime=1,
             size=100,
             width=10,
             height=10,
             cache_uuid="u1",
         )
-        db.delete_thumbnails_by_folder("D:\\Dropbox\\Art")
-        assert db.get_thumbnail("D:/Dropbox/Art/a.png") is None
+        db.delete_thumbnails_by_folder("D:\\Test\\Art")
+        assert db.get_thumbnail("D:/Test/Art/a.png") is None
 
     def test_list_distinct_folders_uses_forward_slashes(self, db: Database) -> None:
         """list_distinct_folders returns paths with forward slashes."""
         db.upsert_thumbnail(
-            "D:/Dropbox/Art/a.png",
+            "D:/Test/Art/a.png",
             mtime=1,
             size=100,
             width=10,
@@ -771,17 +575,19 @@ class TestWindowsPathNormalization:
             cache_uuid="u1",
         )
         folders = db.list_distinct_folders()
-        assert folders == ["D:/Dropbox/Art"]
+        assert folders == ["D:/Test/Art"]
         # Ensure no backslashes in the output
         for f in folders:
             assert "\\" not in f
 
     def test_add_file_tags_normalizes_paths(self, db: Database) -> None:
         """add_file_tags normalizes backslash paths."""
-        tag_id = db.ensure_tag("test")
-        db.add_file_tags(["D:\\Art\\file.png"], tag_id)
+        tag = db.ensure_tag("test")
+        tag.set_source(TagSource.USER)
+        db.add_tag_to_files(["D:\\Art\\file.png"], tag)
         # Should be retrievable with forward-slash path
-        assert db.get_file_tag_ids("D:/Art/file.png") == {tag_id}
+        tags = db.get_tags_for_file("D:/Art/file.png")
+        assert tag in tags
 
     def test_favorites_normalize_paths(self, db: Database) -> None:
         """add_favorite and remove_favorite normalize backslash paths."""
@@ -796,27 +602,8 @@ class TestWindowsPathNormalization:
 
     def test_folder_uuid_normalizes_paths(self, db: Database) -> None:
         """Folder UUID methods normalize backslash paths."""
-        db.upsert_folder_uuid("D:\\Dropbox\\Art", "uuid-123")
+        db.upsert_folder_uuid("D:\\Test\\Art", "uuid-123")
         # Retrieve with forward slashes
-        assert db.get_folder_uuid("D:/Dropbox/Art") == "uuid-123"
+        assert db.get_folder_uuid("D:/Test/Art") == "uuid-123"
         # Retrieve with backslashes
-        assert db.get_folder_uuid("D:\\Dropbox\\Art") == "uuid-123"
-
-    def test_get_all_tags_with_counts_backslash_folder(self, db: Database) -> None:
-        """get_all_tags_with_counts works with backslash folder paths."""
-        tag_id = db.ensure_tag("nature")
-        db.upsert_thumbnail(
-            "D:/Dropbox/Art/a.png",
-            mtime=1,
-            size=100,
-            width=10,
-            height=10,
-            cache_uuid="u1",
-        )
-        db.add_file_tags(["D:/Dropbox/Art/a.png"], tag_id)
-
-        # Query with backslash folder path
-        result = db.get_all_tags_with_counts("D:\\Dropbox\\Art")
-        assert len(result) == 1
-        assert result[0]["name"] == "nature"
-        assert result[0]["usage_count"] == 1
+        assert db.get_folder_uuid("D:\\Test\\Art") == "uuid-123"

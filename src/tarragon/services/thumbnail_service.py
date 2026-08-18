@@ -12,6 +12,7 @@ from typing import Any
 from PIL import Image
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal, Slot
 
+from tarragon.db.common.tag import Tag, TagSource
 from tarragon.db.database import Database
 from tarragon.renderers.cache import (
     RESOLUTION_FULL,
@@ -27,7 +28,9 @@ from tarragon.renderers.clip import render_clip_image
 from tarragon.renderers.plain import render_plain_image
 from tarragon.renderers.psd import get_executor, render_psd_image
 from tarragon.scanner import FileInfo
+from tarragon.services.color_tagger import extract_dominant_colors
 from tarragon.services.settings_service import SettingsService
+from tarragon.services.tag_service import TagService
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +55,7 @@ class _RenderAllTask(QRunnable):
         """Execute render in worker thread."""
         # Check cancellation before starting expensive work.
         if self._cancel_event is not None and self._cancel_event.is_set():
-            logger.debug("_RenderAllTask cancelled before start: %s", self._file_info.path)
+            logger.debug("Cancelled before start: %s", self._file_info.path)
             return
         try:
             self._render_func(self._file_info)
@@ -71,10 +74,13 @@ class ThumbnailService(QObject):
     error_occurred = Signal(str, str)
     tags_updated = Signal()
 
-    def __init__(self, db: Database, settings_service: SettingsService, parent: QObject | None = None) -> None:
+    def __init__(
+        self, db: Database, settings_service: SettingsService, tag_service: TagService, parent: QObject | None = None
+    ) -> None:
         super().__init__(parent)
         self._db = db
         self._settings_service = settings_service
+        self._tag_service = tag_service
         self._cancel_event = threading.Event()
         self._threadpool = QThreadPool()
         self._cache_format: str = self._settings_service.cache_format.get()
@@ -114,7 +120,7 @@ class ThumbnailService(QObject):
 
         shutdown_executor()
         self._threadpool.waitForDone(timeout_ms)
-        logger.debug("ThumbnailService shutdown complete")
+        logger.debug("Shutdown complete")
 
     @Slot(FileInfo)
     def check_and_render(self, file_info: FileInfo) -> str:
@@ -129,8 +135,8 @@ class ThumbnailService(QObject):
             "derived": missing resolutions derived from existing cached image
             "queued": async render dispatched to thread pool
         """
+        logger.debug("Called - path: %s", file_info.path)
         start = time.perf_counter()
-        logger.debug("check_and_render: %s", file_info.path)
         cached = self._db.get_thumbnail(str(file_info.path))
 
         # Auto-regeneration: When source file mtime or size changes,
@@ -144,12 +150,12 @@ class ThumbnailService(QObject):
             if has_thumbnail and has_preview and has_full:
                 self._emit_cached_thumbnails(file_info, cached)
                 elapsed = time.perf_counter() - start
-                logger.debug("check_and_render completed in %.3fs: status=cached", elapsed)
+                logger.debug("completed in %.3fs: status=cached", elapsed)
                 return "cached"
 
             result = self._derive_missing_resolutions(file_info, cached)
             elapsed = time.perf_counter() - start
-            logger.debug("check_and_render completed in %.3fs: status=%s", elapsed, result)
+            logger.debug("completed in %.3fs: status=%s", elapsed, result)
             return result
 
         task = _RenderAllTask(
@@ -161,7 +167,7 @@ class ThumbnailService(QObject):
         self._threadpool.start(task)
         logger.debug("Queued render for %s", file_info.path)
         elapsed = time.perf_counter() - start
-        logger.debug("check_and_render completed in %.3fs: status=queued", elapsed)
+        logger.debug("completed in %.3fs: status=queued", elapsed)
         return "queued"
 
     def invalidate_and_render(self, source_path: Path) -> None:
@@ -331,10 +337,10 @@ class ThumbnailService(QObject):
         folder switch or app shutdown can abort stale work early.
         """
         start = time.perf_counter()
-        logger.debug("_render_all_resolutions: %s", file_info.path)
+        logger.debug("Called - file_info: path: %s", file_info.path)
 
         if self._cancel_event.is_set():
-            logger.debug("_render_all_resolutions cancelled before start: %s", file_info.path)
+            logger.debug("cancelled before start: %s", file_info.path)
             return
 
         # Get or create a per-folder UUID so all images in the same folder
@@ -363,7 +369,7 @@ class ThumbnailService(QObject):
 
         # Cancel check: after expensive render
         if self._cancel_event.is_set():
-            logger.debug("_render_all_resolutions cancelled after render: %s", file_info.path)
+            logger.debug("cancelled after render: %s", file_info.path)
             return
 
         if full_img is None:
@@ -381,7 +387,7 @@ class ThumbnailService(QObject):
         for size, img in smaller_sizes.items():
             # Cancel check: between resolution saves
             if self._cancel_event.is_set():
-                logger.debug("_render_all_resolutions cancelled during smaller sizes: %s", file_info.path)
+                logger.debug("cancelled during smaller sizes: %s", file_info.path)
                 return
 
             resolution_key = str(RESOLUTION_THUMBNAIL) if size == RESOLUTION_THUMBNAIL else str(RESOLUTION_PREVIEW)
@@ -394,16 +400,18 @@ class ThumbnailService(QObject):
         # Extract and persist dominant color tags (from full resolution)
         if self._settings_service.color_tag_enabled.get():
             try:
-                # Deferred import to avoid circular dependency
-                from tarragon.services.color_tagger import extract_dominant_color_tags
-
-                tags = extract_dominant_color_tags(
+                colors = extract_dominant_colors(
                     full_img,
                     palette_size=self._settings_service.color_tag_palette_size.get(),
                     min_share=self._settings_service.color_tag_min_share.get(),
                     neutral_s_threshold=self._settings_service.color_tag_neutral_s_threshold.get(),
                 )
-                self._db.replace_auto_color_tags(str(file_info.path), tags)
+
+                tags: set[Tag] = set()
+                for color in colors:
+                    tags.add(self._tag_service.create_tag(color, TagSource.AUTO_COLOR))
+
+                self._tag_service.replace_auto_color_tags(str(file_info.path), tags)
                 self.tags_updated.emit()
             except (ImportError, OSError, RuntimeError, ValueError):
                 logger.warning("Color tagging failed for %s", file_info.path, exc_info=True)
@@ -421,7 +429,7 @@ class ThumbnailService(QObject):
             full_cache_path=str(cache_paths["full"]),
         )
         elapsed = time.perf_counter() - start
-        logger.debug("_render_all_resolutions completed in %.3fs: %s", elapsed, file_info.path)
+        logger.debug("completed in %.3fs: %s", elapsed, file_info.path)
 
     def _on_error(self, file_info: FileInfo, error_message: str) -> None:
         """Handle render error."""

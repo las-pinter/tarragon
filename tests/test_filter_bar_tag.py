@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 from PySide6.QtWidgets import QLabel, QPushButton
 
+from tarragon.db.common.tag import TagSource
 from tarragon.db.database import Database
 from tarragon.services.tag_service import TagService
 from tarragon.widgets.filter_bar_tag import FilterBarTag
@@ -35,6 +36,12 @@ def bar(service: TagService) -> Generator[FilterBarTag, None, None]:
     w.close()
 
 
+TEST_TAG_NAME_1 = "test tag 1"
+TEST_TAG_NAME_2 = "test tag 2"
+TEST_TAG_NAME_3 = "test tag 3"
+TEST_TAG_NAME_4 = "test tag 4"
+
+
 class TestFilterBarTagCreation:
     """FilterBarTag construction and basic structure."""
 
@@ -57,38 +64,43 @@ class TestFilterBarTagCreation:
 
 
 class TestAutoColorFiltering:
-    """Auto-color tags (color: prefix) are excluded from available tags."""
+    """Auto-color tags are excluded from available tags."""
 
     def test_color_tags_excluded(self, service: TagService, bar: FilterBarTag) -> None:
-        """Tags starting with 'color:' are filtered out of available tags."""
-        service._get_or_create_tag("color:red")
-        service._get_or_create_tag("color:blue")
-        service._get_or_create_tag("landscape")
+        """Tags with auto color source are filtered out of available tags."""
+        tag_1 = service.create_tag(TEST_TAG_NAME_1, TagSource.AUTO_COLOR)
+        tag_1.set_usage_count(0)
+        tag_2 = service.create_tag(TEST_TAG_NAME_2, TagSource.AUTO_COLOR)
+        tag_2.set_usage_count(0)
+        tag_3 = service.create_tag(TEST_TAG_NAME_3, TagSource.USER)
+        tag_3.set_usage_count(0)
         bar._refresh_tags()
 
-        assert "landscape" in bar._available_tags.values()
-        assert "color:red" not in bar._available_tags.values()
-        assert "color:blue" not in bar._available_tags.values()
+        assert tag_1 not in bar._available_tags
+        assert tag_2 not in bar._available_tags
+        assert tag_3 in bar._available_tags
 
     def test_only_color_tags(self, service: TagService, bar: FilterBarTag) -> None:
         """When only auto-color tags exist, available_tags is empty."""
-        service._get_or_create_tag("color:green")
+        _ = service.create_tag("green", TagSource.AUTO_COLOR)
         bar._refresh_tags()
 
         assert len(bar._available_tags) == 0
 
     def test_color_tag_not_in_menu(self, service: TagService, bar: FilterBarTag) -> None:
         """Auto-color tags do not appear in the tag menu."""
-        service._get_or_create_tag("color:yellow")
-        service._get_or_create_tag("portrait")
+        tag_1 = service.create_tag(TEST_TAG_NAME_1, TagSource.AUTO_COLOR)
+        tag_1.set_usage_count(0)
+        tag_2 = service.create_tag(TEST_TAG_NAME_2, TagSource.USER)
+        tag_2.set_usage_count(0)
         bar._refresh_tags()
 
         bar._show_menu()
         menu_actions = bar._tag_menu.actions()
         action_texts = [a.text() for a in menu_actions]
 
-        assert "portrait" in action_texts
-        assert "color:yellow" not in action_texts
+        assert TEST_TAG_NAME_2 in action_texts
+        assert TEST_TAG_NAME_1 not in action_texts
 
 
 class TestTagMenu:
@@ -96,19 +108,19 @@ class TestTagMenu:
 
     def test_menu_populated_with_tags(self, service: TagService, bar: FilterBarTag) -> None:
         """Menu contains an action for each available tag."""
-        service._get_or_create_tag("alpha")
-        service._get_or_create_tag("beta")
+        service.create_tag(TEST_TAG_NAME_1)
+        service.create_tag(TEST_TAG_NAME_2)
         bar._refresh_tags()
 
         bar._show_menu()
         actions = bar._tag_menu.actions()
         assert len(actions) == 2
-        assert actions[0].text() == "alpha"
-        assert actions[1].text() == "beta"
+        assert actions[0].text() == TEST_TAG_NAME_1
+        assert actions[1].text() == TEST_TAG_NAME_2
 
     def test_menu_actions_are_checkable(self, service: TagService, bar: FilterBarTag) -> None:
         """Each menu action is checkable."""
-        service._get_or_create_tag("test-tag")
+        service.create_tag(TEST_TAG_NAME_1)
         bar._refresh_tags()
 
         bar._show_menu()
@@ -117,25 +129,26 @@ class TestTagMenu:
 
     def test_active_tag_shows_checked_in_menu(self, service: TagService, bar: FilterBarTag) -> None:
         """An active tag appears checked in the menu."""
-        tag_id = service._get_or_create_tag("active-tag")
+        tag = service.create_tag(TEST_TAG_NAME_1)
+        tag.set_usage_count(0)
         bar._refresh_tags()
-        bar._toggle_tag(tag_id)
+        bar._toggle_tag(tag)
 
         bar._show_menu()
         actions = bar._tag_menu.actions()
-        active_action = next(a for a in actions if a.data() == tag_id)
+        active_action = next(a for a in actions if a.data() == tag)
         assert active_action.isChecked()
 
     def test_menu_sorted_alphabetically(self, service: TagService, bar: FilterBarTag) -> None:
         """Menu actions are sorted alphabetically by tag name."""
-        service._get_or_create_tag("zebra")
-        service._get_or_create_tag("apple")
-        service._get_or_create_tag("mango")
+        service.create_tag(TEST_TAG_NAME_3)
+        service.create_tag(TEST_TAG_NAME_1)
+        service.create_tag(TEST_TAG_NAME_2)
         bar._refresh_tags()
 
         bar._show_menu()
         action_texts = [a.text() for a in bar._tag_menu.actions()]
-        assert action_texts == ["apple", "mango", "zebra"]
+        assert action_texts == [TEST_TAG_NAME_1, TEST_TAG_NAME_2, TEST_TAG_NAME_3]
 
 
 class TestTagFiltering:
@@ -143,40 +156,40 @@ class TestTagFiltering:
 
     def test_toggle_tag_removes_from_active(self, service: TagService, bar: FilterBarTag) -> None:
         """Toggling an active tag removes it from the active set."""
-        tag_id = service._get_or_create_tag("remove-me")
+        tag = service.create_tag(TEST_TAG_NAME_1)
         bar._refresh_tags()
 
-        bar._toggle_tag(tag_id)
-        assert tag_id in bar.get_active_tag_ids()
+        bar._toggle_tag(tag)
+        assert tag in bar.get_active_tags()
 
-        bar._toggle_tag(tag_id)
-        assert tag_id not in bar.get_active_tag_ids()
+        bar._toggle_tag(tag)
+        assert tag not in bar.get_active_tags()
 
     def test_remove_tag(self, service: TagService, bar: FilterBarTag) -> None:
         """_remove_tag discards a tag from the active set."""
-        tag_id = service._get_or_create_tag("discard-me")
+        tag = service.create_tag(TEST_TAG_NAME_1)
         bar._refresh_tags()
 
-        bar._toggle_tag(tag_id)
-        assert tag_id in bar.get_active_tag_ids()
+        bar._toggle_tag(tag)
+        assert tag in bar.get_active_tags()
 
-        bar._remove_tag(tag_id)
-        assert tag_id not in bar.get_active_tag_ids()
+        bar._remove_tag(tag)
+        assert tag not in bar.get_active_tags()
 
     def test_remove_nonexistent_tag_is_safe(self, bar: FilterBarTag) -> None:
         """Removing a tag that isn't active does not raise."""
         bar._remove_tag(9999)  # Should not raise
-        assert bar.get_active_tag_ids() == set()
+        assert bar.get_active_tags() == set()
 
     def test_multiple_tags(self, service: TagService, bar: FilterBarTag) -> None:
         """Multiple tags can be active simultaneously."""
-        id1 = service._get_or_create_tag("alpha")
-        id2 = service._get_or_create_tag("beta")
+        tag_1 = service.create_tag(TEST_TAG_NAME_1)
+        tag_2 = service.create_tag(TEST_TAG_NAME_2)
         bar._refresh_tags()
 
-        bar._toggle_tag(id1)
-        bar._toggle_tag(id2)
-        assert bar.get_active_tag_ids() == {id1, id2}
+        bar._toggle_tag(tag_1)
+        bar._toggle_tag(tag_2)
+        assert bar.get_active_tags() == {tag_1, tag_2}
 
 
 class TestSignalEmission:
@@ -184,56 +197,56 @@ class TestSignalEmission:
 
     def test_signal_on_toggle_on(self, service: TagService, bar: FilterBarTag) -> None:
         """Toggling a tag on emits tag_filter_changed with the tag ID."""
-        tag_id = service._get_or_create_tag("signal-tag")
+        tag = service.create_tag("signal-tag")
         bar._refresh_tags()
 
         captured: list[set[int]] = []
         bar.filter_changed.connect(captured.append)
 
-        bar._toggle_tag(tag_id)
+        bar._toggle_tag(tag)
 
         assert len(captured) == 1
-        assert tag_id in captured[0]
+        assert tag in captured[0]
 
     def test_signal_on_toggle_off(self, service: TagService, bar: FilterBarTag) -> None:
         """Toggling a tag off emits tag_filter_changed without the tag ID."""
-        tag_id = service._get_or_create_tag("uncheck-signal")
+        tag = service.create_tag(TEST_TAG_NAME_1)
         bar._refresh_tags()
 
-        bar._toggle_tag(tag_id)  # Turn on first
+        bar._toggle_tag(tag)  # Turn on first
 
         captured: list[set[int]] = []
         bar.filter_changed.connect(captured.append)
 
-        bar._toggle_tag(tag_id)  # Turn off
+        bar._toggle_tag(tag)  # Turn off
 
         assert len(captured) == 1
-        assert tag_id not in captured[0]
+        assert tag not in captured[0]
 
     def test_signal_on_remove(self, service: TagService, bar: FilterBarTag) -> None:
         """Removing a tag emits tag_filter_changed without the tag ID."""
-        tag_id = service._get_or_create_tag("remove-signal")
+        tag = service.create_tag(TEST_TAG_NAME_1)
         bar._refresh_tags()
 
-        bar._toggle_tag(tag_id)  # Activate first
+        bar._toggle_tag(tag)  # Activate first
 
         captured: list[set[int]] = []
         bar.filter_changed.connect(captured.append)
 
-        bar._remove_tag(tag_id)
+        bar._remove_tag(tag)
 
         assert len(captured) == 1
-        assert tag_id not in captured[0]
+        assert tag not in captured[0]
 
 
 class TestPublicAPI:
     """Public API methods work correctly."""
 
-    def test_get_active_tag_ids_returns_copy(self, bar: FilterBarTag) -> None:
-        """get_active_tag_ids returns a copy, not the internal set."""
-        result = bar.get_active_tag_ids()
+    def test_get_active_tags_returns_copy(self, bar: FilterBarTag) -> None:
+        """get_active_tags returns a copy, not the internal set."""
+        result = bar.get_active_tags()
         result.add(999)  # Mutating the returned set
-        assert bar.get_active_tag_ids() == set()  # Internal state unchanged
+        assert bar.get_active_tags() == set()  # Internal state unchanged
 
     def test_has_active_filters_false_initially(self, bar: FilterBarTag) -> None:
         """has_active_filters() is False when no tags are active."""
@@ -241,19 +254,19 @@ class TestPublicAPI:
 
     def test_has_active_filters_true_when_active(self, service: TagService, bar: FilterBarTag) -> None:
         """has_active_filters() is True when a tag is active."""
-        tag_id = service._get_or_create_tag("active")
+        tag = service.create_tag("active")
         bar._refresh_tags()
-        bar._toggle_tag(tag_id)
+        bar._toggle_tag(tag)
         assert bar.has_active_filters() is True
 
     def test_clear_filters(self, service: TagService, bar: FilterBarTag) -> None:
         """clear_filters() removes all active tags and emits empty set."""
-        id1 = service._get_or_create_tag("one")
-        id2 = service._get_or_create_tag("two")
+        tag_1 = service.create_tag("one")
+        tag_2 = service.create_tag("two")
         bar._refresh_tags()
 
-        bar._toggle_tag(id1)
-        bar._toggle_tag(id2)
+        bar._toggle_tag(tag_1)
+        bar._toggle_tag(tag_2)
         assert bar.has_active_filters() is True
 
         captured: list[set[int]] = []
@@ -261,7 +274,7 @@ class TestPublicAPI:
 
         bar.clear_filters()
 
-        assert bar.get_active_tag_ids() == set()
+        assert bar.get_active_tags() == set()
         assert bar.has_active_filters() is False
         assert len(captured) == 1
         assert captured[0] == set()
@@ -273,7 +286,7 @@ class TestPublicAPI:
 
         bar.clear_filters()
 
-        assert bar.get_active_tag_ids() == set()
+        assert bar.get_active_tags() == set()
         assert len(captured) == 1
         assert captured[0] == set()
 
@@ -283,30 +296,30 @@ class TestChipDisplay:
 
     def test_chip_appears_on_toggle(self, service: TagService, bar: FilterBarTag) -> None:
         """A chip appears when a tag is toggled on."""
-        tag_id = service._get_or_create_tag("chip-tag")
+        tag = service.create_tag("chip-tag")
         bar._refresh_tags()
 
         assert bar._chips_layout.count() == 0
 
-        bar._toggle_tag(tag_id)
+        bar._toggle_tag(tag)
         assert bar._chips_layout.count() == 1
 
     def test_chip_disappears_on_remove(self, service: TagService, bar: FilterBarTag) -> None:
         """A chip disappears when its tag is removed."""
-        tag_id = service._get_or_create_tag("removable-chip")
+        tag = service.create_tag("removable-chip")
         bar._refresh_tags()
 
-        bar._toggle_tag(tag_id)
+        bar._toggle_tag(tag)
         assert bar._chips_layout.count() == 1
 
-        bar._remove_tag(tag_id)
+        bar._remove_tag(tag)
         assert bar._chips_layout.count() == 0
 
     def test_chip_shows_tag_name(self, service: TagService, bar: FilterBarTag) -> None:
         """Each chip displays the correct tag name."""
-        tag_id = service._get_or_create_tag("my-special-tag")
+        tag = service.create_tag("my-special-tag")
         bar._refresh_tags()
-        bar._toggle_tag(tag_id)
+        bar._toggle_tag(tag)
 
         # Find the QLabel in the chip
         item = bar._chips_layout.itemAt(0)
@@ -318,9 +331,9 @@ class TestChipDisplay:
 
     def test_chip_has_remove_button(self, service: TagService, bar: FilterBarTag) -> None:
         """Each chip has a remove button with 'x' text."""
-        tag_id = service._get_or_create_tag("has-btn")
+        tag = service.create_tag("has-btn")
         bar._refresh_tags()
-        bar._toggle_tag(tag_id)
+        bar._toggle_tag(tag)
 
         item = bar._chips_layout.itemAt(0)
         assert item is not None
@@ -331,25 +344,25 @@ class TestChipDisplay:
 
     def test_multiple_chips(self, service: TagService, bar: FilterBarTag) -> None:
         """Multiple active tags produce multiple chips."""
-        id1 = service._get_or_create_tag("first")
-        id2 = service._get_or_create_tag("second")
-        id3 = service._get_or_create_tag("third")
+        tag_1 = service.create_tag("first")
+        tag_2 = service.create_tag("second")
+        tag_3 = service.create_tag("third")
         bar._refresh_tags()
 
-        bar._toggle_tag(id1)
-        bar._toggle_tag(id2)
-        bar._toggle_tag(id3)
+        bar._toggle_tag(tag_1)
+        bar._toggle_tag(tag_2)
+        bar._toggle_tag(tag_3)
 
         assert bar._chips_layout.count() == 3
 
     def test_clear_filters_removes_chips(self, service: TagService, bar: FilterBarTag) -> None:
         """clear_filters() removes all chips."""
-        id1 = service._get_or_create_tag("a")
-        id2 = service._get_or_create_tag("b")
+        tag_1 = service.create_tag("a")
+        tag_2 = service.create_tag("b")
         bar._refresh_tags()
 
-        bar._toggle_tag(id1)
-        bar._toggle_tag(id2)
+        bar._toggle_tag(tag_1)
+        bar._toggle_tag(tag_2)
         assert bar._chips_layout.count() == 2
 
         bar.clear_filters()
@@ -361,14 +374,15 @@ class TestRefreshPreservesSelection:
 
     def test_active_tags_survive_refresh(self, service: TagService, bar: FilterBarTag) -> None:
         """Active tag IDs are preserved when the tag list is refreshed."""
-        tag_id = service._get_or_create_tag("persistent")
+        tag = service.create_tag("persistent")
+        tag.set_usage_count(0)
         bar._refresh_tags()
 
-        bar._toggle_tag(tag_id)
-        assert tag_id in bar.get_active_tag_ids()
+        bar._toggle_tag(tag)
+        assert tag in bar.get_active_tags()
 
         # Refresh (e.g., due to tags_changed signal)
         bar._refresh_tags()
 
         # The active set should still contain the tag
-        assert tag_id in bar.get_active_tag_ids()
+        assert tag in bar.get_active_tags()

@@ -234,7 +234,7 @@ class _SettingCacheDir(_LineEditWithButtonSetting):
     def _browse_cache_dir(self) -> None:
         """Open a directory chooser and update the cache path display."""
         assert isinstance(self._widget, QLineEdit)
-        logger.debug("Cache dir browser opened")
+        logger.debug("Called")
         current_path = self._widget.text()
         chosen = QFileDialog.getExistingDirectory(
             self._parent,
@@ -393,6 +393,7 @@ class SettingsDialog(QDialog):
         layout.setContentsMargins(SPACING_M, SPACING_M, SPACING_M, SPACING_M)
         layout.setSpacing(SPACING_S)
 
+        # ---------------------------------------------------------------------
         # Performance Section
         # ---------------------------------------------------------------------
         perf_group = QGroupBox("Performance")
@@ -419,6 +420,7 @@ class SettingsDialog(QDialog):
         perf_group.setLayout(perf_layout)
         layout.addWidget(perf_group)
 
+        # ---------------------------------------------------------------------
         # Color Tagging Section
         # ---------------------------------------------------------------------
         color_group = QGroupBox("Color Tagging")
@@ -445,6 +447,7 @@ class SettingsDialog(QDialog):
         color_group.setLayout(color_layout)
         layout.addWidget(color_group)
 
+        # ---------------------------------------------------------------------
         # Cache Section
         # ---------------------------------------------------------------------
         cache_group = QGroupBox("Cache")
@@ -463,6 +466,7 @@ class SettingsDialog(QDialog):
         cache_group.setLayout(cache_layout)
         layout.addWidget(cache_group)
 
+        # ---------------------------------------------------------------------
         # Debug Section
         # ---------------------------------------------------------------------
         debug_group = QGroupBox("Debug")
@@ -477,6 +481,7 @@ class SettingsDialog(QDialog):
         debug_group.setLayout(debug_layout)
         layout.addWidget(debug_group)
 
+        # ---------------------------------------------------------------------
         # Dialog Buttons
         # ---------------------------------------------------------------------
         layout.addStretch()

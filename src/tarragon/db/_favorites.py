@@ -21,7 +21,7 @@ class FavoritesMixin(MixinBase):
     ) -> None:
         """Add a file to favorites."""
         path = normalize_path(path)
-        logger.debug("add_favorite: path=%s, label=%s", path, label)
+        logger.debug("Called - path: %s, label: %s", path, label)
         self._execute(
             "INSERT OR IGNORE INTO favorites (path, label, sort_order) VALUES (?, ?, ?)",
             (path, label, sort_order),
@@ -31,12 +31,12 @@ class FavoritesMixin(MixinBase):
     def remove_favorite(self, path: str) -> None:
         """Remove a file from favorites."""
         path = normalize_path(path)
-        logger.debug("remove_favorite: path=%s", path)
+        logger.debug("Called - path: %s", path)
         self._execute("DELETE FROM favorites WHERE path = ?", (path,))
         self._commit()
 
     def list_favorites(self) -> list[dict[str, Any]]:
         """Return all favorite records ordered by sort_order then path."""
-        logger.debug("list_favorites")
+        logger.debug("Called")
         cursor = self._execute("SELECT * FROM favorites ORDER BY sort_order, path")
         return [_row_to_dict(row) for row in cursor.fetchall()]

@@ -16,7 +16,7 @@ class FolderCacheMixin(MixinBase):
     def get_folder_uuid(self, folder_path: str) -> str | None:
         """Return the cache UUID for a source folder, or None if not mapped."""
         folder_path = normalize_path(folder_path)
-        logger.debug("get_folder_uuid: folder_path=%s", folder_path)
+        logger.debug("Called - folder_path: %s", folder_path)
         row = self._execute(
             "SELECT cache_uuid FROM folder_cache_uuids WHERE folder_path = ?",
             (folder_path,),
@@ -26,7 +26,7 @@ class FolderCacheMixin(MixinBase):
     def upsert_folder_uuid(self, folder_path: str, cache_uuid: str) -> None:
         """Insert or update the cache UUID for a source folder."""
         folder_path = normalize_path(folder_path)
-        logger.debug("upsert_folder_uuid: folder_path=%s", folder_path)
+        logger.debug("Called - folder_path: %s", folder_path)
         self._execute(
             "INSERT INTO folder_cache_uuids (folder_path, cache_uuid) VALUES (?, ?) "
             "ON CONFLICT(folder_path) DO UPDATE SET cache_uuid=excluded.cache_uuid",
@@ -43,7 +43,7 @@ class FolderCacheMixin(MixinBase):
         to guarantee consistency.
         """
         folder_path = normalize_path(folder_path)
-        logger.debug("get_or_create_folder_uuid: folder_path=%s", folder_path)
+        logger.debug("Called - folder_path: %s", folder_path)
         with self._lock:
             self._conn.execute(
                 "INSERT INTO folder_cache_uuids (folder_path, cache_uuid) "
@@ -62,7 +62,7 @@ class FolderCacheMixin(MixinBase):
 
         Returns the number of stale entries removed.
         """
-        logger.debug("cleanup_stale_folder_uuids: checking for stale entries")
+        logger.debug("Called")
         cursor = self._execute("SELECT folder_path FROM folder_cache_uuids")
         folder_paths = [row["folder_path"] for row in cursor.fetchall()]
 

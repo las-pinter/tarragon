@@ -3,6 +3,9 @@
 import logging
 import os
 import sys
+import threading
+from types import TracebackType
+from typing import Any
 
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import QApplication
@@ -90,6 +93,32 @@ class MainWindow(_MainWindow):
             os._exit(0)
 
 
+def _excepthook(
+    exc_type: type[BaseException],
+    exc_value: BaseException,
+    exc_tb: TracebackType | None,
+) -> None:
+    """Log unhandled exceptions in the log panel."""
+    try:
+        logger.critical(
+            "Unhandled exception",
+            exc_info=(exc_type, exc_value, exc_tb),
+        )
+    except Exception:
+        pass
+
+
+def _thread_excepthook(args: Any) -> None:
+    """Log unhandled thread exceptions in the log panel."""
+    try:
+        logger.critical(
+            "Unhandled exception",
+            exc_info=(args.exc_type, args.exc_value, args.exc_traceback),
+        )
+    except Exception:
+        pass
+
+
 def main() -> None:
     """Application entry point."""
     ensure_dirs()
@@ -110,6 +139,8 @@ def main() -> None:
     app.setPalette(palette)
 
     window = MainWindow()
+    sys.excepthook = _excepthook
+    threading.excepthook = _thread_excepthook
     window.show()
 
     sys.exit(app.exec())

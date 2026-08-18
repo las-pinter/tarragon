@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from html import escape
 
 from PySide6.QtCore import Signal
 from PySide6.QtGui import QFont
@@ -93,11 +94,11 @@ class LogPanel(QWidget):
     def append_log(self, message: str, level: int) -> None:
         """Append a color-coded log line to the text area.
 
-        Called automatically via ``_log_signal``, do **not** call directly
-        from background threads.
+        Called automatically via ``_log_signal``.
         """
         color = _LEVEL_COLORS.get(level, _DEFAULT_COLOR)
-        self._text_area.appendHtml(f'<span style="color:{color};">{message}</span>')
+        safe_message = "<br/>".join(escape(line) for line in message.splitlines())
+        self._text_area.appendHtml(f'<span style="color:{color}; white-space:pre-wrap;">{safe_message}</span>')
 
     def clear_logs(self) -> None:
         """Remove all log lines from the panel."""

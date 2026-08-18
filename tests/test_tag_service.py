@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from tarragon.db.common.tag import Tag
 from tarragon.db.database import Database
 from tarragon.services.tag_service import TagService
 
@@ -24,238 +25,285 @@ def service(db: Database) -> TagService:
     return TagService(db=db)
 
 
-class TestGetOrCreateTag:
-    """_get_or_create_tag - create vs. retrieve idempotency."""
+TEST_FILE_1 = "/test_folder_1/test_file_1.png"
+TEST_FILE_2 = "/test_folder_2/test_file_2.png"
+TEST_FILE_3 = "/test_folder_3/test_file_3.png"
 
-    def test_get_or_create_tag_creates_and_returns_id(self, service: TagService) -> None:
-        """First call creates a tag, second call returns the *same* id."""
-        tag_id_1 = service._get_or_create_tag("character")
-        assert isinstance(tag_id_1, int)
-        assert tag_id_1 > 0
+TEST_TAG_NAME_1 = "test tag 1"
+TEST_TAG_NAME_2 = "test tag 2"
+TEST_TAG_NAME_3 = "test tag 3"
+TEST_TAG_NAME_4 = "test tag 4"
 
-        tag_id_2 = service._get_or_create_tag("character")
-        assert tag_id_2 == tag_id_1, "Same name should return same id"
 
-    def test_get_or_create_tag_multiple_tags(self, service: TagService) -> None:
-        """Distinct names get distinct ids."""
-        id_a = service._get_or_create_tag("landscape")
-        id_b = service._get_or_create_tag("portrait")
-        assert id_a != id_b
+class TestCreateTag:
+    """Creating tags without associtations"""
+
+    def test_create_single_tag(self, service: TagService) -> None:
+        """Creating a single tag without association"""
+        created_tag = service.create_tag(TEST_TAG_NAME_1)
+        assert created_tag.get_name() == TEST_TAG_NAME_1
+        assert created_tag.get_id() > 0
 
 
 class TestAddTagsToFiles:
-    """add_tags_to_files - batch tagging."""
+    """Adding tags to files"""
 
-    def test_add_tags_to_files_adds_tags_to_multiple_paths(self, service: TagService) -> None:
-        """Adding tags to multiple files - verify via get_tags_for_file."""
-        paths = ["/img/a.png", "/img/b.png"]
-        service.add_tags_to_files(paths, ["character", "landscape"])
+    def test_add_a_single_tag_to_a_file_by_name(self, service: TagService) -> None:
+        """Adding tags to a file."""
+        created_tags = service.add_tags_to_file_by_name(TEST_FILE_1, [TEST_TAG_NAME_1])
+
+        tags = service.get_tags_for_file(TEST_FILE_1)
+
+        assert len(tags) == 1
+        for t in created_tags:
+            assert t in tags
+
+    def test_add_a_single_tag_to_a_file(self, service: TagService) -> None:
+        """Adding tags to a file."""
+        created_tag = service.create_tag(TEST_TAG_NAME_1)
+        service.add_tags_to_file(TEST_FILE_1, {created_tag})
+
+        tags = service.get_tags_for_file(TEST_FILE_1)
+
+        assert len(tags) == 1
+        assert created_tag in tags
+
+    def test_add_multiple_tags_to_a_file_by_name(self, service: TagService) -> None:
+        """Adding multiple tags to a file."""
+        created_tags = service.add_tags_to_file_by_name(TEST_FILE_1, [TEST_TAG_NAME_1, TEST_TAG_NAME_2])
+
+        tags = service.get_tags_for_file(TEST_FILE_1)
+
+        assert len(tags) == 2
+        for t in created_tags:
+            assert t in tags
+
+    def test_add_multiple_tags_to_a_file(self, service: TagService) -> None:
+        """Adding multiple tags to a file."""
+        created_tag_1 = service.create_tag(TEST_TAG_NAME_1)
+        created_tag_2 = service.create_tag(TEST_TAG_NAME_2)
+        created_tags = {created_tag_1, created_tag_2}
+        service.add_tags_to_file(TEST_FILE_1, {created_tag_1, created_tag_2})
+
+        tags = service.get_tags_for_file(TEST_FILE_1)
+
+        assert len(tags) == 2
+        for t in created_tags:
+            assert t in tags
+
+    def test_add_multiple_tags_to_multiple_files_by_name(self, service: TagService) -> None:
+        """Adding tags to multiple files."""
+        paths = [TEST_FILE_1, TEST_FILE_2]
+        created_tags = service.add_tags_to_files_by_name(paths, [TEST_TAG_NAME_1, TEST_TAG_NAME_2])
 
         for path in paths:
             tags = service.get_tags_for_file(path)
-            names = {t["name"] for t in tags}
-            assert names == {"character", "landscape"}, f"{path} should have both tags"
+            assert len(tags) == 2
+            for t in created_tags:
+                assert t in tags
 
-    def test_add_tags_to_files_emits_tags_changed(self, service: TagService) -> None:
-        """add_tags_to_files emits tags_changed."""
-        emitted = []
+    def test_add_multiple_tags_to_multiple_files(self, service: TagService) -> None:
+        """Adding tags to multiple files."""
+        paths = [TEST_FILE_1, TEST_FILE_2]
+        created_tag_1 = service.create_tag(TEST_TAG_NAME_1)
+        created_tag_2 = service.create_tag(TEST_TAG_NAME_2)
+        created_tags = {created_tag_1, created_tag_2}
+        service.add_tags_to_files(paths, {created_tag_1, created_tag_2})
+
+        for path in paths:
+            tags = service.get_tags_for_file(path)
+            assert len(tags) == 2
+            for t in created_tags:
+                assert t in tags
+
+    def test_emit_tags_changed(self, service: TagService) -> None:
+        """Emits tags_changed."""
+        emitted: list[bool] = []
         service.tags_changed.connect(lambda: emitted.append(True))
 
-        service.add_tags_to_files(["/img/a.png"], ["test"])
+        service.add_tags_to_file_by_name(TEST_FILE_1, [TEST_TAG_NAME_1])
 
         assert len(emitted) == 1, "tags_changed should be emitted once"
+
+    def test_emit_tags_changed_2(self, service: TagService) -> None:
+        """Emits tags_changed."""
+        emitted: list[bool] = []
+        service.tags_changed.connect(lambda: emitted.append(True))
+
+        service.add_tags_to_file_by_name(TEST_FILE_1, [TEST_TAG_NAME_1])
+        service.add_tags_to_file_by_name(TEST_FILE_2, [TEST_TAG_NAME_2])
+
+        assert len(emitted) == 2, "tags_changed should be emitted twice"
 
     def test_add_tags_to_files_idempotent(self, service: TagService) -> None:
-        """Adding the same tag twice does not duplicate."""
-        service.add_tags_to_files(["/img/a.png"], ["dupe"])
-        service.add_tags_to_files(["/img/a.png"], ["dupe"])
+        """Adding the same tag multiple times does not duplicate."""
+        created_tag_1 = service.add_tags_to_files_by_name([TEST_FILE_1], [TEST_TAG_NAME_1])
+        created_tag_2 = service.add_tags_to_files_by_name([TEST_FILE_1], [TEST_TAG_NAME_1])
+        created_tag_3 = service.add_tags_to_file_by_name(TEST_FILE_1, [TEST_TAG_NAME_1])
+        created_tag_4 = service.add_tags_to_file_by_name(TEST_FILE_1, [TEST_TAG_NAME_1])
 
-        tags = service.get_tags_for_file("/img/a.png")
+        assert created_tag_1 == created_tag_2 == created_tag_3 == created_tag_4
+
+        tags = service.get_tags_for_file(TEST_FILE_1)
         assert len(tags) == 1
-        assert tags[0]["name"] == "dupe"
+        for t in created_tag_1:
+            assert t in tags
 
 
-class TestRemoveTagsFromFiles:
-    """remove_tags_from_files - batch tag removal."""
+class TestGetTagsForFiles:
+    """Querying tags attached to files."""
 
-    def test_remove_tags_from_files_removes_specified_tags(self, service: TagService) -> None:
-        """Add tags then remove them - verify they're gone."""
-        paths = ["/img/a.png", "/img/b.png"]
-        service.add_tags_to_files(paths, ["character", "landscape"])
+    def test_get_tags_for_single_file_no_result(self, service: TagService) -> None:
+        """Returns an empty result for a file which doesn't have tags"""
+        tags = service.get_tags_for_file(TEST_FILE_1)
+        assert len(tags) == 0
 
-        # Get the tag ids
-        tag_id = service._get_or_create_tag("landscape")
+    def test_get_tags_for_multiple_files_no_result(self, service: TagService) -> None:
+        """Returns an empty result for multiple files which don't have tags"""
+        tags_dict = service.get_tags_for_files([TEST_FILE_1, TEST_FILE_2])
+        assert len(tags_dict[TEST_FILE_1]) == 0
+        assert len(tags_dict[TEST_FILE_2]) == 0
 
-        service.remove_tags_from_files(paths, {tag_id})
+    def test_get_tags_for_single_file(self, service: TagService) -> None:
+        """Returns a set of tags for a file"""
+        tags_created = service.add_tags_to_file_by_name(TEST_FILE_1, [TEST_TAG_NAME_1])
 
-        for path in paths:
-            tags = service.get_tags_for_file(path)
-            names = {t["name"] for t in tags}
-            assert names == {"character"}, f"{path} should only have 'character' after removal"
+        tags = service.get_tags_for_file(TEST_FILE_1)
 
-    def test_remove_tags_from_files_emits_tags_changed(self, service: TagService) -> None:
-        """remove_tags_from_files emits tags_changed."""
-        service.add_tags_to_files(["/img/a.png"], ["test"])
-        tag_id = service._get_or_create_tag("test")
-
-        emitted = []
-        service.tags_changed.connect(lambda: emitted.append(True))
-
-        service.remove_tags_from_files(["/img/a.png"], {tag_id})
-
-        assert len(emitted) == 1, "tags_changed should be emitted once"
-
-    def test_remove_tags_from_files_nonexistent_tag(self, service: TagService) -> None:
-        """Removing a tag that doesn't exist does not raise."""
-        service.add_tags_to_files(["/img/a.png"], ["keep"])
-        # Should not raise
-        service.remove_tags_from_files(["/img/a.png"], {9999})
-        tags = service.get_tags_for_file("/img/a.png")
         assert len(tags) == 1
-        assert tags[0]["name"] == "keep"
+        for t in tags_created:
+            assert t in tags
 
+    def test_get_tags_for_multiple_files(self, service: TagService) -> None:
+        """Returns a set of tags for a file"""
+        tags_created = service.add_tags_to_files_by_name([TEST_FILE_1, TEST_FILE_2], [TEST_TAG_NAME_1])
 
-class TestGetTagsForFile:
-    """get_tags_for_file - querying tags attached to a file."""
+        tags_dict = service.get_tags_for_files([TEST_FILE_1, TEST_FILE_2])
 
-    def test_get_tags_for_file_returns_tag_list(self, service: TagService) -> None:
-        """Returned list entries have id, name, source keys."""
-        service.add_tags_to_files(["/img/a.png"], ["character"])
-
-        tags = service.get_tags_for_file("/img/a.png")
-        assert len(tags) == 1
-
-        tag = tags[0]
-        assert isinstance(tag["id"], int)
-        assert tag["name"] == "character"
-        assert tag["source"] == "user"
-
-    def test_get_tags_for_file_no_tags(self, service: TagService) -> None:
-        """File with no tags returns empty list."""
-        tags = service.get_tags_for_file("/img/untagged.png")
-        assert tags == []
-
-    def test_get_tags_for_file_multiple_sources(self, service: TagService) -> None:
-        """Different sources are reflected in the result."""
-        service.add_tags_to_files(["/img/a.png"], ["user_tag"])
-
-        # Manually add an auto_color tag to check source preservation
-        tag_id = service._get_or_create_tag("auto_tag")
-        service._db.add_file_tags(["/img/a.png"], tag_id, source="auto_color")
-
-        tags = service.get_tags_for_file("/img/a.png")
-        sources = {t["source"] for t in tags}
-        assert "user" in sources
-        assert "auto_color" in sources
+        assert len(tags_dict[TEST_FILE_1]) == 1
+        assert len(tags_dict[TEST_FILE_2]) == 1
+        for t in tags_created:
+            assert t in tags_dict[TEST_FILE_1]
+            assert t in tags_dict[TEST_FILE_2]
 
 
 class TestGetAllTags:
-    """get_all_tags - listing all tags with usage counts."""
+    """Listing all tags with usage counts."""
 
-    def test_get_all_tags_returns_all_tags(self, service: TagService) -> None:
-        """Multiple tags created; all returned with correct counts."""
-        service._get_or_create_tag("character")
-        service._get_or_create_tag("landscape")
-        service._get_or_create_tag("portrait")
-
-        # Use the 'character' tag on two files
-        char_id = service._get_or_create_tag("character")
-        service._db.add_file_tags(["/img/a.png", "/img/b.png"], char_id)
-
-        all_tags = service.get_all_tags()
-
-        names = {t["name"] for t in all_tags}
-        assert names == {"character", "landscape", "portrait"}
-
-        for tag in all_tags:
-            if tag["name"] == "character":
-                assert tag["usage_count"] == 2
-            elif tag["name"] == "landscape":
-                assert tag["usage_count"] == 0
-            elif tag["name"] == "portrait":
-                assert tag["usage_count"] == 0
-
-    def test_get_all_tags_empty(self, service: TagService) -> None:
-        """No tags exist -> empty list."""
+    def test_empty(self, service: TagService) -> None:
+        """Returns empty list if there is no tag in the db"""
         assert service.get_all_tags() == []
 
-    def test_get_all_tags_ordered_by_name(self, service: TagService) -> None:
-        """Tags are returned in alphabetical order."""
-        service._get_or_create_tag("zebra")
-        service._get_or_create_tag("alpha")
-        service._get_or_create_tag("beta")
+    def test_returns_all_tags(self, service: TagService) -> None:
+        """Returns multiple tags with usage count"""
+        created_tag_na_1 = service.create_tag(TEST_TAG_NAME_1)
+        created_tag_na_2 = service.create_tag(TEST_TAG_NAME_2)
+        created_tags_na = {created_tag_na_1, created_tag_na_2}
+        created_tags_a = service.add_tags_to_files_by_name(
+            [TEST_FILE_1, TEST_FILE_2], [TEST_TAG_NAME_3, TEST_TAG_NAME_4]
+        )
+
+        for t_na in created_tags_na:
+            t_na.set_usage_count(0)
+
+        for t_a in created_tags_a:
+            t_a.set_usage_count(2)
 
         all_tags = service.get_all_tags()
-        names = [t["name"] for t in all_tags]
-        assert names == ["alpha", "beta", "zebra"]
+
+        for t_na in created_tags_na:
+            assert t_na in all_tags
+
+        for t_a in created_tags_a:
+            assert t_a in all_tags
+
+    def test_ordered_by_name(self, service: TagService) -> None:
+        """Tags are returned in alphabetical order."""
+        tag_1 = service.create_tag(TEST_TAG_NAME_1)
+        tag_2 = service.create_tag(TEST_TAG_NAME_2)
+        tag_3 = service.create_tag(TEST_TAG_NAME_3)
+        tag_4 = service.create_tag(TEST_TAG_NAME_4)
+
+        ordered_tag_names = sorted([t.get_name() for t in [tag_1, tag_2, tag_3, tag_4]])
+        all_tags = service.get_all_tags()
+        names = [t.get_name() for t in all_tags]
+        assert names == ordered_tag_names
 
 
-class TestGetAllTagsScoped:
-    """get_all_tags with folder_path - local vs global usage counts."""
+class TestRemoveTagsFromFiles:
+    """Tag removal."""
 
-    def test_global_counts_all_files(self, service: TagService) -> None:
-        """Without folder_path, usage_count spans the entire database."""
-        tag_id = service._get_or_create_tag("beach")
-        service._db.add_file_tags(["/folder_a/img1.png", "/folder_b/img2.png"], tag_id)
+    def test_remove_single_tag_from_a_file(self, service: TagService) -> None:
+        """Remove a tag from a file"""
+        created_tags = service.add_tags_to_file_by_name(TEST_FILE_1, [TEST_TAG_NAME_1])
+        tags = service.get_tags_for_file(TEST_FILE_1)
 
-        tags = service.get_all_tags()
-        assert tags[0]["usage_count"] == 2
+        assert len(tags) == 1
+        for t in created_tags:
+            assert t in tags
 
-    def test_local_counts_scope_to_folder(self, service: TagService) -> None:
-        """With folder_path, usage_count only includes files in that folder."""
-        tag_id = service._get_or_create_tag("beach")
-        service._db.add_file_tags(["/folder_a/img1.png", "/folder_b/img2.png"], tag_id)
+        tag = created_tags.pop()
+        service.remove_tags_from_file(TEST_FILE_1, {tag})
 
-        tags = service.get_all_tags(folder_path="/folder_a/")
-        assert tags[0]["usage_count"] == 1
+        tags = service.get_tags_for_file(TEST_FILE_1)
+        assert len(tags) == 0
 
-    def test_local_counts_zero_for_other_folder(self, service: TagService) -> None:
-        """Folder with no matching files returns usage_count=0."""
-        tag_id = service._get_or_create_tag("beach")
-        service._db.add_file_tags(["/folder_a/img1.png"], tag_id)
+    def test_remove_multiple_tags_from_a_file(self, service: TagService) -> None:
+        """Remove multiple tags from a file"""
+        created_tags = service.add_tags_to_file_by_name(TEST_FILE_1, [TEST_TAG_NAME_1, TEST_TAG_NAME_2])
+        tags = service.get_tags_for_file(TEST_FILE_1)
 
-        tags = service.get_all_tags(folder_path="/folder_c/")
-        assert tags[0]["usage_count"] == 0
+        assert len(tags) == 2
+        for t in created_tags:
+            assert t in tags
 
-    def test_none_folder_path_same_as_global(self, service: TagService) -> None:
-        """folder_path=None returns global counts (same as no argument)."""
-        tag_id = service._get_or_create_tag("test")
-        service._db.add_file_tags(["/a/1.png", "/b/2.png"], tag_id)
+        service.remove_tags_from_file(TEST_FILE_1, tags)
 
-        global_tags = service.get_all_tags()
-        none_tags = service.get_all_tags(folder_path=None)
-        assert global_tags[0]["usage_count"] == none_tags[0]["usage_count"] == 2
+        tags = service.get_tags_for_file(TEST_FILE_1)
+        assert len(tags) == 0
 
-    def test_empty_folder_path_same_as_global(self, service: TagService) -> None:
-        """folder_path='' returns global counts (same as no argument)."""
-        tag_id = service._get_or_create_tag("test")
-        service._db.add_file_tags(["/a/1.png"], tag_id)
+    def test_remove_multiple_tags_from_a_file_not_all(self, service: TagService) -> None:
+        """Remove multiple tags from a file while leaving some"""
+        created_tags = service.add_tags_to_file_by_name(
+            TEST_FILE_1, [TEST_TAG_NAME_1, TEST_TAG_NAME_2, TEST_TAG_NAME_3]
+        )
+        tags = service.get_tags_for_file(TEST_FILE_1)
 
-        tags = service.get_all_tags(folder_path="")
-        assert tags[0]["usage_count"] == 1
+        assert len(tags) == 3
+        for t in created_tags:
+            assert t in tags
 
-    def test_folder_path_does_not_match_sibling_with_shared_prefix(self, service: TagService) -> None:
-        """folder_path='/photos' must NOT count files in '/photos-vacation/'."""
-        tag_id = service._get_or_create_tag("beach")
-        service._db.add_file_tags(["/photos/img.png", "/photos-vacation/img.png"], tag_id)
+        tag_1 = tags.pop()
+        tag_2 = tags.pop()
+        tag_3 = tags.pop()
+        service.remove_tags_from_file(TEST_FILE_1, {tag_1, tag_2})
 
-        tags = service.get_all_tags(folder_path="/photos")
-        assert tags[0]["usage_count"] == 1
+        tags = service.get_tags_for_file(TEST_FILE_1)
+        assert len(tags) == 1
+        assert tag_3 in tags
 
+    def test_remove_tags_emits_tags_changed(self, service: TagService) -> None:
+        """remove_tags_from_files emits tags_changed."""
+        created_tags_1 = service.add_tags_to_file_by_name(TEST_FILE_1, [TEST_TAG_NAME_1])
+        created_tags_2 = service.add_tags_to_files_by_name([TEST_FILE_2, TEST_FILE_3], [TEST_TAG_NAME_2])
 
-class TestGetTagName:
-    """get_tag_name - retrieve tag name by ID."""
+        emitted: list[bool] = []
+        service.tags_changed.connect(lambda: emitted.append(True))
 
-    def test_get_tag_name_returns_name(self, service: TagService) -> None:
-        """get_tag_name returns the correct name for an existing tag."""
-        tag_id = service._get_or_create_tag("my-tag")
-        assert service.get_tag_name(tag_id) == "my-tag"
+        service.remove_tags_from_file(TEST_FILE_1, created_tags_1)
 
-    def test_get_tag_name_returns_none_for_missing(self, service: TagService) -> None:
-        """get_tag_name returns None for a non-existent tag id."""
-        assert service.get_tag_name(99999) is None
+        assert len(emitted) == 1, "tags_changed should be emitted once"
 
-    def test_get_tag_name_color_tag(self, service: TagService) -> None:
-        """get_tag_name works for color tags too."""
-        tag_id = service._get_or_create_tag("color:red")
-        assert service.get_tag_name(tag_id) == "color:red"
+        service.remove_tags_from_files([TEST_FILE_2, TEST_FILE_3], created_tags_2)
+
+        assert len(emitted) == 2, "tags_changed should be emitted a second time"
+
+    def test_remove_nonexistent_tag(self, service: TagService) -> None:
+        """Removing a tag that doesn't exist does not raise."""
+        created_tags = service.add_tags_to_file_by_name(TEST_FILE_1, [TEST_TAG_NAME_1])
+
+        service.remove_tags_from_file(TEST_FILE_1, {Tag(9999, "nonexistent")})
+        tags = service.get_tags_for_file(TEST_FILE_1)
+        assert len(tags) == 1
+        for t in created_tags:
+            assert t in tags

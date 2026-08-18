@@ -91,9 +91,10 @@ def invalidate_cache_files(db: Any, source_path: str) -> None:
     Uses ``Path.unlink(missing_ok=True)`` so missing files do not raise.
     If no DB record exists for *source_path*, the function is a no-op.
     """
+    logger.debug("Called - source_path: %s", source_path)
     cached = db.get_thumbnail(source_path)
     if cached is None:
-        logger.debug("invalidate_cache_files: no DB record for %s", source_path)
+        logger.debug("No DB record for %s", source_path)
         return
 
     deleted_paths: list[str] = []
@@ -105,7 +106,7 @@ def invalidate_cache_files(db: Any, source_path: str) -> None:
 
     db.delete_thumbnail(source_path)
     logger.info(
-        "invalidate_cache_files: deleted %d cache file(s) for %s",
+        "deleted %d cache file(s) for %s",
         len(deleted_paths),
         source_path,
     )
@@ -121,6 +122,7 @@ def save_to_cache(img: Image.Image, cache_path: Path, format_setting: str = "PNG
     * ``"JPEG"``: smaller files; RGBA images are flattened onto a
       white background before saving.
     """
+    logger.debug("Called - cache_path: %s, format_setting: %s", cache_path, format_setting)
     cache_path.parent.mkdir(parents=True, exist_ok=True)
 
     if format_setting.upper() == "JPEG":

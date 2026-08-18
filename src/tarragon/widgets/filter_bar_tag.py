@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from tarragon.db.common.tag import Tag, TagSource
 from tarragon.services.tag_service import TagService
 from tarragon.theme.constants import SPACING_S
 from tarragon.widgets._chip_utils import create_removable_chip
@@ -36,8 +37,8 @@ class FilterBarTag(FilterBarFilter):
         """Build the filter bar with an Add Tag button and chips container."""
         super().__init__(parent)
         self._tag_service = tag_service
-        self._active_tag_ids: set[int] = set()
-        self._available_tags: dict[int, str] = {}
+        self._active_tags: set[Tag] = set()
+        self._available_tags: set[Tag] = set()
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(SPACING_S, 0, SPACING_S, 0)
@@ -74,42 +75,42 @@ class FilterBarTag(FilterBarFilter):
         the current active filter selections across rebuilds.
         """
         tags = self._tag_service.get_all_tags()
-        self._available_tags = {tag["id"]: tag["name"] for tag in tags if not tag["name"].startswith("color:")}
+        self._available_tags = {t for t in tags if not t.get_source() == TagSource.AUTO_COLOR}
 
         # Drop any active IDs that no longer exist in available tags
-        self._active_tag_ids &= set(self._available_tags.keys())
+        self._active_tags = {t for t in self._active_tags if t in self._available_tags}
         self._update_chips()
 
     def _show_menu(self) -> None:
         """Show context menu with available tags as checkable actions."""
         self._tag_menu.clear()
 
-        for tag_id, tag_name in sorted(self._available_tags.items(), key=lambda x: x[1]):
-            action = self._tag_menu.addAction(tag_name)
+        for tag in sorted(self._available_tags):
+            action = self._tag_menu.addAction(tag.get_name())
             action.setCheckable(True)
-            checked = tag_id in self._active_tag_ids
+            checked = tag in self._active_tags
             action.setChecked(checked)
-            action.setData(tag_id)
-            action.triggered.connect(lambda checked=checked, tid=tag_id: self._toggle_tag(tid))
+            action.setData(tag)
+            action.triggered.connect(lambda checked=checked, tag=tag: self._toggle_tag(tag))
 
         # Show menu below the button
         pos = self._add_button.mapToGlobal(self._add_button.rect().bottomLeft())
         self._tag_menu.popup(pos)
 
-    def _toggle_tag(self, tag_id: int) -> None:
+    def _toggle_tag(self, tag: Tag) -> None:
         """Toggle a tag in the active filter set."""
-        if tag_id in self._active_tag_ids:
-            self._active_tag_ids.remove(tag_id)
+        if tag in self._active_tags:
+            self._active_tags.remove(tag)
         else:
-            self._active_tag_ids.add(tag_id)
+            self._active_tags.add(tag)
         self._update_chips()
-        self._emit_signal(set(self._active_tag_ids))
+        self._emit_signal(set(self._active_tags))
 
-    def _remove_tag(self, tag_id: int) -> None:
+    def _remove_tag(self, tag: Tag) -> None:
         """Remove a tag from the active filter set."""
-        self._active_tag_ids.discard(tag_id)
+        self._active_tags.discard(tag)
         self._update_chips()
-        self._emit_signal(set(self._active_tag_ids))
+        self._emit_signal(set(self._active_tags))
 
     def _update_chips(self) -> None:
         """Rebuild the displayed tag chips to match the active filter set."""
@@ -122,42 +123,39 @@ class FilterBarTag(FilterBarFilter):
                     widget.deleteLater()
 
         # Add chips for each active tag
-        for tag_id in sorted(self._active_tag_ids):
-            tag_name = self._available_tags.get(tag_id, f"Tag {tag_id}")
-            chip = self._create_chip(tag_id, tag_name)
+        for tag in sorted(self._active_tags):
+            chip = self._create_chip(tag)
             self._chips_layout.addWidget(chip)
 
-    def _create_chip(self, tag_id: int, tag_name: str) -> QWidget:
+    def _create_chip(self, tag: Tag) -> QWidget:
         """Create a removable tag chip widget.
 
         Delegates to the shared chip factory for consistent styling.
 
         Parameters
         ----------
-        tag_id:
-            The database ID of the tag.
-        tag_name:
-            Display name for the tag label.
+        tag:
+            The tag object.
 
         Returns
         -------
             A QWidget containing the tag name label and a remove button.
         """
         return create_removable_chip(
-            label_text=tag_name,
-            on_remove=partial(self._remove_tag, tag_id),
+            label_text=tag.get_name(),
+            on_remove=partial(self._remove_tag, tag),
         )
 
-    def get_active_tag_ids(self) -> set[int]:
-        """Return the set of currently active tag filter IDs."""
-        return set(self._active_tag_ids)
+    def get_active_tags(self) -> set[Tag]:
+        """Return the set of currently active tags."""
+        return set(self._active_tags)
 
     def has_active_filters(self) -> bool:
         """Return True if any tag filter is active."""
-        return len(self._active_tag_ids) > 0
+        return len(self._active_tags) > 0
 
     def clear_filters(self) -> None:
         """Remove all active tag filters and emit an empty set."""
-        self._active_tag_ids.clear()
+        self._active_tags.clear()
         self._update_chips()
         self._emit_signal(set())

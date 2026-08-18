@@ -7,8 +7,10 @@ from pathlib import Path
 
 import pytest
 
+from tarragon.db.common.tag import Tag
 from tarragon.db.database import Database
 from tarragon.services.tag_service import TagService
+from tarragon.theme.color_buckets import ColorBucket
 from tarragon.widgets.filter_bar import FilterBar
 from tarragon.widgets.filter_bar_color import FilterBarColor
 from tarragon.widgets.filter_bar_tag import FilterBarTag
@@ -61,23 +63,23 @@ class TestSignalForwarding:
         captured: list[set[str]] = []
         bar.color_filter_changed.connect(captured.append)
 
-        bar.filter_bar_color.toggle_color("red")
+        bar.filter_bar_color.toggle_color(ColorBucket.RED)
 
         assert len(captured) == 1
-        assert captured[0] == {"color:red"}
+        assert captured[0] == {ColorBucket.RED}
 
     def test_tag_filter_changed_forwarded(self, bar: FilterBar, tag_service: TagService) -> None:
         """tag_filter_changed signal is forwarded from FilterBarTag."""
-        tag_id = tag_service._get_or_create_tag("test-tag")
+        tag = tag_service.create_tag("test-tag")
         bar.filter_bar_tag._refresh_tags()
 
-        captured: list[set[int]] = []
+        captured: list[set[Tag]] = []
         bar.tag_filter_changed.connect(captured.append)
 
-        bar.filter_bar_tag._toggle_tag(tag_id)
+        bar.filter_bar_tag._toggle_tag(tag)
 
         assert len(captured) == 1
-        assert tag_id in captured[0]
+        assert tag in captured[0]
 
     def test_folder_filter_changed_forwarded(self, bar: FilterBar, db: Database) -> None:
         """folder_filter_changed signal is forwarded from FilterBarFolder."""

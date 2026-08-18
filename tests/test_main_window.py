@@ -231,8 +231,8 @@ class TestFilteredQueryRegression:
             db.upsert_thumbnail("/test/photos/b.png", mtime=2, size=200, width=1024, height=768, cache_uuid="u2")
 
             # Add a tag to one file
-            tag_id = db.ensure_tag("beach")
-            db.add_file_tags(["/test/photos/a.png"], tag_id)
+            tag = db.ensure_tag("beach")
+            db.add_tag_to_files(["/test/photos/a.png"], tag)
 
             tag_service = TagService(db=db)
             window.setup_widgets(db, tag_service)
@@ -241,7 +241,7 @@ class TestFilteredQueryRegression:
             window._current_folder = "/test/photos/"
 
             # Activate a tag filter via the tag_filter_bar's toggle API
-            window.filter_bar_tag._toggle_tag(tag_id)
+            window.filter_bar_tag._toggle_tag(tag)
 
             # Verify has_active_filters works on tag_filter_bar
             assert window.filter_bar_tag.has_active_filters() is True
@@ -273,9 +273,9 @@ class TestFilteredQueryRegression:
             window._current_folder = "/test/photos/"
 
             # Create a tag and activate filter (but no files have it)
-            tag_id = tag_service._get_or_create_tag("nonexistent")
+            tag = tag_service.create_tag("nonexistent")
             window.filter_bar_tag._refresh_tags()
-            window.filter_bar_tag._toggle_tag(tag_id)
+            window.filter_bar_tag._toggle_tag(tag)
 
             # Filtered query should return 0 results - no fallback to unfiltered
             window._run_filtered_query()
@@ -301,7 +301,7 @@ class TestFilteredQueryRegression:
 
             # Both files have the same tag
             tag_id = db.ensure_tag("shared")
-            db.add_file_tags(["/folder_a/img1.png", "/folder_b/img2.png"], tag_id)
+            db.add_tag_to_files(["/folder_a/img1.png", "/folder_b/img2.png"], tag_id)
 
             tag_service = TagService(db=db)
             window.setup_widgets(db, tag_service)

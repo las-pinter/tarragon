@@ -60,7 +60,7 @@ def scan_folder(folder_path: Path, recursive: bool = False) -> list[FileInfo]:
     logger.debug("scan_folder: %s (recursive=%s)", folder_path, recursive)
     try:
         if not folder_path.is_dir():
-            logger.debug("scan_folder: path does not exist or is not a directory: %s", folder_path)
+            logger.debug("path does not exist or is not a directory: %s", folder_path)
             return []
 
         iterable: list[Path]
@@ -90,9 +90,9 @@ def scan_folder(folder_path: Path, recursive: bool = False) -> list[FileInfo]:
             )
 
         elapsed = time.perf_counter() - start
-        logger.debug("scan_folder found %d files in %.3fs", len(results), elapsed)
+        logger.debug("found %d files in %.3fs", len(results), elapsed)
         return results
     except OSError as e:
         elapsed = time.perf_counter() - start
-        logger.error("scan_folder failed after %.3fs: %s | error: %s", elapsed, folder_path, e)
+        logger.error("failed after %.3fs: %s | error: %s", elapsed, folder_path, e)
         return []

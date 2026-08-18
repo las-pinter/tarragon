@@ -539,9 +539,9 @@ class TestSettingTileGridSize:
     """Tests for the _SettingTileGridSize Setting subclass."""
 
     def test_default_value(self, db: Database) -> None:
-        """tile_grid_size defaults to '2x2'."""
+        """tile_grid_size defaults to '3x3'."""
         setting = _SettingTileGridSize(db)
-        assert setting.get() == "2x2"
+        assert setting.get() == "3x3"
 
     def test_get_key(self, db: Database) -> None:
         """get_key() returns 'tile_grid_size'."""
@@ -646,7 +646,7 @@ class TestSettingsServiceIntegration:
         assert service.large_canvas_threshold_mp.get() == pytest.approx(20.0)
         assert service.max_multi_preview.get() == 9
         assert service.max_psd_workers.get() == 3
-        assert service.tile_grid_size.get() == "2x2"
+        assert service.tile_grid_size.get() == "3x3"
         assert service.window_layout_state.get() is None
         assert service.window_geometry_state.get() is None
 

@@ -307,7 +307,7 @@ class MainWindow(QMainWindow):
         self.thumbnail_grid.set_model(self.thumbnail_model)
 
         # Create thumbnail service (skip if settings_service is None, e.g. in tests)
-        self._thumbnail_service = ThumbnailService(db, self._settings_service, parent=self)
+        self._thumbnail_service = ThumbnailService(db, self._settings_service, self._tag_service, parent=self)
         self._thumbnail_service.thumbnail_ready.connect(self._on_thumbnail_ready)
         self._thumbnail_service.error_occurred.connect(self._on_thumbnail_error)
         # Auto-color tags from thumbnail rendering should refresh the tag panel

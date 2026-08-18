@@ -75,7 +75,7 @@ class TestDialogCreation:
         assert psd_workers.value() == 3
         assert multi_preview.value() == 9
         assert canvas_threshold.value() == pytest.approx(20.0)
-        assert grid_combo.currentText() == "2x2"
+        assert grid_combo.currentText() == "3x3"
         assert color_enabled.isChecked() is True
         assert palette_size.value() == 8
         assert min_share.value() == pytest.approx(0.10)

@@ -82,13 +82,13 @@ class ThumbnailModel(QAbstractListModel):
         overwritten when new thumbnails are generated.
         """
         start = time.perf_counter()
-        logger.debug("set_paths: %d items", len(paths))
+        logger.debug("Called -  items: %d", len(paths))
 
         self.beginResetModel()
         self._paths = list(paths)
         self.endResetModel()
         elapsed = time.perf_counter() - start
-        logger.debug("set_paths completed in %.3fs", elapsed)
+        logger.debug("completed in %.3fs", elapsed)
 
     def set_thumbnail(
         self,
@@ -107,7 +107,7 @@ class ThumbnailModel(QAbstractListModel):
         if normalized not in self._thumbnails:
             self._thumbnails[normalized] = {}
         self._thumbnails[normalized][resolution] = cache_path
-        logger.debug("set_thumbnail: path=%s, resolution=%s, cache=%s", normalized, resolution, cache_path)
+        logger.debug("Called - path: %s, resolution: %s, cache: %s", normalized, resolution, cache_path)
 
         # Find row and emit dataChanged for the specific role
         for row, path in enumerate(self._paths):

@@ -58,7 +58,7 @@ class FilterBar(QWidget):
         layout.addWidget(self._filter_bar_folder)
 
         self._filter_bar_color.filter_changed.connect(lambda colors: self.color_filter_changed.emit(colors))  # pyright: ignore[reportUnknownLambdaType, reportUnknownArgumentType]
-        self._filter_bar_tag.filter_changed.connect(lambda tag_ids: self.tag_filter_changed.emit(tag_ids))  # pyright: ignore[reportUnknownLambdaType, reportUnknownArgumentType]
+        self._filter_bar_tag.filter_changed.connect(lambda tags: self.tag_filter_changed.emit(tags))  # pyright: ignore[reportUnknownLambdaType, reportUnknownArgumentType]
         self._filter_bar_folder.filter_changed.connect(lambda folders: self.folder_filter_changed.emit(folders))  # pyright: ignore[reportUnknownLambdaType, reportUnknownArgumentType]
 
     @property

@@ -31,12 +31,14 @@ CREATE TABLE IF NOT EXISTS thumbnails (
     full_cache_path TEXT
 );
 CREATE TABLE IF NOT EXISTS tags (
-    id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE NOT NULL
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT UNIQUE NOT NULL,
+    source TEXT NOT NULL DEFAULT 'user'
 );
 CREATE TABLE IF NOT EXISTS file_tags (
-    path TEXT NOT NULL, tag_id INTEGER NOT NULL,
-    source TEXT NOT NULL DEFAULT 'user',
-    PRIMARY KEY (path, tag_id, source),
+    path TEXT NOT NULL,
+    tag_id INTEGER NOT NULL,
+    PRIMARY KEY (path, tag_id),
     FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
 );
 CREATE TABLE IF NOT EXISTS favorites (
@@ -111,18 +113,18 @@ class Base(MixinBase):
 
     def _execute(self, sql: str, params: SqlParams = ()) -> sqlite3.Cursor:
         """Execute SQL with lock for thread safety."""
+        logger.debug("Called - sql: %s, params: %s", sql, params)
         start = time.perf_counter()
-        logger.debug("SQL: %s | params: %s", sql, params)
         try:
             with self._lock:
                 cursor = self._conn.execute(sql, params)
             elapsed = time.perf_counter() - start
-            logger.debug("SQL completed in %.3fs", elapsed)
+            logger.debug("completed in %.3fs", elapsed)
             return cursor
         except sqlite3.Error as e:
             elapsed = time.perf_counter() - start
             logger.error(
-                "SQL failed after %.3fs: %s | params: %s | error: %s",
+                "failed after %.3fs: %s | params: %s | error: %s",
                 elapsed,
                 sql,
                 params,
@@ -132,17 +134,17 @@ class Base(MixinBase):
 
     def _executemany(self, sql: str, seq: Sequence[SqlParams]) -> None:
         """Execute executemany with lock for thread safety."""
+        logger.debug("Called = sql: %s, rows: %d", sql, len(seq))
         start = time.perf_counter()
-        logger.debug("SQL (many): %s | rows: %d", sql, len(seq))
         try:
             with self._lock:
                 self._conn.executemany(sql, seq)
             elapsed = time.perf_counter() - start
-            logger.debug("SQL (many) completed in %.3fs", elapsed)
+            logger.debug("completed in %.3fs", elapsed)
         except sqlite3.Error as e:
             elapsed = time.perf_counter() - start
             logger.error(
-                "SQL (many) failed after %.3fs: %s | rows: %d | error: %s",
+                "failed after %.3fs: %s | rows: %d | error: %s",
                 elapsed,
                 sql,
                 len(seq),
@@ -152,16 +154,16 @@ class Base(MixinBase):
 
     def _executescript(self, sql: str) -> None:
         """Execute executescript with lock for thread safety."""
+        logger.debug("Called - sql: %s", sql)
         start = time.perf_counter()
-        logger.debug("SQL (script): executing schema script")
         try:
             with self._lock:
                 self._conn.executescript(sql)
             elapsed = time.perf_counter() - start
-            logger.debug("SQL (script) completed in %.3fs", elapsed)
+            logger.debug("completed in %.3fs", elapsed)
         except sqlite3.Error as e:
             elapsed = time.perf_counter() - start
-            logger.error("SQL (script) failed after %.3fs: error: %s", elapsed, e)
+            logger.error("failed after %.3fs: error: %s", elapsed, e)
             raise
 
     def _commit(self) -> None:
@@ -188,9 +190,11 @@ class Base(MixinBase):
         list[dict[str, Any]]
             List of row dicts (column_name -> value).
         """
-        logger.debug("fetch_all: %s | params: %s", sql, params)
+        logger.debug("Called - sql: %s, params: %s", sql, params)
         cursor = self._execute(sql, params)
-        return [_row_to_dict(row) for row in cursor.fetchall()]
+        result = [_row_to_dict(row) for row in cursor.fetchall()]
+        logger.debug("result: %s", result)
+        return result
 
     # -------------------------------------------------------------------------
     # Lifecycle
@@ -205,7 +209,7 @@ class Base(MixinBase):
 
     def close(self) -> None:
         """Close the underlying SQLite connection."""
-        logger.debug("Closing database connection: %s", self._db_path)
+        logger.info("Closing database connection: %s", self._db_path)
         self._conn.close()
 
     # -------------------------------------------------------------------------
@@ -214,7 +218,7 @@ class Base(MixinBase):
 
     def set_schema_version(self, version: int) -> None:
         """Set the current schema version. Replaces any existing rows."""
-        logger.debug("set_schema_version: version=%d", version)
+        logger.debug("Called - version: %d", version)
         self._execute("DELETE FROM schema_version")
         self._execute(
             "INSERT INTO schema_version (version) VALUES (?)",
@@ -224,7 +228,7 @@ class Base(MixinBase):
 
     def get_schema_version(self) -> int:
         """Return the stored schema version, or 0 if absent."""
-        logger.debug("get_schema_version")
+        logger.debug("Called")
         row = self._execute("SELECT version FROM schema_version LIMIT 1").fetchone()
         return row["version"] if row else 0
 

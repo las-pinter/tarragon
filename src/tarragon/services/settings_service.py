@@ -180,7 +180,7 @@ class _SettingMaxPsdWorkers(Setting):
 
 class _SettingTileGridSize(Setting):
     def __init__(self, db: Database) -> None:
-        super().__init__(db, "tile_grid_size", "2x2")
+        super().__init__(db, "tile_grid_size", "3x3")
         self._tile_grid_pattern = re.compile(r"^\d+x\d+$")
         self._valid_cache_formats = ["1x1", "2x2", "3x3", "4x4"]
 

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from tarragon.db.common.tag import Tag
+
 
 @dataclass
 class FilterState:
@@ -12,26 +14,26 @@ class FilterState:
     Tracks four independent filter dimensions:
 
     - **filename_filter**: substring matched against file names.
-    - **tag_ids**: set of tag primary-key IDs that must all be present.
-    - **color_tags**: set of color-label strings applied as a filter.
+    - **tags**: set of tags that must all be present.
+    - **color_tags**: set of color tags applied as a filter.
     - **folder_filters**: set of folder paths for multi-folder scoping.
 
     All dimensions are combined with AND semantics — an image must satisfy
-    every active filter to remain visible.
+    every active filter to remain visible.1
     """
 
     filename_filter: str = ""
-    tag_ids: set[int] = field(default_factory=set[int])
-    color_tags: set[str] = field(default_factory=set[str])
+    tags: set[Tag] = field(default_factory=set[Tag])
+    color_tags: set[Tag] = field(default_factory=set[Tag])
     folder_filters: set[str] = field(default_factory=set[str])
 
     def is_empty(self) -> bool:
         """Return ``True`` if no filters are active."""
-        return not self.filename_filter and not self.tag_ids and not self.color_tags and not self.folder_filters
+        return not self.filename_filter and not self.tags and not self.color_tags and not self.folder_filters
 
     def clear(self) -> None:
         """Clear all filters, restoring the unfiltered state."""
         self.filename_filter = ""
-        self.tag_ids.clear()
+        self.tags.clear()
         self.color_tags.clear()
         self.folder_filters.clear()

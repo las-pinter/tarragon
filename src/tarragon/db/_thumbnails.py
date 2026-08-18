@@ -27,7 +27,7 @@ class ThumbnailsMixin(MixinBase):
     ) -> None:
         """Insert or update a thumbnail record."""
         path = normalize_path(path)
-        logger.debug("upsert_thumbnail: path=%s, mtime=%d, size=%d", path, mtime, size)
+        logger.debug("Called - path: %s, mtime: %d, size: %d", path, mtime, size)
         self._execute(
             """
             INSERT INTO thumbnails (
@@ -77,7 +77,7 @@ class ThumbnailsMixin(MixinBase):
         """
         if not files:
             return
-        logger.debug("bulk_upsert_stubs: %d files", len(files))
+        logger.debug("Called - files: %d", len(files))
         # Normalize path separators to forward slashes for cross-platform consistency
         normalized = [(normalize_path(path), mtime, size) for path, mtime, size in files]
         self._executemany(
@@ -97,6 +97,7 @@ class ThumbnailsMixin(MixinBase):
 
     def delete_thumbnail(self, path: str) -> None:
         """Remove a thumbnail record by path."""
+        logger.debug("Called - path: %s", path)
         path = normalize_path(path)
         logger.debug("delete_thumbnail: path=%s", path)
         self._execute("DELETE FROM thumbnails WHERE path = ?", (path,))
@@ -104,15 +105,15 @@ class ThumbnailsMixin(MixinBase):
 
     def get_thumbnail(self, path: str) -> dict[str, Any] | None:
         """Fetch a single thumbnail record as a dict, or None if absent."""
+        logger.debug("Called - path: %s", path)
         path = normalize_path(path)
-        logger.debug("get_thumbnail: path=%s", path)
         row = self._execute("SELECT * FROM thumbnails WHERE path = ?", (path,)).fetchone()
         return _row_to_dict(row) if row else None
 
     def list_thumbnails_for_folder(self, folder_path: str) -> list[dict[str, Any]]:
         """List all thumbnail records whose path starts with folder_path."""
+        logger.debug("Called - folder_path: %s", folder_path)
         folder_path = normalize_path(folder_path)
-        logger.debug("list_thumbnails_for_folder: folder_path=%s", folder_path)
         cursor = self._execute(
             "SELECT * FROM thumbnails WHERE path LIKE ?",
             (f"{folder_path.rstrip('/')}/%",),
@@ -128,7 +129,7 @@ class ThumbnailsMixin(MixinBase):
             Folder path prefix.  All thumbnails whose path begins with
             this value (followed by ``/``) are deleted.
         """
-        logger.debug("delete_thumbnails_by_folder: folder_path=%s", folder_path)
+        logger.debug("Called - folder_path: %s", folder_path)
         folder_path = normalize_path(folder_path)
         self._execute(
             "DELETE FROM thumbnails WHERE path LIKE ?",
@@ -148,7 +149,7 @@ class ThumbnailsMixin(MixinBase):
         list[str]
             Sorted list of distinct folder path strings.
         """
-        logger.debug("list_distinct_folders")
+        logger.debug("Called")
         cursor = self._execute("SELECT path FROM thumbnails WHERE path != ''")
         folders: set[str] = set()
         for row in cursor.fetchall():

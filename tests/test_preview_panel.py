@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import gc
-import math
 from collections.abc import Generator
 from pathlib import Path
 from typing import Any
@@ -23,6 +22,7 @@ from PySide6.QtWidgets import (
 )
 
 from tarragon.common import ImageInfo
+from tarragon.db.common.tag import Tag, TagSource
 from tarragon.db.database import Database
 from tarragon.services.settings_service import SettingsService
 from tarragon.theme.color_buckets import BUCKET_COLORS
@@ -128,7 +128,7 @@ class TestInstantiation:
         """PreviewPanel is a QWidget subclass."""
         assert issubclass(PreviewPanel, QWidget)
 
-    def test_preview_panel_instantiation(self, qapp: Any, settings_service: SettingsService) -> None:
+    def test_preview_panel_instantiation(self, settings_service: SettingsService) -> None:
         """PreviewPanel can be created without errors."""
         panel = PreviewPanel(settings_service)
         try:
@@ -137,7 +137,7 @@ class TestInstantiation:
         finally:
             panel.close()
 
-    def test_preview_panel_has_layout(self, qapp: Any, settings_service: SettingsService) -> None:
+    def test_preview_panel_has_layout(self, settings_service: SettingsService) -> None:
         """PreviewPanel has a QVBoxLayout."""
         panel = PreviewPanel(settings_service)
         try:
@@ -146,7 +146,7 @@ class TestInstantiation:
         finally:
             panel.close()
 
-    def test_preview_panel_has_image_label(self, qapp: Any, settings_service: SettingsService) -> None:
+    def test_preview_panel_has_image_label(self, settings_service: SettingsService) -> None:
         """PreviewPanel has an image QLabel."""
         panel = PreviewPanel(settings_service)
         try:
@@ -155,7 +155,7 @@ class TestInstantiation:
         finally:
             panel.close()
 
-    def test_image_label_size_policy_is_ignored(self, qapp: Any, settings_service: SettingsService) -> None:
+    def test_image_label_size_policy_is_ignored(self, settings_service: SettingsService) -> None:
         """Image label size policy is Ignored/Ignored to prevent resize loop."""
         panel = PreviewPanel(settings_service)
         try:
@@ -165,12 +165,10 @@ class TestInstantiation:
         finally:
             panel.close()
 
-    def test_preview_panel_initial_state(self, qapp: Any, settings_service: SettingsService) -> None:
+    def test_preview_panel_initial_state(self, settings_service: SettingsService) -> None:
         """PreviewPanel starts with no image and empty metadata."""
         panel = PreviewPanel(settings_service)
         try:
-            assert panel._current_image is None
-            assert panel._current_path is None
             assert panel._image_label.text() == "No preview"
             assert _meta_text(panel, "File") == ""
             assert _meta_text(panel, "Dimensions") == ""
@@ -181,31 +179,27 @@ class TestInstantiation:
 class TestSetImage:
     """The set_image() method displays images and metadata."""
 
-    def test_set_image_rgb(self, qapp: Any, sample_image: Any, settings_service: SettingsService) -> None:
+    def test_set_image_rgb(self, sample_image: Any, settings_service: SettingsService) -> None:
         """The set_image() method displays an RGB image."""
         panel = PreviewPanel(settings_service)
         try:
             panel.set_image(_make_image_info(sample_image))
-            assert panel._current_image is not None
             assert panel._image_label.pixmap() is not None
             assert _meta_text(panel, "Dimensions") == "800 x 600"
         finally:
             panel.close()
 
-    def test_set_image_rgba(self, qapp: Any, sample_rgba_image: Any, settings_service: SettingsService) -> None:
+    def test_set_image_rgba(self, sample_rgba_image: Any, settings_service: SettingsService) -> None:
         """The set_image() method displays an RGBA image."""
         panel = PreviewPanel(settings_service)
         try:
             panel.set_image(_make_image_info(sample_rgba_image))
-            assert panel._current_image is not None
             assert panel._image_label.pixmap() is not None
             assert _meta_text(panel, "Dimensions") == "1024 x 768"
         finally:
             panel.close()
 
-    def test_set_image_with_path(
-        self, qapp: Any, sample_image: Any, tmp_path: Any, settings_service: SettingsService
-    ) -> None:
+    def test_set_image_with_path(self, sample_image: Any, tmp_path: Any, settings_service: SettingsService) -> None:
         """The set_image() method displays metadata when a path is provided."""
         # Create a dummy file
         test_file = tmp_path / "test_image.jpg"
@@ -214,14 +208,13 @@ class TestSetImage:
         panel = PreviewPanel(settings_service)
         try:
             panel.set_image(_make_image_info(sample_image, path=test_file))
-            assert panel._current_path == test_file
             assert _meta_text(panel, "File") == "test_image.jpg"
             assert "Size:" in _meta_text(panel, "Size")
             assert _meta_text(panel, "Format") == "JPG"
         finally:
             panel.close()
 
-    def test_set_image_without_path(self, qapp: Any, sample_image: Any, settings_service: SettingsService) -> None:
+    def test_set_image_without_path(self, sample_image: Any, settings_service: SettingsService) -> None:
         """The set_image() method works without a path (shows 'Unknown')."""
         panel = PreviewPanel(settings_service)
         try:
@@ -235,16 +228,13 @@ class TestSetImage:
 class TestClear:
     """The clear() method resets the panel to its initial state."""
 
-    def test_clear_resets_state(self, qapp: Any, sample_image: Any, settings_service: SettingsService) -> None:
+    def test_clear_resets_state(self, sample_image: Any, settings_service: SettingsService) -> None:
         """The clear() method resets the panel to its initial state."""
         panel = PreviewPanel(settings_service)
         try:
             panel.set_image(_make_image_info(sample_image))
-            assert panel._current_image is not None
 
             panel.clear()
-            assert panel._current_image is None
-            assert panel._current_path is None
             assert panel._image_label.text() == "No preview"
             assert _meta_text(panel, "File") == ""
         finally:
@@ -267,30 +257,30 @@ class TestMetadataFormatting:
             (5 * 1024**4, "5.0 TB"),
         ],
     )
-    def test_format_size_parametrized(self, qapp: Any, size_bytes: int, expected: str) -> None:
+    def test_format_size_parametrized(self, size_bytes: int, expected: str) -> None:
         """The _format_size() function formats all byte ranges correctly."""
         assert SizeMeta._format_size(size_bytes) == expected
 
 
 class TestPilToQImage:
-    """The _pil_to_qimage() function converts common PIL modes to QImage."""
+    """The _to_qimage() function converts common PIL modes to QImage."""
 
-    def test_pil_to_qimage_rgb(self, qapp: Any, sample_image: Any) -> None:
-        """The _pil_to_qimage() function converts an RGB image correctly."""
-        qimage = PreviewPanel._pil_to_qimage(sample_image)
+    def test_to_qimage_rgb(self, sample_image: Any) -> None:
+        """The _to_qimage() function converts an RGB image correctly."""
+        qimage = PreviewPanel._to_qimage(sample_image)
         assert qimage.width() == 800
         assert qimage.height() == 600
 
-    def test_pil_to_qimage_rgba(self, qapp: Any, sample_rgba_image: Any) -> None:
-        """The _pil_to_qimage() function converts an RGBA image correctly."""
-        qimage = PreviewPanel._pil_to_qimage(sample_rgba_image)
+    def test_to_qimage_rgba(self, sample_rgba_image: Any) -> None:
+        """The _to_qimage() function converts an RGBA image correctly."""
+        qimage = PreviewPanel._to_qimage(sample_rgba_image)
         assert qimage.width() == 1024
         assert qimage.height() == 768
 
-    def test_pil_to_qimage_grayscale(self, qapp: Any) -> None:
-        """The _pil_to_qimage() function converts a grayscale image to RGB."""
+    def test_to_qimage_grayscale(self, qapp: Any) -> None:
+        """The _to_qimage() function converts a grayscale image to RGB."""
         gray_image = Image.new("L", (400, 300), color=128)
-        qimage = PreviewPanel._pil_to_qimage(gray_image)
+        qimage = PreviewPanel._to_qimage(gray_image)
         assert qimage.width() == 400
         assert qimage.height() == 300
 
@@ -298,19 +288,18 @@ class TestPilToQImage:
 class TestSetImageBoundarySizes:
     """The set_image() method handles extreme image dimensions."""
 
-    def test_set_image_1x1_pixel(self, qapp: Any, settings_service: SettingsService) -> None:
+    def test_set_image_1x1_pixel(self, settings_service: SettingsService) -> None:
         """The set_image() method handles a 1x1 pixel image without crashing."""
         panel = PreviewPanel(settings_service)
         try:
             tiny = Image.new("RGB", (1, 1), color="blue")
             panel.set_image(_make_image_info(tiny))
-            assert panel._current_image is not None
             assert panel._image_label.pixmap() is not None
             assert _meta_text(panel, "Dimensions") == "1 x 1"
         finally:
             panel.close()
 
-    def test_set_image_very_wide_panorama(self, qapp: Any, settings_service: SettingsService) -> None:
+    def test_set_image_very_wide_panorama(self, settings_service: SettingsService) -> None:
         """The set_image() method handles an extreme aspect ratio (wide panorama)."""
         panel = PreviewPanel(settings_service)
         try:
@@ -321,7 +310,7 @@ class TestSetImageBoundarySizes:
         finally:
             panel.close()
 
-    def test_set_image_very_tall(self, qapp: Any, settings_service: SettingsService) -> None:
+    def test_set_image_very_tall(self, settings_service: SettingsService) -> None:
         """The set_image() method handles an extreme aspect ratio (tall/narrow image)."""
         panel = PreviewPanel(settings_service)
         try:
@@ -332,13 +321,12 @@ class TestSetImageBoundarySizes:
         finally:
             panel.close()
 
-    def test_set_image_large_25mp(self, qapp: Any, settings_service: SettingsService) -> None:
+    def test_set_image_large_25mp(self, settings_service: SettingsService) -> None:
         """The set_image() method handles a large 25-megapixel image (5000x5000)."""
         panel = PreviewPanel(settings_service)
         try:
             large = Image.new("RGB", (5000, 5000), color="white")
             panel.set_image(_make_image_info(large))
-            assert panel._current_image is not None
             assert panel._image_label.pixmap() is not None
             assert _meta_text(panel, "Dimensions") == "5000 x 5000"
         finally:
@@ -348,7 +336,7 @@ class TestSetImageBoundarySizes:
 class TestSetImageModeConversions:
     """The set_image() method converts unusual PIL modes for display."""
 
-    def test_set_image_cmyk_mode(self, qapp: Any, settings_service: SettingsService) -> None:
+    def test_set_image_cmyk_mode(self, settings_service: SettingsService) -> None:
         """The set_image() method converts a CMYK image to RGB for display."""
         panel = PreviewPanel(settings_service)
         try:
@@ -359,7 +347,7 @@ class TestSetImageModeConversions:
         finally:
             panel.close()
 
-    def test_set_image_palette_mode(self, qapp: Any, settings_service: SettingsService) -> None:
+    def test_set_image_palette_mode(self, settings_service: SettingsService) -> None:
         """The set_image() method converts a palette (P) mode image for display."""
         panel = PreviewPanel(settings_service)
         try:
@@ -370,7 +358,7 @@ class TestSetImageModeConversions:
         finally:
             panel.close()
 
-    def test_set_image_1bit_mode(self, qapp: Any, settings_service: SettingsService) -> None:
+    def test_set_image_1bit_mode(self, settings_service: SettingsService) -> None:
         """The set_image() method converts a 1-bit binary image for display."""
         panel = PreviewPanel(settings_service)
         try:
@@ -380,7 +368,7 @@ class TestSetImageModeConversions:
         finally:
             panel.close()
 
-    def test_set_image_la_mode(self, qapp: Any, settings_service: SettingsService) -> None:
+    def test_set_image_la_mode(self, settings_service: SettingsService) -> None:
         """The set_image() method converts an LA (grayscale + alpha) image for display."""
         panel = PreviewPanel(settings_service)
         try:
@@ -390,7 +378,7 @@ class TestSetImageModeConversions:
         finally:
             panel.close()
 
-    def test_set_image_i_mode_32bit(self, qapp: Any, settings_service: SettingsService) -> None:
+    def test_set_image_i_mode_32bit(self, settings_service: SettingsService) -> None:
         """The set_image() method converts an I (32-bit integer) mode image for display."""
         panel = PreviewPanel(settings_service)
         try:
@@ -400,7 +388,7 @@ class TestSetImageModeConversions:
         finally:
             panel.close()
 
-    def test_set_image_f_mode_float(self, qapp: Any, settings_service: SettingsService) -> None:
+    def test_set_image_f_mode_float(self, settings_service: SettingsService) -> None:
         """The set_image() method converts an F (float) mode image for display."""
         panel = PreviewPanel(settings_service)
         try:
@@ -414,9 +402,7 @@ class TestSetImageModeConversions:
 class TestSetImageAnimatedGif:
     """The set_image() method displays the first frame of an animated GIF."""
 
-    def test_set_image_animated_gif_shows_first_frame(
-        self, qapp: Any, tmp_path: Any, settings_service: SettingsService
-    ) -> None:
+    def test_set_image_animated_gif_shows_first_frame(self, tmp_path: Any, settings_service: SettingsService) -> None:
         """The set_image() method displays the first frame of an animated GIF."""
         # Create a multi-frame GIF
         frames = [
@@ -448,7 +434,7 @@ class TestSetImageAnimatedGif:
 class TestResizeEvent:
     """The resizeEvent handler rescales the cached pixmap without reconversion."""
 
-    def test_resize_event_with_no_image_does_not_crash(self, qapp: Any, settings_service: SettingsService) -> None:
+    def test_resize_event_with_no_image_does_not_crash(self, settings_service: SettingsService) -> None:
         """The resizeEvent handler does not crash when no image is set."""
         panel = PreviewPanel(settings_service)
         try:
@@ -456,31 +442,26 @@ class TestResizeEvent:
             event = QResizeEvent(QSize(400, 300), QSize(200, 200))
             panel.resizeEvent(event)
             # Should not crash, image label should still say "No preview"
-            assert panel._current_image is None
         finally:
             panel.close()
 
-    def test_resize_event_with_image_reapplies(
-        self, qapp: Any, sample_image: Any, settings_service: SettingsService
-    ) -> None:
+    def test_resize_event_with_image_reapplies(self, sample_image: Any, settings_service: SettingsService) -> None:
         """The resizeEvent handler re-scales the image when the panel is resized."""
         panel = PreviewPanel(settings_service)
         try:
             panel.show()
             panel.set_image(_make_image_info(sample_image))
-            assert panel._current_image is not None
 
             # Simulate resize
             event = QResizeEvent(QSize(600, 400), QSize(200, 200))
             panel.resizeEvent(event)
 
             # Image should still be set after resize
-            assert panel._current_image is not None
             assert panel._image_label.pixmap() is not None
         finally:
             panel.close()
 
-    def test_set_image_caches_pixmap(self, qapp: Any, sample_image: Any, settings_service: SettingsService) -> None:
+    def test_set_image_caches_pixmap(self, sample_image: Any, settings_service: SettingsService) -> None:
         """The set_image() method caches the full-resolution pixmap for fast resizing."""
         panel = PreviewPanel(settings_service)
         try:
@@ -491,9 +472,7 @@ class TestResizeEvent:
         finally:
             panel.close()
 
-    def test_resize_event_does_not_reconvert(
-        self, qapp: Any, sample_image: Any, settings_service: SettingsService
-    ) -> None:
+    def test_resize_event_does_not_reconvert(self, sample_image: Any, settings_service: SettingsService) -> None:
         """The resizeEvent handler re-scales the cached pixmap without re-converting from PIL."""
         panel = PreviewPanel(settings_service)
         try:
@@ -502,8 +481,8 @@ class TestResizeEvent:
             cached = panel._cached_pixmap
             assert cached is not None
 
-            # Spy on _pil_to_qimage - it should NOT be called during resize
-            with patch.object(PreviewPanel, "_pil_to_qimage", wraps=PreviewPanel._pil_to_qimage) as spy:
+            # Spy on _to_qimage - it should NOT be called during resize
+            with patch.object(PreviewPanel, "_to_qimage", wraps=PreviewPanel._to_qimage) as spy:
                 event = QResizeEvent(QSize(600, 400), QSize(200, 200))
                 panel.resizeEvent(event)
                 assert spy.call_count == 0
@@ -514,7 +493,7 @@ class TestResizeEvent:
         finally:
             panel.close()
 
-    def test_clear_resets_cached_pixmap(self, qapp: Any, sample_image: Any, settings_service: SettingsService) -> None:
+    def test_clear_resets_cached_pixmap(self, sample_image: Any, settings_service: SettingsService) -> None:
         """The clear() method resets the cached pixmap to None."""
         panel = PreviewPanel(settings_service)
         try:
@@ -529,7 +508,7 @@ class TestResizeEvent:
 class TestSetImageRapidCalls:
     """Rapid successive set_image calls behave correctly."""
 
-    def test_multiple_set_image_calls_last_one_wins(self, qapp: Any, settings_service: SettingsService) -> None:
+    def test_multiple_set_image_calls_last_one_wins(self, settings_service: SettingsService) -> None:
         """The last of multiple rapid set_image calls is displayed."""
         panel = PreviewPanel(settings_service)
         try:
@@ -541,22 +520,19 @@ class TestSetImageRapidCalls:
             panel.set_image(_make_image_info(img2))
             panel.set_image(_make_image_info(img3))
 
-            assert panel._current_image is not None
             assert _meta_text(panel, "Dimensions") == "300 x 300"
         finally:
             panel.close()
 
-    def test_set_image_after_clear(self, qapp: Any, sample_image: Any, settings_service: SettingsService) -> None:
+    def test_set_image_after_clear(self, sample_image: Any, settings_service: SettingsService) -> None:
         """The set_image() method works correctly after clear()."""
         panel = PreviewPanel(settings_service)
         try:
             panel.set_image(_make_image_info(sample_image))
             panel.clear()
-            assert panel._current_image is None
 
             new_img = Image.new("RGB", (50, 50), color="cyan")
             panel.set_image(_make_image_info(new_img))
-            assert panel._current_image is not None
             assert _meta_text(panel, "Dimensions") == "50 x 50"
         finally:
             panel.close()
@@ -566,7 +542,7 @@ class TestSetImagePathErrors:
     """The set_image() method handles missing or unreadable paths gracefully."""
 
     def test_set_image_with_nonexistent_path_shows_unknown_size(
-        self, qapp: Any, sample_image: Any, settings_service: SettingsService
+        self, sample_image: Any, settings_service: SettingsService
     ) -> None:
         """The set_image() method shows 'Unknown' for size with a nonexistent path."""
         panel = PreviewPanel(settings_service)
@@ -579,7 +555,7 @@ class TestSetImagePathErrors:
             panel.close()
 
     def test_set_image_with_path_stat_raises_oserror(
-        self, qapp: Any, sample_image: Any, settings_service: SettingsService
+        self, sample_image: Any, settings_service: SettingsService
     ) -> None:
         """The set_image() method handles OSError from path.stat() gracefully."""
         panel = PreviewPanel(settings_service)
@@ -597,7 +573,7 @@ class TestSetImageFilenames:
     """The set_image() method handles Unicode and very long filenames."""
 
     def test_set_image_with_unicode_filename(
-        self, qapp: Any, sample_image: Any, tmp_path: Any, settings_service: SettingsService
+        self, sample_image: Any, tmp_path: Any, settings_service: SettingsService
     ) -> None:
         """The set_image() method handles Unicode characters in a filename."""
         panel = PreviewPanel(settings_service)
@@ -610,7 +586,7 @@ class TestSetImageFilenames:
             panel.close()
 
     def test_set_image_with_very_long_filename(
-        self, qapp: Any, sample_image: Any, tmp_path: Any, settings_service: SettingsService
+        self, sample_image: Any, tmp_path: Any, settings_service: SettingsService
     ) -> None:
         """The set_image() method handles a very long filename without crashing."""
         panel = PreviewPanel(settings_service)
@@ -627,9 +603,7 @@ class TestSetImageFilenames:
 class TestFormatFallback:
     """Format metadata falls back to the path extension."""
 
-    def test_format_fallback_to_path_extension(
-        self, qapp: Any, tmp_path: Any, settings_service: SettingsService
-    ) -> None:
+    def test_format_fallback_to_path_extension(self, tmp_path: Any, settings_service: SettingsService) -> None:
         """Format falls back to path extension when image.format is None."""
         panel = PreviewPanel(settings_service)
         try:
@@ -643,9 +617,7 @@ class TestFormatFallback:
         finally:
             panel.close()
 
-    def test_format_shows_unknown_when_no_format_and_no_path(
-        self, qapp: Any, settings_service: SettingsService
-    ) -> None:
+    def test_format_shows_unknown_when_no_format_and_no_path(self, settings_service: SettingsService) -> None:
         """Format shows 'Unknown' when image has no format and no path given."""
         panel = PreviewPanel(settings_service)
         try:
@@ -657,7 +629,7 @@ class TestFormatFallback:
             panel.close()
 
     def test_format_prefers_path_extension_over_pil_format(
-        self, qapp: Any, tmp_path: Any, settings_service: SettingsService
+        self, tmp_path: Any, settings_service: SettingsService
     ) -> None:
         """Format derives from path extension, not PIL format."""
         panel = PreviewPanel(settings_service)
@@ -676,7 +648,7 @@ class TestFormatFallback:
 class TestStateConsistency:
     """The set_image() and clear() methods maintain consistent panel state."""
 
-    def test_set_image_replaces_previous_image(self, qapp: Any, settings_service: SettingsService) -> None:
+    def test_set_image_replaces_previous_image(self, settings_service: SettingsService) -> None:
         """The set_image() method fully replaces the previous image and metadata."""
         panel = PreviewPanel(settings_service)
         try:
@@ -687,30 +659,29 @@ class TestStateConsistency:
             assert _meta_text(panel, "Dimensions") == "100 x 100"
 
             panel.set_image(_make_image_info(img2))
-            assert panel._current_image is not None
             assert _meta_text(panel, "Dimensions") == "500 x 400"
         finally:
             panel.close()
 
-    def test_clear_when_already_clear_is_idempotent(self, qapp: Any, settings_service: SettingsService) -> None:
+    def test_clear_when_already_clear_is_idempotent(self, settings_service: SettingsService) -> None:
         """The clear() method on an already-cleared panel does not crash."""
         panel = PreviewPanel(settings_service)
         try:
             panel.clear()
             panel.clear()
-            assert panel._current_image is None
+
             assert panel._image_label.text() == "No preview"
         finally:
             panel.close()
 
 
 class TestPilToQImageDeepCopy:
-    """The _pil_to_qimage() function returns a deep copy that survives garbage collection."""
+    """The _to_qimage() function returns a deep copy that survives garbage collection."""
 
-    def test_pil_to_qimage_returns_deep_copy_survives_gc(self, qapp: Any, settings_service: SettingsService) -> None:
-        """The _pil_to_qimage() function returns a deep copy that survives garbage collection."""
+    def test_to_qimage_returns_deep_copy_survives_gc(self, settings_service: SettingsService) -> None:
+        """The _to_qimage() function returns a deep copy that survives garbage collection."""
         img = Image.new("RGB", (50, 50), color="red")
-        qimage = PreviewPanel._pil_to_qimage(img)
+        qimage = PreviewPanel._to_qimage(img)
 
         # Delete source image and force GC
         del img
@@ -726,7 +697,7 @@ class TestPathDisplay:
     """Metadata shows only the filename, not the full path."""
 
     def test_set_image_shows_only_filename_not_full_path(
-        self, qapp: Any, sample_image: Any, tmp_path: Any, settings_service: SettingsService
+        self, sample_image: Any, tmp_path: Any, settings_service: SettingsService
     ) -> None:
         """Metadata shows only filename, not full path."""
         panel = PreviewPanel(settings_service)
@@ -748,8 +719,8 @@ class TestPilToQImageStride:
         "width",
         [1, 3, 5, 7, 9, 11, 13, 15, 17, 21, 63, 101],
     )
-    def test_pil_to_qimage_rgb_pixel_values_non_aligned_widths(self, qapp: Any, width: int) -> None:
-        """The _pil_to_qimage() function preserves pixel values for RGB widths not divisible by 4."""
+    def test_to_qimage_rgb_pixel_values_non_aligned_widths(self, width: int) -> None:
+        """The _to_qimage() function preserves pixel values for RGB widths not divisible by 4."""
         height = 4
         # Create an image with unique pixel values per row so shearing is detectable
         pil_img = Image.new("RGB", (width, height))
@@ -758,7 +729,7 @@ class TestPilToQImageStride:
                 # Each pixel gets a unique color based on position
                 pil_img.putpixel((x, y), ((x * 37 + y * 13) % 256, (x * 53 + y * 7) % 256, (x * 11 + y * 97) % 256))
 
-        qimage = PreviewPanel._pil_to_qimage(pil_img)
+        qimage = PreviewPanel._to_qimage(pil_img)
 
         assert qimage.width() == width
         assert qimage.height() == height
@@ -774,15 +745,15 @@ class TestPilToQImageStride:
                     f"expected {expected}, got {actual} - stride shearing detected!"
                 )
 
-    def test_pil_to_qimage_rgba_pixel_values(self, qapp: Any) -> None:
-        """The _pil_to_qimage() function preserves RGBA pixel values including the alpha channel."""
+    def test_to_qimage_rgba_pixel_values(self, qapp: Any) -> None:
+        """The _to_qimage() function preserves RGBA pixel values including the alpha channel."""
         width, height = 7, 3
         pil_img = Image.new("RGBA", (width, height))
         for y in range(height):
             for x in range(width):
                 pil_img.putpixel((x, y), ((x * 41) % 256, (y * 67) % 256, ((x + y) * 23) % 256, (x * y * 17) % 256))
 
-        qimage = PreviewPanel._pil_to_qimage(pil_img)
+        qimage = PreviewPanel._to_qimage(pil_img)
 
         for y in range(height):
             for x in range(width):
@@ -799,68 +770,10 @@ class TestMultiPreviewEmptyList:
         """The set_multi_preview() method clears the panel when given an empty images list."""
         img = Image.new("RGB", (100, 100), color="red")
         preview_panel.set_image(_make_image_info(img))
-        assert preview_panel._current_image is not None
 
         preview_panel.set_multi_preview([])
 
-        assert preview_panel._current_image is None
         assert preview_panel._image_label.text() == "No preview"
-
-
-class TestMultiPreviewCappedAtNine:
-    """More than nine images are capped at a 3x3 grid."""
-
-    def test_capped_at_nine_images(self, preview_panel: PreviewPanel) -> None:
-        """The set_multi_preview() method caps the display at 9 images (3x3 grid) for 12 images."""
-        infos = _solid_image_infos(12)
-
-        preview_panel.set_multi_preview(infos)
-
-        # Mosaic rendered (only 9 images used)
-        assert len(preview_panel._mosaic_labels) == 9
-        # Grid should be 3x3 for 9 images
-        n = 9
-        expected_cols = math.ceil(math.sqrt(n))
-        expected_rows = math.ceil(n / expected_cols)
-        assert expected_cols == 3
-        assert expected_rows == 3
-
-
-class TestMosaicGridDimensions:
-    """Mosaic grid dimensions are calculated for various image counts."""
-
-    @pytest.mark.parametrize(
-        "n_images,expected_cols,expected_rows",
-        [
-            (1, 1, 1),
-            (2, 2, 1),
-            (3, 2, 2),
-            (4, 2, 2),
-            (5, 3, 2),
-            (6, 3, 2),
-            (7, 3, 3),
-            (8, 3, 3),
-            (9, 3, 3),
-        ],
-        ids=["1img", "2img", "3img", "4img", "5img", "6img", "7img", "8img", "9img"],
-    )
-    def test_grid_dimensions(
-        self, preview_panel: PreviewPanel, n_images: int, expected_cols: int, expected_rows: int
-    ) -> None:
-        """Mosaic grid dimensions match expected cols/rows for N images."""
-        infos = _solid_image_infos(n_images)
-
-        preview_panel.set_multi_preview(infos)
-
-        # Verify grid math
-        n = min(n_images, 9)
-        cols = math.ceil(math.sqrt(n))
-        rows = math.ceil(n / cols)
-        assert cols == expected_cols
-        assert rows == expected_rows
-        # Verify mosaic was rendered
-        assert preview_panel._preview_stack.currentWidget() is preview_panel._mosaic_container
-        assert len(preview_panel._mosaic_labels) == min(n_images, 9)
 
 
 class TestMosaicMetadataLabels:
@@ -896,36 +809,6 @@ class TestMosaicMetadataLabels:
         assert _meta_text(preview_panel, "Size") == "Unknown"
 
 
-class TestMosaicWithMixedImages:
-    """Mosaics handle various image modes and sizes."""
-
-    def test_rgba_images_in_mosaic(self, preview_panel: PreviewPanel) -> None:
-        """Mosaic handles RGBA images correctly."""
-        images = [
-            Image.new("RGBA", (200, 200), color=(255, 0, 0, 128)),
-            Image.new("RGBA", (200, 200), color=(0, 255, 0, 128)),
-        ]
-
-        preview_panel.set_multi_preview(_make_image_infos(images))
-
-        assert preview_panel._preview_stack.currentWidget() is preview_panel._mosaic_container
-        assert len(preview_panel._mosaic_labels) == 2
-
-    def test_different_sized_images_in_mosaic(self, preview_panel: PreviewPanel) -> None:
-        """Mosaic handles images of different sizes."""
-        images = [
-            Image.new("RGB", (100, 100), color="red"),
-            Image.new("RGB", (400, 300), color="blue"),
-            Image.new("RGB", (50, 200), color="green"),
-            Image.new("RGB", (300, 50), color="yellow"),
-        ]
-
-        preview_panel.set_multi_preview(_make_image_infos(images))
-
-        assert preview_panel._preview_stack.currentWidget() is preview_panel._mosaic_container
-        assert len(preview_panel._mosaic_labels) == 4
-
-
 class TestMosaicClearsSingleState:
     """The set_multi_preview() method clears single-image state."""
 
@@ -933,11 +816,8 @@ class TestMosaicClearsSingleState:
         """The set_multi_preview() method clears _current_image."""
         img = Image.new("RGB", (100, 100), color="red")
         preview_panel.set_image(_make_image_info(img))
-        assert preview_panel._current_image is not None
 
         preview_panel.set_multi_preview(_solid_image_infos(3))
-
-        assert preview_panel._current_image is None
 
     def test_clears_cached_pixmap(self, preview_panel: PreviewPanel) -> None:
         """The set_multi_preview() method clears _cached_pixmap."""
@@ -948,18 +828,6 @@ class TestMosaicClearsSingleState:
         preview_panel.set_multi_preview(_solid_image_infos(3))
 
         assert preview_panel._cached_pixmap is None
-
-    def test_clears_current_path(self, preview_panel: PreviewPanel, tmp_path: Path) -> None:
-        """The set_multi_preview() method clears _current_path."""
-        test_file = tmp_path / "test.jpg"
-        test_file.write_bytes(b"fake")
-        img = Image.new("RGB", (100, 100), color="red")
-        preview_panel.set_image(_make_image_info(img, path=test_file))
-        assert preview_panel._current_path == test_file
-
-        preview_panel.set_multi_preview(_solid_image_infos(3))
-
-        assert preview_panel._current_path is None
 
 
 class TestMosaicModeConversion:
@@ -996,23 +864,11 @@ class TestMosaicModeConversion:
         preview_panel.set_multi_preview(_make_image_infos(images))
         assert preview_panel._preview_stack.currentWidget() is preview_panel._mosaic_container
 
-    def test_mixed_modes_in_same_mosaic(self, preview_panel: PreviewPanel) -> None:
-        """Mosaic handles a mix of RGB, RGBA, L, and P images together."""
-        images = [
-            Image.new("RGB", (200, 200), color="red"),
-            Image.new("RGBA", (200, 200), color=(0, 255, 0, 128)),
-            Image.new("L", (200, 200), color=128),
-            Image.new("RGB", (300, 150), color="blue"),
-        ]
-        preview_panel.set_multi_preview(_make_image_infos(images))
-        assert preview_panel._preview_stack.currentWidget() is preview_panel._mosaic_container
-        assert len(preview_panel._mosaic_labels) == 4
-
 
 class TestTagServiceConfiguration:
     """PreviewPanel accepts an optional tag_service."""
 
-    def test_preview_panel_accepts_tag_service(self, qapp: Any, settings_service: SettingsService) -> None:
+    def test_preview_panel_accepts_tag_service(self, settings_service: SettingsService) -> None:
         """PreviewPanel can be created with a tag_service parameter."""
         service = MagicMock()
         panel = PreviewPanel(settings_service=settings_service, tag_service=service)
@@ -1021,7 +877,7 @@ class TestTagServiceConfiguration:
         finally:
             panel.close()
 
-    def test_preview_panel_works_without_tag_service(self, qapp: Any, settings_service: SettingsService) -> None:
+    def test_preview_panel_works_without_tag_service(self, settings_service: SettingsService) -> None:
         """PreviewPanel works without tag_service (display-only mode)."""
         panel = PreviewPanel(settings_service)
         try:
@@ -1033,14 +889,14 @@ class TestTagServiceConfiguration:
 class TestSetTags:
     """The set_tags() method renders and stores the provided tags."""
 
-    def test_set_tags_displays_pills(self, qapp: Any, settings_service: SettingsService) -> None:
+    def test_set_tags_displays_pills(self, settings_service: SettingsService) -> None:
         """The set_tags() method creates tag pill widgets for user tags only."""
         panel = PreviewPanel(settings_service)
         try:
-            tags = [
-                {"id": 1, "name": "landscape", "source": "user"},
-                {"id": 2, "name": "color:red", "source": "auto_color"},
-            ]
+            tags = {
+                Tag(id=1, name="landscape", source=TagSource.USER),
+                Tag(id=2, name="color:red", source=TagSource.AUTO_COLOR),
+            }
             panel.set_tags(tags)
             # Only user tags create pills; auto_color tags update color squares
             assert len(panel._tag_pills) == 1
@@ -1048,29 +904,29 @@ class TestSetTags:
         finally:
             panel.close()
 
-    def test_set_tags_clears_previous_pills(self, qapp: Any, settings_service: SettingsService) -> None:
+    def test_set_tags_clears_previous_pills(self, settings_service: SettingsService) -> None:
         """The set_tags() method replaces previous pills rather than appending to them."""
         panel = PreviewPanel(settings_service)
         try:
-            panel.set_tags([{"id": 1, "name": "old_tag", "source": "user"}])
+            panel.set_tags({Tag(id=1, name="old_tag", source=TagSource.USER)})
             assert len(panel._tag_pills) == 1
 
             panel.set_tags(
-                [
-                    {"id": 2, "name": "new_tag1", "source": "user"},
-                    {"id": 3, "name": "new_tag2", "source": "user"},
-                ]
+                {
+                    Tag(id=2, name="new_tag1", source=TagSource.USER),
+                    Tag(id=3, name="new_tag2", source=TagSource.USER),
+                }
             )
             assert len(panel._tag_pills) == 2
             assert panel._tag_pills[0].text() == "new_tag1"
         finally:
             panel.close()
 
-    def test_set_tags_empty_clears_pills(self, qapp: Any, settings_service: SettingsService) -> None:
+    def test_set_tags_empty_clears_pills(self, settings_service: SettingsService) -> None:
         """The set_tags() method removes all pills when given an empty list."""
         panel = PreviewPanel(settings_service)
         try:
-            panel.set_tags([{"id": 1, "name": "tag", "source": "user"}])
+            panel.set_tags({Tag(id=1, name="tag", source=TagSource.USER)})
             assert len(panel._tag_pills) == 1
 
             panel.set_tags([])
@@ -1078,17 +934,17 @@ class TestSetTags:
         finally:
             panel.close()
 
-    def test_set_tags_stores_current_tags(self, qapp: Any, settings_service: SettingsService) -> None:
+    def test_set_tags_stores_current_tags(self, settings_service: SettingsService) -> None:
         """The set_tags() method stores the tag list for later reference."""
         panel = PreviewPanel(settings_service)
         try:
-            tags = [{"id": 1, "name": "test", "source": "user"}]
+            tags = {Tag(id=1, name="tag", source=TagSource.USER)}
             panel.set_tags(tags)
             assert panel._current_tags == tags
         finally:
             panel.close()
 
-    def test_set_tags_stores_selected_paths(self, qapp: Any, settings_service: SettingsService) -> None:
+    def test_set_tags_stores_selected_paths(self, settings_service: SettingsService) -> None:
         """The set_tags() method stores selected_paths when they are provided."""
         panel = PreviewPanel(settings_service)
         try:
@@ -1098,7 +954,7 @@ class TestSetTags:
         finally:
             panel.close()
 
-    def test_set_tags_normalizes_backslash_paths(self, qapp: Any, settings_service: SettingsService) -> None:
+    def test_set_tags_normalizes_backslash_paths(self, settings_service: SettingsService) -> None:
         """Backslash paths (Windows) are normalized to forward slashes."""
         panel = PreviewPanel(settings_service)
         try:
@@ -1112,29 +968,29 @@ class TestSetTags:
 class TestTagPillPresentation:
     """Tag pills are styled and tagged by role."""
 
-    def test_tag_pill_has_pointing_hand_cursor(self, qapp: Any, settings_service: SettingsService) -> None:
+    def test_tag_pill_has_pointing_hand_cursor(self, settings_service: SettingsService) -> None:
         """Tag pills have PointingHandCursor to indicate clickability."""
         panel = PreviewPanel(settings_service)
         try:
-            panel.set_tags([{"id": 1, "name": "clickable", "source": "user"}])
+            panel.set_tags({Tag(id=1, name="tag", source=TagSource.USER)})
             assert panel._tag_pills[0].cursor().shape() == Qt.CursorShape.PointingHandCursor
         finally:
             panel.close()
 
-    def test_tag_pill_role_primary_for_user_tags(self, qapp: Any, settings_service: SettingsService) -> None:
+    def test_tag_pill_role_primary_for_user_tags(self, settings_service: SettingsService) -> None:
         """User-created tags get 'primary' role."""
         panel = PreviewPanel(settings_service)
         try:
-            panel.set_tags([{"id": 1, "name": "manual", "source": "user"}])
+            panel.set_tags({Tag(id=1, name="tag", source=TagSource.USER)})
             assert panel._tag_pills[0].property("tagRole") == "primary"
         finally:
             panel.close()
 
-    def test_tag_pill_role_secondary_for_auto_tags(self, qapp: Any, settings_service: SettingsService) -> None:
+    def test_tag_pill_role_secondary_for_auto_tags(self, settings_service: SettingsService) -> None:
         """Auto-color tags update color squares instead of creating pills."""
         panel = PreviewPanel(settings_service)
         try:
-            panel.set_tags([{"id": 1, "name": "color:red", "source": "auto_color"}])
+            panel.set_tags({Tag(id=1, name="red", source=TagSource.AUTO_COLOR)})
             # auto_color tags should NOT create pills
             assert len(panel._tag_pills) == 0
             # The red color square should be at full opacity (active)
@@ -1149,19 +1005,19 @@ class TestTagPillPresentation:
 class TestClearTagState:
     """The clear() method resets all tag-related state."""
 
-    def test_clear_resets_tag_state(self, qapp: Any, settings_service: SettingsService) -> None:
+    def test_clear_resets_tag_state(self, settings_service: SettingsService) -> None:
         """The clear() method resets all tag-related state."""
         panel = PreviewPanel(settings_service)
         try:
             panel.set_tags(
-                [{"id": 1, "name": "tag", "source": "user"}],
+                {Tag(id=1, name="tag", source=TagSource.USER)},
                 selected_paths=["/path/img.jpg"],
             )
             assert len(panel._current_tags) == 1
             assert len(panel._selected_paths) == 1
 
             panel.clear()
-            assert panel._current_tags == []
+            assert panel._current_tags == set()
             assert panel._selected_paths == []
             assert panel._cached_file_tags == {}
             assert len(panel._tag_pills) == 0
@@ -1172,63 +1028,70 @@ class TestClearTagState:
 class TestTagTriState:
     """Tag pills use tri-state opacity for multi-selection."""
 
-    def test_tri_state_full_opacity_when_all_files_have_tag(self, qapp: Any, settings_service: SettingsService) -> None:
+    def test_tri_state_full_opacity_when_all_files_have_tag(self, settings_service: SettingsService) -> None:
         """Tag pill has full opacity (no effect) when all selected files have the tag."""
         panel = PreviewPanel(settings_service)
         try:
             paths = ["/img1.jpg", "/img2.jpg"]
             # Both files have tag 1
-            panel._cached_file_tags = {"/img1.jpg": {1}, "/img2.jpg": {1}}
+            panel._cached_file_tags = {
+                "/img1.jpg": {Tag(id=1, name="tag", source=TagSource.USER)},
+                "/img2.jpg": {Tag(id=1, name="tag", source=TagSource.USER)},
+            }
             panel._selected_paths = paths
 
-            pill = panel._create_tag_pill({"id": 1, "name": "shared", "source": "user"})
+            pill = panel._create_tag_pill(Tag(id=1, name="tag", source=TagSource.USER))
             # No opacity effect = full opacity
             assert pill.graphicsEffect() is None
         finally:
             panel.close()
 
-    def test_tri_state_half_opacity_when_some_files_have_tag(
-        self, qapp: Any, settings_service: SettingsService
-    ) -> None:
+    def test_tri_state_half_opacity_when_some_files_have_tag(self, settings_service: SettingsService) -> None:
         """Tag pill has 0.5 opacity effect when only some selected files have the tag."""
         panel = PreviewPanel(settings_service)
         try:
             paths = ["/img1.jpg", "/img2.jpg"]
             # Only first file has tag 1
-            panel._cached_file_tags = {"/img1.jpg": {1}, "/img2.jpg": set()}
+            panel._cached_file_tags = {
+                "/img1.jpg": {Tag(id=1, name="tag", source=TagSource.USER)},
+                "/img2.jpg": set(),
+            }
             panel._selected_paths = paths
 
-            pill = panel._create_tag_pill({"id": 1, "name": "partial", "source": "user"})
+            pill = panel._create_tag_pill(Tag(id=1, name="tag", source=TagSource.USER))
             effect = pill.graphicsEffect()
             assert isinstance(effect, QGraphicsOpacityEffect)
             assert abs(effect.opacity() - 0.5) < 0.01
         finally:
             panel.close()
 
-    def test_tri_state_low_opacity_when_no_files_have_tag(self, qapp: Any, settings_service: SettingsService) -> None:
+    def test_tri_state_low_opacity_when_no_files_have_tag(self, settings_service: SettingsService) -> None:
         """Tag pill has 0.3 opacity effect when no selected files have the tag."""
         panel = PreviewPanel(settings_service)
         try:
             paths = ["/img1.jpg", "/img2.jpg"]
-            panel._cached_file_tags = {"/img1.jpg": set(), "/img2.jpg": set()}
+            panel._cached_file_tags = {
+                "/img1.jpg": set(),
+                "/img2.jpg": set(),
+            }
             panel._selected_paths = paths
 
-            pill = panel._create_tag_pill({"id": 1, "name": "absent", "source": "user"})
+            pill = panel._create_tag_pill(Tag(id=1, name="tag", source=TagSource.USER))
             effect = pill.graphicsEffect()
             assert isinstance(effect, QGraphicsOpacityEffect)
             assert abs(effect.opacity() - 0.3) < 0.01
         finally:
             panel.close()
 
-    def test_tri_state_not_applied_for_single_selection(self, qapp: Any, settings_service: SettingsService) -> None:
+    def test_tri_state_not_applied_for_single_selection(self, settings_service: SettingsService) -> None:
         """Tri-state opacity is not applied for single file selection."""
         panel = PreviewPanel(settings_service)
         try:
             paths = ["/img1.jpg"]
-            panel._cached_file_tags = {"/img1.jpg": {1}}
+            panel._cached_file_tags = {"/img1.jpg": {Tag(id=1, name="tag", source=TagSource.USER)}}
             panel._selected_paths = paths
 
-            pill = panel._create_tag_pill({"id": 1, "name": "tag", "source": "user"})
+            pill = panel._create_tag_pill(Tag(id=1, name="tag", source=TagSource.USER))
             # No opacity effect for single selection
             assert pill.graphicsEffect() is None
         finally:
@@ -1240,7 +1103,6 @@ class TestTagPillActions:
 
     def test_tag_pill_clicked_removes_tag_when_all_have_it(
         self,
-        qapp: Any,
         mock_tag_service: Any,
         settings_service: SettingsService,
     ) -> None:
@@ -1250,17 +1112,21 @@ class TestTagPillActions:
         try:
             paths = ["/img1.jpg", "/img2.jpg"]
             panel._selected_paths = paths
-            panel._cached_file_tags = {"/img1.jpg": {1}, "/img2.jpg": {1}}
+            panel._cached_file_tags = {
+                "/img1.jpg": {Tag(id=1, name="tag", source=TagSource.USER)},
+                "/img2.jpg": {Tag(id=1, name="tag", source=TagSource.USER)},
+            }
 
-            panel._on_tag_pill_clicked({"id": 1, "name": "tag", "source": "user"})
-            service.remove_tags_from_files.assert_called_once_with(paths, {1})
+            panel._on_tag_pill_clicked(Tag(id=1, name="tag", source=TagSource.USER))
+            service.remove_tags_from_files.assert_called_once_with(
+                paths, {Tag(id=1, name="tag", source=TagSource.USER)}
+            )
             service.add_tags_to_files.assert_not_called()
         finally:
             panel.close()
 
     def test_tag_pill_clicked_adds_tag_when_not_all_have_it(
         self,
-        qapp: Any,
         mock_tag_service: Any,
         settings_service: SettingsService,
     ) -> None:
@@ -1270,17 +1136,19 @@ class TestTagPillActions:
         try:
             paths = ["/img1.jpg", "/img2.jpg"]
             panel._selected_paths = paths
-            panel._cached_file_tags = {"/img1.jpg": {1}, "/img2.jpg": set()}
+            panel._cached_file_tags = {
+                "/img1.jpg": {Tag(id=1, name="tag", source=TagSource.USER)},
+                "/img2.jpg": set(),
+            }
 
-            panel._on_tag_pill_clicked({"id": 1, "name": "tag", "source": "user"})
-            service.add_tags_to_files.assert_called_once_with(paths, ["tag"])
+            panel._on_tag_pill_clicked(Tag(id=1, name="tag", source=TagSource.USER))
+            service.add_tags_to_files.assert_called_once_with(paths, {Tag(id=1, name="tag", source=TagSource.USER)})
             service.remove_tags_from_files.assert_not_called()
         finally:
             panel.close()
 
     def test_tag_pill_clicked_noop_without_selection(
         self,
-        qapp: Any,
         mock_tag_service: Any,
         settings_service: SettingsService,
     ) -> None:
@@ -1289,7 +1157,7 @@ class TestTagPillActions:
         panel = PreviewPanel(settings_service=settings_service, tag_service=service)
         try:
             panel._selected_paths = []
-            panel._on_tag_pill_clicked({"id": 1, "name": "tag", "source": "user"})
+            panel._on_tag_pill_clicked(Tag(id=1, name="tag", source=TagSource.USER))
             service.add_tags_to_files.assert_not_called()
             service.remove_tags_from_files.assert_not_called()
         finally:
@@ -1301,7 +1169,7 @@ class TestTagPillActions:
         try:
             panel._selected_paths = ["/img1.jpg"]
             # Should not raise
-            panel._on_tag_pill_clicked({"id": 1, "name": "tag", "source": "user"})
+            panel._on_tag_pill_clicked(Tag(id=1, name="tag", source=TagSource.USER))
         finally:
             panel.close()
 
@@ -1309,9 +1177,7 @@ class TestTagPillActions:
 class TestInlineTagInput:
     """Inline tag input creates tags and restores the add button."""
 
-    def test_inline_tag_input_creation(
-        self, qapp: Any, mock_tag_service: Any, settings_service: SettingsService
-    ) -> None:
+    def test_inline_tag_input_creation(self, mock_tag_service: Any, settings_service: SettingsService) -> None:
         """The _show_inline_tag_input() method creates a QLineEdit and hides the add button."""
         service = mock_tag_service
         panel = PreviewPanel(settings_service=settings_service, tag_service=service)
@@ -1331,7 +1197,6 @@ class TestInlineTagInput:
 
     def test_inline_tag_input_submitted_creates_tag(
         self,
-        qapp: Any,
         mock_tag_service: Any,
         settings_service: SettingsService,
     ) -> None:
@@ -1344,7 +1209,7 @@ class TestInlineTagInput:
             panel._tag_input.setText("new_tag")
 
             panel._on_tag_input_submitted()
-            service.add_tags_to_files.assert_called_once_with(["/img1.jpg"], ["new_tag"])
+            service.add_tags_to_files_by_name.assert_called_once_with(["/img1.jpg"], ["new_tag"])
         finally:
             if panel._tag_input is not None:
                 panel._tag_input.deleteLater()
@@ -1352,7 +1217,6 @@ class TestInlineTagInput:
 
     def test_inline_tag_input_finished_restores_button(
         self,
-        qapp: Any,
         mock_tag_service: Any,
         settings_service: SettingsService,
     ) -> None:
@@ -1372,7 +1236,6 @@ class TestInlineTagInput:
 
     def test_inline_tag_input_empty_does_not_create_tag(
         self,
-        qapp: Any,
         mock_tag_service: Any,
         settings_service: SettingsService,
     ) -> None:
@@ -1397,38 +1260,36 @@ class TestGetUnionTags:
 
     def test_get_union_tags_combines_tags_from_multiple_files(
         self,
-        qapp: Any,
         mock_tag_service: Any,
         settings_service: SettingsService,
     ) -> None:
         """The get_union_tags() method returns the union of tags from all paths."""
         service = mock_tag_service
-        service.get_tags_for_file.side_effect = lambda path: {
-            "/img1.jpg": [{"id": 1, "name": "shared", "source": "user"}],
-            "/img2.jpg": [
-                {"id": 1, "name": "shared", "source": "user"},
-                {"id": 2, "name": "unique", "source": "user"},
-            ],
-        }[path]
-        service.get_tag_name.side_effect = lambda tid: {1: "shared", 2: "unique"}.get(tid)
+        service.get_tags_for_files.side_effect = lambda paths: {
+            ("/img1.jpg", "/img2.jpg"): {
+                "/img1.jpg": {Tag(id=1, name="tag", source=TagSource.USER)},
+                "/img2.jpg": {
+                    Tag(id=1, name="tag", source=TagSource.USER),
+                    Tag(id=2, name="tag2", source=TagSource.USER),
+                },
+            }
+        }[tuple(paths)]
 
         panel = PreviewPanel(settings_service=settings_service, tag_service=service)
         try:
             union = panel.get_union_tags(["/img1.jpg", "/img2.jpg"])
             assert len(union) == 2
-            tag_ids = {t["id"] for t in union}
+            tag_ids = {t.get_id() for t in union}
             assert tag_ids == {1, 2}
         finally:
             panel.close()
 
-    def test_get_union_tags_without_tag_service_returns_empty(
-        self, qapp: Any, settings_service: SettingsService
-    ) -> None:
+    def test_get_union_tags_without_tag_service_returns_empty(self, settings_service: SettingsService) -> None:
         """The get_union_tags() method returns an empty list when no tag_service is set."""
         panel = PreviewPanel(settings_service)
         try:
             union = panel.get_union_tags(["/img1.jpg"])
-            assert union == []
+            assert union == set()
         finally:
             panel.close()
 
@@ -1438,7 +1299,6 @@ class TestTagSignals:
 
     def test_tags_changed_signal_emitted_on_external_change(
         self,
-        qapp: Any,
         mock_tag_service: Any,
         settings_service: SettingsService,
     ) -> None:
@@ -1461,7 +1321,7 @@ class TestTagSignals:
 class TestTagsContainerLayout:
     """The tags container keeps visible height when empty and after updates."""
 
-    def test_tags_container_has_minimum_height_when_empty(self, qapp: Any, settings_service: SettingsService) -> None:
+    def test_tags_container_has_minimum_height_when_empty(self, settings_service: SettingsService) -> None:
         """Tags container has a minimum height even when no tags are present."""
         panel = PreviewPanel(settings_service)
         try:
@@ -1471,15 +1331,15 @@ class TestTagsContainerLayout:
         finally:
             panel.close()
 
-    def test_tags_container_nonzero_height_after_set_tags(self, qapp: Any, settings_service: SettingsService) -> None:
+    def test_tags_container_nonzero_height_after_set_tags(self, settings_service: SettingsService) -> None:
         """After set_tags() with tags, the tags container has non-zero height."""
         panel = PreviewPanel(settings_service)
         try:
             panel.show()
-            tags = [
-                {"id": 1, "name": "landscape", "source": "user"},
-                {"id": 2, "name": "portrait", "source": "user"},
-            ]
+            tags = {
+                Tag(id=1, name="tag", source=TagSource.USER),
+                Tag(id=2, name="tag", source=TagSource.USER),
+            }
             panel.set_tags(tags)
 
             # The container must have non-zero height after tags are added
@@ -1487,15 +1347,15 @@ class TestTagsContainerLayout:
         finally:
             panel.close()
 
-    def test_tag_pills_have_nonzero_size_after_set_tags(self, qapp: Any, settings_service: SettingsService) -> None:
+    def test_tag_pills_have_nonzero_size_after_set_tags(self, settings_service: SettingsService) -> None:
         """Tag pills have non-zero size after set_tags()."""
         panel = PreviewPanel(settings_service)
         try:
             panel.show()
-            tags = [
-                {"id": 1, "name": "landscape", "source": "user"},
-                {"id": 2, "name": "portrait", "source": "user"},
-            ]
+            tags = {
+                Tag(id=1, name="tag", source=TagSource.USER),
+                Tag(id=2, name="tag", source=TagSource.USER),
+            }
             panel.set_tags(tags)
 
             for i, pill in enumerate(panel._tag_pills):
@@ -1504,12 +1364,14 @@ class TestTagsContainerLayout:
         finally:
             panel.close()
 
-    def test_flow_layout_minimum_size_hint_with_items(self, qapp: Any, settings_service: SettingsService) -> None:
+    def test_flow_layout_minimum_size_hint_with_items(self, settings_service: SettingsService) -> None:
         """FlowLayout is used for tag pills and items are added correctly."""
         panel = PreviewPanel(settings_service)
         try:
             panel.show()
-            tags = [{"id": 1, "name": "test_tag", "source": "user"}]
+            tags = {
+                Tag(id=1, name="tag", source=TagSource.USER),
+            }
             panel.set_tags(tags)
 
             assert isinstance(panel._tags_flow, FlowLayout)
@@ -1518,7 +1380,7 @@ class TestTagsContainerLayout:
             panel.close()
 
     def test_flow_layout_minimum_size_hint_empty_returns_nonzero_height(
-        self, qapp: Any, settings_service: SettingsService
+        self, settings_service: SettingsService
     ) -> None:
         """Tags container has nonzero minimum height when FlowLayout is empty."""
         panel = PreviewPanel(settings_service)
@@ -1530,17 +1392,17 @@ class TestTagsContainerLayout:
         finally:
             panel.close()
 
-    def test_tags_container_geometry_updates_on_clear(self, qapp: Any, settings_service: SettingsService) -> None:
+    def test_tags_container_geometry_updates_on_clear(self, settings_service: SettingsService) -> None:
         """Tags container geometry updates properly after clearing tags."""
         panel = PreviewPanel(settings_service)
         try:
             panel.show()
             # Add tags
             panel.set_tags(
-                [
-                    {"id": 1, "name": "tag1", "source": "user"},
-                    {"id": 2, "name": "tag2", "source": "user"},
-                ]
+                {
+                    Tag(id=1, name="tag", source=TagSource.USER),
+                    Tag(id=2, name="tag", source=TagSource.USER),
+                }
             )
             assert len(panel._tag_pills) == 2
 
@@ -1559,7 +1421,6 @@ class TestAddTagButton:
 
     def test_add_button_disabled_without_selection(
         self,
-        qapp: Any,
         mock_tag_service: Any,
         settings_service: SettingsService,
     ) -> None:
@@ -1574,7 +1435,7 @@ class TestAddTagButton:
         finally:
             panel.close()
 
-    def test_add_tag_button_has_maximum_size_policy(self, qapp: Any, settings_service: SettingsService) -> None:
+    def test_add_tag_button_has_maximum_size_policy(self, settings_service: SettingsService) -> None:
         """The '+ add' tag button uses Maximum size policy so it doesn't stretch."""
         panel = PreviewPanel(settings_service)
         try:
@@ -1588,7 +1449,7 @@ class TestAddTagButton:
 class TestColorSquares:
     """Color squares reflect auto-color tag state with opacity."""
 
-    def test_color_squares_container_exists(self, qapp: Any, settings_service: SettingsService) -> None:
+    def test_color_squares_container_exists(self, settings_service: SettingsService) -> None:
         """Preview panel has a color squares container with 10 buttons."""
         panel = PreviewPanel(settings_service)
         try:
@@ -1599,7 +1460,7 @@ class TestColorSquares:
         finally:
             panel.close()
 
-    def test_color_squares_all_inactive_by_default(self, qapp: Any, settings_service: SettingsService) -> None:
+    def test_color_squares_all_inactive_by_default(self, settings_service: SettingsService) -> None:
         """All color squares start at low opacity (0.3) when no tags are set."""
         panel = PreviewPanel(settings_service)
         try:
@@ -1613,11 +1474,11 @@ class TestColorSquares:
         finally:
             panel.close()
 
-    def test_color_squares_active_when_tag_present(self, qapp: Any, settings_service: SettingsService) -> None:
+    def test_color_squares_active_when_tag_present(self, settings_service: SettingsService) -> None:
         """Color square is at full opacity when its tag is present on the file."""
         panel = PreviewPanel(settings_service)
         try:
-            panel.set_tags([{"id": 1, "name": "color:red", "source": "auto_color"}])
+            panel.set_tags({Tag(id=1, name="red", source=TagSource.AUTO_COLOR)})
             red_btn = panel._color_square_buttons["red"]
             effect = red_btn.graphicsEffect()
             assert isinstance(effect, QGraphicsOpacityEffect)
@@ -1630,15 +1491,18 @@ class TestColorSquares:
         finally:
             panel.close()
 
-    def test_color_squares_tri_state_multi_selection(self, qapp: Any, settings_service: SettingsService) -> None:
+    def test_color_squares_tri_state_multi_selection(self, settings_service: SettingsService) -> None:
         """Color squares use tri-state opacity for multi-selection."""
         panel = PreviewPanel(settings_service)
         try:
             paths = ["/img1.jpg", "/img2.jpg"]
             panel._selected_paths = paths
             # Both files have color:red (tag id=1)
-            panel._cached_file_tags = {"/img1.jpg": {1}, "/img2.jpg": {1}}
-            panel._current_tags = [{"id": 1, "name": "color:red", "source": "auto_color"}]
+            panel._cached_file_tags = {
+                "/img1.jpg": {Tag(id=1, name="red", source=TagSource.AUTO_COLOR)},
+                "/img2.jpg": {Tag(id=1, name="red", source=TagSource.AUTO_COLOR)},
+            }
+            panel._current_tags = {Tag(id=1, name="red", source=TagSource.AUTO_COLOR)}
 
             # Call _update_color_squares directly (as set_tags would)
             panel._update_color_squares({"red"})
@@ -1649,15 +1513,18 @@ class TestColorSquares:
         finally:
             panel.close()
 
-    def test_color_squares_partial_opacity_multi_selection(self, qapp: Any, settings_service: SettingsService) -> None:
+    def test_color_squares_partial_opacity_multi_selection(self, settings_service: SettingsService) -> None:
         """Color square has 0.5 opacity when only some files have the color."""
         panel = PreviewPanel(settings_service)
         try:
             paths = ["/img1.jpg", "/img2.jpg"]
             panel._selected_paths = paths
             # Only first file has color:red (tag id=1)
-            panel._cached_file_tags = {"/img1.jpg": {1}, "/img2.jpg": set()}
-            panel._current_tags = [{"id": 1, "name": "color:red", "source": "auto_color"}]
+            panel._cached_file_tags = {
+                "/img1.jpg": {Tag(id=1, name="red", source=TagSource.AUTO_COLOR)},
+                "/img2.jpg": set(),
+            }
+            panel._current_tags = {Tag(id=1, name="red", source=TagSource.AUTO_COLOR)}
 
             panel._update_color_squares({"red"})
             red_btn = panel._color_square_buttons["red"]
@@ -1667,7 +1534,7 @@ class TestColorSquares:
         finally:
             panel.close()
 
-    def test_color_square_button_has_pointing_hand_cursor(self, qapp: Any, settings_service: SettingsService) -> None:
+    def test_color_square_button_has_pointing_hand_cursor(self, settings_service: SettingsService) -> None:
         """Color square buttons have PointingHandCursor."""
         panel = PreviewPanel(settings_service)
         try:
@@ -1678,7 +1545,7 @@ class TestColorSquares:
         finally:
             panel.close()
 
-    def test_color_square_button_has_color_square_property(self, qapp: Any, settings_service: SettingsService) -> None:
+    def test_color_square_button_has_color_square_property(self, settings_service: SettingsService) -> None:
         """Color square buttons have the 'colorSquare' property set for QSS targeting."""
         panel = PreviewPanel(settings_service)
         try:
@@ -1691,7 +1558,6 @@ class TestColorSquares:
 
     def test_color_square_clicked_adds_tag(
         self,
-        qapp: Any,
         mock_tag_service: Any,
         settings_service: SettingsService,
     ) -> None:
@@ -1702,17 +1568,16 @@ class TestColorSquares:
             paths = ["/img1.jpg"]
             panel._selected_paths = paths
             panel._cached_file_tags = {"/img1.jpg": set()}
-            panel._current_tags = []
+            panel._current_tags = set()
 
             panel._on_color_square_clicked("red")
-            service.add_tags_to_files.assert_called_once_with(paths, ["color:red"], source="auto_color")
+            service.add_tags_to_files_by_name.assert_called_once_with(paths, ["red"], source=TagSource.AUTO_COLOR)
             service.remove_tags_from_files.assert_not_called()
         finally:
             panel.close()
 
     def test_color_square_clicked_removes_tag(
         self,
-        qapp: Any,
         mock_tag_service: Any,
         settings_service: SettingsService,
     ) -> None:
@@ -1722,20 +1587,22 @@ class TestColorSquares:
         try:
             paths = ["/img1.jpg"]
             panel._selected_paths = paths
-            panel._cached_file_tags = {"/img1.jpg": {1}}
-            panel._current_tags = [{"id": 1, "name": "color:red", "source": "auto_color"}]
+            panel._cached_file_tags = {"/img1.jpg": {Tag(id=1, name="red", source=TagSource.AUTO_COLOR)}}
+            panel._current_tags = {Tag(id=1, name="red", source=TagSource.AUTO_COLOR)}
 
             panel._on_color_square_clicked("red")
-            service.remove_tags_from_files.assert_called_once_with(paths, {1})
+            service.remove_tags_from_files.assert_called_once_with(
+                paths, {Tag(id=1, name="red", source=TagSource.AUTO_COLOR)}
+            )
             service.add_tags_to_files.assert_not_called()
         finally:
             panel.close()
 
-    def test_clear_resets_color_squares(self, qapp: Any, settings_service: SettingsService) -> None:
+    def test_clear_resets_color_squares(self, settings_service: SettingsService) -> None:
         """The clear() method resets all color squares to inactive opacity."""
         panel = PreviewPanel(settings_service)
         try:
-            panel.set_tags([{"id": 1, "name": "color:red", "source": "auto_color"}])
+            panel.set_tags({Tag(id=1, name="red", source=TagSource.AUTO_COLOR)})
             red_btn = panel._color_square_buttons["red"]
             effect = red_btn.graphicsEffect()
             assert isinstance(effect, QGraphicsOpacityEffect)
@@ -1752,32 +1619,32 @@ class TestColorSquares:
 class TestTagPillRemoveButton:
     """Tag pill remove buttons delete tags from selected files."""
 
-    def test_tag_pill_has_remove_button(self, qapp: Any, settings_service: SettingsService) -> None:
+    def test_tag_pill_has_remove_button(self, settings_service: SettingsService) -> None:
         """Tag pill widgets contain a remove (×) button."""
         panel = PreviewPanel(settings_service)
         try:
-            panel.set_tags([{"id": 1, "name": "test_tag", "source": "user"}])
+            panel.set_tags({Tag(id=1, name="tag", source=TagSource.USER)})
             pill = panel._tag_pills[0]
             assert hasattr(pill, "_remove_btn")
-            assert pill._remove_btn.text() == "×"
+            assert pill._remove_btn.text() == "x"
         finally:
             panel.close()
 
-    def test_tag_pill_remove_button_hidden_by_default(self, qapp: Any, settings_service: SettingsService) -> None:
+    def test_tag_pill_remove_button_hidden_by_default(self, settings_service: SettingsService) -> None:
         """The remove (×) button is hidden by default."""
         panel = PreviewPanel(settings_service)
         try:
-            panel.set_tags([{"id": 1, "name": "test_tag", "source": "user"}])
+            panel.set_tags({Tag(id=1, name="tag", source=TagSource.USER)})
             pill = panel._tag_pills[0]
             assert pill._remove_btn.isHidden()
         finally:
             panel.close()
 
-    def test_tag_pill_remove_button_has_object_name(self, qapp: Any, settings_service: SettingsService) -> None:
+    def test_tag_pill_remove_button_has_object_name(self, settings_service: SettingsService) -> None:
         """The remove button has 'tagPillRemoveBtn' objectName for QSS targeting."""
         panel = PreviewPanel(settings_service)
         try:
-            panel.set_tags([{"id": 1, "name": "test_tag", "source": "user"}])
+            panel.set_tags({Tag(id=1, name="tag", source=TagSource.USER)})
             pill = panel._tag_pills[0]
             assert pill._remove_btn.objectName() == "tagPillRemoveBtn"
         finally:
@@ -1785,7 +1652,6 @@ class TestTagPillRemoveButton:
 
     def test_tag_pill_remove_clicked_calls_service(
         self,
-        qapp: Any,
         mock_tag_service: Any,
         settings_service: SettingsService,
     ) -> None:
@@ -1795,16 +1661,17 @@ class TestTagPillRemoveButton:
         try:
             paths = ["/img1.jpg"]
             panel._selected_paths = paths
-            panel._cached_file_tags = {"/img1.jpg": {1}}
+            panel._cached_file_tags = {"/img1.jpg": {Tag(id=1, name="tag", source=TagSource.USER)}}
 
-            panel._on_tag_remove_clicked({"id": 1, "name": "test_tag", "source": "user"})
-            service.remove_tags_from_files.assert_called_once_with(paths, {1})
+            panel._on_tag_remove_clicked(Tag(id=1, name="tag", source=TagSource.USER))
+            service.remove_tags_from_files.assert_called_once_with(
+                paths, {Tag(id=1, name="tag", source=TagSource.USER)}
+            )
         finally:
             panel.close()
 
     def test_tag_pill_remove_noop_without_selection(
         self,
-        qapp: Any,
         mock_tag_service: Any,
         settings_service: SettingsService,
     ) -> None:
@@ -1813,7 +1680,7 @@ class TestTagPillRemoveButton:
         panel = PreviewPanel(settings_service=settings_service, tag_service=service)
         try:
             panel._selected_paths = []
-            panel._on_tag_remove_clicked({"id": 1, "name": "test_tag", "source": "user"})
+            panel._on_tag_remove_clicked(Tag(id=1, name="tag", source=TagSource.USER))
             service.remove_tags_from_files.assert_not_called()
         finally:
             panel.close()
@@ -1824,22 +1691,21 @@ class TestAddTagDropdown:
 
     def test_add_tag_dropdown_filters_color_tags(
         self,
-        qapp: Any,
         mock_tag_service: Any,
         settings_service: SettingsService,
     ) -> None:
         """The +Add dropdown excludes color: tags from the list."""
         service = mock_tag_service
         service.get_all_tags.return_value = [
-            {"id": 1, "name": "landscape", "usage_count": 5},
-            {"id": 2, "name": "color:red", "usage_count": 3},
-            {"id": 3, "name": "portrait", "usage_count": 2},
-            {"id": 4, "name": "color:blue", "usage_count": 1},
+            Tag(id=1, name="landscape", source=TagSource.USER, usage_count=5),
+            Tag(id=2, name="color:red", source=TagSource.AUTO_COLOR, usage_count=3),
+            Tag(id=3, name="portrait", source=TagSource.USER, usage_count=2),
+            Tag(id=4, name="color:blue", source=TagSource.AUTO_COLOR, usage_count=1),
         ]
         panel = PreviewPanel(settings_service=settings_service, tag_service=service)
         try:
             panel._selected_paths = ["/img1.jpg"]
-            panel._current_tags = []
+            panel._current_tags = set()
 
             # Patch QMenu.exec to return a mock action with data=None (no selection)
             added_actions: list[str] = []

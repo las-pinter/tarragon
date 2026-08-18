@@ -16,6 +16,7 @@ from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QLineEdit
 
 from tarragon.common import ImageInfo
+from tarragon.db.common.tag import Tag
 from tarragon.db.database import Database
 from tarragon.models.filter_state import FilterState
 from tarragon.models.thumbnail_model import ThumbnailModel
@@ -103,25 +104,25 @@ class GalleryController:
 
     def on_search_text_changed(self, text: str) -> None:
         """Restart the debounce timer when the search text changes."""
-        logger.debug("Search text changed: %r", text)
+        logger.debug("Called - text: %r", text)
         self._filter_state.filename_filter = text
         self._search_timer.start()
 
-    def on_color_filter_changed(self, color_tags: set[str]) -> None:
+    def on_color_filter_changed(self, color_tags: set[Tag]) -> None:
         """Re-run the filtered query when color filter swatches change."""
-        logger.debug("Color filter changed: %s", color_tags)
-        self._filter_state.color_tags = set(color_tags)
+        logger.debug("Called - color_tags %s", color_tags)
+        self._filter_state.color_tags = color_tags
         self.run_filtered_query()
 
-    def on_tag_filter_changed(self, tag_ids: set[int]) -> None:
+    def on_tag_filter_changed(self, tags: set[Tag]) -> None:
         """Re-run the filtered query when tag filter checkboxes change."""
-        logger.debug("Tag filter changed: %s", tag_ids)
-        self._filter_state.tag_ids = set(tag_ids)
+        logger.debug("Called - tags: %s", tags)
+        self._filter_state.tags = tags
         self.run_filtered_query()
 
     def on_folder_filter_changed(self, folder_paths: set[str]) -> None:
         """Re-run the filtered query when the folder chip selection changes."""
-        logger.debug("Folder filter changed: %s", folder_paths)
+        logger.debug("Called - folder_paths: %s", folder_paths)
         self._filter_state.folder_filters = set(folder_paths)
         self.run_filtered_query()
 
@@ -130,7 +131,7 @@ class GalleryController:
 
         Updates the filter bar scope and re-runs the filtered query.
         """
-        logger.debug("Scope changed: %s", "global" if is_global else "local")
+        logger.debug("Called - is_global: %b", is_global)
         self._filter_bar.set_scope(is_global)
         self.run_filtered_query()
         # Ensure info bar reflects new scope label even if query returned early
@@ -153,6 +154,7 @@ class GalleryController:
         the model to avoid clearing the gallery.
         """
 
+        logger.debug("Called")
         start = time.perf_counter()
 
         # Determine browser scope based on gallery tabs
@@ -171,21 +173,21 @@ class GalleryController:
 
         filename_filter = self._filter_state.filename_filter
         color_tags = self._filter_state.color_tags
-        tag_ids = self._filter_state.tag_ids
+        tags = self._filter_state.tags
 
         results = self._query_service.query(
             folder_filters=folder_filters,
             filename_filter=filename_filter,
-            tag_ids=tag_ids,
+            tags=tags,
             color_tags=color_tags,
         )
         elapsed = time.perf_counter() - start
         logger.debug(
-            "Filtered query: folders=%s, filename=%r, colors=%s, tags=%s → %d results in %.3fs",
+            "folders: %s, filename: %r, colors: %s, tags: %s -> %d results in %.3fs",
             folder_filters,
             filename_filter,
             color_tags,
-            tag_ids,
+            tags,
             len(results),
             elapsed,
         )
@@ -234,7 +236,7 @@ class GalleryController:
 
         # Active filter count: tag_ids + color_tags + folder_filters + filename_filter
         active_count = (
-            len(self._filter_state.tag_ids)
+            len(self._filter_state.tags)
             + len(self._filter_state.color_tags)
             + len(self._filter_state.folder_filters)
             + (1 if self._filter_state.filename_filter else 0)
@@ -249,6 +251,7 @@ class GalleryController:
         Updates the preview panel (single image or mosaic) and tag display
         based on the current selection.
         """
+        logger.debug("Called - paths: %s", paths)
         if len(paths) == 0:
             self._preview_panel.clear()
         elif len(paths) == 1:
@@ -285,8 +288,9 @@ class GalleryController:
         Args:
             paths: Currently selected file paths.
         """
+        logger.debug("Called - paths: %s", paths)
         if not paths:
-            self._preview_panel.set_tags([], selected_paths=[])
+            self._preview_panel.set_tags(set(), selected_paths=[])
             return
 
         if len(paths) == 1:

@@ -25,6 +25,7 @@ from tarragon.renderers.cache import (
     save_to_cache,
 )
 from tarragon.renderers.clip import render_clip_image
+from tarragon.renderers.krita import render_kra_image
 from tarragon.renderers.plain import render_plain_image
 from tarragon.renderers.psd import get_executor, render_psd_image
 from tarragon.scanner import FileInfo
@@ -364,6 +365,8 @@ class ThumbnailService(QObject):
             )
         elif file_info.extension.lower() == ".clip":
             full_img = render_clip_image(file_info.path, target_size=RESOLUTION_FULL)
+        elif file_info.extension.lower() == ".kra":
+            full_img = render_kra_image(file_info.path, target_size=RESOLUTION_FULL)
         else:
             full_img = render_plain_image(file_info.path, target_size=RESOLUTION_FULL)
 

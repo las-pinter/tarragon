@@ -36,6 +36,7 @@ class TestGetBadgeColors:
             ("gif", "#2A1A3A", "#A87BC8"),
             ("webp", "#1A3A3A", "#7BC8C8"),
             ("bmp", "#3A3A1A", "#C8C87B"),
+            ("kra", "#2A1A3A", "#A87BC8"),
         ],
     )
     def test_get_badge_colors_known_extensions(self, ext: str, expected_bg: str, expected_text: str) -> None:
@@ -75,7 +76,7 @@ class TestBadgeColorConstants:
 
     def test_badge_colors_has_expected_keys(self) -> None:
         """BADGE_COLORS contains all specified file extensions."""
-        expected_keys = {"psd", "psb", "jpg", "jpeg", "png", "tiff", "tif", "gif", "webp", "bmp", "clip"}
+        expected_keys = {"psd", "psb", "jpg", "jpeg", "png", "tiff", "tif", "gif", "webp", "bmp", "clip", "kra"}
         assert set(BADGE_COLORS.keys()) == expected_keys
 
     def test_badge_colors_values_are_qcolor_tuples(self) -> None:

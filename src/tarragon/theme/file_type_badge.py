@@ -41,6 +41,7 @@ BADGE_COLORS: dict[str, tuple[QColor, QColor]] = {
     "webp": (BADGE_BG_TEAL, BADGE_FG_TEAL),
     "bmp": (BADGE_BG_OLIVE, BADGE_FG_OLIVE),
     "clip": (BADGE_BG_AZURE, BADGE_FG_AZURE),
+    "kra": (BADGE_BG_PLUM, BADGE_FG_PLUM),
 }
 
 # Default fallback colors

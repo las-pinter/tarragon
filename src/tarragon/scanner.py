@@ -1,4 +1,4 @@
-"""Folder scanner — walks a directory, filters by supported image extensions, returns file info."""
+"""Folder scanner."""
 
 from __future__ import annotations
 
@@ -19,6 +19,7 @@ SUPPORTED_EXTENSIONS = {
     ".psd",
     ".psb",
     ".clip",
+    ".kra",
 }
 
 
@@ -57,7 +58,7 @@ def scan_folder(folder_path: Path, recursive: bool = False) -> list[FileInfo]:
     """
     folder_path = Path(folder_path)
     start = time.perf_counter()
-    logger.debug("scan_folder: %s (recursive=%s)", folder_path, recursive)
+    logger.debug("Called - folder_path: %s recursive: %s", folder_path, recursive)
     try:
         if not folder_path.is_dir():
             logger.debug("path does not exist or is not a directory: %s", folder_path)

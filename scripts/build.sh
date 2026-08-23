@@ -2,7 +2,7 @@
 set -e
 
 # Build script for Tarragon Viewer (Linux/macOS)
-# Creates a virtual environment, installs dependencies, and runs the Nuitka build.
+# Syncs dependencies with uv and runs the Nuitka build.
 #
 # Usage:
 #   ./scripts/build.sh              # Build release onefile binary
@@ -16,31 +16,12 @@ cd "$PROJECT_ROOT"
 REAL_PATH="$(pwd -P)"
 if [[ "$REAL_PATH" == /media/sf_* ]] || [[ "$REAL_PATH" == */VirtualBox* ]]; then
     echo "==> Detected VirtualBox shared folder - using external venv location..."
-    VENV_DIR="$HOME/.tarragon-build-venv"
-else
-    VENV_DIR=".venv"
+    export UV_PROJECT_ENVIRONMENT="$HOME/.tarragon-build-venv"
 fi
 
-# Create venv if needed
-if [ ! -f "$VENV_DIR/bin/activate" ]; then
-    echo "==> Creating virtual environment at $VENV_DIR..."
-    rm -rf "$VENV_DIR" # Clean up any partial venv
-    python3 -m venv --copies "$VENV_DIR" || {
-        echo "ERROR: Failed to create virtual environment"
-        exit 1
-    }
-fi
-
-# Activate venv
-echo "==> Activating virtual environment..."
-source "$VENV_DIR/bin/activate"
-
-# Upgrade pip
-pip install --upgrade pip --quiet
-
-# Install dependencies
+# Install dependencies (creates .venv automatically from uv.lock)
 echo "==> Installing dependencies..."
-pip install -e ".[build]" --quiet
+uv sync --extra build
 
 # Check for ccache (dramatically speeds up repeat builds)
 if command -v ccache &>/dev/null; then
@@ -52,6 +33,6 @@ fi
 
 # Run build
 echo "==> Building..."
-python scripts/package_nuitka.py --platform linux
+uv run python scripts/package_nuitka.py --platform linux
 
 echo "==> Build complete! Check dist/ directory for output."

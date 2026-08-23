@@ -155,26 +155,45 @@ class TestBuildScripts:
 
 
 class TestBuildScriptContents:
-    """Build scripts create a virtual environment and install the build extra."""
+    """Build scripts use uv to sync dependencies and run the build."""
 
-    def test_build_sh_references_venv(self) -> None:
-        """The build.sh script creates and activates a virtual environment."""
+    def test_build_sh_uses_uv_sync(self) -> None:
+        """The build.sh script syncs the build extra with uv."""
         content = BUILD_SH.read_text()
-        assert "venv" in content, "build.sh must reference a virtual environment"
-        assert "activate" in content, "build.sh must activate the virtual environment"
+        assert "uv sync --extra build" in content, "build.sh must sync the build extra with uv"
 
-    def test_build_bat_references_venv(self) -> None:
-        """The build.bat script creates and activates a virtual environment."""
+    def test_build_bat_uses_uv_sync(self) -> None:
+        """The build.bat script syncs the build extra with uv."""
         content = BUILD_BAT.read_text()
-        assert "venv" in content, "build.bat must reference a virtual environment"
-        assert "activate" in content, "build.bat must activate the virtual environment"
+        assert "uv sync --extra build" in content, "build.bat must sync the build extra with uv"
 
-    def test_build_sh_installs_requirements(self) -> None:
-        """The build.sh script installs using the pyproject.toml build extra."""
+    def test_build_sh_runs_build_with_uv(self) -> None:
+        """The build.sh script runs the Linux build via uv run."""
         content = BUILD_SH.read_text()
-        assert ".[build]" in content, "build.sh must install via .[build] extra"
+        assert "uv run python scripts/package_nuitka.py --platform linux" in content, (
+            "build.sh must run the packaging script with uv for linux"
+        )
 
-    def test_build_bat_installs_requirements(self) -> None:
-        """The build.bat script installs using the pyproject.toml build extra."""
+    def test_build_bat_runs_build_with_uv(self) -> None:
+        """The build.bat script runs the Windows build via uv run."""
         content = BUILD_BAT.read_text()
-        assert ".[build]" in content, "build.bat must install via .[build] extra"
+        assert "uv run python scripts\\package_nuitka.py --platform windows" in content, (
+            "build.bat must run the packaging script with uv for windows"
+        )
+
+    def test_build_sh_has_no_pip_install(self) -> None:
+        """The build.sh script does not install with pip."""
+        content = BUILD_SH.read_text()
+        assert "pip install" not in content, "build.sh must not install with pip"
+
+    def test_build_bat_has_no_pip_install(self) -> None:
+        """The build.bat script does not install with pip."""
+        content = BUILD_BAT.read_text()
+        assert "pip install" not in content, "build.bat must not install with pip"
+
+    def test_build_sh_keeps_virtualbox_venv(self) -> None:
+        """The build.sh script uses an external venv in VirtualBox shared folders."""
+        content = BUILD_SH.read_text()
+        assert "UV_PROJECT_ENVIRONMENT" in content, (
+            "build.sh must set UV_PROJECT_ENVIRONMENT for VirtualBox shared folders"
+        )

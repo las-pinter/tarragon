@@ -7,6 +7,7 @@ from abc import abstractmethod
 from collections.abc import Callable
 from typing import Any, cast
 
+from PySide6.QtCore import Signal
 from PySide6.QtGui import QShowEvent
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -26,8 +27,10 @@ from PySide6.QtWidgets import (
 )
 
 from tarragon.app_paths import cache_dir, data_dir
+from tarragon.renderers.cache import compute_cache_size_bytes
 from tarragon.services.settings_service import Setting, SettingsService
 from tarragon.theme.constants import SPACING_M, SPACING_S
+from tarragon.widgets.metadata import SizeMeta
 
 logger = logging.getLogger(__name__)
 
@@ -109,6 +112,32 @@ class _Button:
 
     def get_widget(self) -> QPushButton:
         return self._button
+
+
+class _CacheSizeRow:
+    """Cache size label with a purge button in an HBox container."""
+
+    def __init__(self) -> None:
+        self._size_label = QLabel()
+        self._button = _Button("Purge Cache", "Delete all cached thumbnails and re-render the current folder.")
+        self._container = QWidget()
+        layout = QHBoxLayout(self._container)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self._size_label)
+        layout.addStretch()
+        layout.addWidget(self._button.get_widget())
+
+    def get_widget(self) -> QWidget:
+        """Return the container widget for the cache size row."""
+        return self._container
+
+    def refresh(self) -> None:
+        """Recompute the cache size and update the label text."""
+        self._size_label.setText(SizeMeta.format_size(compute_cache_size_bytes()))
+
+    def connect_purge(self, callback: Callable[[], None]) -> None:
+        """Connect a callback to the purge button's clicked signal."""
+        self._button.connect_clicked(callback)
 
 
 class _LineEditWithButtonSetting(_Setting):
@@ -388,6 +417,8 @@ class SettingsDialog(QDialog):
     back only when the user accepts the dialog via the OK button.
     """
 
+    cache_purge_requested = Signal()
+
     def __init__(self, settings_service: SettingsService, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._settings_service = settings_service
@@ -477,6 +508,10 @@ class SettingsDialog(QDialog):
         self._settings.append(self._clear_full_res_on_exit_setting)
         cache_layout.add_setting(self._clear_full_res_on_exit_setting)
 
+        self._cache_size_row = _CacheSizeRow()
+        cache_layout.addRow("Cache Size", self._cache_size_row.get_widget())
+        self._cache_size_row.connect_purge(self._on_purge_cache)
+
         cache_group.setLayout(cache_layout)
         layout.addWidget(cache_group)
 
@@ -531,6 +566,12 @@ class SettingsDialog(QDialog):
 
         self.accept()
 
+    def _on_purge_cache(self) -> None:
+        """Emit the purge request and refresh the size label."""
+        self.cache_purge_requested.emit()
+        self._cache_size_row.refresh()
+
     def showEvent(self, event: QShowEvent) -> None:  # noqa: N802
         super().showEvent(event)
+        self._cache_size_row.refresh()
         self.setFocus()

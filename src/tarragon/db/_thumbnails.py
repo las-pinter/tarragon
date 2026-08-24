@@ -139,6 +139,12 @@ class ThumbnailsMixin(MixinBase):
         )
         self._commit()
 
+    def clear_thumbnails(self) -> None:
+        """Remove all thumbnail records from the database."""
+        logger.debug("Called")
+        self._execute("DELETE FROM thumbnails")
+        self._commit()
+
     def list_distinct_folders(self) -> list[str]:
         """Return a sorted list of distinct folder paths from the thumbnails table.
 

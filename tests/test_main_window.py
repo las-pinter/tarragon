@@ -576,3 +576,82 @@ class TestRegenerateThumbnails:
             window._on_regenerate_requested(["/fake/a.png"])
         finally:
             window.close()
+
+
+class TestCachePurgeWiring:
+    """Cache purge signal wiring from the settings dialog."""
+
+    def test_on_cache_purge_requested_calls_service(
+        self,
+        qapp: Any,
+        mock_settings: MagicMock,
+    ) -> None:
+        """The _on_cache_purge_requested handler calls purge_cache on the service."""
+        window = MainWindow(settings_service=mock_settings)
+        try:
+            db = Database(Path(":memory:"))
+            db.init_schema()
+            tag_service = TagService(db=db)
+            window.setup_widgets(db, tag_service)
+
+            with patch.object(window._thumbnail_service, "purge_cache") as mock_purge:
+                window._on_cache_purge_requested()
+
+            mock_purge.assert_called_once_with()
+        finally:
+            window.close()
+
+    def test_on_cache_purge_requested_rerenders_current_folder(
+        self,
+        qapp: Any,
+        mock_settings: MagicMock,
+    ) -> None:
+        """The handler re-navigates to the current folder after purging."""
+        window = MainWindow(settings_service=mock_settings)
+        try:
+            db = Database(Path(":memory:"))
+            db.init_schema()
+            tag_service = TagService(db=db)
+            window.setup_widgets(db, tag_service)
+            window._current_folder = "/fake/folder"
+
+            with (
+                patch.object(window._thumbnail_service, "purge_cache") as mock_purge,
+                patch.object(window, "_navigate_to_folder") as mock_navigate,
+            ):
+                window._on_cache_purge_requested()
+
+            mock_purge.assert_called_once_with()
+            mock_navigate.assert_called_once_with(Path("/fake/folder"))
+        finally:
+            window.close()
+
+    def test_on_cache_purge_requested_without_service_does_not_raise(
+        self,
+        qapp: Any,
+        mock_settings: MagicMock,
+    ) -> None:
+        """The handler does nothing when the thumbnail service is not set."""
+        window = MainWindow(settings_service=mock_settings)
+        try:
+            window._on_cache_purge_requested()
+        finally:
+            window.close()
+
+    def test_show_preferences_connects_purge_signal(
+        self,
+        qapp: Any,
+        mock_settings: MagicMock,
+    ) -> None:
+        """_show_preferences connects cache_purge_requested to the handler."""
+        window = MainWindow(settings_service=mock_settings)
+        try:
+            with patch("tarragon.widgets.settings_dialog.SettingsDialog") as mock_dialog_cls:
+                mock_dialog = MagicMock()
+                mock_dialog.exec.return_value = False
+                mock_dialog_cls.return_value = mock_dialog
+                window._show_preferences()
+
+            mock_dialog.cache_purge_requested.connect.assert_called_once_with(window._on_cache_purge_requested)
+        finally:
+            window.close()

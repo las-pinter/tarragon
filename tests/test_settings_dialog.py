@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Generator
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch
 
 import pytest
 from PySide6.QtWidgets import (
@@ -18,6 +19,7 @@ from PySide6.QtWidgets import (
 )
 
 from tarragon.db.database import Database
+from tarragon.renderers.cache import clear_cache
 from tarragon.services.settings_service import SettingsService
 from tarragon.widgets.settings_dialog import SettingsDialog
 
@@ -36,6 +38,15 @@ def dialog(qapp: Any, service: SettingsService) -> Generator[SettingsDialog, Non
     d = SettingsDialog(service)
     yield d
     d.close()
+
+
+@pytest.fixture
+def cache_dialog(qapp: Any, service: SettingsService, tmp_path: Path) -> Generator[SettingsDialog, None, None]:
+    """SettingsDialog with the cache dir patched to a temp path."""
+    with patch("tarragon.renderers.cache.cache_dir", return_value=tmp_path):
+        d = SettingsDialog(service)
+        yield d
+        d.close()
 
 
 def _get_widget(dialog: SettingsDialog, attr: str) -> Any:
@@ -355,3 +366,50 @@ class TestCacheFormatCombo:
         format_combo = _get_widget(dialog, "_cache_format_setting")
         items = [format_combo.itemText(i) for i in range(format_combo.count())]
         assert items == ["PNG", "JPEG"]
+
+
+class TestCacheSizeRow:
+    """Cache size row shows the on-disk cache size and emits a purge signal."""
+
+    def test_purge_button_exists(self, cache_dialog: SettingsDialog) -> None:
+        """The Cache group contains exactly one 'Purge Cache' button."""
+        buttons = [b for b in cache_dialog.findChildren(QPushButton) if b.text() == "Purge Cache"]
+        assert len(buttons) == 1
+
+    def test_size_label_shows_formatted_size(self, cache_dialog: SettingsDialog, tmp_path: Path) -> None:
+        """refresh() displays the formatted cache size for the current cache tree."""
+        tier_dir = tmp_path / "256" / "folder_abc12345"
+        tier_dir.mkdir(parents=True)
+        (tier_dir / "image.png").write_bytes(b"x" * 2048)
+
+        cache_dialog._cache_size_row.refresh()
+
+        assert cache_dialog._cache_size_row._size_label.text() == "2.0 KB"
+
+    def test_purge_button_emits_signal(self, cache_dialog: SettingsDialog) -> None:
+        """Clicking the purge button emits cache_purge_requested."""
+        emitted: list[bool] = []
+        cache_dialog.cache_purge_requested.connect(lambda: emitted.append(True))
+
+        buttons = [b for b in cache_dialog.findChildren(QPushButton) if b.text() == "Purge Cache"]
+        buttons[0].click()
+
+        assert emitted == [True]
+
+    def test_on_purge_cache_refreshes_size_label_to_zero(self, cache_dialog: SettingsDialog, tmp_path: Path) -> None:
+        """_on_purge_cache refreshes the size label to 0 B after a connected purge handler runs."""
+        tier_dir = tmp_path / "256" / "folder_abc12345"
+        tier_dir.mkdir(parents=True)
+        (tier_dir / "image.png").write_bytes(b"x" * 2048)
+
+        cache_dialog.cache_purge_requested.connect(clear_cache)
+        cache_dialog._on_purge_cache()
+
+        assert cache_dialog._cache_size_row._size_label.text() == "0 B"
+
+    def test_show_event_refreshes_cache_size(self, cache_dialog: SettingsDialog) -> None:
+        """Showing the dialog triggers a cache size refresh."""
+        with patch.object(cache_dialog._cache_size_row, "refresh") as mock_refresh:
+            cache_dialog.show()
+
+        mock_refresh.assert_called_once()

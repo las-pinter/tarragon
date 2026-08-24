@@ -18,6 +18,7 @@ from tarragon.renderers.cache import (
     RESOLUTION_FULL,
     RESOLUTION_PREVIEW,
     RESOLUTION_THUMBNAIL,
+    clear_cache,
     clear_full_res_cache,
     derive_smaller_sizes,
     generate_cache_paths,
@@ -109,6 +110,20 @@ class ThumbnailService(QObject):
         Call this when starting a new folder scan after ``cancel_pending()``.
         """
         self._cancel_event.clear()
+
+    def purge_cache(self) -> None:
+        """Purge the entire thumbnail cache: disk files and DB rows.
+
+        Cancels pending renders and waits for the thread pool to drain so
+        no in-flight render can write to the cache while files are being
+        deleted, then clears the cache tree and the thumbnails table, and
+        finally resets the cancel flag so new renders can proceed.
+        """
+        self.cancel_pending()
+        self._threadpool.waitForDone()
+        clear_cache()
+        self._db.clear_thumbnails()
+        self.reset_cancel()
 
     def shutdown(self, timeout_ms: int = 5000) -> None:
         """Graceful shutdown. Cancel pending tasks, wait for running ones.

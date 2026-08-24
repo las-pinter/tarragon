@@ -9,6 +9,7 @@ import pytest
 from tarragon.db.common.tag import Tag, TagSource
 from tarragon.db.database import Database
 from tarragon.services.query_service import QueryService
+from tarragon.sorting import sort_paths
 
 
 def _populate_test_data(db: Database) -> dict[str, Tag]:
@@ -127,10 +128,28 @@ class TestQueryService:
         service: QueryService,
         tags: dict[str, Tag],  # noqa: ARG002
     ) -> None:
-        """Results are ordered alphabetically by path."""
+        """Results are ordered naturally by path."""
         result = service.query(folder_filters={"/test/photos/"})
-        path_strs = [str(p) for p in result]
-        assert path_strs == sorted(path_strs)
+        assert result == sort_paths(result)
+
+    def test_digit_suffixed_names_sort_naturally(self) -> None:
+        """Digit-suffixed names sort naturally (photo 2 before photo 10)."""
+        db = Database(Path(":memory:"))
+        db.init_schema()
+        for i in (1, 10, 2):
+            db.upsert_thumbnail(
+                f"/test/natural/photo {i}.png",
+                mtime=i,
+                size=100,
+                width=10,
+                height=10,
+                cache_uuid=f"n{i}",
+            )
+        svc = QueryService(db)
+
+        result = svc.query(folder_filters={"/test/natural/"})
+
+        assert [p.name for p in result] == ["photo 1.png", "photo 2.png", "photo 10.png"]
 
     def test_filename_filter_matches(
         self,

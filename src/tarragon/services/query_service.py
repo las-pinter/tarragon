@@ -15,6 +15,7 @@ from typing import Any
 from tarragon.db._base import normalize_path
 from tarragon.db.common.tag import Tag
 from tarragon.db.database import Database
+from tarragon.sorting import SortMode, sort_paths
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +38,7 @@ class QueryService:
         filename_filter: str = "",
         tags: set[Tag] | None = None,
         color_tags: set[Tag] | None = None,
+        sort_mode: SortMode = SortMode.NAME,
     ) -> list[Path]:
         """Query thumbnails with optional filters.
 
@@ -57,11 +59,14 @@ class QueryService:
         color_tags:
             Set of auto-color tag names.  **AND** semantics — a file must
             have **all** of the specified color tags.
+        sort_mode:
+            Sort mode applied to the results after fetching. Defaults to
+            natural name ordering.
 
         Returns
         -------
         list[Path]
-            Matching paths ordered alphabetically.
+            Matching paths ordered naturally.
         """
         start = time.perf_counter()
         folder_filters = folder_filters or set()
@@ -132,5 +137,6 @@ class QueryService:
         rows = self._db.fetch_all(sql, tuple(params))
         elapsed = time.perf_counter() - start
         results = [Path(row["path"]) for row in rows]
+        results = sort_paths(results, mode=sort_mode)
         logger.debug("returned %d results in %.3fs", len(results), elapsed)
         return results

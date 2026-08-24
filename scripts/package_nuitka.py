@@ -98,6 +98,7 @@ def build(target_platform: str) -> None:
         "--assume-yes-for-downloads",
         "--standalone",
         "--windows-console-mode=disable",
+        "--force-stderr-spec={PROGRAM_BASE}.err.txt",
         "--static-libpython=no",
         "--enable-plugin=pyside6",
         "--include-package=tarragon",

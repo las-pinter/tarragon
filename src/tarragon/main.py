@@ -12,7 +12,7 @@ from PySide6.QtWidgets import QApplication
 
 from tarragon.app_paths import db_path, ensure_dirs
 from tarragon.db.database import Database
-from tarragon.logging import LogFormatter
+from tarragon.log_config import LogFormatter, setup_file_logging
 from tarragon.main_window import MainWindow as _MainWindow
 from tarragon.migrations import MigrationRunner
 from tarragon.services.settings_service import SettingsService
@@ -126,6 +126,10 @@ def main() -> None:
     handler = logging.StreamHandler()
     handler.setFormatter(LogFormatter())
     logging.basicConfig(level=logging.INFO, handlers=[handler])
+
+    # Write logs to a rotating file next to the database.
+    file_handler = setup_file_logging(db_path().parent / "tarragon.log")
+    logging.getLogger().addHandler(file_handler)
 
     # Suppress noisy third-party debug logging
     logging.getLogger("PIL").setLevel(logging.WARNING)

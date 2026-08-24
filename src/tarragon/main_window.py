@@ -21,7 +21,7 @@ from PySide6.QtWidgets import (
 
 from tarragon.db.database import Database
 from tarragon.gallery_controller import GalleryController
-from tarragon.logging import LogFormatter
+from tarragon.log_config import LogFormatter
 from tarragon.models.filter_state import FilterState
 from tarragon.models.thumbnail_model import ThumbnailModel
 from tarragon.services.query_service import QueryService

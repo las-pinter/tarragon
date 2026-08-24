@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import io
+import os
 import threading
+from collections.abc import Generator
 from concurrent.futures import Future
 from pathlib import Path
 from typing import Any
@@ -12,9 +14,10 @@ from unittest.mock import MagicMock, patch
 import pytest
 from PIL import Image
 
+from tarragon.db.database import Database
 from tarragon.renderers.cache import RESOLUTION_FULL, RESOLUTION_PREVIEW, RESOLUTION_THUMBNAIL, invalidate_cache_files
 from tarragon.renderers.psd import render_psd_image
-from tarragon.scanner import FileInfo
+from tarragon.scanner import FileInfo, scan_folder
 from tarragon.services.thumbnail_service import ThumbnailService, _RenderAllTask
 
 SUPER_LONG_PATH = "/" + "a" * 4096  # Exceeds typical FS path limits
@@ -42,6 +45,7 @@ def settings_mock() -> MagicMock:
     mock.color_tag_palette_size.get.return_value = 8
     mock.color_tag_min_share.get.return_value = 0.10
     mock.color_tag_neutral_s_threshold.get.return_value = 0.15
+    mock.clear_full_res_on_exit.get.return_value = False
     return mock
 
 
@@ -62,6 +66,33 @@ def service(db_mock: MagicMock, settings_mock: MagicMock, tag_service_mock: Magi
     # Replace the real QThreadPool with a mock that executes tasks synchronously
     # so tests can verify render_func dispatch through check_and_render().
     # QThreadPool.start() returns None (void) in real Qt - mock matches that.
+    mock_pool = MagicMock()
+    mock_pool.start.side_effect = lambda task: _run_task(task)
+    svc._threadpool = mock_pool
+    return svc
+
+
+@pytest.fixture
+def real_db() -> Generator[Database, None, None]:
+    """Provide a real in-memory Database for integration tests."""
+    db = Database(Path(":memory:"))
+    db.init_schema()
+    yield db
+    db.close()
+
+
+@pytest.fixture
+def real_service(real_db: Database, tag_service_mock: MagicMock) -> ThumbnailService:
+    """Create a ThumbnailService with a real Database and synchronous threadpool."""
+    settings = MagicMock()
+    settings.cache_format.get.return_value = "PNG"
+    settings.max_psd_workers.get.return_value = 3
+    settings.large_canvas_threshold_mp.get.return_value = 20.0
+    settings.tile_grid_size.get.return_value = "2x2"
+    settings.color_tag_enabled.get.return_value = False
+    settings.clear_full_res_on_exit.get.return_value = False
+    with patch("tarragon.services.thumbnail_service.get_executor"):
+        svc = ThumbnailService(db=real_db, settings_service=settings, tag_service=tag_service_mock)
     mock_pool = MagicMock()
     mock_pool.start.side_effect = lambda task: _run_task(task)
     svc._threadpool = mock_pool
@@ -357,6 +388,28 @@ class TestCancellation:
         """shutdown() uses 5000 ms timeout by default."""
         service.shutdown()
         service._threadpool.waitForDone.assert_called_once_with(5000)  # type: ignore[attr-defined]
+
+    def test_shutdown_clears_full_res_cache_when_enabled(
+        self,
+        service: ThumbnailService,
+        settings_mock: MagicMock,
+    ) -> None:
+        """shutdown() clears the full-res cache when the setting is enabled."""
+        settings_mock.clear_full_res_on_exit.get.return_value = True
+        with patch("tarragon.services.thumbnail_service.clear_full_res_cache") as mock_clear:
+            service.shutdown(timeout_ms=1000)
+        mock_clear.assert_called_once_with(enabled=True)
+
+    def test_shutdown_skips_full_res_cleanup_when_disabled(
+        self,
+        service: ThumbnailService,
+        settings_mock: MagicMock,
+    ) -> None:
+        """shutdown() passes enabled=False to cleanup when the setting is disabled."""
+        settings_mock.clear_full_res_on_exit.get.return_value = False
+        with patch("tarragon.services.thumbnail_service.clear_full_res_cache") as mock_clear:
+            service.shutdown(timeout_ms=1000)
+        mock_clear.assert_called_once_with(enabled=False)
 
 
 class TestRenderAllTaskCancellation:
@@ -1357,3 +1410,67 @@ class TestInvalidateAndRender:
         assert call_args.extension == ".psd"  # lowercase
         assert call_args.size == source_file.stat().st_size
         assert call_args.mtime == source_file.stat().st_mtime
+
+
+class TestRealPathRendering:
+    """End-to-end rendering through the real check_and_render path."""
+
+    def test_check_and_render_saves_real_full_res_cache_file(
+        self,
+        tmp_path: Path,
+        real_service: ThumbnailService,
+        real_db: Database,
+    ) -> None:
+        """First discovery renders and records a real full-res cache file on disk."""
+        source = tmp_path / "source.png"
+        Image.new("RGB", (300, 200), color="red").save(source)
+        stat = source.stat()
+        file_info = FileInfo(path=source, mtime=stat.st_mtime, size=stat.st_size, extension=".png")
+
+        with patch("tarragon.renderers.cache.cache_dir", return_value=tmp_path / "cache"):
+            real_service.check_and_render(file_info)
+
+        record = real_db.get_thumbnail(str(source))
+        assert record is not None
+        full_path = Path(record["full_cache_path"])
+        assert full_path.is_file()
+        assert full_path.stat().st_size > 0
+
+    def test_stale_cache_regenerated_on_rescan(
+        self,
+        tmp_path: Path,
+        real_service: ThumbnailService,
+        real_db: Database,
+    ) -> None:
+        """Modified source file triggers cache regeneration on the next folder-open pass."""
+        source = tmp_path / "source.png"
+        Image.new("RGB", (300, 200), color="red").save(source)
+        cache_root = tmp_path / "cache"
+
+        with patch("tarragon.renderers.cache.cache_dir", return_value=cache_root):
+            first_infos = scan_folder(tmp_path)
+            real_db.bulk_upsert_stubs([(str(fi.path), int(fi.mtime), fi.size) for fi in first_infos])
+            for fi in first_infos:
+                real_service.check_and_render(fi)
+
+            first_record = real_db.get_thumbnail(str(source))
+            assert first_record is not None
+            first_full_path = Path(first_record["full_cache_path"])
+            assert first_full_path.is_file()
+            assert Image.open(first_full_path).size == (300, 200)
+
+            Image.new("RGB", (400, 300), color="blue").save(source)
+            new_mtime = first_record["mtime"] + 100
+            os.utime(source, (new_mtime, new_mtime))
+
+            second_infos = scan_folder(tmp_path)
+            real_db.bulk_upsert_stubs([(str(fi.path), int(fi.mtime), fi.size) for fi in second_infos])
+            for fi in second_infos:
+                real_service.check_and_render(fi)
+
+            second_record = real_db.get_thumbnail(str(source))
+            assert second_record is not None
+            second_full_path = Path(second_record["full_cache_path"])
+            assert second_full_path.is_file()
+            assert Image.open(second_full_path).size == (400, 300)
+            assert second_record["mtime"] == new_mtime

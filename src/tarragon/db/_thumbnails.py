@@ -69,6 +69,8 @@ class ThumbnailsMixin(MixinBase):
 
         When rendering later calls `upsert_thumbnail()` with real dimensions
         and cache paths, the ``ON CONFLICT`` clause updates the stub in place.
+        For existing rows, a re-scan preserves the stored ``mtime``/``size``
+        so that `check_and_render` can detect when a source file changed.
 
         Parameters
         ----------
@@ -88,8 +90,8 @@ class ThumbnailsMixin(MixinBase):
             )
             VALUES (?, ?, ?, 0, 0, '', NULL, NULL, NULL)
             ON CONFLICT(path) DO UPDATE SET
-                mtime=excluded.mtime,
-                size=excluded.size
+                mtime=thumbnails.mtime,
+                size=thumbnails.size
             """,
             normalized,
         )

@@ -280,6 +280,16 @@ class _SettingColorTagEnabled(_CheckBoxSetting):
         )
 
 
+class _SettingClearFullResOnExit(_CheckBoxSetting):
+    def __init__(self, settings_service: SettingsService) -> None:
+        super().__init__(
+            "Clear Full-Res Cache on Exit",
+            "Delete full-resolution cache files when the application exits. "
+            "Full-res images are re-rendered on demand when a folder is opened.",
+            settings_service.clear_full_res_on_exit,
+        )
+
+
 class _SettingColorTagPaletteSize(_SpinBoxSetting):
     def __init__(self, settings_service: SettingsService) -> None:
         super().__init__(
@@ -462,6 +472,10 @@ class SettingsDialog(QDialog):
         self._cache_format_setting = _SettingCacheFormat(settings_service)
         self._settings.append(self._cache_format_setting)
         cache_layout.add_setting(self._cache_format_setting)
+
+        self._clear_full_res_on_exit_setting = _SettingClearFullResOnExit(settings_service)
+        self._settings.append(self._clear_full_res_on_exit_setting)
+        cache_layout.add_setting(self._clear_full_res_on_exit_setting)
 
         cache_group.setLayout(cache_layout)
         layout.addWidget(cache_group)

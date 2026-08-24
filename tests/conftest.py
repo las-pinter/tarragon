@@ -35,4 +35,5 @@ def mock_settings() -> MagicMock:
     # Settings accessed by ThumbnailService (created in setup_widgets)
     mock.cache_format.get.return_value = "PNG"
     mock.max_psd_workers.get.return_value = 3
+    mock.clear_full_res_on_exit.get.return_value = False
     return mock

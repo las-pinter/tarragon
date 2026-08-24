@@ -53,17 +53,24 @@ def grid() -> Generator[ThumbnailGrid, None, None]:
     g.close()
 
 
+TEST_PATH_1 = Path("/fake/images/asdphoto_001.png")
+TEST_PATH_2 = Path("/fake/images/asdphoto_002.jpg")
+TEST_PATH_3 = Path("/fake/images/asdphoto_003.png")
+TEST_PATH_4 = Path("/fake/images/asdphoto_004.jpg")
+TEST_PATH_5 = Path("/fake/images/asdphoto_005.png")
+
+
 @pytest.fixture
 def grid_with_model(grid: ThumbnailGrid) -> tuple[ThumbnailGrid, ThumbnailModel]:
     """Provide a ThumbnailGrid backed by a ThumbnailModel with sample paths."""
     model = ThumbnailModel()
     model.set_paths(
         [
-            Path("/fake/images/photo_001.png"),
-            Path("/fake/images/photo_002.jpg"),
-            Path("/fake/images/photo_003.png"),
-            Path("/fake/images/photo_004.jpg"),
-            Path("/fake/images/photo_005.png"),
+            TEST_PATH_1,
+            TEST_PATH_2,
+            TEST_PATH_3,
+            TEST_PATH_4,
+            TEST_PATH_5,
         ]
     )
     grid.set_model(model)
@@ -885,7 +892,7 @@ class TestContextMenu:
         mock_menu_instance.exec.assert_called_once()
 
         action.trigger()
-        assert received == [["/fake/images/photo_001.png"]]
+        assert received == [[str(TEST_PATH_1)]]
 
     def test_context_menu_emits_all_selected_paths_when_right_clicking_selected_item(
         self, grid_with_model: Any
@@ -916,9 +923,9 @@ class TestContextMenu:
         action.trigger()
 
         expected = [
-            "/fake/images/photo_001.png",
-            "/fake/images/photo_002.jpg",
-            "/fake/images/photo_003.png",
+            str(TEST_PATH_1),
+            str(TEST_PATH_2),
+            str(TEST_PATH_3),
         ]
         assert received == [expected]
 
@@ -947,7 +954,7 @@ class TestContextMenu:
         action = mock_menu_instance.addAction.call_args[0][0]
         action.trigger()
 
-        assert received == [["/fake/images/photo_004.jpg"]]
+        assert received == [[str(TEST_PATH_4)]]
 
     def test_context_menu_emits_single_path_for_single_selection(self, grid_with_model: Any) -> None:
         """The contextMenuEvent handler emits one path when a single item is selected."""
@@ -973,7 +980,7 @@ class TestContextMenu:
         action = mock_menu_instance.addAction.call_args[0][0]
         action.trigger()
 
-        assert received == [["/fake/images/photo_001.png"]]
+        assert received == [[str(TEST_PATH_1)]]
 
     def test_context_menu_on_empty_area_does_not_emit(self, grid_with_model: Any) -> None:
         """The contextMenuEvent handler on an empty area (invalid index) does NOT emit a signal."""
@@ -1096,7 +1103,7 @@ class TestSelectionChangedSignalSingle:
         assert len(emitted) >= 1
         last_emission = emitted[-1]
         assert len(last_emission) == 1
-        assert last_emission[0] == str(Path("/fake/images/photo_001.png"))
+        assert last_emission[0] == str(TEST_PATH_1)
 
 
 class TestSelectionChangedSignalMulti:
@@ -1118,9 +1125,9 @@ class TestSelectionChangedSignalMulti:
         assert len(emitted) >= 1
         last_emission = emitted[-1]
         assert len(last_emission) == 3
-        assert str(Path("/fake/images/photo_001.png")) in last_emission
-        assert str(Path("/fake/images/photo_002.jpg")) in last_emission
-        assert str(Path("/fake/images/photo_003.png")) in last_emission
+        assert str(TEST_PATH_1) in last_emission
+        assert str(TEST_PATH_2) in last_emission
+        assert str(TEST_PATH_3) in last_emission
 
 
 class TestSelectionChangedSignalEmpty:

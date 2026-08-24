@@ -11,6 +11,7 @@ import pytest
 from PySide6.QtCore import (
     QEvent,
     QItemSelection,
+    QItemSelectionModel,
     QModelIndex,
     QPoint,
     QPointF,
@@ -856,11 +857,11 @@ class TestContextMenu:
     """The context menu regenerates thumbnails via a signal."""
 
     def test_context_menu_emits_regenerate_signal(self, grid_with_model: Any) -> None:
-        """The contextMenuEvent handler creates a menu action that emits regenerate_requested on a valid item."""
+        """The contextMenuEvent handler emits regenerate_requested with the right-clicked path."""
         grid, model = grid_with_model
         index = model.index(0)
 
-        received: list[str] = []
+        received: list[list[str]] = []
         grid.regenerate_requested.connect(lambda p: received.append(p))
 
         # Mock indexAt to return a valid index.
@@ -882,6 +883,97 @@ class TestContextMenu:
         action = mock_menu_instance.addAction.call_args[0][0]
         assert action.text() == "Regenerate Thumbnail"
         mock_menu_instance.exec.assert_called_once()
+
+        action.trigger()
+        assert received == [["/fake/images/photo_001.png"]]
+
+    def test_context_menu_emits_all_selected_paths_when_right_clicking_selected_item(
+        self, grid_with_model: Any
+    ) -> None:
+        """The contextMenuEvent handler emits all selected paths when the right-clicked item is selected."""
+        grid, model = grid_with_model
+        selection_model = grid.selectionModel()
+        selection_model.select(model.index(0), QItemSelectionModel.SelectionFlag.Select)
+        selection_model.select(model.index(1), QItemSelectionModel.SelectionFlag.Select)
+        selection_model.select(model.index(2), QItemSelectionModel.SelectionFlag.Select)
+
+        received: list[list[str]] = []
+        grid.regenerate_requested.connect(lambda p: received.append(p))
+
+        mock_menu_instance = MagicMock()
+        with (
+            patch.object(grid, "indexAt", return_value=model.index(1)),
+            patch("tarragon.widgets.thumbnail_grid.QMenu", return_value=mock_menu_instance),
+        ):
+            event = QContextMenuEvent(
+                QContextMenuEvent.Reason.Mouse,
+                QPoint(50, 50),
+                QPoint(100, 100),
+            )
+            grid.contextMenuEvent(event)
+
+        action = mock_menu_instance.addAction.call_args[0][0]
+        action.trigger()
+
+        expected = [
+            "/fake/images/photo_001.png",
+            "/fake/images/photo_002.jpg",
+            "/fake/images/photo_003.png",
+        ]
+        assert received == [expected]
+
+    def test_context_menu_emits_only_right_clicked_path_when_item_not_selected(self, grid_with_model: Any) -> None:
+        """The contextMenuEvent handler emits only the right-clicked path when it is not selected."""
+        grid, model = grid_with_model
+        selection_model = grid.selectionModel()
+        selection_model.select(model.index(0), QItemSelectionModel.SelectionFlag.Select)
+        selection_model.select(model.index(1), QItemSelectionModel.SelectionFlag.Select)
+
+        received: list[list[str]] = []
+        grid.regenerate_requested.connect(lambda p: received.append(p))
+
+        mock_menu_instance = MagicMock()
+        with (
+            patch.object(grid, "indexAt", return_value=model.index(3)),
+            patch("tarragon.widgets.thumbnail_grid.QMenu", return_value=mock_menu_instance),
+        ):
+            event = QContextMenuEvent(
+                QContextMenuEvent.Reason.Mouse,
+                QPoint(50, 50),
+                QPoint(100, 100),
+            )
+            grid.contextMenuEvent(event)
+
+        action = mock_menu_instance.addAction.call_args[0][0]
+        action.trigger()
+
+        assert received == [["/fake/images/photo_004.jpg"]]
+
+    def test_context_menu_emits_single_path_for_single_selection(self, grid_with_model: Any) -> None:
+        """The contextMenuEvent handler emits one path when a single item is selected."""
+        grid, model = grid_with_model
+        selection_model = grid.selectionModel()
+        selection_model.select(model.index(0), QItemSelectionModel.SelectionFlag.Select)
+
+        received: list[list[str]] = []
+        grid.regenerate_requested.connect(lambda p: received.append(p))
+
+        mock_menu_instance = MagicMock()
+        with (
+            patch.object(grid, "indexAt", return_value=model.index(0)),
+            patch("tarragon.widgets.thumbnail_grid.QMenu", return_value=mock_menu_instance),
+        ):
+            event = QContextMenuEvent(
+                QContextMenuEvent.Reason.Mouse,
+                QPoint(50, 50),
+                QPoint(100, 100),
+            )
+            grid.contextMenuEvent(event)
+
+        action = mock_menu_instance.addAction.call_args[0][0]
+        action.trigger()
+
+        assert received == [["/fake/images/photo_001.png"]]
 
     def test_context_menu_on_empty_area_does_not_emit(self, grid_with_model: Any) -> None:
         """The contextMenuEvent handler on an empty area (invalid index) does NOT emit a signal."""

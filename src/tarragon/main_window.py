@@ -451,10 +451,13 @@ class MainWindow(QMainWindow):
         if self._db is not None:
             launch_editor(self._db, file_path, extension)
 
-    def _on_regenerate_requested(self, file_path: str) -> None:
-        """Handle 'Regenerate Thumbnail' context menu action."""
-        path = Path(file_path)
-        if self._thumbnail_service is not None:
+    def _on_regenerate_requested(self, file_paths: list[str]) -> None:
+        """Handle 'Regenerate Thumbnail' context menu action for one or more files."""
+        if self._thumbnail_service is None:
+            return
+        logger.info("Regenerating thumbnails for %d file(s)", len(file_paths))
+        for file_path in file_paths:
+            path = Path(file_path)
             logger.info("Regenerating thumbnail for %s", path.name)
             self._thumbnail_service.invalidate_and_render(path)
 

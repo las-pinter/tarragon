@@ -82,6 +82,17 @@ class TestBuildCommand:
         cmd = mock_run.call_args[0][0]
         assert "--enable-plugin=pyside6" in cmd, "Nuitka command must include --enable-plugin=pyside6"
 
+    def test_build_command_includes_force_stderr_spec(self, package_module: Any) -> None:
+        """The Nuitka command redirects stderr next to the executable."""
+        with patch.object(package_module, "check_dependencies"), patch("subprocess.run") as mock_run:
+            package_module.build(target_platform="linux")
+
+        mock_run.assert_called_once()
+        cmd = mock_run.call_args[0][0]
+        assert "--force-stderr-spec={PROGRAM_BASE}.err.txt" in cmd, (
+            "Nuitka command must include --force-stderr-spec={PROGRAM_BASE}.err.txt"
+        )
+
     def test_build_command_includes_entry_point(self, package_module: Any) -> None:
         """The Nuitka command references the main.py entry point."""
         with patch.object(package_module, "check_dependencies"), patch("subprocess.run") as mock_run:

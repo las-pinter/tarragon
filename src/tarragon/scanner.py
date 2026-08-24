@@ -7,6 +7,8 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
+from tarragon.sorting import SortMode, sort_paths
+
 logger = logging.getLogger(__name__)
 
 SUPPORTED_EXTENSIONS = {
@@ -33,7 +35,7 @@ class FileInfo:
     extension: str  # lowercase, e.g. ".psd"
 
 
-def scan_folder(folder_path: Path, recursive: bool = False) -> list[FileInfo]:
+def scan_folder(folder_path: Path, recursive: bool = False, sort_mode: SortMode = SortMode.NAME) -> list[FileInfo]:
     """Walk *folder_path*, filter by *SUPPORTED_EXTENSIONS*, return sorted list of *FileInfo*.
 
     Parameters
@@ -43,6 +45,9 @@ def scan_folder(folder_path: Path, recursive: bool = False) -> list[FileInfo]:
     recursive : bool
         When *True*, descend into subdirectories via ``rglob``.
         When *False* (default), only direct children are considered.
+    sort_mode : SortMode
+        Sort mode applied to the discovered paths. Defaults to natural
+        name ordering.
 
     Returns
     -------
@@ -66,9 +71,9 @@ def scan_folder(folder_path: Path, recursive: bool = False) -> list[FileInfo]:
 
         iterable: list[Path]
         if recursive:
-            iterable = sorted(p for p in folder_path.rglob("*") if p.is_file())
+            iterable = sort_paths((p for p in folder_path.rglob("*") if p.is_file()), mode=sort_mode)
         else:
-            iterable = sorted(child for child in folder_path.iterdir() if child.is_file())
+            iterable = sort_paths((child for child in folder_path.iterdir() if child.is_file()), mode=sort_mode)
 
         results: list[FileInfo] = []
 

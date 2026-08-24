@@ -178,6 +178,24 @@ class TestSortOrder:
         assert results[0].path.name == "alpha.jpg"
         assert results[1].path.name == "nested.png"
 
+    def test_digit_names_sort_naturally(self, tmp_path: Path) -> None:
+        """Digit-suffixed names sort naturally (name 2 before name 10)."""
+        for i in (1, 10, 2, 3):
+            (tmp_path / f"name {i}.png").write_text("data")
+
+        results = scan_folder(tmp_path)
+
+        assert [r.path.name for r in results] == ["name 1.png", "name 2.png", "name 3.png", "name 10.png"]
+
+    def test_leading_zeros_sort_naturally(self, tmp_path: Path) -> None:
+        """Leading zeros pin ordering: 001 before 01 before 1."""
+        for name in ("img 1.png", "img 001.png", "img 01.png"):
+            (tmp_path / name).write_text("data")
+
+        results = scan_folder(tmp_path)
+
+        assert [r.path.name for r in results] == ["img 001.png", "img 01.png", "img 1.png"]
+
 
 class TestHiddenFiles:
     """Hidden files are included in results."""

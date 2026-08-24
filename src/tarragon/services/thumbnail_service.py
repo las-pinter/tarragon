@@ -380,7 +380,9 @@ class ThumbnailService(QObject):
             self.thumbnail_ready.emit(str(file_info.path), None, None, None)
             return
 
-        self._save_and_record(full_img, file_info, RESOLUTION_FULL, cache_paths["full"])
+        # Not saving the full resolution yet, because it has no use at the moment. It would just
+        # consume a lot of disk space.
+        # self._save_and_record(full_img, file_info, RESOLUTION_FULL, cache_paths["full"])
 
         smaller_sizes = derive_smaller_sizes(full_img, [RESOLUTION_THUMBNAIL, RESOLUTION_PREVIEW])
 

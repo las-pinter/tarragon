@@ -37,11 +37,12 @@ class ThumbnailGrid(QListView):
     Emits ``file_double_clicked(str)`` with the file path when an item is double-clicked
     (wired for external editor launch).
     Emits ``selection_changed(list)`` with selected path strings when selection changes.
+    Emits ``regenerate_requested(list)`` with selected path strings on "Regenerate Thumbnail".
     """
 
     selection_changed = Signal(list)  # list of selected path strings
     file_double_clicked = Signal(str)  # emits file path on double-click
-    regenerate_requested = Signal(str)  # emits file path on "Regenerate Thumbnail" action
+    regenerate_requested = Signal(list)  # emits list of file paths on "Regenerate Thumbnail" action
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -125,6 +126,15 @@ class ThumbnailGrid(QListView):
                 self.file_double_clicked.emit(path)
         super().mouseDoubleClickEvent(event)
 
+    def _selected_paths(self) -> list[str]:
+        """Return the paths of all currently selected indexes."""
+        paths: list[str] = []
+        for index in self.selectedIndexes():
+            path = index.data(ThumbnailModel.PathRole)
+            if path:
+                paths.append(path)
+        return paths
+
     def contextMenuEvent(self, event: QContextMenuEvent) -> None:  # noqa: N802
         """Show a context menu with 'Regenerate Thumbnail' when right-clicking an item."""
         index = self.indexAt(event.pos())
@@ -134,9 +144,15 @@ class ThumbnailGrid(QListView):
         if not path:
             return
 
+        # Regenerate the full selection when the right-clicked item is selected,
+        # otherwise fall back to just the right-clicked item.
+        selected_paths = self._selected_paths()
+        if path not in selected_paths:
+            selected_paths = [path]
+
         menu = QMenu(self)
         regenerate_action = QAction("Regenerate Thumbnail", self)
-        regenerate_action.triggered.connect(lambda: self.regenerate_requested.emit(path))
+        regenerate_action.triggered.connect(lambda: self.regenerate_requested.emit(selected_paths))
         menu.addAction(regenerate_action)
         menu.exec(event.globalPos())
 
@@ -147,9 +163,4 @@ class ThumbnailGrid(QListView):
     ) -> None:
         """Emit signal with currently selected paths when selection changes."""
         super().selectionChanged(selected, deselected)
-        paths = []
-        for index in self.selectedIndexes():
-            path = index.data(ThumbnailModel.PathRole)
-            if path:
-                paths.append(path)
-        self.selection_changed.emit(paths)
+        self.selection_changed.emit(self._selected_paths())

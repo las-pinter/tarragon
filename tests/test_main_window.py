@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from PySide6.QtWidgets import QDockWidget, QMainWindow, QMenu, QMenuBar, QPushButton
 
@@ -515,5 +515,64 @@ class TestFilterBarIntegration:
             # Switch back to local mode
             window._gallery_tabs.setCurrentIndex(0)
             assert folder_btn.isHidden()
+        finally:
+            window.close()
+
+
+class TestRegenerateThumbnails:
+    """Regenerate Thumbnail actions invalidate and re-render each selected file."""
+
+    def test_on_regenerate_requested_calls_service_for_each_path(
+        self,
+        qapp: Any,
+        mock_settings: MagicMock,
+    ) -> None:
+        """The _on_regenerate_requested handler calls invalidate_and_render for every path in the list."""
+        window = MainWindow(settings_service=mock_settings)
+        try:
+            db = Database(Path(":memory:"))
+            db.init_schema()
+            tag_service = TagService(db=db)
+            window.setup_widgets(db, tag_service)
+
+            with patch.object(window._thumbnail_service, "invalidate_and_render") as mock_invalidate:
+                window._on_regenerate_requested(["/fake/a.png", "/fake/b.png", "/fake/c.png"])
+
+            assert mock_invalidate.call_count == 3
+            mock_invalidate.assert_any_call(Path("/fake/a.png"))
+            mock_invalidate.assert_any_call(Path("/fake/b.png"))
+            mock_invalidate.assert_any_call(Path("/fake/c.png"))
+        finally:
+            window.close()
+
+    def test_on_regenerate_requested_with_empty_list_makes_no_calls(
+        self,
+        qapp: Any,
+        mock_settings: MagicMock,
+    ) -> None:
+        """The _on_regenerate_requested handler makes no service calls for an empty list."""
+        window = MainWindow(settings_service=mock_settings)
+        try:
+            db = Database(Path(":memory:"))
+            db.init_schema()
+            tag_service = TagService(db=db)
+            window.setup_widgets(db, tag_service)
+
+            with patch.object(window._thumbnail_service, "invalidate_and_render") as mock_invalidate:
+                window._on_regenerate_requested([])
+
+            mock_invalidate.assert_not_called()
+        finally:
+            window.close()
+
+    def test_on_regenerate_requested_without_service_does_not_raise(
+        self,
+        qapp: Any,
+        mock_settings: MagicMock,
+    ) -> None:
+        """The _on_regenerate_requested handler does nothing when the thumbnail service is not set."""
+        window = MainWindow(settings_service=mock_settings)
+        try:
+            window._on_regenerate_requested(["/fake/a.png"])
         finally:
             window.close()

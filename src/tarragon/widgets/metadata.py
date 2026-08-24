@@ -115,12 +115,12 @@ class SizeMeta(Metadata):
                 return
 
         if len(image_infos) > 1:
-            self._label_widget.setText(f"Multiple selected images total size: {self._format_size(total_size_bytes)}")
+            self._label_widget.setText(f"Multiple selected images total size: {self.format_size(total_size_bytes)}")
             return
-        self._label_widget.setText(f"Size: {self._format_size(total_size_bytes)}")
+        self._label_widget.setText(f"Size: {self.format_size(total_size_bytes)}")
 
     @staticmethod
-    def _format_size(size_bytes: int) -> str:
+    def format_size(size_bytes: int) -> str:
         """Format file size in human-readable form."""
         value: float = size_bytes
         for unit in ("B", "KB", "MB", "GB"):

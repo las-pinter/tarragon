@@ -12,7 +12,10 @@ from PIL import Image
 from tarragon.renderers.cache import (
     RESOLUTION_PREVIEW,
     RESOLUTION_THUMBNAIL,
+    _is_safe_cache_dir,
+    clear_cache,
     clear_full_res_cache,
+    compute_cache_size_bytes,
     derive_smaller_sizes,
     generate_cache_paths,
     generate_cache_uuid,
@@ -342,3 +345,219 @@ class TestClearFullResCache:
         assert blocked.exists()
         assert not other.exists()
         assert "Failed to remove cache file" in caplog.text
+
+
+class TestComputeCacheSize:
+    """Computing the total on-disk size of the cache."""
+
+    def test_compute_cache_size_bytes_sums_all_files(self, tmp_path: Path) -> None:
+        """compute_cache_size_bytes sums file sizes across all resolution tiers."""
+        for tier, size in (("256", 100), ("1024", 200), ("full", 300)):
+            tier_dir = tmp_path / tier / "folder_abc12345"
+            tier_dir.mkdir(parents=True)
+            (tier_dir / "image.png").write_bytes(b"x" * size)
+
+        with patch("tarragon.renderers.cache.cache_dir", return_value=tmp_path):
+            result = compute_cache_size_bytes()
+
+        assert result == 600
+
+    def test_compute_cache_size_bytes_empty_dir_returns_zero(self, tmp_path: Path) -> None:
+        """compute_cache_size_bytes returns 0 for an existing but empty cache dir."""
+        with patch("tarragon.renderers.cache.cache_dir", return_value=tmp_path):
+            result = compute_cache_size_bytes()
+
+        assert result == 0
+
+    def test_compute_cache_size_bytes_missing_dir_returns_zero(self, tmp_path: Path) -> None:
+        """compute_cache_size_bytes returns 0 when the cache dir does not exist."""
+        with patch("tarragon.renderers.cache.cache_dir", return_value=tmp_path / "missing"):
+            result = compute_cache_size_bytes()
+
+        assert result == 0
+
+
+class TestClearCache:
+    """Clearing the whole thumbnail cache."""
+
+    def test_clear_cache_deletes_all_tiers(self, tmp_path: Path) -> None:
+        """clear_cache deletes files in all three resolution tiers."""
+        for tier in ("256", "1024", "full"):
+            tier_dir = tmp_path / tier / "folder_abc12345"
+            tier_dir.mkdir(parents=True)
+            (tier_dir / "image.png").write_bytes(b"data")
+
+        with patch("tarragon.renderers.cache.cache_dir", return_value=tmp_path):
+            clear_cache()
+
+        for tier in ("256", "1024", "full"):
+            assert not (tmp_path / tier / "folder_abc12345" / "image.png").exists()
+
+    def test_clear_cache_prunes_empty_subdirs(self, tmp_path: Path) -> None:
+        """clear_cache removes now-empty subdirectories bottom-up but keeps the cache root."""
+        subdir = tmp_path / "256" / "folder_abc12345"
+        subdir.mkdir(parents=True)
+        (subdir / "image.png").write_bytes(b"data")
+
+        with patch("tarragon.renderers.cache.cache_dir", return_value=tmp_path):
+            clear_cache()
+
+        assert not subdir.exists()
+        assert tmp_path.exists()
+
+    def test_clear_cache_missing_dir_is_noop(self, tmp_path: Path) -> None:
+        """clear_cache does nothing when the cache dir does not exist."""
+        with patch("tarragon.renderers.cache.cache_dir", return_value=tmp_path / "missing"):
+            clear_cache()
+
+        assert not (tmp_path / "missing").exists()
+
+    def test_clear_cache_refuses_home_dir(self, tmp_path: Path) -> None:
+        """clear_cache refuses to clear when the cache dir resolves to the home directory."""
+        (tmp_path / "image.png").write_bytes(b"data")
+
+        with (
+            patch("tarragon.renderers.cache.cache_dir", return_value=tmp_path),
+            patch("tarragon.renderers.cache.Path.home", return_value=tmp_path),
+        ):
+            clear_cache()
+
+        assert (tmp_path / "image.png").exists()
+
+    def test_clear_cache_refuses_data_dir(self, tmp_path: Path) -> None:
+        """clear_cache refuses to clear when the cache dir resolves to the data directory."""
+        (tmp_path / "image.png").write_bytes(b"data")
+
+        with (
+            patch("tarragon.renderers.cache.cache_dir", return_value=tmp_path),
+            patch("tarragon.renderers.cache.data_dir", return_value=tmp_path),
+        ):
+            clear_cache()
+
+        assert (tmp_path / "image.png").exists()
+
+    def test_clear_cache_refuses_filesystem_root(self, tmp_path: Path) -> None:
+        """clear_cache refuses to clear the filesystem root without error."""
+        with (
+            patch("tarragon.renderers.cache.cache_dir", return_value=Path("/")),
+            patch("tarragon.renderers.cache._delete_tree_contents") as mock_delete,
+        ):
+            clear_cache()
+
+        mock_delete.assert_not_called()
+
+    def test_clear_cache_removes_symlink_but_keeps_target(self, tmp_path: Path) -> None:
+        """clear_cache removes symlinks under the cache but leaves target files untouched."""
+        cache_root = tmp_path / "cache"
+        cache_root.mkdir()
+        target = tmp_path / "outside.png"
+        target.write_bytes(b"precious")
+        link = cache_root / "link.png"
+        link.symlink_to(target)
+
+        with patch("tarragon.renderers.cache.cache_dir", return_value=cache_root):
+            clear_cache()
+
+        assert not link.is_symlink()
+        assert target.exists()
+        assert target.read_bytes() == b"precious"
+
+    def test_clear_cache_continues_after_permission_error(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """clear_cache logs a warning and continues when unlink raises PermissionError."""
+        subdir = tmp_path / "256" / "folder_abc12345"
+        subdir.mkdir(parents=True)
+        blocked = subdir / "blocked.png"
+        blocked.write_bytes(b"data")
+        other = tmp_path / "other.png"
+        other.write_bytes(b"data")
+
+        real_unlink = Path.unlink
+
+        def flaky_unlink(path: Path, missing_ok: bool = False) -> None:
+            """Raise PermissionError for blocked.png, otherwise delegate to the real unlink."""
+            if path == blocked:
+                raise PermissionError("Permission denied")
+            real_unlink(path, missing_ok=missing_ok)
+
+        with (
+            caplog.at_level(logging.WARNING, logger="tarragon.renderers.cache"),
+            patch("tarragon.renderers.cache.cache_dir", return_value=tmp_path),
+            patch.object(Path, "unlink", flaky_unlink),
+        ):
+            clear_cache()
+
+        assert blocked.exists()
+        assert not other.exists()
+        assert "Failed to remove cache file" in caplog.text
+
+
+class TestIsSafeCacheDir:
+    """Direct tests for the _is_safe_cache_dir safety checks."""
+
+    def test_refuses_filesystem_root(self) -> None:
+        """_is_safe_cache_dir returns False for the filesystem root."""
+        assert _is_safe_cache_dir(Path("/")) is False
+
+    def test_refuses_home_dir(self, tmp_path: Path) -> None:
+        """_is_safe_cache_dir returns False for the home directory itself."""
+        home = tmp_path / "home"
+        with (
+            patch("tarragon.renderers.cache.Path.home", return_value=home),
+            patch("tarragon.renderers.cache.data_dir", return_value=tmp_path / "data"),
+        ):
+            assert _is_safe_cache_dir(home) is False
+
+    def test_refuses_ancestor_of_home(self, tmp_path: Path) -> None:
+        """_is_safe_cache_dir returns False for an ancestor of the home directory."""
+        home = tmp_path / "home"
+        with (
+            patch("tarragon.renderers.cache.Path.home", return_value=home),
+            patch("tarragon.renderers.cache.data_dir", return_value=tmp_path / "data"),
+        ):
+            assert _is_safe_cache_dir(tmp_path) is False
+
+    def test_refuses_data_dir(self, tmp_path: Path) -> None:
+        """_is_safe_cache_dir returns False for the data directory itself."""
+        data = tmp_path / "data"
+        with (
+            patch("tarragon.renderers.cache.Path.home", return_value=tmp_path / "home"),
+            patch("tarragon.renderers.cache.data_dir", return_value=data),
+        ):
+            assert _is_safe_cache_dir(data) is False
+
+    def test_refuses_ancestor_of_data_dir(self, tmp_path: Path) -> None:
+        """_is_safe_cache_dir returns False for an ancestor of the data directory."""
+        data = tmp_path / "data"
+        with (
+            patch("tarragon.renderers.cache.Path.home", return_value=tmp_path / "home"),
+            patch("tarragon.renderers.cache.data_dir", return_value=data),
+        ):
+            assert _is_safe_cache_dir(tmp_path) is False
+
+    def test_allows_default_cache_dir(self, tmp_path: Path) -> None:
+        """_is_safe_cache_dir allows the default data_dir()/cache path."""
+        data = tmp_path / "data"
+        with (
+            patch("tarragon.renderers.cache.Path.home", return_value=tmp_path / "home"),
+            patch("tarragon.renderers.cache.data_dir", return_value=data),
+        ):
+            assert _is_safe_cache_dir(data / "cache") is True
+
+    def test_allows_child_of_home(self, tmp_path: Path) -> None:
+        """_is_safe_cache_dir allows a child directory of the home directory."""
+        home = tmp_path / "home"
+        with (
+            patch("tarragon.renderers.cache.Path.home", return_value=home),
+            patch("tarragon.renderers.cache.data_dir", return_value=tmp_path / "data"),
+        ):
+            assert _is_safe_cache_dir(home / "custom_cache") is True
+
+    def test_allows_deep_children(self, tmp_path: Path) -> None:
+        """_is_safe_cache_dir allows deep nested cache directories."""
+        with (
+            patch("tarragon.renderers.cache.Path.home", return_value=tmp_path / "home"),
+            patch("tarragon.renderers.cache.data_dir", return_value=tmp_path / "data"),
+        ):
+            assert _is_safe_cache_dir(tmp_path / "a" / "b" / "c" / "cache") is True

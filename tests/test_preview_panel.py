@@ -259,7 +259,7 @@ class TestMetadataFormatting:
     )
     def test_format_size_parametrized(self, size_bytes: int, expected: str) -> None:
         """The _format_size() function formats all byte ranges correctly."""
-        assert SizeMeta._format_size(size_bytes) == expected
+        assert SizeMeta.format_size(size_bytes) == expected
 
 
 class TestPilToQImage:

@@ -461,6 +461,16 @@ class MainWindow(QMainWindow):
             logger.info("Regenerating thumbnail for %s", path.name)
             self._thumbnail_service.invalidate_and_render(path)
 
+    def _on_cache_purge_requested(self) -> None:
+        """Handle a cache purge request from the settings dialog."""
+        if self._thumbnail_service is None:
+            return
+        self._thumbnail_service.purge_cache()
+        if self._current_folder:
+            self._navigate_to_folder(Path(self._current_folder))
+        else:
+            self._run_filtered_query()
+
     # ── Menu Actions ───────────────────────────────────────────────────
 
     def _setup_actions(self) -> None:
@@ -502,6 +512,7 @@ class MainWindow(QMainWindow):
         from tarragon.widgets.settings_dialog import SettingsDialog
 
         dialog = SettingsDialog(self._settings_service, parent=self)
+        dialog.cache_purge_requested.connect(self._on_cache_purge_requested)
         if dialog.exec():
             # Settings were saved, apply changes
             # Update debug logging level

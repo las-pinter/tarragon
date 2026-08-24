@@ -1474,3 +1474,185 @@ class TestRealPathRendering:
             assert second_full_path.is_file()
             assert Image.open(second_full_path).size == (400, 300)
             assert second_record["mtime"] == new_mtime
+
+
+class TestPurgeCache:
+    """purge_cache cancels renders, drains the pool, and clears disk + DB."""
+
+    def test_purge_cache_cancels_waits_and_resets(
+        self,
+        service: ThumbnailService,
+    ) -> None:
+        """purge_cache cancels pending work, waits for the pool, clears cache and DB, and resets cancel."""
+        with (
+            patch.object(service, "cancel_pending", wraps=service.cancel_pending) as mock_cancel,
+            patch("tarragon.services.thumbnail_service.clear_cache") as mock_clear,
+        ):
+            service.purge_cache()
+
+        mock_cancel.assert_called_once_with()
+        service._threadpool.waitForDone.assert_called_once_with()  # type: ignore[attr-defined]
+        mock_clear.assert_called_once_with()
+        service._db.clear_thumbnails.assert_called_once_with()  # type: ignore[attr-defined]
+        assert not service._cancel_event.is_set()
+
+    def test_purge_cache_deletes_files_and_db_rows(
+        self,
+        tmp_path: Path,
+        real_service: ThumbnailService,
+        real_db: Database,
+    ) -> None:
+        """purge_cache deletes cache files and thumbnail rows but keeps folder_cache_uuids."""
+        cache_root = tmp_path / "cache"
+        tier_dir = cache_root / "256" / "folder_abc12345"
+        tier_dir.mkdir(parents=True)
+        cache_file = tier_dir / "image.png"
+        cache_file.write_bytes(b"data")
+
+        real_db.upsert_thumbnail("/fake/a.png", mtime=1, size=100, width=10, height=10, cache_uuid="u1")
+        real_db.upsert_thumbnail("/fake/b.png", mtime=2, size=200, width=10, height=10, cache_uuid="u2")
+        real_db.upsert_folder_uuid("/fake", "u1")
+        real_db.upsert_folder_uuid("/other", "u2")
+
+        with patch("tarragon.renderers.cache.cache_dir", return_value=cache_root):
+            real_service.purge_cache()
+
+        assert not cache_file.exists()
+        assert real_db.fetch_all("SELECT COUNT(*) as cnt FROM thumbnails")[0]["cnt"] == 0
+        assert real_db.fetch_all("SELECT COUNT(*) as cnt FROM folder_cache_uuids")[0]["cnt"] == 2
+
+    def test_purge_cache_allows_rerender_afterwards(
+        self,
+        tmp_path: Path,
+        real_service: ThumbnailService,
+        real_db: Database,
+    ) -> None:
+        """After purge_cache, rendering a file again creates fresh cache files and a DB row."""
+        cache_root = tmp_path / "cache"
+        source = tmp_path / "source.png"
+        Image.new("RGB", (300, 200), color="red").save(source)
+        stat = source.stat()
+        file_info = FileInfo(path=source, mtime=stat.st_mtime, size=stat.st_size, extension=".png")
+
+        with patch("tarragon.renderers.cache.cache_dir", return_value=cache_root):
+            real_service.check_and_render(file_info)
+            first_record = real_db.get_thumbnail(str(source))
+            assert first_record is not None
+            first_full_path = Path(first_record["full_cache_path"])
+            assert first_full_path.is_file()
+
+            real_service.purge_cache()
+
+            assert not first_full_path.exists()
+            assert real_db.get_thumbnail(str(source)) is None
+
+            real_service.check_and_render(file_info)
+            second_record = real_db.get_thumbnail(str(source))
+            assert second_record is not None
+            second_full_path = Path(second_record["full_cache_path"])
+            assert second_full_path.is_file()
+            assert second_full_path.stat().st_size > 0
+
+    def test_purge_cache_missing_cache_dir_no_crash(
+        self,
+        tmp_path: Path,
+        real_service: ThumbnailService,
+        real_db: Database,
+    ) -> None:
+        """purge_cache does not crash when the cache dir does not exist."""
+        cache_root = tmp_path / "cache"
+
+        with patch("tarragon.renderers.cache.cache_dir", return_value=cache_root):
+            real_service.purge_cache()
+
+        assert real_db.fetch_all("SELECT COUNT(*) as cnt FROM thumbnails")[0]["cnt"] == 0
+
+    def test_purge_cache_empty_thumbnails_table_no_crash(
+        self,
+        tmp_path: Path,
+        real_service: ThumbnailService,
+        real_db: Database,
+    ) -> None:
+        """purge_cache does not crash when the thumbnails table is empty."""
+        cache_root = tmp_path / "cache"
+        tier_dir = cache_root / "256" / "folder_abc12345"
+        tier_dir.mkdir(parents=True)
+        cache_file = tier_dir / "image.png"
+        cache_file.write_bytes(b"data")
+
+        with patch("tarragon.renderers.cache.cache_dir", return_value=cache_root):
+            real_service.purge_cache()
+
+        assert not cache_file.exists()
+        assert real_db.fetch_all("SELECT COUNT(*) as cnt FROM thumbnails")[0]["cnt"] == 0
+
+    def test_purge_cache_waits_for_inflight_render_before_deleting(
+        self,
+        tmp_path: Path,
+        real_db: Database,
+        tag_service_mock: MagicMock,
+    ) -> None:
+        """purge_cache waits for an in-flight render so its late file write is deleted."""
+        settings = MagicMock()
+        settings.cache_format.get.return_value = "PNG"
+        settings.max_psd_workers.get.return_value = 3
+        settings.large_canvas_threshold_mp.get.return_value = 20.0
+        settings.tile_grid_size.get.return_value = "2x2"
+        settings.color_tag_enabled.get.return_value = False
+        settings.clear_full_res_on_exit.get.return_value = False
+        with patch("tarragon.services.thumbnail_service.get_executor"):
+            svc = ThumbnailService(db=real_db, settings_service=settings, tag_service=tag_service_mock)
+
+        cache_root = tmp_path / "cache"
+        late_file = cache_root / "256" / "folder_abc12345" / "late.png"
+        started = threading.Event()
+        release = threading.Event()
+        reached_wait = threading.Event()
+
+        def slow_render(file_info: FileInfo) -> None:
+            """Block until released, then write a cache file like a real render would."""
+            started.set()
+            release.wait(timeout=10)
+            late_file.parent.mkdir(parents=True, exist_ok=True)
+            late_file.write_bytes(b"late")
+
+        file_info = FileInfo(path=tmp_path / "source.png", mtime=1.0, size=100, extension=".png")
+        task = _RenderAllTask(
+            file_info=file_info,
+            on_error=MagicMock(),
+            render_func=slow_render,
+            cancel_event=svc._cancel_event,
+        )
+
+        real_wait_for_done = svc._threadpool.waitForDone
+
+        def wrapped_wait_for_done() -> bool:
+            """Signal that purge reached waitForDone, then delegate to the real method."""
+            reached_wait.set()
+            return real_wait_for_done()
+
+        svc._threadpool.waitForDone = wrapped_wait_for_done  # type: ignore[assignment]
+
+        svc._threadpool.start(task)
+        assert started.wait(timeout=10)
+
+        purge_errors: list[BaseException] = []
+
+        def run_purge() -> None:
+            """Run purge_cache in a worker thread."""
+            try:
+                with patch("tarragon.renderers.cache.cache_dir", return_value=cache_root):
+                    svc.purge_cache()
+            except BaseException as exc:
+                purge_errors.append(exc)
+
+        purge_thread = threading.Thread(target=run_purge)
+        purge_thread.start()
+        assert reached_wait.wait(timeout=10)
+        assert purge_thread.is_alive()
+        release.set()
+        purge_thread.join(timeout=10)
+
+        assert not purge_errors
+        assert not late_file.exists()
+        svc._threadpool.waitForDone()

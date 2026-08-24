@@ -9,7 +9,7 @@ from typing import Any
 
 from PIL import Image
 
-from tarragon.app_paths import cache_dir
+from tarragon.app_paths import cache_dir, data_dir
 
 logger = logging.getLogger(__name__)
 
@@ -144,7 +144,17 @@ def clear_full_res_cache(enabled: bool = True) -> None:
         logger.debug("Full-res cache dir does not exist: %s", full_dir)
         return
 
-    for path in full_dir.rglob("*"):
+    _delete_tree_contents(full_dir)
+    logger.debug("Cleared full-res cache: %s", full_dir)
+
+
+def _delete_tree_contents(root: Path) -> None:
+    """Delete all files and symlinks under *root* and prune empty dirs bottom-up.
+
+    The root directory itself is kept.  Unlink failures (e.g. permission
+    errors) are logged and skipped so one file cannot abort the cleanup.
+    """
+    for path in root.rglob("*"):
         if path.is_file() or path.is_symlink():
             try:
                 path.unlink(missing_ok=True)
@@ -152,13 +162,69 @@ def clear_full_res_cache(enabled: bool = True) -> None:
                 logger.warning("Failed to remove cache file: %s", path, exc_info=True)
 
     # Prune empty subdirectories bottom-up (deepest first).
-    for path in sorted(full_dir.rglob("*"), key=lambda p: len(p.parts), reverse=True):
+    for path in sorted(root.rglob("*"), key=lambda p: len(p.parts), reverse=True):
         if path.is_dir():
             try:
                 path.rmdir()
             except OSError:
                 pass
-    logger.debug("Cleared full-res cache: %s", full_dir)
+
+
+def _is_safe_cache_dir(path: Path) -> bool:
+    """Return True when *path* is safe to purge recursively.
+
+    Refuses filesystem roots, the user's home directory (or any ancestor
+    of it), and the data directory (or any ancestor of it) so a
+    misconfigured custom cache dir can never cause the wrong tree to be
+    deleted.
+    """
+    resolved = path.resolve()
+    if resolved == Path(resolved.anchor):
+        return False
+    home = Path.home().resolve()
+    if resolved == home or home.is_relative_to(resolved):
+        return False
+    data = data_dir().resolve()
+    if resolved == data or data.is_relative_to(resolved):
+        return False
+    return True
+
+
+def clear_cache() -> None:
+    """Delete all files under the cache directory and prune empty dirs.
+
+    Removes every file under ``cache_dir()`` (all resolution tiers) and
+    prunes the now-empty subdirectories bottom-up.  The cache root
+    directory itself is kept.  No database rows are touched.
+
+    Notes
+    -----
+    The resolved cache directory is checked by :func:`_is_safe_cache_dir`
+    before any deletion so a misconfigured custom cache dir can never
+    cause the wrong tree to be removed.
+    """
+    cache_root = cache_dir().resolve()
+    if not _is_safe_cache_dir(cache_root):
+        logger.error("Refusing to clear cache: unsafe cache dir: %s", cache_root)
+        return
+    if not cache_root.exists():
+        logger.debug("Cache dir does not exist: %s", cache_root)
+        return
+    _delete_tree_contents(cache_root)
+    logger.debug("Cleared cache: %s", cache_root)
+
+
+def compute_cache_size_bytes() -> int:
+    """Return the total on-disk size of the thumbnail cache in bytes.
+
+    Walks the entire cache tree under ``cache_dir()`` and sums the sizes
+    of all regular files.  Returns 0 when the cache directory does not
+    exist or contains no files.
+    """
+    cache_root = cache_dir()
+    if not cache_root.exists():
+        return 0
+    return sum(p.stat().st_size for p in cache_root.rglob("*") if p.is_file())
 
 
 def save_to_cache(img: Image.Image, cache_path: Path, format_setting: str = "PNG") -> None:

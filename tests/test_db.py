@@ -187,6 +187,26 @@ class TestThumbnailDelete:
         db.delete_thumbnail("/no/such/file.png")  # Should not raise
 
 
+class TestClearThumbnails:
+    """clear_thumbnails removes all thumbnail records."""
+
+    def test_clear_thumbnails_removes_all_rows(self, db: Database) -> None:
+        """clear_thumbnails deletes every thumbnail row."""
+        db.upsert_thumbnail("/a.png", mtime=1, size=100, width=10, height=10, cache_uuid="u1")
+        db.upsert_thumbnail("/b.png", mtime=2, size=200, width=10, height=10, cache_uuid="u2")
+        db.upsert_thumbnail("/c.png", mtime=3, size=300, width=10, height=10, cache_uuid="u3")
+
+        db.clear_thumbnails()
+
+        assert db.fetch_all("SELECT COUNT(*) as cnt FROM thumbnails")[0]["cnt"] == 0
+
+    def test_clear_thumbnails_empty_table_is_noop(self, db: Database) -> None:
+        """clear_thumbnails does nothing and does not error on an empty table."""
+        db.clear_thumbnails()
+
+        assert db.fetch_all("SELECT COUNT(*) as cnt FROM thumbnails")[0]["cnt"] == 0
+
+
 class TestThumbnailGet:
     """get_thumbnail returns thumbnail records."""
 

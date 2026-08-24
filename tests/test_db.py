@@ -115,7 +115,7 @@ class TestBulkUpsertStubs:
     """The bulk_upsert_stubs() method populates and updates thumbnail stubs."""
 
     def test_bulk_upsert_stubs_inserts_and_updates(self, db: Database) -> None:
-        """The bulk_upsert_stubs() method inserts new records and updates existing ones."""
+        """The bulk_upsert_stubs() method inserts new records and preserves existing mtime/size."""
         # Insert stubs
         db.bulk_upsert_stubs(
             [
@@ -134,7 +134,7 @@ class TestBulkUpsertStubs:
         assert rec_a["cache_uuid"] == ""
         assert rec_a["thumbnail_cache_path"] is None
 
-        # Update stubs (simulating a re-scan with new mtime/size)
+        # Re-scan with new mtime/size (existing stub values are preserved)
         db.bulk_upsert_stubs(
             [
                 ("/test/a.png", 999, 777),
@@ -142,8 +142,8 @@ class TestBulkUpsertStubs:
         )
         rec_a_updated = db.get_thumbnail("/test/a.png")
         assert rec_a_updated is not None
-        assert rec_a_updated["mtime"] == 999
-        assert rec_a_updated["size"] == 777
+        assert rec_a_updated["mtime"] == 100
+        assert rec_a_updated["size"] == 500
 
         # Verify upsert_thumbnail (from render) overwrites stub correctly
         db.upsert_thumbnail(

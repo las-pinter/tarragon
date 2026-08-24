@@ -112,6 +112,55 @@ def invalidate_cache_files(db: Any, source_path: str) -> None:
     )
 
 
+def clear_full_res_cache(enabled: bool = True) -> None:
+    """Delete all files under the full-resolution cache tier and prune empty dirs.
+
+    Removes every file under ``cache_dir()/full`` and then prunes the
+    now-empty ``full/{folder}_{uuid}`` subdirectories bottom-up.  The
+    ``full`` root directory itself is kept.  No database rows are touched.
+
+    Parameters
+    ----------
+    enabled:
+        When False, the function is a no-op.  Used to honor the
+        ``clear_full_res_on_exit`` setting.
+
+    Notes
+    -----
+    The resolved target directory name is verified to be exactly ``full``
+    before any deletion, so a misconfigured custom cache dir can never
+    cause the wrong tree to be removed.  Unlink failures (e.g. permission
+    errors) are logged and skipped so one file cannot abort the cleanup.
+    """
+    if not enabled:
+        logger.debug("Skipping full-res cache cleanup (disabled)")
+        return
+
+    full_dir = (cache_dir() / "full").resolve()
+    if full_dir.name != "full":
+        logger.error("Refusing to clear cache: expected a directory named 'full', got %s", full_dir)
+        return
+    if not full_dir.exists():
+        logger.debug("Full-res cache dir does not exist: %s", full_dir)
+        return
+
+    for path in full_dir.rglob("*"):
+        if path.is_file() or path.is_symlink():
+            try:
+                path.unlink(missing_ok=True)
+            except PermissionError:
+                logger.warning("Failed to remove cache file: %s", path, exc_info=True)
+
+    # Prune empty subdirectories bottom-up (deepest first).
+    for path in sorted(full_dir.rglob("*"), key=lambda p: len(p.parts), reverse=True):
+        if path.is_dir():
+            try:
+                path.rmdir()
+            except OSError:
+                pass
+    logger.debug("Cleared full-res cache: %s", full_dir)
+
+
 def save_to_cache(img: Image.Image, cache_path: Path, format_setting: str = "PNG") -> None:
     """Write a rendered thumbnail to the cache directory.
 

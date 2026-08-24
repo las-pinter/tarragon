@@ -71,6 +71,7 @@ class TestDialogCreation:
         neutral_s = _get_widget(dialog, "_color_tag_neutral_s_threshold_setting")
         format_combo = _get_widget(dialog, "_cache_format_setting")
         debug_check = _get_widget(dialog, "_debug_mode_setting")
+        clear_full_res = _get_widget(dialog, "_clear_full_res_on_exit_setting")
 
         assert psd_workers.value() == 3
         assert multi_preview.value() == 9
@@ -82,6 +83,7 @@ class TestDialogCreation:
         assert neutral_s.value() == pytest.approx(0.15)
         assert format_combo.currentIndex() == 0  # PNG
         assert debug_check.isChecked() is False
+        assert clear_full_res.isChecked() is True
 
 
 class TestWidgetTypes:
@@ -116,6 +118,10 @@ class TestWidgetTypes:
     def test_cache_format_is_combobox(self, dialog: SettingsDialog) -> None:
         """cache_format is a QComboBox."""
         assert isinstance(_get_widget(dialog, "_cache_format_setting"), QComboBox)
+
+    def test_clear_full_res_on_exit_is_checkbox(self, dialog: SettingsDialog) -> None:
+        """clear_full_res_on_exit is a QCheckBox."""
+        assert isinstance(_get_widget(dialog, "_clear_full_res_on_exit_setting"), QCheckBox)
 
     def test_debug_section_has_checkbox(self, dialog: SettingsDialog) -> None:
         """debug_mode is a QCheckBox."""
@@ -190,6 +196,15 @@ class TestSaveLoadRoundtrip:
         dialog._on_accept()
 
         assert service.cache_format.get() == "JPEG"
+
+    def test_clear_full_res_on_exit_saved_correctly(self, dialog: SettingsDialog, service: SettingsService) -> None:
+        """Unchecking clear_full_res_on_exit persists as False."""
+        checkbox = _get_widget(dialog, "_clear_full_res_on_exit_setting")
+
+        checkbox.setChecked(False)
+        dialog._on_accept()
+
+        assert service.clear_full_res_on_exit.get() is False
 
     def test_cache_dir_default_preserved_on_save(self, dialog: SettingsDialog, service: SettingsService) -> None:
         """When cache_dir text matches platform default, service stores None."""

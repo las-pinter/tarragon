@@ -15,6 +15,7 @@ from tarragon.services.settings_service import (
     SettingsService,
     _SettingCacheDir,
     _SettingCacheFormat,
+    _SettingClearFullResOnExit,
     _SettingColorTagEnabled,
     _SettingColorTagMinShare,
     _SettingColorTagNeutralSThreshold,
@@ -251,6 +252,33 @@ class TestSettingColorTagEnabled:
     def test_set_true_after_false(self, db: Database) -> None:
         """Setting True after False re-enables color tagging."""
         setting = _SettingColorTagEnabled(db)
+        setting.set(False)
+        setting.set(True)
+        assert setting.get() is True
+
+
+class TestSettingClearFullResOnExit:
+    """Tests for the _SettingClearFullResOnExit Setting subclass."""
+
+    def test_default_value(self, db: Database) -> None:
+        """clear_full_res_on_exit defaults to True."""
+        setting = _SettingClearFullResOnExit(db)
+        assert setting.get() is True
+
+    def test_get_key(self, db: Database) -> None:
+        """get_key() returns 'clear_full_res_on_exit'."""
+        setting = _SettingClearFullResOnExit(db)
+        assert setting.get_key() == "clear_full_res_on_exit"
+
+    def test_set_false(self, db: Database) -> None:
+        """Setting False disables full-res cache cleanup on exit."""
+        setting = _SettingClearFullResOnExit(db)
+        setting.set(False)
+        assert setting.get() is False
+
+    def test_set_true_after_false(self, db: Database) -> None:
+        """Setting True after False re-enables full-res cache cleanup."""
+        setting = _SettingClearFullResOnExit(db)
         setting.set(False)
         setting.set(True)
         assert setting.get() is True
@@ -638,6 +666,7 @@ class TestSettingsServiceIntegration:
         """Every setting exposed by SettingsService returns its expected default."""
         assert service.cache_dir.get() is None
         assert service.cache_format.get() == "PNG"
+        assert service.clear_full_res_on_exit.get() is True
         assert service.color_tag_enabled.get() is True
         assert service.color_tag_palette_size.get() == 8
         assert service.color_tag_min_share.get() == pytest.approx(0.10)
@@ -701,6 +730,7 @@ class TestSettingsServiceInit:
         """SettingsService creates all expected setting attributes."""
         assert hasattr(service, "cache_dir")
         assert hasattr(service, "cache_format")
+        assert hasattr(service, "clear_full_res_on_exit")
         assert hasattr(service, "color_tag_enabled")
         assert hasattr(service, "color_tag_palette_size")
         assert hasattr(service, "color_tag_min_share")
@@ -717,6 +747,7 @@ class TestSettingsServiceInit:
         """All setting attributes are Setting subclass instances."""
         assert isinstance(service.cache_dir, _SettingCacheDir)
         assert isinstance(service.cache_format, _SettingCacheFormat)
+        assert isinstance(service.clear_full_res_on_exit, _SettingClearFullResOnExit)
         assert isinstance(service.color_tag_enabled, _SettingColorTagEnabled)
         assert isinstance(service.color_tag_palette_size, _SettingColorTagPaletteSize)
         assert isinstance(service.color_tag_min_share, _SettingColorTagMinShare)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from unittest.mock import patch
 
@@ -11,6 +12,7 @@ from PIL import Image
 from tarragon.renderers.cache import (
     RESOLUTION_PREVIEW,
     RESOLUTION_THUMBNAIL,
+    clear_full_res_cache,
     derive_smaller_sizes,
     generate_cache_paths,
     generate_cache_uuid,
@@ -217,3 +219,126 @@ class TestDeriveSmallerSizes:
         assert RESOLUTION_PREVIEW in result
         assert result[RESOLUTION_THUMBNAIL].size == (256, 192)  # Aspect ratio preserved
         assert result[RESOLUTION_PREVIEW].size == (1024, 768)
+
+
+class TestClearFullResCache:
+    """Clearing the full-resolution cache tier."""
+
+    def test_clear_full_res_cache_deletes_full_tree(self, tmp_path: Path) -> None:
+        """clear_full_res_cache deletes all files under the full tier."""
+        full_dir = tmp_path / "full"
+        subdir = full_dir / "folder_abc12345"
+        subdir.mkdir(parents=True)
+        (subdir / "image.png").write_bytes(b"data")
+        (full_dir / "stray.png").write_bytes(b"data")
+
+        with patch("tarragon.renderers.cache.cache_dir", return_value=tmp_path):
+            clear_full_res_cache()
+
+        assert not (subdir / "image.png").exists()
+        assert not (full_dir / "stray.png").exists()
+
+    def test_clear_full_res_cache_skips_when_disabled(self, tmp_path: Path) -> None:
+        """clear_full_res_cache does nothing when disabled."""
+        full_dir = tmp_path / "full"
+        full_dir.mkdir(parents=True)
+        (full_dir / "image.png").write_bytes(b"data")
+
+        with patch("tarragon.renderers.cache.cache_dir", return_value=tmp_path):
+            clear_full_res_cache(enabled=False)
+
+        assert (full_dir / "image.png").exists()
+
+    def test_clear_full_res_cache_does_not_touch_other_tiers(self, tmp_path: Path) -> None:
+        """clear_full_res_cache leaves other resolution tiers intact."""
+        full_dir = tmp_path / "full"
+        full_dir.mkdir(parents=True)
+        (full_dir / "image.png").write_bytes(b"full")
+        thumb_dir = tmp_path / str(RESOLUTION_THUMBNAIL)
+        thumb_dir.mkdir(parents=True)
+        (thumb_dir / "image.png").write_bytes(b"thumb")
+
+        with patch("tarragon.renderers.cache.cache_dir", return_value=tmp_path):
+            clear_full_res_cache()
+
+        assert not (full_dir / "image.png").exists()
+        assert (thumb_dir / "image.png").exists()
+
+    def test_clear_full_res_cache_prunes_empty_subdirs(self, tmp_path: Path) -> None:
+        """clear_full_res_cache removes now-empty subdirectories bottom-up."""
+        full_dir = tmp_path / "full"
+        subdir = full_dir / "folder_abc12345"
+        subdir.mkdir(parents=True)
+        (subdir / "image.png").write_bytes(b"data")
+
+        with patch("tarragon.renderers.cache.cache_dir", return_value=tmp_path):
+            clear_full_res_cache()
+
+        assert not subdir.exists()
+        assert full_dir.exists()
+
+    def test_clear_full_res_cache_missing_dir_is_noop(self, tmp_path: Path) -> None:
+        """clear_full_res_cache does nothing when the full dir does not exist."""
+        with patch("tarragon.renderers.cache.cache_dir", return_value=tmp_path):
+            clear_full_res_cache()
+
+        assert not (tmp_path / "full").exists()
+
+    def test_clear_full_res_cache_refuses_non_full_dir(self, tmp_path: Path) -> None:
+        """clear_full_res_cache refuses to clear when the resolved dir is not named 'full'."""
+        target = tmp_path / "notfull"
+        target.mkdir()
+        (target / "image.png").write_bytes(b"data")
+        (tmp_path / "full").symlink_to(target, target_is_directory=True)
+
+        with patch("tarragon.renderers.cache.cache_dir", return_value=tmp_path):
+            clear_full_res_cache()
+
+        assert (target / "image.png").exists()
+
+    def test_clear_full_res_cache_removes_symlink_but_keeps_target(self, tmp_path: Path) -> None:
+        """clear_full_res_cache removes symlinks under full but leaves target files untouched."""
+        full_dir = tmp_path / "full"
+        full_dir.mkdir(parents=True)
+        target = tmp_path / "outside.png"
+        target.write_bytes(b"precious")
+        link = full_dir / "link.png"
+        link.symlink_to(target)
+
+        with patch("tarragon.renderers.cache.cache_dir", return_value=tmp_path):
+            clear_full_res_cache()
+
+        assert not link.is_symlink()
+        assert target.exists()
+        assert target.read_bytes() == b"precious"
+
+    def test_clear_full_res_cache_continues_after_permission_error(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """clear_full_res_cache logs a warning and continues when unlink raises PermissionError."""
+        full_dir = tmp_path / "full"
+        subdir = full_dir / "folder_abc12345"
+        subdir.mkdir(parents=True)
+        blocked = subdir / "blocked.png"
+        blocked.write_bytes(b"data")
+        other = full_dir / "other.png"
+        other.write_bytes(b"data")
+
+        real_unlink = Path.unlink
+
+        def flaky_unlink(path: Path, missing_ok: bool = False) -> None:
+            """Raise PermissionError for blocked.png, otherwise delegate to the real unlink."""
+            if path == blocked:
+                raise PermissionError("Permission denied")
+            real_unlink(path, missing_ok=missing_ok)
+
+        with (
+            caplog.at_level(logging.WARNING, logger="tarragon.renderers.cache"),
+            patch("tarragon.renderers.cache.cache_dir", return_value=tmp_path),
+            patch.object(Path, "unlink", flaky_unlink),
+        ):
+            clear_full_res_cache()
+
+        assert blocked.exists()
+        assert not other.exists()
+        assert "Failed to remove cache file" in caplog.text

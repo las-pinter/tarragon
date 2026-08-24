@@ -18,6 +18,7 @@ from tarragon.renderers.cache import (
     RESOLUTION_FULL,
     RESOLUTION_PREVIEW,
     RESOLUTION_THUMBNAIL,
+    clear_full_res_cache,
     derive_smaller_sizes,
     generate_cache_paths,
     generate_cache_uuid,
@@ -121,7 +122,17 @@ class ThumbnailService(QObject):
 
         shutdown_executor()
         self._threadpool.waitForDone(timeout_ms)
+        self._clear_full_res_cache()
         logger.debug("Shutdown complete")
+
+    def _clear_full_res_cache(self) -> None:
+        """Clear the full-resolution cache tier when enabled by the setting.
+
+        Runs after the thread pool has drained so no in-flight render can
+        write to ``cache/full`` while files are being deleted.  Disk-only:
+        database rows are left untouched.
+        """
+        clear_full_res_cache(enabled=self._settings_service.clear_full_res_on_exit.get())
 
     @Slot(FileInfo)
     def check_and_render(self, file_info: FileInfo) -> str:
@@ -380,9 +391,7 @@ class ThumbnailService(QObject):
             self.thumbnail_ready.emit(str(file_info.path), None, None, None)
             return
 
-        # Not saving the full resolution yet, because it has no use at the moment. It would just
-        # consume a lot of disk space.
-        # self._save_and_record(full_img, file_info, RESOLUTION_FULL, cache_paths["full"])
+        self._save_and_record(full_img, file_info, RESOLUTION_FULL, cache_paths["full"])
 
         smaller_sizes = derive_smaller_sizes(full_img, [RESOLUTION_THUMBNAIL, RESOLUTION_PREVIEW])
 

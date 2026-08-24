@@ -122,6 +122,14 @@ class _SettingColorTagEnabled(Setting):
         return cast(bool, super().get())
 
 
+class _SettingClearFullResOnExit(Setting):
+    def __init__(self, db: Database) -> None:
+        super().__init__(db, "clear_full_res_on_exit", True)
+
+    def get(self) -> bool:
+        return cast(bool, super().get())
+
+
 class _SettingColorTagPaletteSize(Setting):
     def __init__(self, db: Database) -> None:
         super().__init__(db, "color_tag_palette_size", 8, 2, 32)
@@ -222,6 +230,7 @@ class SettingsService:
 
         self.cache_dir = _SettingCacheDir(db)
         self.cache_format = _SettingCacheFormat(db)
+        self.clear_full_res_on_exit = _SettingClearFullResOnExit(db)
         self.color_tag_enabled = _SettingColorTagEnabled(db)
         self.color_tag_palette_size = _SettingColorTagPaletteSize(db)
         self.color_tag_min_share = _SettingColorTagMinShare(db)

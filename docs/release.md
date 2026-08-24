@@ -84,10 +84,6 @@ At runtime, `app_paths.data_dir()` checks for a `data` folder next to the execut
 
 An installed/non-portable variant (Inno Setup on Windows, DMG on macOS, .deb/AppImage on Linux) is a possible future addition, but is out of scope for now — see the packaging discussion for tradeoffs.
 
-## Crashlog
-
-On any unhandled exception, startup failure, or native crash, a `crashlog.txt` file is written to the data directory (the same folder as `tarragon.log`). The crashlog bootstrap is installed before any risky imports so it also catches import-time errors. The Nuitka build additionally passes `--force-stderr-spec={PROGRAM_BASE}.err.txt` to redirect stderr to a file next to the executable, catching even pre-Python/native stderr output.
-
 ## Code Signing (Post-MVP)
 
 For production releases, consider code signing:

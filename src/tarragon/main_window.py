@@ -350,7 +350,7 @@ class MainWindow(QMainWindow):
         self.grid_dock.setWidget(gallery_container)
 
         # Log panel — application log output in dedicated dock
-        self.log_panel = LogPanel(parent=self)
+        self.log_panel = LogPanel(settings_service=self._settings_service, parent=self)
         self.log_dock.setWidget(self.log_panel)
         # Hidden by default on first run only — a restored layout already
         # encodes whatever visibility the user last left it in.

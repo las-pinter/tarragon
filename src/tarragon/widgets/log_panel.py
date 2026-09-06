@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from tarragon.services.settings_service import SettingsService
 from tarragon.theme.colors import (
     AMBER_ACCENT,
     CORAL_MUTED,
@@ -54,8 +55,9 @@ class LogPanel(QWidget):
 
     log_signal = Signal(str, int)  # (formatted_message, log_level)
 
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(self, parent: QWidget | None = None, settings_service: SettingsService | None = None) -> None:
         super().__init__(parent)
+        self._settings_service = settings_service
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)
@@ -71,7 +73,10 @@ class LogPanel(QWidget):
         toolbar.addStretch()
 
         self._debug_checkbox = QCheckBox("Debug")
-        self._debug_checkbox.setChecked(False)
+        if self._settings_service is not None:
+            self._debug_checkbox.setChecked(self._settings_service.debug_mode.get())
+        else:
+            self._debug_checkbox.setChecked(False)
         self._debug_checkbox.toggled.connect(self.set_debug_enabled)
         toolbar.addWidget(self._debug_checkbox)
 
@@ -107,6 +112,8 @@ class LogPanel(QWidget):
     def set_debug_enabled(self, enabled: bool) -> None:
         """Toggle the root logger between DEBUG and INFO levels."""
         apply_debug_level(enabled)
+        if self._settings_service is not None:
+            self._settings_service.debug_mode.set(enabled)
 
 
 class QtLogHandler(logging.Handler):

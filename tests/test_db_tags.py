@@ -66,11 +66,24 @@ class TestEnsureTag:
         tag_3 = db.ensure_tag(TEST_TAG_NAME_3)
         assert tag_1 != tag_2 != tag_3
 
-    def test_auto_and_user_tags_coexist(self, db: Database) -> None:
-        """Auto color and user created tags can exist at the same time with the same name"""
+    def test_ensure_tag_keeps_first_creator_source(self, db: Database) -> None:
+        """ensure_tag never rewrites an existing row's source (first creator wins)."""
         tag_1 = db.ensure_tag(TEST_TAG_NAME_1, TagSource.AUTO_COLOR)
         tag_2 = db.ensure_tag(TEST_TAG_NAME_1, TagSource.USER)
-        assert tag_1 != tag_2
+        assert tag_1 != tag_2  # in-memory sources differ
+
+        stored = db.get_all_tags()
+        assert len(stored) == 1
+        assert next(iter(stored)).get_source() == TagSource.AUTO_COLOR
+
+    def test_ensure_tag_does_not_flip_user_source_to_auto(self, db: Database) -> None:
+        """Requesting AUTO_COLOR on an existing USER row leaves the stored source alone."""
+        db.ensure_tag(TEST_TAG_NAME_1, TagSource.USER)
+        db.ensure_tag(TEST_TAG_NAME_1, TagSource.AUTO_COLOR)
+
+        stored = db.get_all_tags()
+        assert len(stored) == 1
+        assert next(iter(stored)).get_source() == TagSource.USER
 
 
 class TestAddTagsToFile:
@@ -390,3 +403,98 @@ class TestReplaceAutoColorTags:
         assert _is_tag_associated_with_file(db, TEST_FILE_1, tag_old_2)
         assert _is_tag_associated_with_file(db, TEST_FILE_1, tag_new_1)
         assert _is_tag_associated_with_file(db, TEST_FILE_1, tag_new_2)
+
+    def test_replace_auto_color_only_affects_target_path(self, db: Database) -> None:
+        """Replacing auto-color tags on one path never touches other paths.
+
+        Regression: the old cleanup DELETE matched tag ids via the target path
+        but deleted rows globally, stripping the tag from every file.
+        """
+        tag = db.ensure_tag(TEST_TAG_NAME_1, TagSource.AUTO_COLOR)
+        db.add_tag_to_file(TEST_FILE_1, tag)
+        db.add_tag_to_file(TEST_FILE_2, tag)
+        assert _is_tag_associated_with_file(db, TEST_FILE_1, tag)
+        assert _is_tag_associated_with_file(db, TEST_FILE_2, tag)
+
+        db.replace_auto_color_tags(TEST_FILE_1, set())
+
+        assert not _is_tag_associated_with_file(db, TEST_FILE_1, tag)
+        assert _is_tag_associated_with_file(db, TEST_FILE_2, tag)
+
+    def test_user_tag_survives_auto_color_processing(self, db: Database) -> None:
+        """A USER tag association survives auto-color replacement and cleanup.
+
+        Regression: the per-association source must protect user tag rows from
+        the auto pipeline's cleanup, and ensure_tag must not flip the tags
+        table source.
+        """
+        user_tag = db.ensure_tag(TEST_TAG_NAME_1, TagSource.USER)
+        db.add_tag_to_file(TEST_FILE_1, user_tag)
+
+        # The auto pipeline detects the same name on the same file
+        db.replace_auto_color_tags(TEST_FILE_1, {user_tag})
+        assert _is_tag_associated_with_file(db, TEST_FILE_1, user_tag)
+
+        # A later cleanup pass must not delete the user's association
+        db.replace_auto_color_tags(TEST_FILE_1, set())
+        assert _is_tag_associated_with_file(db, TEST_FILE_1, user_tag)
+
+        # The tags table source is never flipped
+        stored = db.get_all_tags()
+        assert len(stored) == 1
+        assert next(iter(stored)).get_source() == TagSource.USER
+
+    def test_auto_color_association_cleaned_up_on_later_replace(self, db: Database) -> None:
+        """A second replace removes the auto association from the first pass.
+
+        Regression: stale auto-color associations accumulated because the
+        association source was only set in memory; the cleanup pass could not
+        find rows to delete.
+        """
+        tag = db.ensure_tag(TEST_TAG_NAME_1, TagSource.USER)
+        db.replace_auto_color_tags(TEST_FILE_1, {tag})
+        assert _is_tag_associated_with_file(db, TEST_FILE_1, tag)
+
+        db.replace_auto_color_tags(TEST_FILE_1, set())
+        assert not _is_tag_associated_with_file(db, TEST_FILE_1, tag)
+
+    def test_association_source_reflects_insert_path(self, db: Database) -> None:
+        """file_tags.source records who created each association."""
+        manual = db.ensure_tag(TEST_TAG_NAME_1, TagSource.USER)
+        auto = db.ensure_tag(TEST_TAG_NAME_2, TagSource.AUTO_COLOR)
+
+        db.add_tag_to_file(TEST_FILE_1, manual)
+        db.replace_auto_color_tags(TEST_FILE_2, {auto})
+
+        manual_rows = db.fetch_all("SELECT source FROM file_tags WHERE path = ?", (TEST_FILE_1,))
+        auto_rows = db.fetch_all("SELECT source FROM file_tags WHERE path = ?", (TEST_FILE_2,))
+        assert [r["source"] for r in manual_rows] == ["user"]
+        assert [r["source"] for r in auto_rows] == ["auto_color"]
+
+    def test_user_add_promotes_existing_auto_association(self, db: Database) -> None:
+        """A user's manual add upgrades an auto association so cleanup keeps it.
+
+        Regression: INSERT OR IGNORE left an existing 'auto_color' row intact
+        when the user later added the same tag on the same path; the next
+        cleanup pass then deleted the user's association (silent data loss).
+        """
+        color = db.ensure_tag(TEST_TAG_NAME_1, TagSource.AUTO_COLOR)
+        db.replace_auto_color_tags(TEST_FILE_1, {color})
+        assert _is_tag_associated_with_file(db, TEST_FILE_1, color)
+
+        # User later adds the same name on the same path
+        user_tag = db.ensure_tag(TEST_TAG_NAME_1, TagSource.USER)
+        db.add_tag_to_file(TEST_FILE_1, user_tag)
+
+        # The association row is now user-owned (assert BEFORE cleanup)
+        rows = db.fetch_all("SELECT source FROM file_tags WHERE path = ?", (TEST_FILE_1,))
+        assert [r["source"] for r in rows] == ["user"]
+
+        # Cleanup must not delete the (now user-owned) association
+        db.replace_auto_color_tags(TEST_FILE_1, set())
+        assert _is_tag_associated_with_file(db, TEST_FILE_1, color)
+
+        # The auto pipeline must never downgrade the user-owned row either
+        db.replace_auto_color_tags(TEST_FILE_1, {color})
+        rows = db.fetch_all("SELECT source FROM file_tags WHERE path = ?", (TEST_FILE_1,))
+        assert [r["source"] for r in rows] == ["user"]

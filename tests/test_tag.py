@@ -162,8 +162,8 @@ class TestTagEquality:
         )
         assert tag != other
 
-    def test_not_equal_when_usage_count_differs(self, tag: Tag) -> None:
-        """Tags with different usage counts are not equal."""
+    def test_equal_ignores_usage_count(self, tag: Tag) -> None:
+        """Tags with different usage counts are equal; count is volatile metadata."""
         other = Tag(
             id=tag.get_id(),
             name=tag.get_name(),
@@ -171,10 +171,10 @@ class TestTagEquality:
             usage_count=3,
             usage_paths=tag.get_usage_paths(),
         )
-        assert tag != other
+        assert tag == other
 
-    def test_not_equal_when_usage_paths_differs(self, tag: Tag) -> None:
-        """Tags with different usage paths are not equal."""
+    def test_equal_ignores_usage_paths(self, tag: Tag) -> None:
+        """Tags with different usage paths are equal; paths are volatile metadata."""
         other = Tag(
             id=tag.get_id(),
             name=tag.get_name(),
@@ -182,7 +182,7 @@ class TestTagEquality:
             usage_count=tag.get_usage_count(),
             usage_paths={TEST_FILE_PATH_1},
         )
-        assert tag != other
+        assert tag == other
 
     def test_equal_ignores_usage_paths_order(self) -> None:
         """Tags are equal when usage paths differ only in order."""
@@ -227,12 +227,12 @@ class TestTagHashing:
         )
         assert len({tag, equal_tag}) == 1
 
-    def test_hash_changes_after_mutation(self) -> None:
-        """Mutating a tag changes its hash because hash is based on repr."""
+    def test_hash_stable_after_volatile_mutation(self) -> None:
+        """Mutating volatile fields does not change the hash (identity-based hash)."""
         mutable_tag = Tag(id=TEST_TAG_ID_1, name=TEST_TAG_NAME_1)
         original_hash = hash(mutable_tag)
         mutable_tag.set_usage_count(3)
-        assert hash(mutable_tag) != original_hash
+        assert hash(mutable_tag) == original_hash
 
 
 class TestTagOrdering:

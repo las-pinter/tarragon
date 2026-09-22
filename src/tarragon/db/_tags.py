@@ -14,7 +14,12 @@ class TagsMixin(MixinBase):
     """Create, query, and delete tags and their file associations."""
 
     def ensure_tag(self, name: str, source: TagSource = TagSource.USER) -> Tag:
-        """Insert a tag if it doesn't exist. Returns the tag id."""
+        """Insert a tag if it doesn't exist and return it as a Tag.
+
+        The stored row's source is never rewritten on conflict (first creator
+        wins); the returned Tag carries the requested *source*, which callers
+        use to set the per-association ``file_tags.source``.
+        """
         logger.debug("Called - name: %s, source: %s", name, source)
         cursor = self._execute(
             "INSERT INTO tags (name, source) VALUES (?, ?) ON CONFLICT(name) DO UPDATE SET name=name RETURNING id",
@@ -27,15 +32,23 @@ class TagsMixin(MixinBase):
         return Tag(id=tag_id, name=name, usage_paths=None, source=source)
 
     def add_tag_to_files(self, paths: list[str], tag: Tag) -> None:
-        """Associate one or more file paths with a given tag."""
+        """Associate one or more file paths with a given tag.
+
+        The association row is recorded with the tag's source (defaulting to
+        ``user``). A user action (source ``user``) promotes an existing row to
+        user-owned; other sources never downgrade an existing row, so the auto
+        pipeline cannot overwrite a user association.
+        """
         logger.debug(
             "Called - paths: %s, tag: %s",
             paths,
             tag,
         )
         self._executemany(
-            "INSERT OR IGNORE INTO file_tags (path, tag_id) VALUES (?, ?)",
-            [(normalize_path(p), tag.get_id()) for p in paths],
+            "INSERT INTO file_tags (path, tag_id, source) VALUES (?, ?, ?) "
+            "ON CONFLICT(path, tag_id) DO UPDATE SET "
+            "source = CASE WHEN excluded.source = 'user' THEN 'user' ELSE file_tags.source END",
+            [(normalize_path(p), tag.get_id(), tag.get_source() or TagSource.USER) for p in paths],
         )
         self._commit()
 
@@ -134,17 +147,17 @@ class TagsMixin(MixinBase):
         self._commit()
 
     def replace_auto_color_tags(self, path: str, tags: set[Tag]) -> None:
-        """Delete old auto_color tags for a path and insert new ones."""
+        """Replace the auto_color associations for one path with *tags*.
+
+        Cleanup only touches ``auto_color`` associations for this exact path;
+        user associations (and auto associations on other paths) are never
+        affected. The auto pipeline's new associations are recorded with
+        ``auto_color`` source so a later replace can clean them up again.
+        """
         path = normalize_path(path)
         logger.debug("Called - path: %s, tags: %s", path, tags)
         self._execute(
-            "DELETE FROM file_tags \
-                WHERE tag_id IN ( \
-                    SELECT t.id \
-                    FROM tags t \
-                    LEFT JOIN file_tags ft ON ft.tag_id = t.id \
-                    WHERE path = ? AND source = ? \
-                )",
+            "DELETE FROM file_tags WHERE path = ? AND source = ?",
             (
                 path,
                 TagSource.AUTO_COLOR,
@@ -153,12 +166,11 @@ class TagsMixin(MixinBase):
         if tags:
             db_tags: list[Tag] = []
             for tag in tags:
-                ensured_tag = self.ensure_tag(tag.get_name())
-                ensured_tag.set_source(TagSource.AUTO_COLOR)
+                ensured_tag = self.ensure_tag(tag.get_name(), TagSource.AUTO_COLOR)
                 db_tags.append(ensured_tag)
 
             self._executemany(
-                "INSERT OR IGNORE INTO file_tags (path, tag_id) VALUES (?, ?)",
-                [(path, t.get_id()) for t in db_tags],
+                "INSERT OR IGNORE INTO file_tags (path, tag_id, source) VALUES (?, ?, ?)",
+                [(path, t.get_id(), TagSource.AUTO_COLOR) for t in db_tags],
             )
         self._commit()

@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS tags (
 CREATE TABLE IF NOT EXISTS file_tags (
     path TEXT NOT NULL,
     tag_id INTEGER NOT NULL,
+    source TEXT NOT NULL DEFAULT 'user',
     PRIMARY KEY (path, tag_id),
     FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
 );
@@ -204,8 +205,27 @@ class Base(MixinBase):
         """Execute INITIAL_SCHEMA; creates all tables if absent. Idempotent."""
         logger.info("Initializing database schema at %s", self._db_path)
         self._executescript(INITIAL_SCHEMA)
+        self._ensure_file_tags_source_column()
         self._commit()
         logger.info("Database schema initialized successfully")
+
+    def _ensure_file_tags_source_column(self) -> None:
+        """Backfill the ``file_tags.source`` column for pre-existing databases.
+
+        ``INITIAL_SCHEMA`` only shapes fresh databases; older databases were
+        created without the per-association source column. This is a small
+        idempotent guard (not a full migration) so existing installations do
+        not crash on ``file_tags`` writes or auto-color cleanup.
+        """
+        # Check and ALTER must be atomic: two concurrent init_schema() calls
+        # would otherwise both pass the check and the second ALTER would fail.
+        with self._lock:
+            rows = self._conn.execute("PRAGMA table_info(file_tags)").fetchall()
+            if "source" not in {str(row["name"]) for row in rows}:
+                # Legacy pre-existing rows get source='user' by design.
+                logger.info("Adding missing file_tags.source column")
+                self._conn.execute("ALTER TABLE file_tags ADD COLUMN source TEXT NOT NULL DEFAULT 'user'")
+                self._conn.commit()
 
     def close(self) -> None:
         """Close the underlying SQLite connection."""

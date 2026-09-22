@@ -47,6 +47,53 @@ class TestInitSchema:
         # Already initialized by fixture; call again.
         db.init_schema()  # Should not raise
 
+    def test_legacy_database_without_source_column_is_upgraded(self, tmp_path: Path) -> None:
+        """Databases created before file_tags.source existed are upgraded in place.
+
+        The per-association source guard is a stopgap (full migrations are a
+        separate scope): init_schema() must add the column and preserve
+        existing user associations.
+        """
+        legacy_path = tmp_path / "legacy.db"
+        conn = sqlite3.connect(str(legacy_path))
+        conn.executescript(
+            """
+            CREATE TABLE tags (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT UNIQUE NOT NULL,
+                source TEXT NOT NULL DEFAULT 'user'
+            );
+            CREATE TABLE file_tags (
+                path TEXT NOT NULL,
+                tag_id INTEGER NOT NULL,
+                PRIMARY KEY (path, tag_id),
+                FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
+            );
+            """
+        )
+        conn.execute("INSERT INTO tags (name, source) VALUES ('red', 'user')")
+        conn.execute("INSERT INTO file_tags (path, tag_id) VALUES ('/a.jpg', 1)")
+        conn.commit()
+        conn.close()
+
+        db = Database(legacy_path)
+        db.init_schema()
+        try:
+            columns = {str(row["name"]) for row in db._conn.execute("PRAGMA table_info(file_tags)").fetchall()}
+            assert "source" in columns
+
+            # The migrated database keeps working and preserves user data
+            tag = db.ensure_tag("red", TagSource.AUTO_COLOR)
+            db.replace_auto_color_tags("/a.jpg", {tag})
+            rows = db.fetch_all("SELECT source FROM file_tags WHERE path = '/a.jpg'")
+            assert [r["source"] for r in rows] == ["user"]
+
+            stored = db.get_all_tags()
+            assert len(stored) == 1
+            assert next(iter(stored)).get_source() == TagSource.USER
+        finally:
+            db.close()
+
 
 class TestSchemaVersion:
     """Schema version get/set roundtrip behaviour."""

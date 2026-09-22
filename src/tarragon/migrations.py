@@ -1,8 +1,9 @@
 """Migration runner for Tarragon's SQLite schema.
 
-Migrations are applied sequentially based on the stored schema version.
-Each migration function receives the Database instance and is responsible
-for its own SQL execution and committing.
+The schema version is a single generation marker, not a chain of per-version
+migrations: ``init_schema()`` brings the schema up to date (including the
+legacy ``file_tags.source`` guard) and the runner re-stamps the stored version
+to the current generation.
 """
 
 from __future__ import annotations
@@ -31,8 +32,10 @@ class MigrationRunner:
         """
         self._db.init_schema()
 
-        # After init_schema, bootstrap version if needed
-        if self._db.get_schema_version() == 0:
-            self._db.set_schema_version(1)
+        # After init_schema, bootstrap version if needed. Re-stamp legacy
+        # databases too: version 1 predates file_tags.source and must be
+        # recorded as migrated once init_schema() has added the column.
+        if self._db.get_schema_version() < 2:
+            self._db.set_schema_version(2)
 
         return self._db.get_schema_version()

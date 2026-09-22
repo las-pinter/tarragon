@@ -32,8 +32,6 @@ class Tag:
                 (self._id == other.get_id())
                 and (self._name == other.get_name())
                 and (self._source == other.get_source())
-                and (self._usage_count == other.get_usage_count())
-                and (self._usage_paths == other.get_usage_paths())
             )
         if isinstance(other, str):
             return self._name == other
@@ -41,7 +39,7 @@ class Tag:
             return False
 
     def __hash__(self) -> int:
-        return hash(self.__repr__())
+        return hash((self._id, self._name, self._source))
 
     def __lt__(self, other: "Tag") -> bool:
         return self._name < other.get_name()

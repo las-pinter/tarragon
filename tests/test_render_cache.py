@@ -221,7 +221,8 @@ class TestGenerateCachePaths:
 
     def test_generate_cache_paths_sanitizes_windows_illegal_stem_chars(self, tmp_path: Path) -> None:
         """generate_cache_paths replaces Windows-illegal characters in the source stem."""
-        source = Path("/photos/vacation/Weird\\Char.jpg")
+        # Backslash is a path separator on Windows, so use a non-separator illegal char.
+        source = Path("/photos/vacation/Weird<Char.jpg")
 
         with patch("tarragon.renderers.cache.cache_dir", return_value=tmp_path):
             paths = generate_cache_paths(source, "abc12345")

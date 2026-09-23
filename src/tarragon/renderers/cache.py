@@ -19,6 +19,11 @@ RESOLUTION_THUMBNAIL = 256
 RESOLUTION_PREVIEW = 1024
 RESOLUTION_FULL = None  # Original resolution
 
+# Windows reserves these device names as base names, case-insensitively.
+_WINDOWS_RESERVED_NAMES = frozenset(
+    {"CON", "PRN", "AUX", "NUL"} | {f"COM{i}" for i in range(1, 10)} | {f"LPT{i}" for i in range(1, 10)}
+)
+
 
 def generate_cache_uuid() -> str:
     """Generate a short UUID for cache organization.
@@ -30,34 +35,52 @@ def generate_cache_uuid() -> str:
     return uuid_mod.uuid4().hex[:8]  # 8 character hex string
 
 
-def generate_cache_paths(source_path: Path, cache_uuid: str) -> dict[str, Path]:
+def _sanitize_cache_name(name: str) -> str:
+    """Return a Windows-portable version of *name*.
+
+    Replaces Windows-illegal characters, strips trailing dots/spaces,
+    and prefixes an underscore when the base name is a reserved device
+    name (e.g. ``con``, case-insensitive).  Lossy: distinct names can
+    collapse to the same result.
+    """
+    sanitized = "".join("_" if c in '<>:"/\\|?*' or ord(c) < 32 else c for c in name)
+    # Windows forbids trailing dots and spaces.
+    sanitized = sanitized.rstrip(". ")
+    if sanitized.split(".", 1)[0].upper() in _WINDOWS_RESERVED_NAMES:
+        sanitized = f"_{sanitized}"
+    return sanitized
+
+
+def generate_cache_paths(source_path: Path, cache_uuid: str, output_format: str = "PNG") -> dict[str, Path]:
     """Generate cache paths for all resolutions.
 
-    Structure: ``cache/{resolution}/{folder_name}_{uuid}/{filename}``
+    Structure: ``cache/{resolution}/{folder_name}_{uuid}/{source name}.{ext}``
 
     Parameters
     ----------
     source_path:
-        The original source image path.  The parent folder name and file
-        stem are extracted to build human-readable cache filenames.
+        Source image path.  Folder name and full basename are sanitized
+        for Windows portability; the source extension is kept so
+        ``photo.jpg`` and ``photo.png`` produce distinct cache files.
     cache_uuid:
-        A short UUID string (see :func:`generate_cache_uuid`) used to
-        uniquely identify this cache entry.
+        Short UUID (see :func:`generate_cache_uuid`) identifying this entry.
+    output_format:
+        Cache format; must match what :func:`save_to_cache` writes.
+        ``"JPEG"`` produces ``.jpg`` files, anything else ``.png``.
 
     Returns
     -------
     dict[str, Path]
-        Mapping of resolution tier names to their cache file paths.
-        Keys: ``'256'``, ``'1024'``, ``'full'``.
+        Mapping of resolution tiers (``'256'``, ``'1024'``, ``'full'``)
+        to cache file paths.
 
     Notes
     -----
-    Directories are created on demand (``mkdir(parents=True, exist_ok=True)``).
-    Uses :func:`tarragon.app_paths.cache_dir` as the cache root.
+    Creates directories on demand beneath the :func:`tarragon.app_paths.cache_dir` root.
     """
-    # Extract folder name and filename
-    folder_name = source_path.parent.name
-    filename = source_path.stem
+    folder_name = _sanitize_cache_name(source_path.parent.name)
+    filename = _sanitize_cache_name(f"{source_path.stem}{source_path.suffix}")
+    cache_suffix = ".jpg" if output_format.upper() == "JPEG" else ".png"
 
     # Create base directory: cache/{folder_name}_{uuid}
     base_name = f"{folder_name}_{cache_uuid}"
@@ -67,17 +90,14 @@ def generate_cache_paths(source_path: Path, cache_uuid: str) -> dict[str, Path]:
     for resolution in (str(RESOLUTION_THUMBNAIL), str(RESOLUTION_PREVIEW), "full"):
         resolution_dir = cache_dir() / resolution / base_name
         resolution_dir.mkdir(parents=True, exist_ok=True)
-        paths[resolution] = resolution_dir / f"{filename}.png"
+        paths[resolution] = resolution_dir / f"{filename}{cache_suffix}"
 
     return paths
 
 
 def invalidate_cache_files(db: Any, source_path: str) -> None:
-    """Delete cached thumbnail files from disk and remove the DB record.
-
-    Looks up the cache record for *source_path* in *db*, deletes the
-    actual PNG files for all three resolution tiers (256px, 1024px, full),
-    then removes the database row.
+    """Delete the cached files for *source_path* and remove the DB record.
+    No file extension is assumed; it follows the ``cache_format`` setting.
 
     Parameters
     ----------

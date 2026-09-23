@@ -200,9 +200,8 @@ class ThumbnailService(QObject):
     def invalidate_and_render(self, source_path: Path) -> None:
         """Delete cached thumbnails and re-render from source.
 
-        Invalidates all cache files for *source_path* (deletes PNGs from
-        disk and removes the DB record), then triggers a fresh render
-        via :meth:`check_and_render`.
+        Invalidates all cache files for *source_path*, then triggers a
+        fresh render via :meth:`check_and_render`.
 
         Parameters
         ----------
@@ -311,7 +310,7 @@ class ThumbnailService(QObject):
         folder_path = str(file_info.path.parent)
         candidate_uuid = cached.get("cache_uuid") or generate_cache_uuid()
         cache_uuid = self._db.get_or_create_folder_uuid(folder_path, candidate_uuid)
-        cache_paths = generate_cache_paths(file_info.path, cache_uuid)
+        cache_paths = generate_cache_paths(file_info.path, cache_uuid, self._cache_format)
 
         # Track which paths to write to DB (preserve existing, add new)
         final_thumb_path = cached.get("thumbnail_cache_path")
@@ -375,7 +374,7 @@ class ThumbnailService(QObject):
         # when two threads process images from the same folder simultaneously.
         folder_path = str(file_info.path.parent)
         cache_uuid = self._db.get_or_create_folder_uuid(folder_path, generate_cache_uuid())
-        cache_paths = generate_cache_paths(file_info.path, cache_uuid)
+        cache_paths = generate_cache_paths(file_info.path, cache_uuid, self._cache_format)
 
         if file_info.extension.lower() in {".psd", ".psb"}:
             threshold = self._settings_service.large_canvas_threshold_mp.get()

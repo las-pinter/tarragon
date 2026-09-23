@@ -1089,7 +1089,7 @@ class TestPerFolderUuid:
         # Should have called the atomic method with the generated candidate UUID
         db_mock.get_or_create_folder_uuid.assert_called_once_with(str(tmp_path), "new-uuid-1")
         # generate_cache_paths should have been called with the UUID returned by the atomic call
-        mock_paths.assert_called_once_with(file_info.path, "new-uuid-1")
+        mock_paths.assert_called_once_with(file_info.path, "new-uuid-1", "PNG")
 
     def test_two_images_same_folder_share_uuid(
         self,

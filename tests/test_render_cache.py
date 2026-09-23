@@ -184,18 +184,109 @@ class TestGenerateCachePaths:
         assert str(RESOLUTION_PREVIEW) in paths
         assert "full" in paths
 
-        # Check structure: cache/{resolution}/{folder}_{uuid}/{filename}.png
+        # Check structure: cache/{resolution}/{folder}_{uuid}/{source name}.{ext}
         assert (
             paths[str(RESOLUTION_THUMBNAIL)]
-            == tmp_path / str(RESOLUTION_THUMBNAIL) / "vacation_abc12345" / "sunset.png"
+            == tmp_path / str(RESOLUTION_THUMBNAIL) / "vacation_abc12345" / "sunset.jpg.png"
         )
-        assert paths[str(RESOLUTION_PREVIEW)] == tmp_path / str(RESOLUTION_PREVIEW) / "vacation_abc12345" / "sunset.png"
-        assert paths["full"] == tmp_path / "full" / "vacation_abc12345" / "sunset.png"
+        assert (
+            paths[str(RESOLUTION_PREVIEW)]
+            == tmp_path / str(RESOLUTION_PREVIEW) / "vacation_abc12345" / "sunset.jpg.png"
+        )
+        assert paths["full"] == tmp_path / "full" / "vacation_abc12345" / "sunset.jpg.png"
 
         # Directories created
         assert (tmp_path / str(RESOLUTION_THUMBNAIL) / "vacation_abc12345").exists()
         assert (tmp_path / str(RESOLUTION_PREVIEW) / "vacation_abc12345").exists()
         assert (tmp_path / "full" / "vacation_abc12345").exists()
+
+    def test_generate_cache_paths_distinct_when_stem_matches_but_extension_differs(self, tmp_path: Path) -> None:
+        """generate_cache_paths names cache files distinctly when two sources share a stem."""
+        with patch("tarragon.renderers.cache.cache_dir", return_value=tmp_path):
+            jpg_paths = generate_cache_paths(Path("/photos/vacation/photo.jpg"), "abc12345")
+            png_paths = generate_cache_paths(Path("/photos/vacation/photo.png"), "abc12345")
+
+        assert jpg_paths["full"].name == "photo.jpg.png"
+        assert png_paths["full"].name == "photo.png.png"
+        assert jpg_paths["full"] != png_paths["full"]
+
+    def test_generate_cache_paths_sanitizes_windows_illegal_suffix_chars(self, tmp_path: Path) -> None:
+        """generate_cache_paths replaces Windows-illegal characters in the source suffix."""
+        source = Path("/photos/vacation/photo.we:ird")
+
+        with patch("tarragon.renderers.cache.cache_dir", return_value=tmp_path):
+            paths = generate_cache_paths(source, "abc12345")
+
+        assert paths["full"].name == "photo.we_ird.png"
+
+    def test_generate_cache_paths_sanitizes_windows_illegal_stem_chars(self, tmp_path: Path) -> None:
+        """generate_cache_paths replaces Windows-illegal characters in the source stem."""
+        source = Path("/photos/vacation/Weird\\Char.jpg")
+
+        with patch("tarragon.renderers.cache.cache_dir", return_value=tmp_path):
+            paths = generate_cache_paths(source, "abc12345")
+
+        assert paths["full"].name == "Weird_Char.jpg.png"
+
+    def test_generate_cache_paths_sanitization_can_collapse_weird_names(self, tmp_path: Path) -> None:
+        """generate_cache_paths may merge distinct pathological names onto one cache name."""
+        with patch("tarragon.renderers.cache.cache_dir", return_value=tmp_path):
+            colon_paths = generate_cache_paths(Path("/photos/vacation/photo.a:b"), "abc12345")
+            question_paths = generate_cache_paths(Path("/photos/vacation/photo.a?b"), "abc12345")
+
+        assert colon_paths["full"].name == "photo.a_b.png"
+        assert question_paths["full"].name == "photo.a_b.png"
+
+    def test_generate_cache_paths_extension_follows_png_format(self, tmp_path: Path) -> None:
+        """generate_cache_paths produces .png files for the default PNG format."""
+        source = Path("/photos/vacation/sunset.jpg")
+
+        with patch("tarragon.renderers.cache.cache_dir", return_value=tmp_path):
+            paths = generate_cache_paths(source, "abc12345")
+
+        assert paths["full"].name == "sunset.jpg.png"
+
+    def test_generate_cache_paths_extension_follows_jpeg_format(self, tmp_path: Path) -> None:
+        """generate_cache_paths produces .jpg files when the cache format is JPEG."""
+        source = Path("/photos/vacation/sunset.jpg")
+
+        with patch("tarragon.renderers.cache.cache_dir", return_value=tmp_path):
+            paths = generate_cache_paths(source, "abc12345", "JPEG")
+
+        assert paths["full"].name == "sunset.jpg.jpg"
+
+    def test_generate_cache_paths_sanitizes_folder_name(self, tmp_path: Path) -> None:
+        """generate_cache_paths replaces Windows-illegal characters in the parent folder name."""
+        source = Path("/photos/vacation:2024/sunset.jpg")
+
+        with patch("tarragon.renderers.cache.cache_dir", return_value=tmp_path):
+            paths = generate_cache_paths(source, "abc12345")
+
+        assert paths["full"].parent.name == "vacation_2024_abc12345"
+        assert paths["full"] == tmp_path / "full" / "vacation_2024_abc12345" / "sunset.jpg.png"
+
+    def test_generate_cache_paths_trims_trailing_dot_and_space(self, tmp_path: Path) -> None:
+        """generate_cache_paths strips trailing dots and spaces from the source name."""
+        with patch("tarragon.renderers.cache.cache_dir", return_value=tmp_path):
+            dot_paths = generate_cache_paths(Path("/photos/vacation/photo.jpg."), "abc12345")
+            space_paths = generate_cache_paths(Path("/photos/vacation/photo.jpg "), "abc12345")
+
+        assert dot_paths["full"].name == "photo.jpg.png"
+        assert space_paths["full"].name == "photo.jpg.png"
+
+    def test_generate_cache_paths_guards_reserved_windows_names(self, tmp_path: Path) -> None:
+        """generate_cache_paths prefixes source names whose base name is a Windows device name."""
+        with patch("tarragon.renderers.cache.cache_dir", return_value=tmp_path):
+            con_paths = generate_cache_paths(Path("/photos/vacation/con"), "abc12345")
+            con_jpg_paths = generate_cache_paths(Path("/photos/vacation/con.jpg"), "abc12345")
+            upper_paths = generate_cache_paths(Path("/photos/vacation/CON.jpg"), "abc12345")
+            com10_paths = generate_cache_paths(Path("/photos/vacation/com10.txt"), "abc12345")
+
+        assert con_paths["full"].name == "_con.png"
+        assert con_jpg_paths["full"].name == "_con.jpg.png"
+        assert upper_paths["full"].name == "_CON.jpg.png"
+        # COM10 is not reserved, only COM1-COM9.
+        assert com10_paths["full"].name == "com10.txt.png"
 
 
 class TestDeriveSmallerSizes:

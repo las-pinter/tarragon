@@ -37,6 +37,9 @@ from tarragon.services.tag_service import TagService
 
 logger = logging.getLogger(__name__)
 
+# Maximum time to wait for in-flight renders to drain before giving up.
+POOL_DRAIN_TIMEOUT_MS = 5000
+
 
 class _RenderAllTask(QRunnable):
     """Runs multi-resolution rendering in a QThreadPool worker thread."""
@@ -117,27 +120,37 @@ class ThumbnailService(QObject):
         Cancels pending renders and waits for the thread pool to drain so
         no in-flight render can write to the cache while files are being
         deleted, then clears the cache tree and the thumbnails table, and
-        finally resets the cancel flag so new renders can proceed.
+        finally resets the cancel flag so new renders can proceed. If the
+        pool does not drain within the timeout, the purge is aborted so no
+        cache files are deleted while a render may still be writing.
         """
         self.cancel_pending()
-        self._threadpool.waitForDone()
+        if not self._threadpool.waitForDone(POOL_DRAIN_TIMEOUT_MS):
+            logger.warning("purge_cache: thread pool did not drain within %d ms; aborting purge", POOL_DRAIN_TIMEOUT_MS)
+            self.reset_cancel()
+            return
         clear_cache()
         self._db.clear_thumbnails()
         self.reset_cancel()
 
-    def shutdown(self, timeout_ms: int = 5000) -> None:
+    def shutdown(self, timeout_ms: int = POOL_DRAIN_TIMEOUT_MS) -> None:
         """Graceful shutdown. Cancel pending tasks, wait for running ones.
 
         Args:
             timeout_ms: Maximum time to wait for in-flight tasks to finish
-            (milliseconds). Defaults to 5000 (5 seconds).
+            (milliseconds). Defaults to POOL_DRAIN_TIMEOUT_MS (5 seconds).
         """
         self.cancel_pending()
         from tarragon.renderers.psd import shutdown_executor
 
         shutdown_executor()
-        self._threadpool.waitForDone(timeout_ms)
-        self._clear_full_res_cache()
+        drained = self._threadpool.waitForDone(timeout_ms)
+        if drained:
+            self._clear_full_res_cache()
+        else:
+            logger.warning(
+                "shutdown: thread pool did not drain within %d ms; skipping full-res cache clear", timeout_ms
+            )
         logger.debug("Shutdown complete")
 
     def _clear_full_res_cache(self) -> None:

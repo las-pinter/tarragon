@@ -18,7 +18,7 @@ from tarragon.db.database import Database
 from tarragon.renderers.cache import RESOLUTION_FULL, RESOLUTION_PREVIEW, RESOLUTION_THUMBNAIL, invalidate_cache_files
 from tarragon.renderers.psd import render_psd_image
 from tarragon.scanner import FileInfo, scan_folder
-from tarragon.services.thumbnail_service import ThumbnailService, _RenderAllTask
+from tarragon.services.thumbnail_service import POOL_DRAIN_TIMEOUT_MS, ThumbnailService, _RenderAllTask
 
 SUPER_LONG_PATH = "/" + "a" * 4096  # Exceeds typical FS path limits
 UNICODE_PATH = "照片/图像/画像/הוראה/ਤਸਵੀਰ/file.png"
@@ -377,6 +377,7 @@ class TestCancellation:
         service: ThumbnailService,
     ) -> None:
         """shutdown() cancels pending work and waits for the threadpool."""
+        service._threadpool.waitForDone.return_value = True  # type: ignore[attr-defined]
         service.shutdown(timeout_ms=1000)
         assert service._cancel_event.is_set()
         service._threadpool.waitForDone.assert_called_once_with(1000)  # type: ignore[attr-defined]
@@ -385,9 +386,10 @@ class TestCancellation:
         self,
         service: ThumbnailService,
     ) -> None:
-        """shutdown() uses 5000 ms timeout by default."""
+        """shutdown() uses POOL_DRAIN_TIMEOUT_MS timeout by default."""
+        service._threadpool.waitForDone.return_value = True  # type: ignore[attr-defined]
         service.shutdown()
-        service._threadpool.waitForDone.assert_called_once_with(5000)  # type: ignore[attr-defined]
+        service._threadpool.waitForDone.assert_called_once_with(POOL_DRAIN_TIMEOUT_MS)  # type: ignore[attr-defined]
 
     def test_shutdown_clears_full_res_cache_when_enabled(
         self,
@@ -396,6 +398,7 @@ class TestCancellation:
     ) -> None:
         """shutdown() clears the full-res cache when the setting is enabled."""
         settings_mock.clear_full_res_on_exit.get.return_value = True
+        service._threadpool.waitForDone.return_value = True  # type: ignore[attr-defined]
         with patch("tarragon.services.thumbnail_service.clear_full_res_cache") as mock_clear:
             service.shutdown(timeout_ms=1000)
         mock_clear.assert_called_once_with(enabled=True)
@@ -407,9 +410,32 @@ class TestCancellation:
     ) -> None:
         """shutdown() passes enabled=False to cleanup when the setting is disabled."""
         settings_mock.clear_full_res_on_exit.get.return_value = False
+        service._threadpool.waitForDone.return_value = True  # type: ignore[attr-defined]
         with patch("tarragon.services.thumbnail_service.clear_full_res_cache") as mock_clear:
             service.shutdown(timeout_ms=1000)
         mock_clear.assert_called_once_with(enabled=False)
+
+    def test_shutdown_skips_full_res_clear_when_pool_does_not_drain(
+        self,
+        service: ThumbnailService,
+        settings_mock: MagicMock,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """shutdown() skips the full-res cache clear and warns when the pool does not drain."""
+        settings_mock.clear_full_res_on_exit.get.return_value = True
+        service._threadpool.waitForDone.return_value = False  # type: ignore[attr-defined]
+        with patch.object(service, "_clear_full_res_cache") as mock_clear:
+            service.shutdown(timeout_ms=1000)
+
+        mock_clear.assert_not_called()
+        service._threadpool.waitForDone.assert_called_once_with(1000)  # type: ignore[attr-defined]
+        expected = "shutdown: thread pool did not drain within 1000 ms; skipping full-res cache clear"
+        warning_messages = [
+            r.message
+            for r in caplog.records
+            if r.name == "tarragon.services.thumbnail_service" and r.levelname == "WARNING"
+        ]
+        assert warning_messages == [expected]
 
 
 class TestRenderAllTaskCancellation:
@@ -1491,10 +1517,32 @@ class TestPurgeCache:
             service.purge_cache()
 
         mock_cancel.assert_called_once_with()
-        service._threadpool.waitForDone.assert_called_once_with()  # type: ignore[attr-defined]
+        service._threadpool.waitForDone.assert_called_once_with(POOL_DRAIN_TIMEOUT_MS)  # type: ignore[attr-defined]
         mock_clear.assert_called_once_with()
         service._db.clear_thumbnails.assert_called_once_with()  # type: ignore[attr-defined]
         assert not service._cancel_event.is_set()
+
+    def test_purge_cache_aborts_when_pool_does_not_drain(
+        self,
+        service: ThumbnailService,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """purge_cache aborts without clearing disk or DB when the pool does not drain."""
+        service._threadpool.waitForDone.return_value = False  # type: ignore[attr-defined]
+        with patch("tarragon.services.thumbnail_service.clear_cache") as mock_clear:
+            service.purge_cache()
+
+        service._threadpool.waitForDone.assert_called_once_with(POOL_DRAIN_TIMEOUT_MS)  # type: ignore[attr-defined]
+        mock_clear.assert_not_called()
+        service._db.clear_thumbnails.assert_not_called()  # type: ignore[attr-defined]
+        assert not service._cancel_event.is_set()
+        expected = f"purge_cache: thread pool did not drain within {POOL_DRAIN_TIMEOUT_MS} ms; aborting purge"
+        warning_messages = [
+            r.message
+            for r in caplog.records
+            if r.name == "tarragon.services.thumbnail_service" and r.levelname == "WARNING"
+        ]
+        assert warning_messages == [expected]
 
     def test_purge_cache_deletes_files_and_db_rows(
         self,
@@ -1626,10 +1674,10 @@ class TestPurgeCache:
 
         real_wait_for_done = svc._threadpool.waitForDone
 
-        def wrapped_wait_for_done() -> bool:
+        def wrapped_wait_for_done(timeout_ms: int) -> bool:
             """Signal that purge reached waitForDone, then delegate to the real method."""
             reached_wait.set()
-            return real_wait_for_done()
+            return real_wait_for_done(timeout_ms)
 
         svc._threadpool.waitForDone = wrapped_wait_for_done  # type: ignore[assignment]
 
@@ -1655,4 +1703,4 @@ class TestPurgeCache:
 
         assert not purge_errors
         assert not late_file.exists()
-        svc._threadpool.waitForDone()
+        svc._threadpool.waitForDone(POOL_DRAIN_TIMEOUT_MS)

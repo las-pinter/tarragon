@@ -82,6 +82,10 @@ class GalleryController:
         self._filter_bar = filter_bar
         self._search_edit = search_edit
         self._search_timer = search_timer
+        # Debounce timer for preview tag changes (coalesces render bursts).
+        self._tags_query_timer = QTimer()
+        self._tags_query_timer.setSingleShot(True)
+        self._tags_query_timer.setInterval(300)
         self._preview_panel = preview_panel
         self._tag_service = tag_service
         self._db = db
@@ -94,6 +98,7 @@ class GalleryController:
         # ── Wire internal signal connections ────────────────────────
         self._search_edit.textChanged.connect(self.on_search_text_changed)
         self._search_timer.timeout.connect(self.run_filtered_query)
+        self._tags_query_timer.timeout.connect(self.run_filtered_query)
         self._filter_bar.color_filter_changed.connect(self.on_color_filter_changed)
         self._filter_bar.tag_filter_changed.connect(self.on_tag_filter_changed)
         self._filter_bar.folder_filter_changed.connect(self.on_folder_filter_changed)
@@ -302,9 +307,13 @@ class GalleryController:
             self._preview_panel.set_tags(union_tags, selected_paths=paths)
 
     def on_preview_tags_changed(self) -> None:
-        """Handle tag changes from the preview panel — refresh gallery query."""
-        logger.debug("Tags changed via preview panel, refreshing gallery")
-        self.run_filtered_query()
+        """Restart the debounce timer when preview tags change externally."""
+        # Tag edits cannot change results unless a tag or color tag filter is active.
+        if not self._filter_state.tags and not self._filter_state.color_tags:
+            logger.debug("Skipped - no tag filter active")
+            return
+        logger.debug("Called - scheduling re-query")
+        self._tags_query_timer.start()
 
     # ── Preview Image Loading ──────────────────────────────────────
 

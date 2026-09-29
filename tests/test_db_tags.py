@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sqlite3
 from collections.abc import Generator
 from pathlib import Path
 
@@ -349,6 +350,33 @@ class TestDeleteTag:
         tags = db.get_all_tags()
         assert tag_1 not in tags
         assert tag_2 in tags
+
+
+class TestForeignKeyCascade:
+    """file_tags rows are cascade-deleted through the schema foreign key."""
+
+    def test_raw_tag_delete_cascades_file_tags(self, db: Database) -> None:
+        """A raw DELETE on tags removes associated file_tags rows via CASCADE."""
+        tag = db.ensure_tag(TEST_TAG_NAME_1)
+        test_files = [TEST_FILE_1, TEST_FILE_2]
+
+        tag.set_source(TagSource.USER)
+        db.add_tag_to_files(test_files, tag)
+
+        assert db.fetch_all("SELECT COUNT(*) as cnt FROM file_tags")[0]["cnt"] == 2
+
+        db._conn.execute("DELETE FROM tags WHERE id = ?", (tag.get_id(),))
+        db._conn.commit()
+
+        assert db.fetch_all("SELECT COUNT(*) as cnt FROM file_tags")[0]["cnt"] == 0
+
+    def test_insert_file_tag_with_unknown_tag_id_raises_integrity_error(self, db: Database) -> None:
+        """file_tags rejects a tag_id with no matching tags row."""
+        with pytest.raises(sqlite3.IntegrityError):
+            db._conn.execute(
+                "INSERT INTO file_tags (path, tag_id) VALUES (?, ?)",
+                (TEST_FILE_1, 999999),
+            )
 
 
 class TestReplaceAutoColorTags:

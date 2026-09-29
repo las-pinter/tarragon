@@ -142,7 +142,6 @@ class TagsMixin(MixinBase):
     def delete_tag(self, tag: Tag) -> None:
         """Delete a tag from the database. Also removes all file-tag associations."""
         logger.debug("Called - tag: %s", tag)
-        self._execute("DELETE FROM file_tags WHERE tag_id = ?", (tag.get_id(),))
         self._execute("DELETE FROM tags WHERE id = ?", (tag.get_id(),))
         self._commit()
 

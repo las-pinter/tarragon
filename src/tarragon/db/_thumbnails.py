@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from tarragon.db._base import MixinBase, _row_to_dict, normalize_path
+from tarragon.db._base import MixinBase, _row_to_dict, folder_like, normalize_path
 
 logger = logging.getLogger(__name__)
 
@@ -117,8 +117,8 @@ class ThumbnailsMixin(MixinBase):
         logger.debug("Called - folder_path: %s", folder_path)
         folder_path = normalize_path(folder_path)
         cursor = self._execute(
-            "SELECT * FROM thumbnails WHERE path LIKE ?",
-            (f"{folder_path.rstrip('/')}/%",),
+            "SELECT * FROM thumbnails WHERE path LIKE ? ESCAPE '\\'",
+            (folder_like(folder_path),),
         )
         return [_row_to_dict(row) for row in cursor.fetchall()]
 
@@ -134,8 +134,8 @@ class ThumbnailsMixin(MixinBase):
         logger.debug("Called - folder_path: %s", folder_path)
         folder_path = normalize_path(folder_path)
         self._execute(
-            "DELETE FROM thumbnails WHERE path LIKE ?",
-            (f"{folder_path.rstrip('/')}/%",),
+            "DELETE FROM thumbnails WHERE path LIKE ? ESCAPE '\\'",
+            (folder_like(folder_path),),
         )
         self._commit()
 

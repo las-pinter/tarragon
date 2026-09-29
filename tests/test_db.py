@@ -299,6 +299,38 @@ class TestThumbnailListForFolder:
         paths = {r["path"] for r in results}
         assert paths == {"/photos/img.png"}
 
+    def test_underscore_in_folder_name_is_literal(self, db: Database) -> None:
+        """Folders containing '_' only match literal descendants, not wildcard lookalikes."""
+        db.upsert_thumbnail("/my_photos/a.png", mtime=1, size=100, width=10, height=10, cache_uuid="us1")
+        db.upsert_thumbnail("/myXphotos/b.png", mtime=2, size=200, width=10, height=10, cache_uuid="us2")
+
+        results = db.list_thumbnails_for_folder("/my_photos")
+        paths = {r["path"] for r in results}
+        assert paths == {"/my_photos/a.png"}
+
+    def test_percent_in_folder_name_is_literal(self, db: Database) -> None:
+        """Folders containing '%' only match literal descendants, not wildcard lookalikes."""
+        db.upsert_thumbnail("/my%photos/a.png", mtime=1, size=100, width=10, height=10, cache_uuid="pc1")
+        db.upsert_thumbnail("/myXXphotos/b.png", mtime=2, size=200, width=10, height=10, cache_uuid="pc2")
+
+        results = db.list_thumbnails_for_folder("/my%photos")
+        paths = {r["path"] for r in results}
+        assert paths == {"/my%photos/a.png"}
+
+
+class TestDeleteThumbnailsByFolder:
+    """delete_thumbnails_by_folder removes thumbnail records under a folder."""
+
+    def test_underscore_in_folder_name_is_literal(self, db: Database) -> None:
+        """Deleting '/my_photos' must NOT delete lookalike sibling '/myXphotos' thumbnails."""
+        db.upsert_thumbnail("/my_photos/a.png", mtime=1, size=100, width=10, height=10, cache_uuid="dl1")
+        db.upsert_thumbnail("/myXphotos/b.png", mtime=2, size=200, width=10, height=10, cache_uuid="dl2")
+
+        db.delete_thumbnails_by_folder("/my_photos")
+
+        assert db.get_thumbnail("/my_photos/a.png") is None
+        assert db.get_thumbnail("/myXphotos/b.png") is not None
+
 
 class TestAddFavorite:
     """add_favorite inserts favourite entries."""

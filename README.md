@@ -113,6 +113,24 @@ See [Release Build Instructions](docs/release.md) for how to build a standalone 
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for developer setup, project architecture, and contribution guidelines.
 
+## Data & Schema
+
+Tarragon stores its library in a local SQLite database. The schema uses a
+single generation marker (`schema_version`) rather than a versioned migration
+chain; there is intentionally no migration framework at version 0.1.0.
+
+On every startup, `MigrationRunner.run()` calls `init_schema()`, which creates
+any missing tables (`CREATE TABLE IF NOT EXISTS`) and applies idempotent
+`ALTER` guards for older databases, then re-stamps the stored version marker
+to the current generation. Existing installs are upgraded in place, at startup,
+with no user action required.
+
+If you change `INITIAL_SCHEMA`, you must (a) bump the `schema_version` marker
+and (b) carry an idempotent `ALTER`-upgrade guard for existing databases — the
+`file_tags.source` column guard is the precedent. A real migration framework
+becomes warranted at the first schema delta a guard cannot express, or the
+first user-installed database that needs an upgrade.
+
 ## Screenshots
 
 *Coming soon, we're polishing the interface for its close-up.*

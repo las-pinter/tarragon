@@ -432,3 +432,23 @@ class TestQueryService:
 
         # Both queries should return the same results
         assert fwd_paths == bwd_paths
+
+    def test_folder_filter_escapes_underscore(self, db: Database) -> None:
+        """Folder '_' filters only match literal descendants, not sibling lookalikes."""
+        svc = QueryService(db)
+        db.upsert_thumbnail("/my_photos/a.png", mtime=1, size=100, width=10, height=10, cache_uuid="qu1")
+        db.upsert_thumbnail("/myXphotos/b.png", mtime=2, size=200, width=10, height=10, cache_uuid="qu2")
+
+        result = svc.query(folder_filters={"/my_photos"})
+        paths = {str(p) for p in result}
+        assert paths == {str(Path("/my_photos/a.png"))}
+
+    def test_folder_filter_escapes_percent(self, db: Database) -> None:
+        """Folder '%' filters only match literal descendants, not wildcard lookalikes."""
+        svc = QueryService(db)
+        db.upsert_thumbnail("/my%photos/a.png", mtime=1, size=100, width=10, height=10, cache_uuid="qu3")
+        db.upsert_thumbnail("/myXXphotos/b.png", mtime=2, size=200, width=10, height=10, cache_uuid="qu4")
+
+        result = svc.query(folder_filters={"/my%photos"})
+        paths = {str(p) for p in result}
+        assert paths == {str(Path("/my%photos/a.png"))}

@@ -63,6 +63,25 @@ def normalize_path(path: str) -> str:
     return path.replace("\\", "/")
 
 
+def _escape_like(value: str) -> str:
+    """Escape LIKE wildcards so they match literally.
+
+    Pairs with an ``ESCAPE '\\'`` clause on the query.  Backslash must be
+    escaped first, otherwise it would swallow the escape sequences added
+    for ``%`` and ``_``.
+    """
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def folder_like(folder: str) -> str:
+    """Return a LIKE pattern matching a folder and all its descendants.
+
+    Wildcards in the folder name are escaped so only literal matches are
+    found.  Callers normalize the folder path to forward slashes first.
+    """
+    return _escape_like(folder.rstrip("/")) + "/%"
+
+
 def _row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
     """Convert a sqlite3.Row to a plain dict."""
     return dict(row)

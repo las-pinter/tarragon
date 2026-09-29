@@ -12,7 +12,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from tarragon.db._base import normalize_path
+from tarragon.db._base import folder_like, normalize_path
 from tarragon.db.common.tag import Tag
 from tarragon.db.database import Database
 from tarragon.sorting import SortMode, sort_paths
@@ -90,8 +90,8 @@ class QueryService:
                 # Normalize to forward slashes so the LIKE pattern matches
                 # paths stored in the database (also normalized to '/').
                 normalized = normalize_path(folder)
-                folder_conds.append("path LIKE ?")
-                params.append(f"{normalized.rstrip('/')}/%")
+                folder_conds.append("path LIKE ? ESCAPE '\\'")
+                params.append(folder_like(normalized))
             conditions.append(f"({' OR '.join(folder_conds)})")
 
         # Filename filter

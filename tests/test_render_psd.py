@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import builtins
 import io
+import logging
 import threading
 from concurrent.futures import CancelledError
 from pathlib import Path
@@ -17,6 +18,7 @@ from psd_tools import PSDImage
 import tarragon.renderers.psd as _tmod
 from tarragon.renderers.cache import MASTER_LONG_EDGE
 from tarragon.renderers.psd import (
+    PSD_RENDER_TIMEOUT_S,
     _composite_psd_in_process,
     _compute_worker_count,
     get_executor,
@@ -400,3 +402,126 @@ class TestRenderPSDEdgeCases:
             assert _tmod._shared_executor is None
         finally:
             _tmod._shared_executor = saved
+
+
+class TestRenderPSDDeadlineAndLogging:
+    """Deadline enforcement and failure traceback logging for the PSD renderer."""
+
+    def test_timeout_constant_matches_two_minute_contract(self) -> None:
+        """PSD_RENDER_TIMEOUT_S is 120 seconds, matching the two-minute render deadline."""
+        assert PSD_RENDER_TIMEOUT_S == 120
+
+    def test_render_psd_image_times_out_and_cancels_when_deadline_passed(
+        self,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """render_psd_image cancels the future, warns, and returns None once the deadline passes."""
+        test_path = Path("/fake/deadline_test.psd")
+        mock_exec = MagicMock()
+        mock_future = MagicMock()
+        mock_future.done.return_value = False
+        mock_future.result.side_effect = TimeoutError("poll")
+        mock_exec.submit.return_value = mock_future
+
+        with (
+            patch("tarragon.renderers.psd.get_executor") as mock_get_exec,
+            patch("tarragon.renderers.psd.time.monotonic", side_effect=[0.0, 121.0]),
+            caplog.at_level(logging.WARNING, logger="tarragon.renderers.psd"),
+        ):
+            mock_get_exec.return_value = mock_exec
+            result = render_psd_image(test_path, 20.0, 2, 2)
+
+        assert result is None
+        mock_future.cancel.assert_called_once()
+        warning_messages = [r.message for r in caplog.records if r.name == "tarragon.renderers.psd"]
+        assert any("timed out" in message and str(test_path) in message for message in warning_messages)
+
+    def test_render_psd_image_returns_image_before_deadline(self, tmp_path: Path) -> None:
+        """render_psd_image completes normally when the deadline has not elapsed."""
+        dummy_img = Image.new("RGBA", (50, 50), (255, 0, 0, 128))
+        buf = io.BytesIO()
+        dummy_img.save(buf, "PNG")
+        png_bytes = buf.getvalue()
+        mock_exec = MagicMock()
+        mock_future = MagicMock()
+        mock_future.done.return_value = False
+        mock_future.result.return_value = png_bytes
+        mock_exec.submit.return_value = mock_future
+
+        with (
+            patch("tarragon.renderers.psd.get_executor") as mock_get_exec,
+            patch("tarragon.renderers.psd.time.monotonic", side_effect=[0.0, 5.0]),
+        ):
+            mock_get_exec.return_value = mock_exec
+            result = render_psd_image(tmp_path / "before_deadline.psd", 20.0, 2, 2)
+
+        assert result is not None
+        assert isinstance(result, Image.Image)
+        assert result.size == (50, 50)
+        mock_future.cancel.assert_not_called()
+
+    def test_tile_composite_failure_logs_traceback(
+        self,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """_composite_psd_in_process warns with a traceback but completes when a tile fails."""
+        mock_psd_cls = MagicMock()
+        mock_psd_instance = MagicMock()
+        mock_psd_instance.width = 5000
+        mock_psd_instance.height = 5000
+        mock_psd_instance.composite.side_effect = Exception("tile boom")
+        mock_psd_cls.open.return_value = mock_psd_instance
+
+        with caplog.at_level(logging.WARNING, logger="tarragon.renderers.psd"):
+            with patch("psd_tools.PSDImage", mock_psd_cls):
+                result = _composite_psd_in_process("/fake/failing_tiles.psd", 20.0, 2, 2)
+
+        assert result is not None
+        record = next(
+            r for r in caplog.records if r.name == "tarragon.renderers.psd" and "Tile composite failed" in r.message
+        )
+        assert "/fake/failing_tiles.psd" in record.message
+        assert "(0, 0)" in record.message
+        assert record.exc_info is not None
+
+    def test_worker_rendering_failure_logs_traceback(
+        self,
+        tmp_path: Path,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """_composite_psd_in_process warns with a traceback when the worker rendering fails."""
+        missing_path = tmp_path / "definitely_missing.psd"
+
+        with caplog.at_level(logging.WARNING, logger="tarragon.renderers.psd"):
+            result = _composite_psd_in_process(str(missing_path), 20.0, 2, 2)
+
+        assert result is None
+        record = next(
+            r for r in caplog.records if r.name == "tarragon.renderers.psd" and "Rendering failed" in r.message
+        )
+        assert str(missing_path) in record.message
+        assert record.exc_info is not None
+
+    def test_render_psd_image_outer_failure_logs_traceback(
+        self,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """render_psd_image warns with a traceback and returns None when the poll loop fails."""
+        test_path = Path("/fake/outer_failure.psd")
+        mock_exec = MagicMock()
+        mock_future = MagicMock()
+        mock_future.done.return_value = False
+        mock_future.result.side_effect = Exception("boom")
+        mock_exec.submit.return_value = mock_future
+
+        with caplog.at_level(logging.WARNING, logger="tarragon.renderers.psd"):
+            with patch("tarragon.renderers.psd.get_executor") as mock_get_exec:
+                mock_get_exec.return_value = mock_exec
+                result = render_psd_image(test_path, 20.0, 2, 2)
+
+        assert result is None
+        record = next(
+            r for r in caplog.records if r.name == "tarragon.renderers.psd" and "PSD render failed" in r.message
+        )
+        assert str(test_path) in record.message
+        assert record.exc_info is not None

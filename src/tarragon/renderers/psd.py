@@ -6,6 +6,7 @@ import atexit
 import io
 import logging
 import threading
+import time
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
@@ -13,6 +14,10 @@ import psutil
 from PIL import Image
 
 logger = logging.getLogger(__name__)
+
+
+# Real overall render deadline in seconds (fulfills the 2-minute contract).
+PSD_RENDER_TIMEOUT_S = 120
 
 
 def _compute_worker_count(manual_override: int | None = None) -> int:
@@ -80,7 +85,13 @@ def _composite_psd_in_process(
                         del tile_img
                     except Exception:
                         # Skip problematic tiles, partial render is better than crash
-                        pass
+                        logger.warning(
+                            "Tile composite failed for %s at (%d, %d)",
+                            file_path_str,
+                            tile_x,
+                            tile_y,
+                            exc_info=True,
+                        )
             image = target
 
         # Resize to target_size if specified
@@ -92,7 +103,7 @@ def _composite_psd_in_process(
         image.save(buf, "PNG")
         return buf.getvalue()
     except Exception:
-        logger.warning("Rendering failed for %s", file_path_str)
+        logger.warning("Rendering failed for %s", file_path_str, exc_info=True)
         return None  # Failure isolation, never crash the worker
 
 
@@ -180,10 +191,19 @@ def render_psd_image(
         target_size,
     )
     try:
-        # Poll with cancellation support instead of blocking for 120 s.
+        # Poll with cancellation support while enforcing a real overall deadline.
+        deadline = time.monotonic() + PSD_RENDER_TIMEOUT_S
         while not future.done():
             if cancel_event is not None and cancel_event.is_set():
                 future.cancel()
+                return None
+            if time.monotonic() >= deadline:
+                future.cancel()
+                logger.warning(
+                    "PSD render timed out after %.1fs for %s",
+                    PSD_RENDER_TIMEOUT_S,
+                    file_path,
+                )
                 return None
             try:
                 result_bytes = future.result(timeout=0.5)
@@ -198,4 +218,5 @@ def render_psd_image(
             return Image.open(io.BytesIO(result_bytes))
         return None
     except Exception:
-        return None
+        logger.warning("PSD render failed for %s", file_path, exc_info=True)
+        return None  # Failure isolation, never crash the caller

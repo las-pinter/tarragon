@@ -3,7 +3,8 @@
 The schema version is a single generation marker, not a chain of per-version
 migrations: ``init_schema()`` brings the schema up to date (including the
 legacy ``file_tags.source`` guard) and the runner re-stamps the stored version
-to the current generation.
+to the current generation. The reasons for this design are documented in the
+README ("Data & Schema").
 """
 
 from __future__ import annotations
@@ -18,7 +19,7 @@ logger = logging.getLogger(__name__)
 class MigrationRunner:
     """Orchestrates database schema migrations.
 
-    Applies pending migrations in order based on the stored schema version.
+    Brings the schema up to date via ``init_schema()`` and re-stamps the generation marker.
     """
 
     def __init__(self, db: Database) -> None:

@@ -95,6 +95,15 @@ class TestInitSchema:
             db.close()
 
 
+class TestForeignKeyEnforcement:
+    """Foreign-key enforcement is enabled on every new connection."""
+
+    def test_foreign_keys_pragma_is_enabled(self, db: Database) -> None:
+        """The connection reports PRAGMA foreign_keys = 1 after init."""
+        row = db._conn.execute("PRAGMA foreign_keys").fetchone()
+        assert row[0] == 1
+
+
 class TestSchemaVersion:
     """Schema version get/set roundtrip behaviour."""
 

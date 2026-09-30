@@ -1,0 +1,28 @@
+name: Setup Tarragon environment
+description: Install uv, the requested Python version, and project dependencies (dev group, optionally with the build extra). Requires the caller to have checked out the repository first.
+inputs:
+  python-version:
+    description: Python version to install.
+    required: true
+  extra:
+    description: Whether to also install the build extra (uv sync --extra build).
+    required: false
+    default: "false"
+runs:
+  using: composite
+  steps:
+    - name: Set up uv and Python ${{ inputs.python-version }}
+      uses: astral-sh/setup-uv@v6
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    # shell: bash is required explicitly — composite action run steps do not
+    # reliably default to bash on Windows runners.
+    - name: Install dependencies (uv sync, dev group)
+      shell: bash
+      run: |
+        if [ "${{ inputs.extra }}" == "true" ]; then
+          uv sync --extra build
+        else
+          uv sync
+        fi

@@ -28,7 +28,7 @@ class FilterBar(QWidget):
         folder_filter_changed: Forwarded from `FilterBarFolder`
     """
 
-    color_filter_changed = Signal(set)  # "color:<bucket>" strings
+    color_filter_changed = Signal(set)  # bare color-bucket names (e.g. "red")
     tag_filter_changed = Signal(set)  # active filter tag IDs
     folder_filter_changed = Signal(set)  # selected folder paths
 

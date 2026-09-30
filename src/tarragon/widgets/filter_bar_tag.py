@@ -71,8 +71,8 @@ class FilterBarTag(FilterBarFilter):
     def _refresh_tags(self) -> None:
         """Rebuild the available tag list from the service.
 
-        Filters out auto-color tags (``color:`` prefix) and preserves
-        the current active filter selections across rebuilds.
+        Filters out tags whose source is ``TagSource.AUTO_COLOR`` and
+        preserves the current active filter selections across rebuilds.
         """
         tags = self._tag_service.get_all_tags()
         self._available_tags = {t for t in tags if not t.get_source() == TagSource.AUTO_COLOR}

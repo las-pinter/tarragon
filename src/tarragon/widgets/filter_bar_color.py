@@ -99,8 +99,8 @@ class FilterBarColor(FilterBarFilter):
     def set_active_colors(self, color_buckets: set[ColorBucket]) -> None:
         """Set which colors are active (for programmatic control).
 
-        *color_names* should contain bare bucket names (e.g. ``"red"``) or
-        prefixed names (``"color:red"``).  Both forms are accepted.
+        *color_buckets* must contain bare bucket names (e.g. ``"red"``).
+        Prefixed names (``"color:red"``) are not matched.
         """
         self._active_colors = color_buckets
         self._refresh_all_swatches()

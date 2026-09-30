@@ -895,7 +895,7 @@ class TestSetTags:
         try:
             tags = {
                 Tag(id=1, name="landscape", source=TagSource.USER),
-                Tag(id=2, name="color:red", source=TagSource.AUTO_COLOR),
+                Tag(id=2, name="red", source=TagSource.AUTO_COLOR),
             }
             panel.set_tags(tags)
             # Only user tags create pills; auto_color tags update color squares
@@ -1497,7 +1497,7 @@ class TestColorSquares:
         try:
             paths = ["/img1.jpg", "/img2.jpg"]
             panel._selected_paths = paths
-            # Both files have color:red (tag id=1)
+            # Both files have red (tag id=1)
             panel._cached_file_tags = {
                 "/img1.jpg": {Tag(id=1, name="red", source=TagSource.AUTO_COLOR)},
                 "/img2.jpg": {Tag(id=1, name="red", source=TagSource.AUTO_COLOR)},
@@ -1519,7 +1519,7 @@ class TestColorSquares:
         try:
             paths = ["/img1.jpg", "/img2.jpg"]
             panel._selected_paths = paths
-            # Only first file has color:red (tag id=1)
+            # Only first file has red (tag id=1)
             panel._cached_file_tags = {
                 "/img1.jpg": {Tag(id=1, name="red", source=TagSource.AUTO_COLOR)},
                 "/img2.jpg": set(),
@@ -1694,13 +1694,13 @@ class TestAddTagDropdown:
         mock_tag_service: Any,
         settings_service: SettingsService,
     ) -> None:
-        """The +Add dropdown excludes color: tags from the list."""
+        """The +Add dropdown excludes auto-color tags from the list."""
         service = mock_tag_service
         service.get_all_tags.return_value = [
             Tag(id=1, name="landscape", source=TagSource.USER, usage_count=5),
-            Tag(id=2, name="color:red", source=TagSource.AUTO_COLOR, usage_count=3),
+            Tag(id=2, name="red", source=TagSource.AUTO_COLOR, usage_count=3),
             Tag(id=3, name="portrait", source=TagSource.USER, usage_count=2),
-            Tag(id=4, name="color:blue", source=TagSource.AUTO_COLOR, usage_count=1),
+            Tag(id=4, name="blue", source=TagSource.AUTO_COLOR, usage_count=1),
         ]
         panel = PreviewPanel(settings_service=settings_service, tag_service=service)
         try:
@@ -1729,7 +1729,7 @@ class TestAddTagDropdown:
             # Only custom (non-color) tags should be in the menu
             assert "landscape" in added_actions
             assert "portrait" in added_actions
-            assert "color:red" not in added_actions
-            assert "color:blue" not in added_actions
+            assert "red" not in added_actions
+            assert "blue" not in added_actions
         finally:
             panel.close()

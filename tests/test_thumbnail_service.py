@@ -18,6 +18,7 @@ from tarragon.db.database import Database
 from tarragon.renderers.cache import RESOLUTION_FULL, RESOLUTION_PREVIEW, RESOLUTION_THUMBNAIL, invalidate_cache_files
 from tarragon.renderers.psd import render_psd_image
 from tarragon.scanner import FileInfo, scan_folder
+from tarragon.services.settings_service import SettingsService
 from tarragon.services.thumbnail_service import POOL_DRAIN_TIMEOUT_MS, ThumbnailService, _RenderAllTask
 
 SUPER_LONG_PATH = "/" + "a" * 4096  # Exceeds typical FS path limits
@@ -1805,3 +1806,40 @@ class TestPurgeCache:
         assert not purge_errors
         assert not late_file.exists()
         svc._threadpool.waitForDone(POOL_DRAIN_TIMEOUT_MS)
+
+
+class TestLiveCacheFormat:
+    """ThumbnailService reads cache_format live from the settings service."""
+
+    def test_render_all_uses_cache_format_set_after_construction(
+        self, real_db: Database, tag_service_mock: MagicMock
+    ) -> None:
+        """A cache_format change after construction applies to new renders."""
+        settings_service = SettingsService(real_db)
+        with patch("tarragon.services.thumbnail_service.get_executor"):
+            svc = ThumbnailService(db=real_db, settings_service=settings_service, tag_service=tag_service_mock)
+
+        settings_service.cache_format.set("JPEG")
+        settings_service.color_tag_enabled.set(False)
+
+        file_info = FileInfo(path=Path("/nonexistent/live.png"), mtime=1000.0, size=500, extension=".png")
+
+        mock_img = MagicMock(spec=Image.Image)
+        mock_img.width = 64
+        mock_img.height = 64
+
+        with (
+            patch("tarragon.renderers.registry.DEFAULT_RENDERER", return_value=mock_img),
+            patch("tarragon.services.thumbnail_service.generate_cache_uuid", return_value="live-uuid"),
+            patch("tarragon.services.thumbnail_service.generate_cache_paths") as mock_paths,
+            patch("tarragon.services.thumbnail_service.save_to_cache"),
+            patch("tarragon.services.thumbnail_service.derive_smaller_sizes", return_value={}),
+        ):
+            mock_paths.return_value = {
+                str(RESOLUTION_THUMBNAIL): Path("/tmp/cache/256.png"),
+                str(RESOLUTION_PREVIEW): Path("/tmp/cache/1024.png"),
+                "full": Path("/tmp/cache/full.png"),
+            }
+            svc._render_all_resolutions(file_info)
+
+        mock_paths.assert_called_once_with(file_info.path, "live-uuid", "JPEG")

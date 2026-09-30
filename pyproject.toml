@@ -76,6 +76,13 @@ exclude = ["dist/"]
 module = ["PIL.*", "psd_tools.*"]
 ignore_missing_imports = true
 
+# The dialog annotates parameters as bare `Setting` (deliberately untyped).
+# `Setting` is now generic; disallow_any_generics is relaxed only for this
+# module so the bare annotation resolves to Setting[Any] (previous behavior).
+[[tool.mypy.overrides]]
+module = ["tarragon.widgets.settings_dialog"]
+disallow_any_generics = false
+
 [dependency-groups]
 dev = [
     "pytest-xdist>=3.8.0",

@@ -277,6 +277,15 @@ def save_to_cache(img: Image.Image, cache_path: Path, format_setting: str = "PNG
         img.save(cache_path, "PNG")
 
 
+def load_image(path: str | Path) -> Image.Image:
+    """Open an image, force decode, and release the file handle."""
+    img = Image.open(path)
+    img.load()
+    if img.fp is not None:
+        img.fp.close()
+    return img
+
+
 def derive_smaller_sizes(source_image: Image.Image, target_sizes: list[int]) -> dict[int, Image.Image]:
     """Derive smaller image sizes from a source image.
 

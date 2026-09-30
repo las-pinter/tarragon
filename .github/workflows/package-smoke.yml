@@ -2,6 +2,9 @@ name: Package Smoke Test
 
 on:
   pull_request:
+  push:
+    branches: [dev]
+  workflow_dispatch:
 
 concurrency:
   group: smoke-${{ github.head_ref || github.run_id }}
@@ -9,6 +12,8 @@ concurrency:
 
 jobs:
   import-smoke:
+    # Cheap pre-gate: run only on pull requests.
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -39,6 +44,8 @@ jobs:
           uv run python -c "import tarragon.main; print('tarragon.main OK')"
 
   nuitka-smoke:
+    # Cheap raw-compile pre-gate: run only on pull requests.
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -73,3 +80,55 @@ jobs:
             --output-filename=tarragon-smoke.bin \
             --remove-output \
             src/tarragon/main.py
+
+  # Real packaging build: runs the actual scripts/package_nuitka.py and then
+  # launches the produced onefile binary to prove it works end-to-end.
+  # Triggered on push to dev and workflow_dispatch (too expensive for PRs).
+  nuitka-real:
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.12"]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up uv and Python ${{ matrix.python-version }}
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install runtime and build dependencies (uv sync, dev group + build extra)
+        run: uv sync --extra build
+
+      - name: Install Qt system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libgl1 libxkbcommon0 libdbus-1-3
+
+      - name: Build real Nuitka binary (scripts/package_nuitka.py)
+        run: uv run python scripts/package_nuitka.py
+
+      # Deterministic binary proof: the onefile binary must print a version and
+      # exit 0. No explicit step timeout — Nuitka onefile extracts to a temp dir
+      # on first launch, so startup latency is normal and expected.
+      - name: Launch packaged binary and assert version
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          set -euo pipefail
+          output="$(./dist/tarragon --version)"
+          echo "binary --version output: $output"
+          if [ -z "$output" ]; then
+            echo "ERROR: packaged binary produced no version output" >&2
+            exit 1
+          fi
+          case "$output" in
+            *tarragon*) ;;
+            *)
+              echo "ERROR: version output does not look like a tarragon version: $output" >&2
+              exit 1
+              ;;
+          esac

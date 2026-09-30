@@ -55,11 +55,11 @@ After building, verify the binary works:
 
 ```bash
 # Linux
-QT_QPA_PLATFORM=offscreen ./dist/tarragon-viewer --help
+QT_QPA_PLATFORM=offscreen ./dist/tarragon --help
 
 # Windows
 set QT_QPA_PLATFORM=offscreen
-dist\tarragon-viewer.exe --help
+dist\tarragon.exe --help
 ```
 
 ## Release Checklist

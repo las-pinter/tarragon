@@ -1,5 +1,7 @@
 """Tarragon application entry point."""
 
+import argparse
+import importlib.metadata
 import logging
 import os
 import sys
@@ -120,8 +122,45 @@ def _thread_excepthook(args: Any) -> None:
         pass
 
 
-def main() -> None:
-    """Application entry point."""
+def _resolve_version() -> str:
+    """Return the canonical application version.
+
+    Prefers the in-package ``__version__`` (bundled into compiled binaries by
+    Nuitka) and falls back to installed distribution metadata.
+    """
+    try:
+        from tarragon import __version__ as package_version
+
+        return package_version
+    except ImportError:
+        return importlib.metadata.version("tarragon-viewer")
+
+
+def _build_parser() -> argparse.ArgumentParser:
+    """Build the CLI parser for the application entry point."""
+    parser = argparse.ArgumentParser(
+        prog="tarragon",
+        description="Tarragon image browser and cataloging application.",
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"tarragon {_resolve_version()}",
+        help="Show the version and exit.",
+    )
+    return parser
+
+
+def main(argv: list[str] | None = None) -> None:
+    """Application entry point.
+
+    CLI flags are resolved before any Qt or database initialization so that
+    ``--version``/``--help`` work in a headless invocation (e.g. a packaged
+    onefile binary on a runner without a display): no QApplication, no event
+    loop, no DB. With no flags the normal GUI launch proceeds unchanged.
+    """
+    _build_parser().parse_args(argv)
+
     ensure_dirs()
 
     handler = logging.StreamHandler()

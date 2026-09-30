@@ -8,11 +8,13 @@ window class focused on layout, menus, and dock management.
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from pathlib import Path
+from typing import ClassVar
 
 from PIL import Image
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import QObject, QRunnable, QThreadPool, QTimer, Signal
 from PySide6.QtWidgets import QLineEdit
 
 from tarragon.common import ImageInfo
@@ -32,6 +34,77 @@ from tarragon.widgets.gallery_tabs import GalleryTabs
 from tarragon.widgets.preview_panel import PreviewPanel
 
 logger = logging.getLogger(__name__)
+
+
+def _load_preview_image_data(db: Database, path: Path) -> tuple[Image.Image, int | None, int | None]:
+    """Load a preview image in a worker thread, preferring cached tiers.
+
+    Shared by the synchronous single-selection path and the async
+    multi-select decode workers.
+
+    Returns:
+        A tuple of ``(image, original_width, original_height)``.
+    """
+    thumb_record = db.get_thumbnail(str(path))
+
+    original_width: int | None = None
+    original_height: int | None = None
+    if thumb_record:
+        original_width = thumb_record.get("width")
+        original_height = thumb_record.get("height")
+
+    if thumb_record:
+        preview_path = thumb_record.get("preview_cache_path")
+        if preview_path and Path(preview_path).is_file():
+            img = load_image(preview_path)
+            img._from_cache = True  # type: ignore[attr-defined,unused-ignore]
+            return img, original_width, original_height
+
+        full_path = thumb_record.get("full_cache_path")
+        if full_path and Path(full_path).is_file():
+            img = load_image(full_path)
+            img._from_cache = True  # type: ignore[attr-defined,unused-ignore]
+            return img, original_width, original_height
+
+    return load_image(path), original_width, original_height
+
+
+class _PreviewDecodeRelay(QObject):
+    """Signal carrier for decode workers (QRunnables cannot own signals)."""
+
+    decode_ready = Signal(object, str, object, object, object)  # epoch, path, image, orig_w, orig_h
+    decode_failed = Signal(object, str, str)  # epoch, path, error
+    decode_busy_started = Signal()
+    decode_busy_finished = Signal()
+
+
+class _DecodePreviewTask(QRunnable):
+    """Decodes a single full-size preview image off the GUI thread."""
+
+    def __init__(
+        self,
+        db: Database,
+        path: Path,
+        relay: _PreviewDecodeRelay,
+        epoch: int,
+        cancel_event: threading.Event,
+    ) -> None:
+        super().__init__()
+        self._db = db
+        self._path = path
+        self._relay = relay
+        self._epoch = epoch
+        self._cancel_event = cancel_event
+
+    def run(self) -> None:
+        """Decode and report; the GUI discards results whose epoch is stale."""
+        if self._cancel_event.is_set():
+            return
+        try:
+            img, orig_w, orig_h = _load_preview_image_data(self._db, self._path)
+            self._relay.decode_ready.emit(self._epoch, str(self._path), img, orig_w, orig_h)
+        except Exception as exc:
+            self._relay.decode_failed.emit(self._epoch, str(self._path), str(exc))
 
 
 class GalleryController:
@@ -58,6 +131,10 @@ class GalleryController:
         max_multi_preview: Maximum images shown in multi-select mosaic.
     """
 
+    # Test seam: when True, decode workers run inline on the calling thread
+    # so tests observe fully synchronous state (production is async).
+    synchronous_workers: ClassVar[bool] = False
+
     def __init__(
         self,
         *,
@@ -74,6 +151,7 @@ class GalleryController:
         db: Database,
         thumbnail_service: ThumbnailService | None = None,
         max_multi_preview: int = MULTI_PREVIEW_MAX_DEFAULT,
+        synchronous_workers: bool | None = None,
     ) -> None:
         self._query_service = query_service
         self._filter_state = filter_state
@@ -92,6 +170,18 @@ class GalleryController:
         self._db = db
         self._thumbnail_service = thumbnail_service
         self._max_multi_preview = max_multi_preview
+        self._synchronous_workers = (
+            GalleryController.synchronous_workers if synchronous_workers is None else synchronous_workers
+        )
+
+        # Async multi-select preview decode pipeline.
+        self.decode_relay = _PreviewDecodeRelay()
+        self._decode_pool = QThreadPool()
+        self._decode_cancel_event = threading.Event()
+        self._decode_epoch = 0
+        self._decode_pending = 0
+        self.decode_relay.decode_ready.connect(self._on_preview_decoded)
+        self.decode_relay.decode_failed.connect(self._on_preview_decode_failed)
 
         # Current folder for local-scope queries ("" means nothing selected).
         self.current_folder: str = ""
@@ -267,13 +357,16 @@ class GalleryController:
         """Handle thumbnail grid selection changes.
 
         Updates the preview panel (single image or mosaic) and tag display
-        based on the current selection.
+        based on the current selection. Multi-select previews are decoded
+        off the GUI thread so the mosaic fills in as images land.
         """
         logger.debug("Called - paths: %s", paths)
         if len(paths) == 0:
+            self._cancel_decode_batch()
             self._preview_panel.clear()
         elif len(paths) == 1:
-            # Single selection
+            # Single selection stays synchronous: one image is cheap to load.
+            self._cancel_decode_batch()
             path = Path(paths[0])
             try:
                 img, orig_w, orig_h = self._load_preview_image(path)
@@ -282,19 +375,80 @@ class GalleryController:
                 logger.warning("Failed to load preview for %s", path, exc_info=True)
                 self._preview_panel.clear()
         else:
-            # Multi-select
-            image_infos: list[ImageInfo] = []
-            for p in paths:
-                path = Path(p)
-                try:
-                    img, _orig_w, _orig_h = self._load_preview_image(path)
-                    image_infos.append(ImageInfo(img, path, _orig_w, _orig_h))
-                except Exception:
-                    logger.debug("Failed to load preview for multi-select: %s", p, exc_info=True)
-            self._preview_panel.set_multi_preview(image_infos)
+            self._begin_multi_decode(paths)
 
         # Update tags in preview panel
         self.update_preview_tags(paths)
+
+    def _begin_multi_decode(self, paths: list[str]) -> None:
+        """Decode each selected image off the GUI thread, one QRunnable per image.
+
+        Respects the multi-preview cap; a selection change mid-decode
+        discards stale results via the epoch guard in the completion slots.
+        """
+        self._cancel_decode_batch()
+        selected = [Path(p) for p in paths[: self._max_multi_preview]]
+        self._preview_panel.begin_multi_preview()
+        self._decode_pending = len(selected)
+        if self._decode_pending > 0:
+            self.decode_relay.decode_busy_started.emit()
+        for path in selected:
+            task = _DecodePreviewTask(
+                db=self._db,
+                path=path,
+                relay=self.decode_relay,
+                epoch=self._decode_epoch,
+                cancel_event=self._decode_cancel_event,
+            )
+            self._start_decode_task(task)
+
+    def _start_decode_task(self, task: _DecodePreviewTask) -> None:
+        """Dispatch *task* to the decode pool, or run it inline under the test seam."""
+        if self._synchronous_workers:
+            task.run()
+        else:
+            self._decode_pool.start(task)
+
+    def _cancel_decode_batch(self) -> None:
+        """Abort any in-flight decode batch; stale results are discarded by epoch."""
+        self._decode_epoch += 1
+        self._decode_cancel_event.set()
+        self._decode_pool.clear()
+        self._decode_cancel_event.clear()
+        if self._decode_pending > 0:
+            self._decode_pending = 0
+            self.decode_relay.decode_busy_finished.emit()
+
+    def _on_preview_decoded(
+        self,
+        epoch: int,
+        path_str: str,
+        img: Image.Image,
+        orig_w: int | None,
+        orig_h: int | None,
+    ) -> None:
+        """Add one decoded image to the mosaic, discarding stale selections."""
+        if epoch != self._decode_epoch:
+            return
+        # Completion accounting runs BEFORE the panel mutation so a raise in
+        # add_multi_preview_image can never leave the pending counter stuck
+        # and decode_busy_finished is never skipped.
+        self._decode_pending -= 1
+        if self._decode_pending <= 0:
+            self.decode_relay.decode_busy_finished.emit()
+        self._preview_panel.add_multi_preview_image(ImageInfo(img, Path(path_str), orig_w, orig_h))
+
+    def _on_preview_decode_failed(self, epoch: int, path_str: str, error_message: str) -> None:
+        """Log a decode failure and count it toward batch completion."""
+        if epoch != self._decode_epoch:
+            return
+        logger.debug("Failed to load preview for multi-select: %s (%s)", path_str, error_message)
+        self._decode_pending -= 1
+        if self._decode_pending <= 0:
+            # A batch with zero successful decodes must not leave the
+            # "Loading previews..." placeholder stuck forever.
+            self._preview_panel.show_empty_mosaic_state()
+            self.decode_relay.decode_busy_finished.emit()
 
     def update_preview_tags(self, paths: list[str]) -> None:
         """Fetch and display tags for the current selection in the preview panel.
@@ -331,45 +485,9 @@ class GalleryController:
     # ── Preview Image Loading ──────────────────────────────────────
 
     def _load_preview_image(self, path: Path) -> tuple[Image.Image, int | None, int | None]:
-        """Load a preview image, preferring the preview-tier cached image when available.
+        """Load a preview image synchronously (single selection).
 
-        Checks ``db.get_thumbnail(path)`` for a ``preview_cache_path``.
-        If the cached file exists on disk it is opened directly (good quality,
-        fast).  Falls back to the ``full_cache_path``, then to the original file.
-
-        Images loaded from cache are marked with ``_from_cache = True`` so that
-        ``PreviewPanel.set_image()`` can skip EXIF recovery from the original
-        file (the cache already has correct orientation).
-
-        Returns:
-            A tuple of ``(image, original_width, original_height)``.
-            ``original_width`` and ``original_height`` are extracted from the
-            database record when available, so the preview panel can display
-            the true dimensions even when showing a downscaled thumbnail.
+        Delegates to the shared worker-safe loader; both paths prefer the
+        preview-tier cached image when available.
         """
-        thumb_record = self._db.get_thumbnail(str(path))
-
-        # Extract original dimensions from DB record (if available)
-        original_width: int | None = None
-        original_height: int | None = None
-        if thumb_record:
-            original_width = thumb_record.get("width")
-            original_height = thumb_record.get("height")
-
-        if thumb_record:
-            # Try the preview-tier cached image first (good quality, fast)
-            preview_path = thumb_record.get("preview_cache_path")
-            if preview_path and Path(preview_path).is_file():
-                img = load_image(preview_path)
-                img._from_cache = True  # type: ignore[attr-defined,unused-ignore]
-                return img, original_width, original_height
-
-            # Fallback: full-tier cache
-            full_path = thumb_record.get("full_cache_path")
-            if full_path and Path(full_path).is_file():
-                img = load_image(full_path)
-                img._from_cache = True  # type: ignore[attr-defined,unused-ignore]
-                return img, original_width, original_height
-
-        # Fallback: open the original file directly
-        return load_image(path), original_width, original_height
+        return _load_preview_image_data(self._db, path)

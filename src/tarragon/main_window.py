@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import sqlite3
 from pathlib import Path
 
 from PySide6.QtCore import QByteArray, Qt, QTimer
@@ -24,11 +23,13 @@ from tarragon.gallery_controller import GalleryController
 from tarragon.log_config import LogFormatter
 from tarragon.models.filter_state import FilterState
 from tarragon.models.thumbnail_model import ThumbnailModel
+from tarragon.scanner import FileInfo
 from tarragon.services.query_service import QueryService
 from tarragon.services.settings_service import SettingsService
 from tarragon.services.tag_service import TagService
 from tarragon.services.thumbnail_service import ThumbnailService
 from tarragon.theme.constants import MULTI_PREVIEW_MAX_DEFAULT, SIDEBAR_WIDTH_PX
+from tarragon.widgets.busy_indicator import BusyIndicator
 from tarragon.widgets.filter_bar import FilterBar
 from tarragon.widgets.filter_bar_color import FilterBarColor
 from tarragon.widgets.filter_bar_folder import FilterBarFolder
@@ -99,6 +100,9 @@ class MainWindow(QMainWindow):
         self.log_panel: LogPanel | None = None
         self._log_handler: QtLogHandler | None = None
         self._search_timer: QTimer | None = None
+        self._busy_indicator: BusyIndicator | None = None
+        self._busy_flags: dict[str, bool] = {"scan": False, "purge": False, "decode": False}
+        self._active_scan_token: int | None = None
 
         # ── Dock panels (created before actions so they're valid widgets) ──
         self.sidebar_dock: QDockWidget
@@ -312,6 +316,11 @@ class MainWindow(QMainWindow):
         self._thumbnail_service.error_occurred.connect(self._on_thumbnail_error)
         # Auto-color tags from thumbnail rendering should refresh the tag panel
         self._thumbnail_service.tags_updated.connect(tag_service.tags_changed.emit)
+        self._thumbnail_service.scan_started.connect(self._on_scan_started)
+        self._thumbnail_service.scan_completed.connect(self._on_folder_scanned)
+        self._thumbnail_service.scan_finished.connect(self._on_scan_finished)
+        self._thumbnail_service.purge_started.connect(self._on_purge_started)
+        self._thumbnail_service.cache_purged.connect(self._on_cache_purged)
 
         # ── Search box (Deviation 4.5) ─────────────────────────────────
         self._search_edit = QLineEdit()
@@ -345,6 +354,11 @@ class MainWindow(QMainWindow):
         gallery_layout.addWidget(self._gallery_tabs)  # FIRST!
         gallery_layout.addWidget(self._search_edit)
         gallery_layout.addWidget(self._gallery_info_bar)
+
+        # ── Busy indicator strip (folder scan / purge / decode status) ──
+        self._busy_indicator = BusyIndicator(parent=gallery_container)
+        gallery_layout.addWidget(self._busy_indicator)
+
         gallery_layout.addWidget(self.filter_bar)
         gallery_layout.addWidget(self.thumbnail_grid, stretch=1)
         self.grid_dock.setWidget(gallery_container)
@@ -393,6 +407,10 @@ class MainWindow(QMainWindow):
 
         # Wire selection signal to the controller
         self.thumbnail_grid.selection_changed.connect(self._gallery_controller.on_selection_changed)
+
+        # Multi-select decode busy state drives the busy indicator
+        self._gallery_controller.decode_relay.decode_busy_started.connect(self._on_decode_busy_started)
+        self._gallery_controller.decode_relay.decode_busy_finished.connect(self._on_decode_busy_finished)
 
         # Wire double-click signal for editor launch
         self.thumbnail_grid.file_double_clicked.connect(self._on_file_double_clicked)
@@ -459,14 +477,14 @@ class MainWindow(QMainWindow):
             self._thumbnail_service.invalidate_and_render(path)
 
     def _on_cache_purge_requested(self) -> None:
-        """Handle a cache purge request from the settings dialog."""
+        """Handle a cache purge request from the settings dialog.
+
+        Queues the purge worker; re-navigation happens in
+        :meth:`_on_cache_purged` when the worker reports completion.
+        """
         if self._thumbnail_service is None:
             return
         self._thumbnail_service.purge_cache()
-        if self._current_folder:
-            self._navigate_to_folder(Path(self._current_folder))
-        else:
-            self._run_filtered_query()
 
     # ── Menu Actions ───────────────────────────────────────────────────
 
@@ -545,44 +563,39 @@ class MainWindow(QMainWindow):
         self._navigate_to_folder(folder)
 
     def _navigate_to_folder(self, folder_path: Path) -> None:
-        """Shared folder navigation: scan, update grid, render thumbnails, update sidebar.
+        """Start an async folder scan; the completion slot updates the UI.
 
-        Both ``_on_open_folder`` and ``_on_folder_navigated`` delegate here
-        after obtaining / validating the target path.
+        The scan worker populates DB stubs before emitting results, so
+        filtered queries return immediately once the model updates.
         """
-        from tarragon.scanner import scan_folder
-
+        if self._thumbnail_service is None:
+            return
         logger.info("Scanning folder: %s", folder_path)
-
-        # Cancel pending thumbnail generation from the previous folder
-        # before scanning the new one, then reset the cancel flag.
-        if self._thumbnail_service is not None:
-            self._thumbnail_service.cancel_pending()
-            self._thumbnail_service.reset_cancel()
-
-        # Store current folder for filtered queries
         self._current_folder = str(folder_path)
+        self._thumbnail_service.request_folder_scan(folder_path)
 
-        # Scan folder for images
-        file_infos = scan_folder(folder_path)
+    def _on_scan_started(self, token: int, folder_path: str) -> None:
+        """Track the newest scan token so stale scan results are discarded."""
+        logger.debug("Scan started - token: %d, folder: %s", token, folder_path)
+        self._active_scan_token = token
+        self._set_busy("scan", True)
+
+    def _on_folder_scanned(self, token: int, file_infos: list[FileInfo]) -> None:
+        """Apply scan results to the gallery (model, sidebar, filter bars).
+
+        DB stubs were inserted by the scan worker before this signal, so
+        filtered queries already see the new folder.
+        """
+        if token != self._active_scan_token:
+            logger.debug("Stale scan completed ignored - token: %d", token)
+            return
+
         if not file_infos:
-            logger.warning("No images found in %s", folder_path)
+            logger.warning("No images found in %s", self._current_folder)
             if self.thumbnail_model is not None:
                 self.thumbnail_model.set_paths([])
             return
 
-        # Populate database immediately so filtered queries return results
-        # before async thumbnail rendering completes (fixes zero-results bug)
-        if self._db is not None:
-            stubs = [(str(fi.path), int(fi.mtime), fi.size) for fi in file_infos]
-            try:
-                self._db.bulk_upsert_stubs(stubs)
-            except sqlite3.Error:
-                logger.warning("Failed to populate DB stubs for %s", folder_path, exc_info=True)
-
-        # Update thumbnail model — use query service if any filters are active
-        # (single source of truth: FilterState shared with the controller),
-        # otherwise load all paths directly.
         has_filters = self._filter_state is not None and not self._filter_state.is_empty()
         if has_filters and self._query_service is not None:
             self._run_filtered_query()
@@ -590,31 +603,52 @@ class MainWindow(QMainWindow):
             paths = [fi.path for fi in file_infos]
             if self.thumbnail_model is not None:
                 self.thumbnail_model.set_paths(paths)
-            # Update info bar for unfiltered folder view
             self._update_gallery_info_bar()
-
-        # Dispatch thumbnail renders
-        if self._thumbnail_service is not None:
-            statuses: dict[str, int] = {"cached": 0, "queued": 0, "derived": 0}
-            for fi in file_infos:
-                status = self._thumbnail_service.check_and_render(fi)
-                statuses[status] = statuses.get(status, 0) + 1
-            logger.info(
-                "Processed %d images in %s: %d queued for render, %d already cached, %d derived from existing",
-                len(file_infos),
-                folder_path,
-                statuses["queued"],
-                statuses["cached"],
-                statuses["derived"],
-            )
 
         # Update sidebar with current folder
         if self.sidebar_widget is not None:
-            self.sidebar_widget.set_current_folder(str(folder_path))
+            self.sidebar_widget.set_current_folder(str(self._current_folder))
 
         # Refresh folder dropdown in the filter bar (new folders may have been scanned)
         if self.filter_bar_folder is not None:
             self.filter_bar_folder.refresh_folders()
+
+    def _on_scan_finished(self, token: int) -> None:
+        """Clear the busy flag when the active scan exits (success or abort)."""
+        if token == self._active_scan_token:
+            self._active_scan_token = None
+            self._set_busy("scan", False)
+
+    def _on_purge_started(self) -> None:
+        """Show the busy indicator while the purge worker drains and unlinks."""
+        self._set_busy("purge", True)
+
+    def _on_cache_purged(self) -> None:
+        """Re-navigate after the purge worker finishes so a fresh scan repopulates the cache."""
+        self._set_busy("purge", False)
+        if self._current_folder:
+            self._navigate_to_folder(Path(self._current_folder))
+        else:
+            self._run_filtered_query()
+
+    def _on_decode_busy_started(self) -> None:
+        """Show the busy indicator while multi-select previews decode."""
+        self._set_busy("decode", True)
+
+    def _on_decode_busy_finished(self) -> None:
+        """Hide the busy indicator when all multi-select previews decoded."""
+        self._set_busy("decode", False)
+
+    def _set_busy(self, key: str, busy: bool) -> None:
+        """Show the busy indicator whenever any background operation is active."""
+        self._busy_flags[key] = busy
+        if self._busy_indicator is None:
+            return
+        now_busy = any(self._busy_flags.values())
+        if now_busy and not self._busy_indicator.is_busy:
+            self._busy_indicator.begin_op()
+        elif not now_busy and self._busy_indicator.is_busy:
+            self._busy_indicator.end_op()
 
     def _on_favorite_clicked(self, folder_path: str) -> None:
         """Handle favorite folder selection."""

@@ -411,12 +411,7 @@ class ThumbnailService(QObject):
             logger.warning("invalidate_and_render: source file not found: %s", source_path)
             return
 
-        file_info = FileInfo(
-            path=source_path,
-            mtime=stat.st_mtime,
-            size=stat.st_size,
-            extension=source_path.suffix.lower(),
-        )
+        file_info = FileInfo.from_stat(path=source_path, stat_result=stat)
 
         self.check_and_render(file_info)
 

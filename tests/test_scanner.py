@@ -144,6 +144,56 @@ class TestFileInfo:
         assert info.mtime > 0
         assert info.extension == ".png"
 
+    def test_scan_loop_matches_from_stat(self, tmp_path: Path) -> None:
+        """Each scanned FileInfo equals FileInfo.from_stat built from its own stat result."""
+        (tmp_path / "alpha.png").write_bytes(b"data")
+        (tmp_path / "beta.JPG").write_bytes(b"data")
+
+        results = scan_folder(tmp_path)
+
+        for info in results:
+            assert info == FileInfo.from_stat(path=info.path, stat_result=info.path.stat())
+
+
+class TestFileInfoFromStat:
+    """FileInfo.from_stat maps an os.stat_result into FileInfo fields."""
+
+    def test_from_stat_builds_fileinfo_from_stat_result(self, tmp_path: Path) -> None:
+        """from_stat records mtime, size, and extension from the stat result."""
+        content = b"some-image-bytes"
+        source = tmp_path / "artwork.png"
+        source.write_bytes(content)
+        stat_result = source.stat()
+
+        info = FileInfo.from_stat(path=source, stat_result=stat_result)
+
+        assert info.path == source
+        assert info.mtime == stat_result.st_mtime
+        assert isinstance(info.mtime, float)
+        assert info.size == stat_result.st_size
+        assert info.size == len(content)
+        assert info.extension == ".png"
+
+    def test_from_stat_keeps_lowercase_suffix(self, tmp_path: Path) -> None:
+        """A lowercase suffix is preserved as-is."""
+        source = tmp_path / "photo.jpeg"
+        source.write_bytes(b"data")
+        stat_result = source.stat()
+
+        info = FileInfo.from_stat(path=source, stat_result=stat_result)
+
+        assert info.extension == ".jpeg"
+
+    def test_from_stat_lowercases_uppercase_suffix(self, tmp_path: Path) -> None:
+        """An uppercase suffix is normalized to lowercase."""
+        source = tmp_path / "photo.JPG"
+        source.write_bytes(b"data")
+        stat_result = source.stat()
+
+        info = FileInfo.from_stat(path=source, stat_result=stat_result)
+
+        assert info.extension == ".jpg"
+
 
 class TestSortOrder:
     """Results are sorted deterministically by path."""

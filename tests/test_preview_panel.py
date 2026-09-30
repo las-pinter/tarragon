@@ -25,7 +25,8 @@ from tarragon.common import ImageInfo
 from tarragon.db.common.tag import Tag, TagSource
 from tarragon.db.database import Database
 from tarragon.services.settings_service import SettingsService
-from tarragon.theme.color_buckets import BUCKET_COLORS
+from tarragon.theme.color_buckets import BUCKET_COLORS, BUCKET_HEX_COLORS
+from tarragon.theme.constants import RADIUS_S
 from tarragon.widgets.flow_layout import FlowLayout
 from tarragon.widgets.metadata import SizeMeta
 from tarragon.widgets.preview_panel import PreviewPanel
@@ -1545,14 +1546,19 @@ class TestColorSquares:
         finally:
             panel.close()
 
-    def test_color_square_button_has_color_square_property(self, settings_service: SettingsService) -> None:
-        """Color square buttons have the 'colorSquare' property set for QSS targeting."""
+    def test_color_square_buttons_use_shared_helper_style(self, settings_service: SettingsService) -> None:
+        """Color square buttons are fully styled by the shared color-square helper."""
         panel = PreviewPanel(settings_service)
         try:
-            for name, btn in panel._color_square_buttons.items():
-                assert btn.property("colorSquare") is True, (
-                    f"Color square '{name}' should have colorSquare=True property"
+            for name in BUCKET_COLORS:
+                btn = panel._color_square_buttons[name]
+                stylesheet = btn.styleSheet()
+                assert BUCKET_HEX_COLORS[name] in stylesheet, (
+                    f"Color square '{name}' stylesheet missing colour {BUCKET_HEX_COLORS[name]}"
                 )
+                assert f"border-radius: {RADIUS_S}px" in stylesheet, f"Color square '{name}' must use the theme radius"
+                # Preview squares stay borderless when idle (historical look).
+                assert "border: none" in stylesheet, f"Color square '{name}' should be borderless when idle"
         finally:
             panel.close()
 

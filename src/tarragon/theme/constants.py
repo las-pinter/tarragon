@@ -1,4 +1,4 @@
-"""Consolidated spacing, motion, and layout constants from design tokens."""
+"""Consolidated spacing, motion, layout, and color constants from design tokens."""
 
 from __future__ import annotations
 
@@ -16,6 +16,9 @@ RADIUS_S: int = 4
 RADIUS_M: int = 6
 RADIUS_L: int = 8
 RADIUS_XL: int = 10
+
+# Color (exact-value tokens without a semantic QColor equivalent)
+BORDER_INACTIVE: str = "#555555"
 
 # Motion
 DURATION_FAST: int = 150

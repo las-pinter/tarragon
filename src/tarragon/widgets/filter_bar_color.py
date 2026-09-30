@@ -3,18 +3,14 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QHBoxLayout, QPushButton, QScrollArea, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QScrollArea, QWidget
 
 from tarragon.theme.color_buckets import BUCKET_HEX_COLORS, ColorBucket
-from tarragon.theme.colors import AMBER_ACCENT
 from tarragon.theme.constants import SPACING_S, SPACING_XS
+from tarragon.widgets.color_square import ColorSquareButton
 from tarragon.widgets.filter_bar_filter import FilterBarFilter
 
 _SWATCH_SIZE = 36
-_ACTIVE_BORDER_COLOR: str = AMBER_ACCENT.name()
-_ACTIVE_BORDER_WIDTH = 2
-_INACTIVE_BORDER_COLOR = "#555555"
-_INACTIVE_BORDER_WIDTH = 1
 
 
 class FilterBarColor(FilterBarFilter):
@@ -30,7 +26,7 @@ class FilterBarColor(FilterBarFilter):
         """Create the filter bar with one swatch per color bucket."""
         super().__init__(parent)
         self._active_colors: set[ColorBucket] = set()
-        self._swatch_buttons: dict[str, QPushButton] = {}
+        self._swatch_buttons: dict[str, ColorSquareButton] = {}
 
         outer_layout = QHBoxLayout(self)
         outer_layout.setContentsMargins(SPACING_S, SPACING_XS, SPACING_S, SPACING_XS)
@@ -54,35 +50,20 @@ class FilterBarColor(FilterBarFilter):
         self._layout.addStretch()
         scroll_area.setWidget(container)
 
-    def _create_swatch_button(self, color_bucket: ColorBucket, hex_color: str) -> QPushButton:
+    def _create_swatch_button(self, color_bucket: ColorBucket, hex_color: str) -> ColorSquareButton:
         """Build a single swatch button for *color_bucket*."""
-        btn = QPushButton()
+        btn = ColorSquareButton(hex_color, active=False)
         btn.setFixedSize(_SWATCH_SIZE, _SWATCH_SIZE)
         btn.setToolTip(color_bucket)
         btn.setProperty("color_bucket", color_bucket)
         btn.setCursor(Qt.CursorShape.PointingHandCursor)
         btn.clicked.connect(lambda _checked=False, name=color_bucket: self.toggle_color(name))
-        self._apply_swatch_style(btn, hex_color, active=False)
         return btn
 
     @staticmethod
-    def _apply_swatch_style(btn: QPushButton, hex_color: str, *, active: bool) -> None:
-        """Apply the appropriate stylesheet to a swatch button.
-
-        This MUST remain inline because:
-        - ``background-color`` is unique per bucket (dynamic hex_color).
-        - ``border`` changes between active/inactive states at runtime.
-        Neither property can be expressed as a static QSS rule.
-        """
-        border_color = _ACTIVE_BORDER_COLOR if active else _INACTIVE_BORDER_COLOR
-        border_width = _ACTIVE_BORDER_WIDTH if active else _INACTIVE_BORDER_WIDTH
-        btn.setStyleSheet(
-            f"QPushButton {{"
-            f"  background-color: {hex_color};"
-            f"  border: {border_width}px solid {border_color};"
-            f"  border-radius: 4px;"
-            f"}}"
-        )
+    def _apply_swatch_style(btn: ColorSquareButton, hex_color: str, *, active: bool) -> None:
+        """Refresh a swatch's inline style via the shared color-square helper."""
+        btn.set_color_square_state(hex_color, active=active)
 
     def _update_swatch_style(self, color_bucket: ColorBucket) -> None:
         """Refresh the visual style of a single swatch to match its state."""

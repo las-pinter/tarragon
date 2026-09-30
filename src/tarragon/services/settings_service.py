@@ -1,244 +1,246 @@
-"""Typed key-value store backed by SQLite."""
+"""Typed key-value store backed by SQLite.
+
+14 settings are described declaratively by ``_SettingSpec`` entries and exposed
+through one generic :class:`Setting` class.  Behavior (defaults, clamping,
+validation, valid-formats) is data-driven instead of duplicated across
+boilerplate subclasses.
+"""
 
 from __future__ import annotations
 
 import json
 import logging
 import re
-from typing import TYPE_CHECKING, Any, cast
-
-if TYPE_CHECKING:
-    from tarragon.db.database import Database
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Any, cast
 
 from tarragon.db.database import Database
 from tarragon.theme.constants import MULTI_PREVIEW_MAX_DEFAULT
 
 logger = logging.getLogger(__name__)
 
-SettingValue = str | int | float | bool | None
+_TILE_GRID_PATTERN = re.compile(r"^\d+x\d+$")
 
 
-class Setting:
-    """Typed setting that stores its values in a Database instance."""
+def _tile_grid_validator(value: object) -> bool:
+    """Regex pre-check that grid strings look like 'NxN'.
 
-    def __init__(
-        self,
-        db: Database,
-        key: str,
-        default: Any,
-        min: int | float | None = None,
-        max: int | float | None = None,
-    ) -> None:
-        self._key = key
+    The spec's valid-list membership is authoritative; this validator is an
+    additional shape pre-check kept for defense in depth.
+    """
+    return _TILE_GRID_PATTERN.match(str(value)) is not None
+
+
+@dataclass(frozen=True)
+class _SettingSpec:
+    """Immutable description of a single settings entry."""
+
+    key: str
+    default: object
+    min: float | None = None
+    max: float | None = None
+    # Choice list: governs validation AND get_valid_formats().
+    valid: tuple[str, ...] | None = None
+    # Optional pre-check (e.g. tile-grid regex); membership in ``valid`` wins.
+    validator: Callable[[object], bool] | None = None
+
+
+class Setting[T]:
+    """Typed setting that stores its values in a Database instance.
+
+    ``T`` is the runtime value type (str, int, float, bool, or str | None).
+    Values are loaded lazily from the DB; on first load (and on reload) numeric
+    bounds are clamped and validation is applied, falling back to the spec
+    default when a stored value is invalid.
+    """
+
+    def __init__(self, db: Database, spec: _SettingSpec) -> None:
         self._db = db
-        self._default = default
-        self._min = min
-        self._max = max
-        self._value = None
+        self._key = spec.key
+        self._default: T = cast(T, spec.default)
+        self._min = spec.min
+        self._max = spec.max
+        self._valid = spec.valid
+        self._validator = spec.validator
+        self._value: T = self._default
         self._loaded = False
 
-    def _get_from_db(self) -> Any:
-        """Read a setting value from Database"""
+    @classmethod
+    def from_spec(cls, db: Database, spec: _SettingSpec) -> Setting[T]:
+        """Build a Setting from a spec (``T`` inferred from the assignment context)."""
+        return cls(db, spec)
+
+    def _get_from_db(self) -> object:
+        """Read a setting value from Database."""
         raw = self._db.get_setting(self._key)
         if raw is None:
             logger.debug("Setting %s was not in the DB, returning default value: %s", self._key, self._default)
             return self._default
-        return json.loads(raw)
+        return cast(object, json.loads(raw))
 
-    def _validate(self, value: SettingValue) -> bool:
-        """Validating the value with a function given in the arguments"""
-        return True
-
-    def _clamp(self, value: Any) -> Any:
-        return_val = value
+    def _clamp(self, value: object) -> object:
+        """Clamp *value* into the configured [min, max] bounds."""
+        return_val = cast(Any, value)
         if self._min is not None:
             return_val = max(self._min, return_val)
         if self._max is not None:
             return_val = min(self._max, return_val)
-        return return_val
+        return cast(object, return_val)
+
+    def _validate(self, value: object) -> bool:
+        """Return True when *value* satisfies the spec's valid-list and validator."""
+        if self._valid is not None and str(value) not in self._valid:
+            return False
+        if self._validator is not None and not self._validator(value):
+            return False
+        return True
+
+    def _validation_error_message(self, value: object) -> str:
+        """Build the ValueError message for an invalid *value*."""
+        if self._valid is not None:
+            return f"Invalid {self._key}: {value!r}. Expected one of {list(self._valid)}."
+        return f"Invalid {self._key}: {value!r}."
+
+    def _load(self) -> None:
+        """Read from the DB and re-apply clamp/validation with default fallback."""
+        value: object = self._default
+        try:
+            value = self._get_from_db()
+            # Exact-type read-repair: numeric/bool settings reject any stored
+            # value whose type differs from the default (float for int, bool
+            # for int/float) before clamp/validate, which would otherwise
+            # silently coerce comparable-but-wrong types or crash startup.
+            if isinstance(self._default, (int, float, bool)) and type(value) is not type(self._default):
+                logger.warning(
+                    "Setting %s has unreadable stored value %r; falling back to default %r",
+                    self._key,
+                    value,
+                    self._default,
+                )
+                self._value = self._default
+            else:
+                value = self._clamp(value)
+                if not self._validate(value):
+                    logger.warning("Setting %s has invalid stored value %r; falling back to default", self._key, value)
+                    self._value = self._default
+                else:
+                    self._value = cast(T, value)
+        except Exception:
+            # Read-repair contract: any bad stored row (wrong type, malformed
+            # shape) must warn and fall back, never crash startup.
+            logger.warning("Setting %s has unreadable stored value %r; falling back to default", self._key, value)
+            self._value = self._default
+        self._loaded = True
 
     def get_key(self) -> str:
         """Returning the key for the setting"""
         return self._key
 
-    def get_valid_formats(self) -> list[Any]:
-        return []
+    def get_valid_formats(self) -> list[str]:
+        """Return the choice list (empty when the setting has no valid-list)."""
+        return list(self._valid) if self._valid is not None else []
 
-    def get_min(self) -> int | float | None:
+    def get_min(self) -> float | None:
         return self._min
 
-    def get_max(self) -> int | float | None:
+    def get_max(self) -> float | None:
         return self._max
 
-    def get(self) -> SettingValue:
-        """Read a setting value"""
+    def get(self) -> T:
+        """Read a setting value, loading it from the DB on first access."""
         if not self._loaded:
-            logger.debug("Setting %s was not yet loaded from DB", self._key)
-            self._value = self._get_from_db()
-            self._loaded = True
+            self._load()
         return self._value
 
-    def set(self, value: SettingValue) -> None:
-        """Persist a setting value"""
+    def set(self, value: T) -> None:
+        """Persist a setting value after validation and clamping.
+
+        Raises ValueError when *value* fails the spec's validation or does not
+        match the setting's declared type.
+        """
         logger.debug("Updating setting: %s, with value: %s", self._key, value)
-        if self._validate(value):
-            clamped_value = self._clamp(value)
-            self._db.set_setting(self._key, json.dumps(clamped_value))
-            self._value = clamped_value
-
-
-class _SettingCacheDir(Setting):
-    def __init__(self, db: Database) -> None:
-        super().__init__(db, "cache_dir", None)
-
-    def get(self) -> str | None:
-        return cast(str | None, super().get())
-
-
-class _SettingCacheFormat(Setting):
-    def __init__(self, db: Database) -> None:
-        super().__init__(db, "cache_format", "PNG")
-        self._valid_cache_formats = ["PNG", "JPEG"]
-
-    def _validate(self, value: SettingValue) -> bool:
-        if str(value) not in self._valid_cache_formats:
-            error = f"Invalid cache_format: {value!r}. Expected one of {self._valid_cache_formats}."
+        if self._default is not None and type(value) is not type(self._default):
+            error = f"Invalid {self._key}: {value!r}. Expected type {type(self._default).__name__}."
             logger.error(error)
             raise ValueError(error)
-        return True
-
-    def get_valid_formats(self) -> list[str]:
-        return self._valid_cache_formats
-
-    def get(self) -> str:
-        return cast(str, super().get())
-
-
-class _SettingColorTagEnabled(Setting):
-    def __init__(self, db: Database) -> None:
-        super().__init__(db, "color_tag_enabled", True)
-
-    def get(self) -> bool:
-        return cast(bool, super().get())
-
-
-class _SettingClearFullResOnExit(Setting):
-    def __init__(self, db: Database) -> None:
-        super().__init__(db, "clear_full_res_on_exit", True)
-
-    def get(self) -> bool:
-        return cast(bool, super().get())
-
-
-class _SettingColorTagPaletteSize(Setting):
-    def __init__(self, db: Database) -> None:
-        super().__init__(db, "color_tag_palette_size", 8, 2, 32)
-
-    def get(self) -> int:
-        return cast(int, super().get())
-
-
-class _SettingColorTagMinShare(Setting):
-    def __init__(self, db: Database) -> None:
-        super().__init__(db, "color_tag_min_share", 0.10, 0.0, 1.0)
-
-    def get(self) -> float:
-        return cast(float, super().get())
-
-
-class _SettingColorTagNeutralSThreshold(Setting):
-    def __init__(self, db: Database) -> None:
-        super().__init__(db, "color_tag_neutral_s_threshold", 0.15, 0, 1.0)
-
-    def get(self) -> float:
-        return cast(float, super().get())
-
-
-class _SettingDebugMode(Setting):
-    def __init__(self, db: Database) -> None:
-        super().__init__(db, "debug_mode", False)
-
-    def get(self) -> bool:
-        return cast(bool, super().get())
-
-
-class _SettingLargeCanvasThresholdMp(Setting):
-    def __init__(self, db: Database) -> None:
-        super().__init__(db, "large_canvas_threshold_mp", 20.0, 0.1, 1000.0)
-
-    def get(self) -> float:
-        return cast(float, super().get())
-
-
-class _SettingMaxMultiPreview(Setting):
-    def __init__(self, db: Database) -> None:
-        super().__init__(db, "max_multi_preview", MULTI_PREVIEW_MAX_DEFAULT, 1, 100)
-
-    def get(self) -> int:
-        return cast(int, super().get())
-
-
-class _SettingMaxPsdWorkers(Setting):
-    def __init__(self, db: Database) -> None:
-        super().__init__(db, "max_psd_workers", 3, 1, 8)
-
-    def get(self) -> int:
-        return cast(int, super().get())
-
-
-class _SettingTileGridSize(Setting):
-    def __init__(self, db: Database) -> None:
-        super().__init__(db, "tile_grid_size", "3x3")
-        self._tile_grid_pattern = re.compile(r"^\d+x\d+$")
-        self._valid_cache_formats = ["1x1", "2x2", "3x3", "4x4"]
-
-    def _validate(self, value: SettingValue) -> bool:
-        if not self._tile_grid_pattern.match(str(value)):
-            error = f"Invalid tile_grid_size: {value!r}. Expected format 'NxN' (e.g. '2x2')."
+        if not self._validate(value):
+            error = self._validation_error_message(value)
             logger.error(error)
             raise ValueError(error)
-        return True
+        self._value = cast(T, self._clamp(value))
+        self._db.set_setting(self._key, json.dumps(self._value))
 
-    def get_valid_formats(self) -> list[str]:
-        return self._valid_cache_formats
-
-    def get(self) -> str:
-        return cast(str, super().get())
-
-
-class _SettingWindowLayoutState(Setting):
-    def __init__(self, db: Database) -> None:
-        super().__init__(db, "window_layout_state", None)
-
-    def get(self) -> str | None:
-        return cast(str | None, super().get())
+    def reload(self) -> None:
+        """Re-read the value from the DB and re-apply clamp/validate rules."""
+        self._load()
 
 
-class _SettingWindowGeometryState(Setting):
-    def __init__(self, db: Database) -> None:
-        super().__init__(db, "window_geometry_state", None)
-
-    def get(self) -> str | None:
-        return cast(str | None, super().get())
+_SPECS: dict[str, _SettingSpec] = {
+    "cache_dir": _SettingSpec(key="cache_dir", default=None),
+    "cache_format": _SettingSpec(key="cache_format", default="PNG", valid=("PNG", "JPEG")),
+    "clear_full_res_on_exit": _SettingSpec(key="clear_full_res_on_exit", default=True),
+    "color_tag_enabled": _SettingSpec(key="color_tag_enabled", default=True),
+    "color_tag_palette_size": _SettingSpec(key="color_tag_palette_size", default=8, min=2, max=32),
+    "color_tag_min_share": _SettingSpec(key="color_tag_min_share", default=0.10, min=0.0, max=1.0),
+    "color_tag_neutral_s_threshold": _SettingSpec(key="color_tag_neutral_s_threshold", default=0.15, min=0.0, max=1.0),
+    "debug_mode": _SettingSpec(key="debug_mode", default=False),
+    "large_canvas_threshold_mp": _SettingSpec(key="large_canvas_threshold_mp", default=20.0, min=0.1, max=1000.0),
+    "max_multi_preview": _SettingSpec(key="max_multi_preview", default=MULTI_PREVIEW_MAX_DEFAULT, min=1, max=100),
+    "max_psd_workers": _SettingSpec(key="max_psd_workers", default=3, min=1, max=8),
+    "tile_grid_size": _SettingSpec(
+        key="tile_grid_size", default="3x3", valid=("1x1", "2x2", "3x3", "4x4"), validator=_tile_grid_validator
+    ),
+    "window_layout_state": _SettingSpec(key="window_layout_state", default=None),
+    "window_geometry_state": _SettingSpec(key="window_geometry_state", default=None),
+}
 
 
 class SettingsService:
-    """Typed settings repository that delegates storage to a Database instance."""
+    """Typed settings repository that delegates storage to a Database instance.
+
+    Exposes one typed :class:`Setting` attribute per spec entry so consumers
+    keep calling ``settings_service.<name>.get()`` / ``.set()`` unchanged.
+    """
 
     def __init__(self, db: Database) -> None:
         self._db = db
 
-        self.cache_dir = _SettingCacheDir(db)
-        self.cache_format = _SettingCacheFormat(db)
-        self.clear_full_res_on_exit = _SettingClearFullResOnExit(db)
-        self.color_tag_enabled = _SettingColorTagEnabled(db)
-        self.color_tag_palette_size = _SettingColorTagPaletteSize(db)
-        self.color_tag_min_share = _SettingColorTagMinShare(db)
-        self.color_tag_neutral_s_threshold = _SettingColorTagNeutralSThreshold(db)
-        self.debug_mode = _SettingDebugMode(db)
-        self.large_canvas_threshold_mp = _SettingLargeCanvasThresholdMp(db)
-        self.max_multi_preview = _SettingMaxMultiPreview(db)
-        self.max_psd_workers = _SettingMaxPsdWorkers(db)
-        self.tile_grid_size = _SettingTileGridSize(db)
-        self.window_layout_state = _SettingWindowLayoutState(db)
-        self.window_geometry_state = _SettingWindowGeometryState(db)
+        self.cache_dir: Setting[str | None] = Setting.from_spec(db, _SPECS["cache_dir"])
+        self.cache_format: Setting[str] = Setting.from_spec(db, _SPECS["cache_format"])
+        self.clear_full_res_on_exit: Setting[bool] = Setting.from_spec(db, _SPECS["clear_full_res_on_exit"])
+        self.color_tag_enabled: Setting[bool] = Setting.from_spec(db, _SPECS["color_tag_enabled"])
+        self.color_tag_palette_size: Setting[int] = Setting.from_spec(db, _SPECS["color_tag_palette_size"])
+        self.color_tag_min_share: Setting[float] = Setting.from_spec(db, _SPECS["color_tag_min_share"])
+        self.color_tag_neutral_s_threshold: Setting[float] = Setting.from_spec(
+            db, _SPECS["color_tag_neutral_s_threshold"]
+        )
+        self.debug_mode: Setting[bool] = Setting.from_spec(db, _SPECS["debug_mode"])
+        self.large_canvas_threshold_mp: Setting[float] = Setting.from_spec(db, _SPECS["large_canvas_threshold_mp"])
+        self.max_multi_preview: Setting[int] = Setting.from_spec(db, _SPECS["max_multi_preview"])
+        self.max_psd_workers: Setting[int] = Setting.from_spec(db, _SPECS["max_psd_workers"])
+        self.tile_grid_size: Setting[str] = Setting.from_spec(db, _SPECS["tile_grid_size"])
+        self.window_layout_state: Setting[str | None] = Setting.from_spec(db, _SPECS["window_layout_state"])
+        self.window_geometry_state: Setting[str | None] = Setting.from_spec(db, _SPECS["window_geometry_state"])
+
+        self._all_settings: tuple[Setting[Any], ...] = (
+            self.cache_dir,
+            self.cache_format,
+            self.clear_full_res_on_exit,
+            self.color_tag_enabled,
+            self.color_tag_palette_size,
+            self.color_tag_min_share,
+            self.color_tag_neutral_s_threshold,
+            self.debug_mode,
+            self.large_canvas_threshold_mp,
+            self.max_multi_preview,
+            self.max_psd_workers,
+            self.tile_grid_size,
+            self.window_layout_state,
+            self.window_geometry_state,
+        )
+
+    def reload(self) -> None:
+        """Re-read every setting from the DB, re-applying clamp/validate rules."""
+        for setting in self._all_settings:
+            setting.reload()

@@ -91,13 +91,21 @@ class ThumbnailService(QObject):
         self._tag_service = tag_service
         self._cancel_event = threading.Event()
         self._threadpool = QThreadPool()
-        self._cache_format: str = self._settings_service.cache_format.get()
 
         # Pre-initialize the shared PSD ProcessPoolExecutor with the
         # user-configured worker count (falls back to RAM-adaptive default
         # when the setting is absent / None).
         max_psd_workers = self._settings_service.max_psd_workers.get()
         get_executor(max_workers=max_psd_workers)
+
+    @property
+    def _cache_format(self) -> str:
+        """Current cache format, read live so settings changes apply immediately.
+
+        Compatibility shim for callers that referenced the old instance
+        snapshot attribute; render paths read ``cache_format.get()`` directly.
+        """
+        return self._settings_service.cache_format.get()
 
     def cancel_pending(self) -> None:
         """Cancel all pending thumbnail generation.
@@ -281,7 +289,7 @@ class ThumbnailService(QObject):
         :meth:`_render_all_resolutions` to avoid duplicating the
         save → emit → record pattern.
         """
-        save_to_cache(img, cache_path, self._cache_format)
+        save_to_cache(img, cache_path, self._settings_service.cache_format.get())
         path_str = str(cache_path)
         self.thumbnail_ready.emit(str(file_info.path), resolution_size, path_str)
         return path_str
@@ -327,7 +335,7 @@ class ThumbnailService(QObject):
         folder_path = str(file_info.path.parent)
         candidate_uuid = cached.get("cache_uuid") or generate_cache_uuid()
         cache_uuid = self._db.get_or_create_folder_uuid(folder_path, candidate_uuid)
-        cache_paths = generate_cache_paths(file_info.path, cache_uuid, self._cache_format)
+        cache_paths = generate_cache_paths(file_info.path, cache_uuid, self._settings_service.cache_format.get())
 
         # Track which paths to write to DB (preserve existing, add new)
         final_thumb_path = cached.get("thumbnail_cache_path")
@@ -383,7 +391,7 @@ class ThumbnailService(QObject):
         # when two threads process images from the same folder simultaneously.
         folder_path = str(file_info.path.parent)
         cache_uuid = self._db.get_or_create_folder_uuid(folder_path, generate_cache_uuid())
-        cache_paths = generate_cache_paths(file_info.path, cache_uuid, self._cache_format)
+        cache_paths = generate_cache_paths(file_info.path, cache_uuid, self._settings_service.cache_format.get())
 
         renderer = registry.FORMAT_DISPATCH.get(file_info.extension.lower(), registry.DEFAULT_RENDERER)
         full_img = renderer(file_info.path, RESOLUTION_FULL, self._cancel_event)

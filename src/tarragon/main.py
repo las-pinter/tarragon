@@ -56,6 +56,7 @@ class MainWindow(_MainWindow):
 
         # Configure custom cache directory if set
         settings_service = SettingsService(self._database)
+        settings_service.reload()
         custom_cache = settings_service.cache_dir.get()
         if custom_cache:
             from pathlib import Path

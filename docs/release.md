@@ -43,11 +43,8 @@ The build scripts will:
 If you prefer to manage the environment yourself:
 
 ```bash
-# Install build dependencies with uv (recommended)
-uv pip install -e ".[build]"
-
-# Or with pip
-pip install -e ".[build]"
+# Install runtime and build dependencies with uv (build extra)
+uv sync --extra build
 
 python scripts/package_nuitka.py
 ```
@@ -106,4 +103,4 @@ Consider using `--standalone` mode and manually removing unused Qt plugins.
 
 ### uv issues
 
-If `uv pip install` fails, ensure you're using a recent version of uv (`uv --version`). You can update with `uv self update`. If problems persist, fall back to `pip install -e ".[build]"`.
+If `uv sync` fails, ensure you're using a recent version of uv (`uv --version`). You can update with `uv self update`. If problems persist, fall back to `pip install -e ".[build]"`.

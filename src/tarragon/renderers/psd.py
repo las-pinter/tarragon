@@ -13,6 +13,8 @@ from pathlib import Path
 import psutil
 from PIL import Image
 
+from tarragon.renderers.cache import resize_long_edge
+
 logger = logging.getLogger(__name__)
 
 
@@ -94,9 +96,9 @@ def _composite_psd_in_process(
                         )
             image = target
 
-        # Resize to target_size if specified
-        if target_size is not None and max(image.size) > target_size:
-            image.thumbnail((target_size, target_size), Image.Resampling.LANCZOS)
+        # Resize to target_size if specified (resize_long_edge never upscales)
+        if target_size is not None:
+            image = resize_long_edge(image, target_size)
 
         # Return as PNG bytes (PIL Image is not picklable)
         buf = io.BytesIO()

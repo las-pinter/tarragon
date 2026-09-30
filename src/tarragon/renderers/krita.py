@@ -9,6 +9,8 @@ from pathlib import Path
 
 from PIL import Image, ImageOps
 
+from tarragon.renderers.cache import resize_long_edge
+
 logger = logging.getLogger(__name__)
 
 
@@ -38,7 +40,7 @@ def render_kra_image(file_path: Path, target_size: int | None = None) -> Image.I
         if img.mode not in ("RGBA", "RGB"):
             img = img.convert("RGBA")
         if target_size is not None:
-            img.thumbnail((target_size, target_size))
+            img = resize_long_edge(img, target_size)
         return img
     except (OSError, ValueError) as exc:
         logger.warning("Failed to decode KRA image %s: %s", file_path, exc)

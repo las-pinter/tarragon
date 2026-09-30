@@ -7,6 +7,8 @@ from pathlib import Path
 
 from PIL import Image, ImageOps
 
+from tarragon.renderers.cache import resize_long_edge
+
 logger = logging.getLogger(__name__)
 
 
@@ -39,7 +41,7 @@ def render_plain_image(file_path: Path, target_size: int | None = None) -> Image
         if img.mode not in ("RGBA", "RGB"):
             img = img.convert("RGBA")
         if target_size is not None:
-            img.thumbnail((target_size, target_size), Image.Resampling.LANCZOS)
+            img = resize_long_edge(img, target_size)
         return img
     except (OSError, ValueError):
         logger.error("Error during opening image: %s", file_path)

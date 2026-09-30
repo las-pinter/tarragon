@@ -10,6 +10,8 @@ from pathlib import Path
 
 from PIL import Image
 
+from tarragon.renderers.cache import resize_long_edge
+
 logger = logging.getLogger(__name__)
 
 # PNG signature and IEND chunk marker for extracting PNG from binary blobs
@@ -112,6 +114,6 @@ def render_clip_image(
         img = img.convert("RGBA")
 
     if target_size is not None:
-        img.thumbnail((target_size, target_size), Image.Resampling.LANCZOS)
+        img = resize_long_edge(img, target_size)
 
     return img

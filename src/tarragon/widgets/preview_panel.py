@@ -240,7 +240,7 @@ class PreviewPanel(QWidget):
             "Called - image_info: path: %s, size: %s, from_cache: %s",
             image_info.path,
             image_info.image.size,
-            getattr(image_info.image, "_from_cache", False),
+            image_info.from_cache,
         )
 
         # Convert PIL Image to QPixmap and CACHE it (avoids re-conversion on resize)

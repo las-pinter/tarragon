@@ -10,10 +10,11 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import ClassVar
 
-from PIL import Image
+from PIL import Image, ImageOps
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, QTimer, Signal
 from PySide6.QtWidgets import QLineEdit
 
@@ -36,14 +37,37 @@ from tarragon.widgets.preview_panel import PreviewPanel
 logger = logging.getLogger(__name__)
 
 
-def _load_preview_image_data(db: Database, path: Path) -> tuple[Image.Image, int | None, int | None]:
+@dataclass(frozen=True)
+class LoadedImage:
+    """A decoded preview image plus its cache provenance.
+
+    Replaces the former ``img._from_cache`` attribute stamp: provenance is
+    carried beside the image instead of being monkeypatched onto a PIL
+    Image, which is not guaranteed to preserve arbitrary attributes.
+    """
+
+    image: Image.Image
+    from_cache: bool
+    original_width: int | None = None
+    original_height: int | None = None
+
+
+def _load_preview_image_data(db: Database, path: Path) -> LoadedImage:
     """Load a preview image in a worker thread, preferring cached tiers.
 
     Shared by the synchronous single-selection path and the async
     multi-select decode workers.
 
+    Cache tiers are the canonical oriented form: renderers normalise
+    orientation when building caches, so cached images are returned
+    as-is (``from_cache=True``) and never re-transposed.  Only the
+    original-file fallback applies :func:`PIL.ImageOps.exif_transpose`
+    so every non-cached load is display-oriented regardless of the path
+    it is shown through.
+
     Returns:
-        A tuple of ``(image, original_width, original_height)``.
+        A :class:`LoadedImage` carrying the decoded image, its cache
+        provenance, and the original dimensions from the DB record.
     """
     thumb_record = db.get_thumbnail(str(path))
 
@@ -57,22 +81,37 @@ def _load_preview_image_data(db: Database, path: Path) -> tuple[Image.Image, int
         preview_path = thumb_record.get("preview_cache_path")
         if preview_path and Path(preview_path).is_file():
             img = load_image(preview_path)
-            img._from_cache = True  # type: ignore[attr-defined,unused-ignore]
-            return img, original_width, original_height
+            return LoadedImage(
+                image=img,
+                from_cache=True,
+                original_width=original_width,
+                original_height=original_height,
+            )
 
         full_path = thumb_record.get("full_cache_path")
         if full_path and Path(full_path).is_file():
             img = load_image(full_path)
-            img._from_cache = True  # type: ignore[attr-defined,unused-ignore]
-            return img, original_width, original_height
+            return LoadedImage(
+                image=img,
+                from_cache=True,
+                original_width=original_width,
+                original_height=original_height,
+            )
 
-    return load_image(path), original_width, original_height
+    img = load_image(path)
+    oriented = ImageOps.exif_transpose(img) or img
+    return LoadedImage(
+        image=oriented,
+        from_cache=False,
+        original_width=original_width,
+        original_height=original_height,
+    )
 
 
 class _PreviewDecodeRelay(QObject):
     """Signal carrier for decode workers (QRunnables cannot own signals)."""
 
-    decode_ready = Signal(object, str, object, object, object)  # epoch, path, image, orig_w, orig_h
+    decode_ready = Signal(object, str, object, object, object, object)  # epoch, path, image, orig_w, orig_h, from_cache
     decode_failed = Signal(object, str, str)  # epoch, path, error
     decode_busy_started = Signal()
     decode_busy_finished = Signal()
@@ -101,8 +140,15 @@ class _DecodePreviewTask(QRunnable):
         if self._cancel_event.is_set():
             return
         try:
-            img, orig_w, orig_h = _load_preview_image_data(self._db, self._path)
-            self._relay.decode_ready.emit(self._epoch, str(self._path), img, orig_w, orig_h)
+            loaded = _load_preview_image_data(self._db, self._path)
+            self._relay.decode_ready.emit(
+                self._epoch,
+                str(self._path),
+                loaded.image,
+                loaded.original_width,
+                loaded.original_height,
+                loaded.from_cache,
+            )
         except Exception as exc:
             self._relay.decode_failed.emit(self._epoch, str(self._path), str(exc))
 
@@ -364,8 +410,16 @@ class GalleryController:
             self._cancel_decode_batch()
             path = Path(paths[0])
             try:
-                img, orig_w, orig_h = self._load_preview_image(path)
-                self._preview_panel.set_image(ImageInfo(img, path, orig_w, orig_h))
+                loaded = self._load_preview_image(path)
+                self._preview_panel.set_image(
+                    ImageInfo(
+                        loaded.image,
+                        path,
+                        loaded.original_width,
+                        loaded.original_height,
+                        loaded.from_cache,
+                    )
+                )
             except Exception:
                 logger.warning("Failed to load preview for %s", path, exc_info=True)
                 self._preview_panel.clear()
@@ -421,6 +475,7 @@ class GalleryController:
         img: Image.Image,
         orig_w: int | None,
         orig_h: int | None,
+        from_cache: bool,
     ) -> None:
         """Add one decoded image to the mosaic, discarding stale selections."""
         if epoch != self._decode_epoch:
@@ -431,7 +486,7 @@ class GalleryController:
         self._decode_pending -= 1
         if self._decode_pending <= 0:
             self.decode_relay.decode_busy_finished.emit()
-        self._preview_panel.add_multi_preview_image(ImageInfo(img, Path(path_str), orig_w, orig_h))
+        self._preview_panel.add_multi_preview_image(ImageInfo(img, Path(path_str), orig_w, orig_h, from_cache))
 
     def _on_preview_decode_failed(self, epoch: int, path_str: str, error_message: str) -> None:
         """Log a decode failure and count it toward batch completion."""
@@ -479,10 +534,11 @@ class GalleryController:
 
     # ── Preview Image Loading ──────────────────────────────────────
 
-    def _load_preview_image(self, path: Path) -> tuple[Image.Image, int | None, int | None]:
+    def _load_preview_image(self, path: Path) -> LoadedImage:
         """Load a preview image synchronously (single selection).
 
-        Delegates to the shared worker-safe loader; both paths prefer the
-        preview-tier cached image when available.
+        Delegates to the shared worker-safe loader, which prefers the
+        preview-tier cached image when available and applies EXIF
+        orientation to the original-file fallback.
         """
         return _load_preview_image_data(self._db, path)

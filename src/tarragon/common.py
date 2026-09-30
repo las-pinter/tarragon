@@ -11,3 +11,4 @@ class ImageInfo(NamedTuple):
     path: Path | None
     width: int | None
     height: int | None
+    from_cache: bool = False

@@ -10,7 +10,7 @@ import pytest
 import tarragon.app_paths as app_paths_module
 from tarragon.app_paths import cache_dir, data_dir, db_path, ensure_dirs
 
-MOCK_DATA = "/tmp/test-tarragon"
+MOCK_DATA = "test-data/tarragon"
 
 
 class TestDataDir:
@@ -42,9 +42,9 @@ class TestPathConstruction:
                 "/home/user/.local/share/tarragon/cache",
             ),
             (
-                "/tmp/custom-data",
-                "/tmp/custom-data/tarragon.db",
-                "/tmp/custom-data/cache",
+                "custom-data",
+                "custom-data/tarragon.db",
+                "custom-data/cache",
             ),
         ],
     )

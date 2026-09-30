@@ -46,7 +46,7 @@ class TestFilterBarCreation:
         """FilterBar is created without error."""
         assert isinstance(bar, FilterBar)
 
-    def test_has_color_filter_bar(self, bar: FilterBar) -> None:
+    def test_has_filter_bar_color(self, bar: FilterBar) -> None:
         """FilterBar contains a FilterBarColor sub-widget."""
         assert isinstance(bar.filter_bar_color, FilterBarColor)
 

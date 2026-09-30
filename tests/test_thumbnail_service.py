@@ -5,7 +5,7 @@ from __future__ import annotations
 import io
 import os
 import threading
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from concurrent.futures import Future
 from pathlib import Path
 from typing import Any
@@ -35,19 +35,9 @@ def db_mock() -> MagicMock:
 
 
 @pytest.fixture
-def settings_mock() -> MagicMock:
+def settings_mock(make_settings_mock: Callable[..., MagicMock]) -> MagicMock:
     """Mock SettingsService with typed return values matching DEFAULTS."""
-    mock = MagicMock()
-    mock.cache_format.get.return_value = "PNG"
-    mock.max_psd_workers.get.return_value = 3
-    mock.large_canvas_threshold_mp.get.return_value = 20.0
-    mock.tile_grid_size.get.return_value = "2x2"
-    mock.color_tag_enabled.get.return_value = True
-    mock.color_tag_palette_size.get.return_value = 8
-    mock.color_tag_min_share.get.return_value = 0.10
-    mock.color_tag_neutral_s_threshold.get.return_value = 0.15
-    mock.clear_full_res_on_exit.get.return_value = False
-    return mock
+    return make_settings_mock()
 
 
 @pytest.fixture
@@ -83,15 +73,11 @@ def real_db() -> Generator[Database, None, None]:
 
 
 @pytest.fixture
-def real_service(real_db: Database, tag_service_mock: MagicMock) -> ThumbnailService:
+def real_service(
+    real_db: Database, tag_service_mock: MagicMock, make_settings_mock: Callable[..., MagicMock]
+) -> ThumbnailService:
     """Create a ThumbnailService with a real Database and synchronous threadpool."""
-    settings = MagicMock()
-    settings.cache_format.get.return_value = "PNG"
-    settings.max_psd_workers.get.return_value = 3
-    settings.large_canvas_threshold_mp.get.return_value = 20.0
-    settings.tile_grid_size.get.return_value = "2x2"
-    settings.color_tag_enabled.get.return_value = False
-    settings.clear_full_res_on_exit.get.return_value = False
+    settings = make_settings_mock(color_tag_enabled=False)
     with patch("tarragon.services.thumbnail_service.get_executor"):
         svc = ThumbnailService(db=real_db, settings_service=settings, tag_service=tag_service_mock)
     mock_pool = MagicMock()

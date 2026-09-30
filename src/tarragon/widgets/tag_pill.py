@@ -12,16 +12,16 @@ from tarragon.widgets._chip_utils import create_chip_close_button
 
 
 class _ClickableLabel(QLabel):
-    """A QLabel subclass dat emits a ``clicked`` signal on mouse press.
+    """A QLabel subclass that emits a ``clicked`` signal on mouse press.
 
-    Replaces da monkey-patched ``mousePressEvent`` approach wiv a proper
+    Replaces the monkey-patched ``mousePressEvent`` approach with a proper
     Qt event-chain override, avoiding fragile instance-level patching.
     """
 
     clicked = Signal()
 
     def mousePressEvent(self, event: QMouseEvent) -> None:  # noqa: N802
-        """Emit ``clicked`` an' propagate da event up da Qt chain."""
+        """Emit ``clicked`` and propagate the event up the Qt chain."""
         self.clicked.emit()
         super().mousePressEvent(event)
 

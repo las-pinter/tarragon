@@ -120,7 +120,7 @@ class SidebarItemDelegate(QStyledItemDelegate):
 class SidebarWidget(QWidget):
     """A sidebar panel that shows a list of favorite folders and a navigable folder tree.
 
-    Section order (top to bottom): Favorites, then Folders — matching the mockup.
+    Section order (top to bottom): Folders, then Favorites.
     Emits ``favorite_clicked(str)`` when the user clicks a favorite row.
     Emits ``folder_navigated(str)`` when the user clicks a folder in the tree.
     """
@@ -131,7 +131,7 @@ class SidebarWidget(QWidget):
     def __init__(self, db: Database, parent: QWidget | None = None) -> None:
         """Build the sidebar layout with favorites list, folder tree, and action buttons.
 
-        Section order matches the mockup: Favorites FIRST, then Folders.
+        Section order: Folders first, then Favorites.
         Both views use a :class:`SidebarItemDelegate` for selection-aware folder icons.
         """
         super().__init__(parent)
@@ -149,7 +149,7 @@ class SidebarWidget(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        # ── Folder tree (SECOND section per mockup) ─────────────
+        # ── Folder tree (first section in layout) ────────────────
         tree_header = QLabel("Folders")
         tree_header.setObjectName("sidebarSectionHeader")
         layout.addWidget(tree_header)
@@ -174,7 +174,7 @@ class SidebarWidget(QWidget):
         # Spacing between sections (Folders header needs 14px top margin)
         layout.addSpacing(14)
 
-        # ── Favorites (FIRST section per mockup) ────────────────
+        # ── Favorites (second section in layout) ─────────────────
         fav_header = QLabel("Favorites")
         fav_header.setObjectName("sidebarSectionHeader")
         layout.addWidget(fav_header)

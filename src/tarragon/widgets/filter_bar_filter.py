@@ -1,4 +1,4 @@
-"""Horizontal scrollable row of clickable hue swatches."""
+"""Abstract base class for filter widgets in the filter bar."""
 
 from __future__ import annotations
 

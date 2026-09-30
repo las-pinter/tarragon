@@ -53,8 +53,8 @@ class MainWindow(QMainWindow):
         - preview_dock : "Preview"  — right panel for image preview + tag management
         - log_dock     : "Log"      — bottom panel for application log output
 
-    Menu actions (current milestone):
-        - File → Open Folder (wired in M3, placeholder in M2)
+    Menu actions:
+        - File → Open Folder — opens a folder dialog, then navigates and scans the chosen folder
         - View → Toggle visibility of each dock panel
 
     Gallery filter orchestration and selection handling are delegated to
@@ -301,7 +301,7 @@ class MainWindow(QMainWindow):
         self.sidebar_widget.folder_navigated.connect(self._on_folder_navigated)
         self.sidebar_widget.favorite_clicked.connect(self._on_favorite_clicked)
 
-        # Preview panel (wiv tag management)
+        # Preview panel (with tag management)
         self.preview_panel = PreviewPanel(settings_service=self._settings_service, tag_service=tag_service, parent=self)
         self.preview_dock.setWidget(self.preview_panel)
 
@@ -487,10 +487,10 @@ class MainWindow(QMainWindow):
     # ── Menu Actions ───────────────────────────────────────────────────
 
     def _setup_actions(self) -> None:
-        """Build the menu bar with File and View menus.
+        """Build the menu bar with File, View, and Settings menus.
 
-        The Open Folder action is wired into the menu system here but does
-        nothing yet (full folder-scanning implementation lands in M3).
+        The Open Folder action opens a folder dialog and kicks off a full
+        folder scan through the thumbnail service (_on_open_folder).
         The View menu provides toggle actions for all dock panels.
         """
         menubar = self.menuBar()

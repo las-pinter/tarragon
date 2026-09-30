@@ -19,6 +19,24 @@ RESOLUTION_THUMBNAIL = 256
 RESOLUTION_PREVIEW = 1024
 RESOLUTION_FULL = None  # Original resolution
 
+# Single source of truth for on-disk cache directory tier names.
+# Values derive from the same constants so they cannot drift; "full" is
+# the sole human-readable literal.
+TIER_KEYS = {
+    RESOLUTION_THUMBNAIL: str(RESOLUTION_THUMBNAIL),
+    RESOLUTION_PREVIEW: str(RESOLUTION_PREVIEW),
+    RESOLUTION_FULL: "full",
+}
+
+
+def tier_key(resolution: int | None) -> str:
+    """Return the cache directory key for a resolution tier."""
+    try:
+        return TIER_KEYS[resolution]
+    except KeyError:
+        raise KeyError(f"unknown cache tier {resolution!r}; add it to TIER_KEYS") from None
+
+
 # Windows reserves these device names as base names, case-insensitively.
 _WINDOWS_RESERVED_NAMES = frozenset(
     {"CON", "PRN", "AUX", "NUL"} | {f"COM{i}" for i in range(1, 10)} | {f"LPT{i}" for i in range(1, 10)}
@@ -87,7 +105,7 @@ def generate_cache_paths(source_path: Path, cache_uuid: str, output_format: str 
 
     # Generate paths for each resolution
     paths: dict[str, Path] = {}
-    for resolution in (str(RESOLUTION_THUMBNAIL), str(RESOLUTION_PREVIEW), "full"):
+    for resolution in TIER_KEYS.values():
         resolution_dir = cache_dir() / resolution / base_name
         resolution_dir.mkdir(parents=True, exist_ok=True)
         paths[resolution] = resolution_dir / f"{filename}{cache_suffix}"

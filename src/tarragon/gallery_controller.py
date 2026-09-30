@@ -319,11 +319,11 @@ class GalleryController:
     # ── Preview Image Loading ──────────────────────────────────────
 
     def _load_preview_image(self, path: Path) -> tuple[Image.Image, int | None, int | None]:
-        """Load a preview image, preferring the 1024px cached preview when available.
+        """Load a preview image, preferring the preview-tier cached image when available.
 
-        Checks ``db.get_thumbnail(path)`` for a ``preview_cache_path`` (1024px).
+        Checks ``db.get_thumbnail(path)`` for a ``preview_cache_path``.
         If the cached file exists on disk it is opened directly (good quality,
-        fast).  Falls back to ``full_cache_path``, then to the original file.
+        fast).  Falls back to the ``full_cache_path``, then to the original file.
 
         Images loaded from cache are marked with ``_from_cache = True`` so that
         ``PreviewPanel.set_image()`` can skip EXIF recovery from the original
@@ -345,14 +345,14 @@ class GalleryController:
             original_height = thumb_record.get("height")
 
         if thumb_record:
-            # Try 1024px preview first (good quality, fast)
+            # Try the preview-tier cached image first (good quality, fast)
             preview_path = thumb_record.get("preview_cache_path")
             if preview_path and Path(preview_path).is_file():
                 img = load_image(preview_path)
                 img._from_cache = True  # type: ignore[attr-defined,unused-ignore]
                 return img, original_width, original_height
 
-            # Fallback: full resolution cache
+            # Fallback: full-tier cache
             full_path = thumb_record.get("full_cache_path")
             if full_path and Path(full_path).is_file():
                 img = load_image(full_path)

@@ -28,6 +28,7 @@ from tarragon.renderers.cache import (
     load_image,
     resize_long_edge,
     save_to_cache,
+    tier_key,
 )
 from tarragon.renderers.psd import get_executor
 from tarragon.scanner import FileInfo
@@ -337,7 +338,7 @@ class ThumbnailService(QObject):
         if not cached.get("thumbnail_cache_path") or not Path(cached["thumbnail_cache_path"]).exists():
             thumb_img = resize_long_edge(source_image, RESOLUTION_THUMBNAIL)
             final_thumb_path = self._save_and_record(
-                thumb_img, file_info, RESOLUTION_THUMBNAIL, cache_paths[str(RESOLUTION_THUMBNAIL)]
+                thumb_img, file_info, RESOLUTION_THUMBNAIL, cache_paths[tier_key(RESOLUTION_THUMBNAIL)]
             )
 
         if source_resolution == RESOLUTION_FULL and (
@@ -345,7 +346,7 @@ class ThumbnailService(QObject):
         ):
             preview_img = resize_long_edge(source_image, RESOLUTION_PREVIEW)
             final_preview_path = self._save_and_record(
-                preview_img, file_info, RESOLUTION_PREVIEW, cache_paths[str(RESOLUTION_PREVIEW)]
+                preview_img, file_info, RESOLUTION_PREVIEW, cache_paths[tier_key(RESOLUTION_PREVIEW)]
             )
 
         self._emit_cached_thumbnails(file_info, cached)
@@ -397,7 +398,7 @@ class ThumbnailService(QObject):
             self.thumbnail_ready.emit(str(file_info.path), None, None)
             return
 
-        self._save_and_record(full_img, file_info, RESOLUTION_FULL, cache_paths["full"])
+        self._save_and_record(full_img, file_info, RESOLUTION_FULL, cache_paths[tier_key(RESOLUTION_FULL)])
 
         smaller_sizes = derive_smaller_sizes(full_img, [RESOLUTION_THUMBNAIL, RESOLUTION_PREVIEW])
 
@@ -410,7 +411,7 @@ class ThumbnailService(QObject):
                 logger.debug("cancelled during smaller sizes: %s", file_info.path)
                 return
 
-            resolution_key = str(RESOLUTION_THUMBNAIL) if size == RESOLUTION_THUMBNAIL else str(RESOLUTION_PREVIEW)
+            resolution_key = tier_key(size)
             cache_path_str = self._save_and_record(img, file_info, size, cache_paths[resolution_key])
             if size == RESOLUTION_THUMBNAIL:
                 thumb_path = cache_path_str
@@ -446,7 +447,7 @@ class ThumbnailService(QObject):
             cache_uuid=cache_uuid,
             thumbnail_cache_path=thumb_path,
             preview_cache_path=preview_path,
-            full_cache_path=str(cache_paths["full"]),
+            full_cache_path=str(cache_paths[tier_key(RESOLUTION_FULL)]),
         )
         elapsed = time.perf_counter() - start
         logger.debug("completed in %.3fs: %s", elapsed, file_info.path)

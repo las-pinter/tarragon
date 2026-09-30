@@ -9,7 +9,7 @@ from typing import override
 
 from PySide6.QtCore import QAbstractListModel, QModelIndex, QObject, QPersistentModelIndex, Qt
 
-from tarragon.renderers.cache import RESOLUTION_FULL, RESOLUTION_PREVIEW, RESOLUTION_THUMBNAIL
+from tarragon.renderers.cache import RESOLUTION_FULL, RESOLUTION_PREVIEW, RESOLUTION_THUMBNAIL, tier_key
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +32,13 @@ class ThumbnailModel(QAbstractListModel):
     ThumbnailRole256: int = Qt.ItemDataRole.UserRole + 2
     ThumbnailRole1024: int = Qt.ItemDataRole.UserRole + 3
     ThumbnailRoleFull: int = Qt.ItemDataRole.UserRole + 4
+
+    # Resolution tier (cache directory key) -> Qt role.
+    TIER_ROLES = {
+        tier_key(RESOLUTION_THUMBNAIL): ThumbnailRole256,
+        tier_key(RESOLUTION_PREVIEW): ThumbnailRole1024,
+        tier_key(RESOLUTION_FULL): ThumbnailRoleFull,
+    }
 
     def __init__(self, parent: QObject | None = None) -> None:
         """Initialise the model with an empty path list."""
@@ -119,9 +126,9 @@ class ThumbnailModel(QAbstractListModel):
 
     @staticmethod
     def _resolution_to_role(resolution: int | None) -> int:
-        """Map a resolution value to the corresponding Qt role."""
-        if resolution == RESOLUTION_THUMBNAIL:
-            return ThumbnailModel.ThumbnailRole256
-        if resolution == RESOLUTION_PREVIEW:
-            return ThumbnailModel.ThumbnailRole1024
-        return ThumbnailModel.ThumbnailRoleFull
+        """Map a resolution value to the corresponding Qt role.
+
+        Unknown tiers raise a :class:`KeyError` (loud contract) rather
+        than silently falling back to the full-resolution role.
+        """
+        return ThumbnailModel.TIER_ROLES[tier_key(resolution)]

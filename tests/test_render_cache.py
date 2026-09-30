@@ -10,8 +10,10 @@ import pytest
 from PIL import Image
 
 from tarragon.renderers.cache import (
+    RESOLUTION_FULL,
     RESOLUTION_PREVIEW,
     RESOLUTION_THUMBNAIL,
+    TIER_KEYS,
     _is_safe_cache_dir,
     clear_cache,
     clear_full_res_cache,
@@ -22,6 +24,7 @@ from tarragon.renderers.cache import (
     load_image,
     resize_long_edge,
     save_to_cache,
+    tier_key,
 )
 
 
@@ -199,6 +202,31 @@ class TestGenerateCacheUUID:
         assert len(set(uuids)) == 100  # All unique
 
 
+class TestTierKey:
+    """Mapping resolution tiers to on-disk cache directory names."""
+
+    def test_tier_key_maps_known_tiers_to_on_disk_names(self) -> None:
+        """tier_key returns the exact on-disk directory names for known tiers."""
+        assert tier_key(RESOLUTION_THUMBNAIL) == "256"
+        assert tier_key(RESOLUTION_PREVIEW) == "1024"
+        assert tier_key(RESOLUTION_FULL) == "full"
+
+    def test_tier_key_raises_for_unknown_tier(self) -> None:
+        """tier_key raises KeyError naming TIER_KEYS for an unknown resolution."""
+        with pytest.raises(KeyError, match="TIER_KEYS"):
+            tier_key(512)
+
+    @pytest.mark.parametrize("resolution", [0, 99, -1])
+    def test_tier_key_raises_for_unexpected_resolutions(self, resolution: int) -> None:
+        """tier_key raises KeyError for unexpected integer resolutions."""
+        with pytest.raises(KeyError):
+            tier_key(resolution)
+
+    def test_tier_key_values_are_distinct(self) -> None:
+        """TIER_KEYS maps every resolution to a distinct on-disk directory name."""
+        assert len(set(TIER_KEYS.values())) == len(TIER_KEYS)
+
+
 class TestGenerateCachePaths:
     """Generating cache file paths and directories."""
 
@@ -228,6 +256,13 @@ class TestGenerateCachePaths:
         assert (tmp_path / str(RESOLUTION_THUMBNAIL) / "vacation_abc12345").exists()
         assert (tmp_path / str(RESOLUTION_PREVIEW) / "vacation_abc12345").exists()
         assert (tmp_path / "full" / "vacation_abc12345").exists()
+
+    def test_generate_cache_paths_uses_tier_keys_values(self, tmp_path: Path) -> None:
+        """generate_cache_paths keys its result by the exact TIER_KEYS directory names."""
+        with patch("tarragon.renderers.cache.cache_dir", return_value=tmp_path):
+            paths = generate_cache_paths(Path("/photos/vacation/sunset.jpg"), "abc12345")
+
+        assert set(paths) == set(TIER_KEYS.values())
 
     def test_generate_cache_paths_distinct_when_stem_matches_but_extension_differs(self, tmp_path: Path) -> None:
         """generate_cache_paths names cache files distinctly when two sources share a stem."""

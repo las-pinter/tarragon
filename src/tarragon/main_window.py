@@ -410,7 +410,8 @@ class MainWindow(QMainWindow):
         source_path:
             The original source file path.
         resolution_size:
-            The resolution tier (256, 1024, or None for full resolution).
+            The resolution tier (see the TIER_KEYS table in
+            ``tarragon.renderers.cache``; None for full resolution).
         cache_path:
             The cache file path (str or None).
         """

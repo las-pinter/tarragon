@@ -8,7 +8,7 @@ import pytest
 from PySide6.QtCore import QModelIndex, Qt
 
 from tarragon.models.thumbnail_model import ThumbnailModel
-from tarragon.renderers.cache import RESOLUTION_FULL, RESOLUTION_PREVIEW, RESOLUTION_THUMBNAIL
+from tarragon.renderers.cache import RESOLUTION_FULL, RESOLUTION_PREVIEW, RESOLUTION_THUMBNAIL, TIER_KEYS
 
 
 class TestThumbnailModel:
@@ -257,3 +257,23 @@ class TestThumbnailModel:
             assert thumb == str(Path(f"/cache/256/file_{i:03d}.png")), (
                 f"Thumbnail for file_{i:03d}.jpg lost after unfilter"
             )
+
+
+class TestResolutionToRole:
+    """Mapping resolution tiers to thumbnail model roles."""
+
+    def test_resolution_to_role_maps_known_tiers(self) -> None:
+        """_resolution_to_role maps known resolutions to their corresponding Qt roles."""
+        assert ThumbnailModel._resolution_to_role(RESOLUTION_THUMBNAIL) == ThumbnailModel.ThumbnailRole256
+        assert ThumbnailModel._resolution_to_role(RESOLUTION_PREVIEW) == ThumbnailModel.ThumbnailRole1024
+        assert ThumbnailModel._resolution_to_role(RESOLUTION_FULL) == ThumbnailModel.ThumbnailRoleFull
+
+    @pytest.mark.parametrize("resolution", [512, 99, 0])
+    def test_resolution_to_role_raises_for_unknown_tier(self, resolution: int) -> None:
+        """_resolution_to_role raises KeyError instead of falling back to the full role."""
+        with pytest.raises(KeyError, match="TIER_KEYS"):
+            ThumbnailModel._resolution_to_role(resolution)
+
+    def test_tier_roles_keys_match_cache_tier_names(self) -> None:
+        """TIER_ROLES is keyed by exactly the cache tier_key output values."""
+        assert set(ThumbnailModel.TIER_ROLES) == set(TIER_KEYS.values())

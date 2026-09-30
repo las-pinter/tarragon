@@ -10,124 +10,60 @@ import logging
 from functools import partial
 from pathlib import Path
 
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (
-    QHBoxLayout,
-    QMenu,
-    QPushButton,
-    QWidget,
-)
+from PySide6.QtWidgets import QWidget
 
 from tarragon.db.database import Database
-from tarragon.theme.constants import SPACING_S
 from tarragon.widgets._chip_utils import create_removable_chip
-from tarragon.widgets.filter_bar_filter import FilterBarFilter
+from tarragon.widgets.filter_bar_chip_base import _ChipFilterBarBase
 
 logger = logging.getLogger(__name__)
 
 
-class FilterBarFolder(FilterBarFilter):
-    """A compact tag filter widget with an Add Folder button and active-folder chips.
+class FilterBarFolder(_ChipFilterBarBase[str]):
+    """A compact folder filter widget with an Add Folder button and active-folder chips.
 
     Emits whenever the set of folders changes.
-    The payload is a ``set[str]`` of active filter tag IDs.
+    The payload is a ``set[str]`` of active folder paths.
     """
 
     def __init__(self, db: Database, parent: QWidget | None = None) -> None:
         """Build the filter bar with an Add Folder button and chips container."""
-        super().__init__(parent)
+        super().__init__(
+            "Filter Folders",
+            button_tooltip="Filter by folder",
+            initially_hidden=True,
+            parent=parent,
+        )
         self._db = db
-        self._selected_folders: set[str] = set()
-        self._folder_chips: dict[str, QWidget] = {}
-
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(SPACING_S, 0, SPACING_S, 0)
-        layout.setSpacing(SPACING_S)
-
-        # Add Folder button
-        self._add_folder_btn = QPushButton("Filter Folders")
-        self._add_folder_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._add_folder_btn.setToolTip("Filter by folder")
-        self._add_folder_btn.clicked.connect(self._show_menu)
-        layout.addWidget(self._add_folder_btn)
-
-        # Container for active folder chips
-        self._chips_container = QWidget()
-        self._chips_layout = QHBoxLayout(self._chips_container)
-        self._chips_layout.setContentsMargins(0, 0, 0, 0)
-        self._chips_layout.setSpacing(SPACING_S)
-        layout.addWidget(self._chips_container)
-
-        layout.addStretch()
-
-        # Folder menu
-        self._folder_menu = QMenu(self)
-
-        # Initial state: folder widgets hidden
-        self._add_folder_btn.hide()
-        self._chips_container.hide()
+        # Alias the base's state to the names pinned by tests / used by the gallery.
+        self._selected_folders = self._active
+        self._folder_chips = self._chips
+        self._add_folder_btn = self._add_button
+        self._folder_menu = self._menu
 
     def refresh_folders(self) -> None:
         """Refresh the folder menu"""
         self._prune_stale_chips()
 
-    def _show_menu(self) -> None:
-        """Show a menu of available folders."""
-        self._folder_menu.clear()
-
+    def _load_items(self) -> list[str] | None:
+        """Load available folders, or ``None`` when the database query fails."""
         try:
             all_folders = self._db.list_distinct_folders()
-
             logger.debug("Available favorite folders: %s", all_folders)
-            for folder_path in all_folders:
-                display_name = self._short_folder_name(folder_path)
-                action = self._folder_menu.addAction(display_name)
-                action.setCheckable(True)
-                checked = folder_path in self._selected_folders
-                action.setChecked(checked)
-                action.setData(display_name)
-                action.triggered.connect(lambda checked=checked, fp=folder_path: self._toggle_folder(fp))
-
-            # Show menu below the button
-            pos = self._add_folder_btn.mapToGlobal(self._add_folder_btn.rect().bottomLeft())
-            self._folder_menu.popup(pos)
-
+            return all_folders
         except Exception:
             logger.debug("Failed to load folder list", exc_info=True)
-            return
+            return None
 
-    def _toggle_folder(self, folder_path: str) -> None:
-        """Toggle a folde in the folders set.
+    def _item_label(self, item: str) -> str:
+        """Return the short display name for the menu."""
+        return self._short_folder_name(item)
 
-        Args:
-            folder_path: Full folder path to toggle.
-        """
+    def _item_data(self, item: str) -> object:
+        """Store the short display name on the action (legacy behavior)."""
+        return self._short_folder_name(item)
 
-        if folder_path in self._selected_folders:
-            self._remove_folder(folder_path)
-        else:
-            self._selected_folders.add(folder_path)
-            chip = self._create_folder_chip(folder_path)
-            self._folder_chips[folder_path] = chip
-            self._chips_layout.addWidget(chip)
-            self._update_chips()
-            self._emit_signal(set(self._selected_folders))
-
-    def _remove_folder(self, folder_path: str) -> None:
-        """Remove a folder chip and emit the updated set.
-
-        Args:
-            folder_path: Full folder path to remove.
-        """
-        self._selected_folders.discard(folder_path)
-        chip = self._folder_chips.pop(folder_path, None)
-        if chip is not None:
-            self._chips_layout.removeWidget(chip)
-            chip.deleteLater()
-        self._update_chips()
-        self._emit_signal(set(self._selected_folders))
-
-    def _create_folder_chip(self, folder_path: str) -> QWidget:
+    def _create_chip(self, folder_path: str) -> QWidget:
         """Create a removable folder chip widget.
 
         Delegates to the shared chip factory for consistent styling.
@@ -145,10 +81,25 @@ class FilterBarFolder(FilterBarFilter):
             tooltip=folder_path,
         )
 
-    def _update_chips(self) -> None:
-        """Show or hide the folder chips container based on selection."""
-        has_chips = len(self._selected_folders) > 0
-        self._chips_container.setVisible(has_chips)
+    def _create_folder_chip(self, folder_path: str) -> QWidget:
+        """Continuity alias for ``_create_chip``."""
+        return self._create_chip(folder_path)
+
+    def _toggle_folder(self, folder_path: str) -> None:
+        """Toggle a folder in the active folders set.
+
+        Args:
+            folder_path: Full folder path to toggle.
+        """
+        self._toggle_item(folder_path)
+
+    def _remove_folder(self, folder_path: str) -> None:
+        """Remove a folder chip and emit the updated set.
+
+        Args:
+            folder_path: Full folder path to remove.
+        """
+        self._remove_item(folder_path)
 
     def _prune_stale_chips(self) -> None:
         """Remove chips for folders that no longer exist in the database."""

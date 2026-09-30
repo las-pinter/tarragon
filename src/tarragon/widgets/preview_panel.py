@@ -29,6 +29,7 @@ from tarragon.services.settings_service import SettingsService
 from tarragon.services.tag_service import TagService
 from tarragon.theme.color_buckets import BUCKET_COLORS, BUCKET_HEX_COLORS, ColorBucket
 from tarragon.theme.constants import SPACING_S, SPACING_XS
+from tarragon.widgets.color_square import ColorSquareButton
 from tarragon.widgets.flow_layout import FlowLayout
 from tarragon.widgets.metadata import DimensionsMeta, FilenameMeta, FormatMeta, MetadataGrid, SizeMeta
 from tarragon.widgets.tag_pill import TagPillWidget
@@ -332,15 +333,12 @@ class PreviewPanel(QWidget):
             A QPushButton styled as a colored square.
         """
         hex_color = BUCKET_HEX_COLORS[color_bucket]
-        btn = QPushButton()
+        # The shared color-square helper owns background, border, border-radius,
+        # and hover styling (single source of truth for square buttons).
+        btn = ColorSquareButton(hex_color, active=False, show_inactive_border=False)
         btn.setFixedSize(self._COLOR_SQUARE_SIZE, self._COLOR_SQUARE_SIZE)
         btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn.setProperty("colorSquare", True)
         btn.setToolTip(f"{color_bucket}")
-        # background-color is dynamic (unique per color bucket) and cannot be
-        # expressed as a QSS rule.  Border, border-radius, and hover styles are
-        # handled by the QSS rule for QPushButton[colorSquare="true"].
-        btn.setStyleSheet(f"QPushButton {{ background-color: {hex_color}; }}")
         btn.clicked.connect(
             lambda _checked=False, name=color_bucket: self._on_color_square_clicked(name),
         )

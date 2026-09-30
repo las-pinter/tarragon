@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
 
 from tarragon.db.database import Database
 from tarragon.services.tag_service import TagService
+from tarragon.theme.constants import RADIUS_M, SPACING_XS
 from tarragon.widgets.filter_bar_color import FilterBarColor
 from tarragon.widgets.filter_bar_folder import FilterBarFolder
 from tarragon.widgets.filter_bar_tag import FilterBarTag
@@ -52,7 +53,7 @@ class FilterBar(QWidget):
         self._filter_bar_tag = FilterBarTag(tag_service)
         self._filter_bar_folder = FilterBarFolder(db)
 
-        layout = FlowLayout(self, margin=4, spacing=6)
+        layout = FlowLayout(self, margin=SPACING_XS, spacing=RADIUS_M)
         layout.addWidget(self._filter_bar_color)
         layout.addWidget(self._filter_bar_tag)
         layout.addWidget(self._filter_bar_folder)

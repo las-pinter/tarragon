@@ -133,14 +133,6 @@ QLabel[tagRole="primary"] {{
     font-size: {typography.SMALL_SIZE}px;
 }}
 
-QLabel[tagRole="secondary"] {{
-    background-color: hsla{colors.AMBER_DARK.getHsl()};
-    color: hsla{colors.AMBER_ACCENT.getHsl()};
-    padding: {constants.SPACING_XS - 1}px {constants.SPACING_S}px;
-    border-radius: {constants.RADIUS_XL}px;
-    font-size: {typography.SMALL_SIZE}px;
-}}
-
 /* Line edits */
 QLineEdit {{
     background-color: hsla{colors.BG_SECONDARY.getHsl()};
@@ -456,8 +448,8 @@ QLabel#galleryInfoLabel {{
 QLabel#galleryActiveFiltersPill {{
     background-color: hsla{colors.AMBER_DARK.getHsl()};
     color: hsla{colors.AMBER_ACCENT.getHsl()};
-    padding: 3px 8px;
-    border-radius: 6px;
+    padding: {constants.SPACING_XS - 1}px {constants.SPACING_S}px;
+    border-radius: {constants.RADIUS_M}px;
     font-size: {typography.CAPTION_SIZE}px;
 }}
 
@@ -497,25 +489,13 @@ QPushButton#previewAddTagBtn {{
     color: hsla{colors.TEXT_MUTED.getHsl()};
     border: 1px solid hsla{colors.BORDER_INTERACTIVE.getHsl()};
     border-radius: {constants.RADIUS_XL}px;
-    padding: 3px 8px;
+    padding: {constants.SPACING_XS - 1}px {constants.SPACING_S}px;
     font-size: {typography.CAPTION_SIZE}px;
 }}
 
 QPushButton#previewAddTagBtn:hover {{
     background-color: hsla{colors.SURFACE_HIGHLIGHT.getHsl()};
     color: hsla{colors.TEXT_SECONDARY.getHsl()};
-}}
-
-/* -------------------------------------------------------------------------------- */
-/* Color square buttons (preview panel) */
-/* -------------------------------------------------------------------------------- */
-QPushButton[colorSquare="true"] {{
-    border: none;
-    border-radius: 4px;
-}}
-
-QPushButton[colorSquare="true"]:hover {{
-    border: 1px solid hsla{colors.TEXT_PRIMARY.getHsl()};
 }}
 
 /* -------------------------------------------------------------------------------- */

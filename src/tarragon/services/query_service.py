@@ -12,7 +12,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from tarragon.db._base import folder_like, normalize_path
+from tarragon.db._base import folder_like, in_clause, normalize_path
 from tarragon.db.common.tag import Tag
 from tarragon.db.database import Database
 from tarragon.sorting import SortMode, sort_paths
@@ -102,11 +102,10 @@ class QueryService:
 
         # Tag ID filter
         if tags:
-            placeholders = ",".join("?" * len(tags))
             conditions.append(
                 "path IN ("
                 "SELECT ft.path FROM file_tags ft "
-                f"WHERE ft.tag_id IN ({placeholders}) "
+                f"WHERE ft.tag_id IN {in_clause(len(tags))} "
                 "GROUP BY ft.path "
                 "HAVING COUNT(DISTINCT ft.tag_id) = ?"
                 ")"
@@ -116,12 +115,11 @@ class QueryService:
 
         #  Color tag filter
         if color_tags:
-            placeholders = ",".join("?" * len(color_tags))
             conditions.append(
                 "path IN ("
                 "SELECT ft.path FROM file_tags ft "
                 "JOIN tags t ON t.id = ft.tag_id "
-                f"WHERE t.name IN ({placeholders}) "
+                f"WHERE t.name IN {in_clause(len(color_tags))} "
                 "GROUP BY ft.path "
                 "HAVING COUNT(DISTINCT t.name) = ?"
                 ")"

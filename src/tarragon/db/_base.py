@@ -82,6 +82,19 @@ def folder_like(folder: str) -> str:
     return _escape_like(folder.rstrip("/")) + "/%"
 
 
+def in_clause(n: int) -> str:
+    """Return a parenthesized ``IN (... )`` placeholder list for *n* items.
+
+    Builds ``"(?, ?, ...)"`` for parameterized queries. Callers guard
+    against empty collections before building a clause; passing ``n < 1``
+    is a programming error and is rejected loudly rather than emitting
+    invalid SQL.
+    """
+    if n < 1:
+        raise ValueError(f"in_clause requires at least one placeholder, got {n}")
+    return "(" + ", ".join("?" * n) + ")"
+
+
 def _row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
     """Convert a sqlite3.Row to a plain dict."""
     return dict(row)
@@ -108,6 +121,9 @@ class MixinBase:
         raise NotImplementedError
 
     def _commit(self) -> None:
+        raise NotImplementedError
+
+    def _fetch_one_locked(self, sql: str, params: SqlParams = ()) -> dict[str, Any] | None:
         raise NotImplementedError
 
     def fetch_all(self, sql: str, params: SqlParams = ()) -> list[dict[str, Any]]:
@@ -192,6 +208,27 @@ class Base(MixinBase):
         """Commit transaction with lock for thread safety."""
         with self._lock:
             self._conn.commit()
+
+    def _fetch_one_locked(self, sql: str, params: SqlParams = ()) -> dict[str, Any] | None:
+        """Run a single-row SELECT and return it as a plain dict, atomically.
+
+        The execute, fetchone, and dict copy all happen while holding the
+        connection lock, so no other thread can interleave a ``conn.execute``
+        between them. ``_execute`` alone is NOT safe for read-backs on a
+        shared connection: it releases the lock before the caller consumes
+        the cursor, and another thread's execute can corrupt the Row/statement
+        state. The plain dict is copied under the lock so no unlocked cursor
+        consumption remains.
+        """
+        logger.debug("Called - sql: %s, params: %s", sql, params)
+        try:
+            with self._lock:
+                cursor = self._conn.execute(sql, params)
+                row = cursor.fetchone()
+                return _row_to_dict(row) if row is not None else None
+        except sqlite3.Error as e:
+            logger.error("failed: %s | params: %s | error: %s", sql, params, e)
+            raise
 
     # -------------------------------------------------------------------------
     # Generic query executor

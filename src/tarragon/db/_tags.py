@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from tarragon.db._base import MixinBase, normalize_path
+from tarragon.db._base import MixinBase, in_clause, normalize_path
 from tarragon.db.common.tag import Tag, TagSource, build_tag_from_dict
 
 logger = logging.getLogger(__name__)
@@ -74,13 +74,12 @@ class TagsMixin(MixinBase):
             return {}
 
         normalized = [normalize_path(p) for p in paths]
-        placeholders = ", ".join("?" * len(normalized))
         rows = self.fetch_all(
-            f"SELECT ft.path, t.id, t.name, t.source \
-                FROM tags t \
-                LEFT JOIN file_tags ft ON ft.tag_id = t.id \
-                WHERE ft.path IN ({placeholders}) \
-                ORDER BY t.name",
+            f"""SELECT ft.path, t.id, t.name, t.source
+            FROM tags t
+            LEFT JOIN file_tags ft ON ft.tag_id = t.id
+            WHERE ft.path IN {in_clause(len(normalized))}
+            ORDER BY t.name""",
             tuple(normalized),
         )
 
@@ -128,10 +127,11 @@ class TagsMixin(MixinBase):
     def remove_tag_from_files(self, paths: list[str], tag: Tag) -> None:
         """Remove file-tag associations for the given paths and tag."""
         logger.debug("Called - paths: %s, tag: %s", paths, tag)
+        if not paths:
+            return
         normalized = [normalize_path(p) for p in paths]
-        placeholders = ",".join("?" * len(normalized))
         self._execute(
-            f"DELETE FROM file_tags WHERE path IN ({placeholders}) AND tag_id = ?",
+            f"DELETE FROM file_tags WHERE path IN {in_clause(len(normalized))} AND tag_id = ?",
             (*normalized, tag.get_id()),
         )
         self._commit()

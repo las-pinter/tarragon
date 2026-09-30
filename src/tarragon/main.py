@@ -14,7 +14,7 @@ from PySide6.QtWidgets import QApplication
 
 from tarragon.app_paths import db_path, ensure_dirs
 from tarragon.db.database import Database
-from tarragon.log_config import LogFormatter, setup_file_logging
+from tarragon.log_config import LogFormatter, close_root_handlers, setup_file_logging
 from tarragon.main_window import MainWindow as _MainWindow
 from tarragon.migrations import MigrationRunner
 from tarragon.services.settings_service import SettingsService
@@ -89,6 +89,8 @@ class MainWindow(_MainWindow):
         super().closeEvent(event)
         if isinstance(self._database, Database):
             self._database.close()
+        # Close log handlers so file streams flush and release before exit.
+        close_root_handlers()
         # Force immediate exit. Bypasses atexit handlers that may hang
         # on ProcessPoolExecutor worker processes stuck in system calls.
         # Skip this during testing to allow pytest to clean up properly.

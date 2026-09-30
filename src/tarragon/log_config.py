@@ -6,17 +6,42 @@ import logging
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
+# Rotation tunables: each log file grows up to MAX_LOG_BYTES before rolling,
+# keeping at most LOG_BACKUP_COUNT rotated backups on disk.
 LOG_BACKUP_COUNT = 2
 MAX_LOG_BYTES = 10 * 1024 * 1024
 
+# Immutable format templates. LogFormatter picks one per record instead of
+# mutating shared style state, so concurrent formatting is thread-safe.
+_DEBUG_FORMAT = "%(asctime)s [%(levelname)s] %(funcName)s(): %(message)s"
+_STANDARD_FORMAT = "%(asctime)s [%(levelname)s] %(message)s"
+
 
 class LogFormatter(logging.Formatter):
+    """Formatter that adds the calling function name to DEBUG records.
+
+    Thread-safe: builds one immutable formatter per output shape at
+    construction and delegates per record. ``format`` never mutates state.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(fmt=_STANDARD_FORMAT)
+        self._debug_formatter = logging.Formatter(fmt=_DEBUG_FORMAT)
+
     def format(self, record: logging.LogRecord) -> str:
         if record.levelno == logging.DEBUG:
-            self._style._fmt = "%(asctime)s [%(levelname)s] %(funcName)s(): %(message)s"
-        else:
-            self._style._fmt = "%(asctime)s [%(levelname)s] %(message)s"
+            return self._debug_formatter.format(record)
         return super().format(record)
+
+
+def close_root_handlers() -> None:
+    """Close every handler attached to the root logger.
+
+    Called at application shutdown so log streams are flushed and released
+    (file handles, Qt log panel connections).
+    """
+    for handler in logging.getLogger().handlers:
+        handler.close()
 
 
 def setup_file_logging(log_path: Path) -> logging.Handler:

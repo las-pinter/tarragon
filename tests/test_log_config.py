@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import logging
+import sys
+import threading
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from tarragon.app_paths import db_path
-from tarragon.log_config import LogFormatter, setup_file_logging
+from tarragon.log_config import LogFormatter, close_root_handlers, setup_file_logging
 
 
 class TestSetupFileLogging:
@@ -132,3 +134,111 @@ class TestSetupFileLogging:
             assert log_path.parent.is_dir()
         finally:
             handler.close()
+
+
+def _make_record(level: int, message: str) -> logging.LogRecord:
+    """Build a LogRecord with a known funcName so templates are distinguishable."""
+    return logging.LogRecord(
+        name="test.logging",
+        level=level,
+        pathname=__file__,
+        lineno=1,
+        msg=message,
+        args=(),
+        exc_info=None,
+        func="run_worker",
+    )
+
+
+class TestLogFormatter:
+    """LogFormatter renders the function name only for DEBUG records."""
+
+    def test_debug_record_includes_func_name(self) -> None:
+        """A DEBUG record is formatted with the function name and parentheses."""
+        formatted = LogFormatter().format(_make_record(logging.DEBUG, "hello"))
+        assert "run_worker()" in formatted
+
+    def test_warning_record_omits_func_name(self) -> None:
+        """A WARNING record is formatted without the function name."""
+        formatted = LogFormatter().format(_make_record(logging.WARNING, "hello"))
+        assert "run_worker()" not in formatted
+        assert "hello" in formatted
+
+    def test_info_and_error_records_omit_func_name(self) -> None:
+        """INFO and ERROR records are formatted without the function name."""
+        for level in (logging.INFO, logging.ERROR):
+            formatted = LogFormatter().format(_make_record(level, "hello"))
+            assert "run_worker()" not in formatted, f"{logging.getLevelName(level)} had funcName"
+
+    def test_output_matches_previous_templates(self) -> None:
+        """Formatted output is byte-identical to the pre-fix templates."""
+        formatter = LogFormatter()
+        templates = (
+            (logging.DEBUG, "%(asctime)s [%(levelname)s] %(funcName)s(): %(message)s"),
+            (logging.INFO, "%(asctime)s [%(levelname)s] %(message)s"),
+        )
+        for level, template in templates:
+            reference = logging.Formatter(template)
+            record = _make_record(level, "hello")
+            assert formatter.format(record) == reference.format(record)
+
+    def test_concurrent_formatting_is_thread_safe(self) -> None:
+        """Concurrent formatting never mixes templates across levels.
+
+        32 threads each format ~200 mixed-level records through ONE shared
+        LogFormatter (exactly what the three root handlers do in production).
+        Every output must match its level's shape — funcName present iff
+        DEBUG. On the pre-fix code, the shared ``_style._fmt`` mutation
+        interleaves across threads and violates that invariant.
+        """
+        formatter = LogFormatter()
+        levels = [logging.DEBUG, logging.INFO, logging.WARNING, logging.ERROR]
+        n_threads = 32
+        rounds = 200
+        barrier = threading.Barrier(n_threads)
+        violations: list[str] = []
+        violations_lock = threading.Lock()
+
+        # Tighten GIL preemption so the thread storm genuinely interleaves
+        # format() calls. The pre-fix code mutates shared _style._fmt between
+        # the write and its read, so interleaving surfaces template mismatches.
+        previous_switch_interval = sys.getswitchinterval()
+        sys.setswitchinterval(1e-5)
+        try:
+
+            def worker(seed: int) -> None:
+                barrier.wait()
+                for i in range(rounds):
+                    level = levels[(seed + i) % len(levels)]
+                    formatted = formatter.format(_make_record(level, f"msg {seed}-{i}"))
+                    if level == logging.DEBUG:
+                        if "run_worker()" not in formatted:
+                            with violations_lock:
+                                violations.append(f"DEBUG missing funcName: {formatted!r}")
+                    elif "run_worker()" in formatted:
+                        with violations_lock:
+                            violations.append(f"{logging.getLevelName(level)} has funcName: {formatted!r}")
+
+            threads = [threading.Thread(target=worker, args=(seed,)) for seed in range(n_threads)]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join()
+        finally:
+            sys.setswitchinterval(previous_switch_interval)
+
+        assert violations == [], f"{len(violations)} template mismatches: {violations[:3]}"
+
+
+class TestCloseRootHandlers:
+    """close_root_handlers() closes every handler attached to the root logger."""
+
+    def test_closes_every_attached_handler(self) -> None:
+        """Each handler on the root logger is closed exactly once."""
+        attached = [MagicMock(), MagicMock()]
+        fake_root = MagicMock()
+        fake_root.handlers = attached
+        with patch.object(logging, "getLogger", return_value=fake_root):
+            close_root_handlers()
+        for handler in attached:
+            handler.close.assert_called_once_with()

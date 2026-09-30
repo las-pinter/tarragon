@@ -19,7 +19,7 @@ class FilterState:
     - **folder_filters**: set of folder paths for multi-folder scoping.
 
     All dimensions are combined with AND semantics — an image must satisfy
-    every active filter to remain visible.1
+    every active filter to remain visible.
     """
 
     filename_filter: str = ""
@@ -30,6 +30,15 @@ class FilterState:
     def is_empty(self) -> bool:
         """Return ``True`` if no filters are active."""
         return not self.filename_filter and not self.tags and not self.color_tags and not self.folder_filters
+
+    def active_count(self) -> int:
+        """Return the number of active filters across all dimensions.
+
+        Each non-empty dimension contributes once: the filename filter
+        counts as a single filter regardless of its length, and every
+        tag, color tag, and folder filter counts individually.
+        """
+        return len(self.tags) + len(self.color_tags) + len(self.folder_filters) + (1 if self.filename_filter else 0)
 
     def clear(self) -> None:
         """Clear all filters, restoring the unfiltered state."""

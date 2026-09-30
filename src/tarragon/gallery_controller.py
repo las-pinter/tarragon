@@ -240,14 +240,26 @@ class GalleryController:
 
         self._gallery_info_bar.set_folder_info(folder_name, file_count)
 
-        # Active filter count: tag_ids + color_tags + folder_filters + filename_filter
-        active_count = (
-            len(self._filter_state.tags)
-            + len(self._filter_state.color_tags)
-            + len(self._filter_state.folder_filters)
-            + (1 if self._filter_state.filename_filter else 0)
-        )
-        self._gallery_info_bar.set_active_filter_count(active_count)
+        # Active filter count from the shared FilterState.  Folder filters
+        # only constrain the query in global scope — in local scope the
+        # navigated folder replaces them, so exclude them from the pill.
+        self._gallery_info_bar.set_active_filter_count(self.active_filter_count(is_global=is_global))
+
+    def active_filter_count(self, *, is_global: bool) -> int:
+        """Return the count of filters active in the current scope.
+
+        Wraps :meth:`FilterState.active_count` so the displayed pill
+        matches the query semantics: folder filters are counted only in
+        global scope, because local scope replaces them with the
+        navigated ``current_folder``.
+
+        Args:
+            is_global: ``True`` when the "All Images" tab is active.
+        """
+        active_count = self._filter_state.active_count()
+        if not is_global:
+            active_count -= len(self._filter_state.folder_filters)
+        return active_count
 
     # ── Selection Handling ─────────────────────────────────────────
 

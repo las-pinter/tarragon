@@ -158,3 +158,51 @@ class TestLoadPreviewImage:
         assert getattr(img, "_from_cache", False) is True
         assert orig_w == 1024
         assert orig_h == 768
+
+
+class TestActiveFilterCount:
+    """Scope-aware active filter counting for the info bar pill."""
+
+    @staticmethod
+    def _populate_all_dimensions(controller: _SpyController) -> None:
+        """Set every FilterState dimension to a non-empty value."""
+        controller._filter_state.filename_filter = "photo"
+        controller._filter_state.tags = {_TEST_TAG}
+        controller._filter_state.color_tags = {_TEST_TAG}
+        controller._filter_state.folder_filters = {"/a", "/b"}
+
+    def test_global_scope_includes_folder_filters(self, controller: _SpyController) -> None:
+        """In global scope, active_filter_count() counts folder filters."""
+        self._populate_all_dimensions(controller)
+        assert controller.active_filter_count(is_global=True) == 5
+
+    def test_local_scope_excludes_folder_filters(self, controller: _SpyController) -> None:
+        """In local scope, active_filter_count() excludes folder filters."""
+        self._populate_all_dimensions(controller)
+        assert controller.active_filter_count(is_global=False) == 3
+
+    def test_local_scope_zero_when_only_folder_filters_active(self, controller: _SpyController) -> None:
+        """Local scope counts zero filters when only folder filters are set."""
+        controller._filter_state.folder_filters = {"/a"}
+        assert controller.active_filter_count(is_global=False) == 0
+
+    def test_info_bar_pill_matches_local_scope_count(self, controller: _SpyController) -> None:
+        """update_gallery_info_bar feeds the scope-aware count to set_active_filter_count."""
+        self._populate_all_dimensions(controller)
+        controller._gallery_tabs.setCurrentIndex(0)  # local scope
+        controller.update_gallery_info_bar()
+        assert controller._gallery_info_bar._filter_pill.isHidden() is False
+        assert controller._gallery_info_bar._filter_pill.text() == "3 filters active"
+
+    def test_info_bar_pill_matches_global_scope_count(self, controller: _SpyController) -> None:
+        """update_gallery_info_bar feeds the scope-aware count to set_active_filter_count."""
+        self._populate_all_dimensions(controller)
+        controller._gallery_tabs.setCurrentIndex(1)  # global scope
+        controller.update_gallery_info_bar()
+        assert controller._gallery_info_bar._filter_pill.isHidden() is False
+        assert controller._gallery_info_bar._filter_pill.text() == "5 filters active"
+
+    def test_info_bar_pill_hidden_when_no_filters(self, controller: _SpyController) -> None:
+        """update_gallery_info_bar hides the pill when the scope-aware count is zero."""
+        controller.update_gallery_info_bar()
+        assert controller._gallery_info_bar._filter_pill.isHidden() is True

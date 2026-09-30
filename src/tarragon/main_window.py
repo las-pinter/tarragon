@@ -28,7 +28,7 @@ from tarragon.services.query_service import QueryService
 from tarragon.services.settings_service import SettingsService
 from tarragon.services.tag_service import TagService
 from tarragon.services.thumbnail_service import ThumbnailService
-from tarragon.theme.constants import MULTI_PREVIEW_MAX_DEFAULT, SIDEBAR_WIDTH_PX
+from tarragon.theme.constants import SIDEBAR_WIDTH_PX
 from tarragon.widgets.busy_indicator import BusyIndicator
 from tarragon.widgets.filter_bar import FilterBar
 from tarragon.widgets.filter_bar_color import FilterBarColor
@@ -385,9 +385,7 @@ class MainWindow(QMainWindow):
 
         # ── Gallery Controller — filter orchestration & selection ───
         # Compute multi-select cap from settings
-        multi_preview_cap = MULTI_PREVIEW_MAX_DEFAULT
-        setting_cap = self._settings_service.max_multi_preview.get()
-        multi_preview_cap = setting_cap
+        multi_preview_cap = self._settings_service.max_multi_preview.get()
 
         self._gallery_controller = GalleryController(
             query_service=self._query_service,

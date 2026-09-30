@@ -14,7 +14,6 @@ from tarragon.app_paths import cache_dir, data_dir
 logger = logging.getLogger(__name__)
 
 # Resolution tiers for organized cache structure
-MASTER_LONG_EDGE = 2048
 RESOLUTION_THUMBNAIL = 256
 RESOLUTION_PREVIEW = 1024
 RESOLUTION_FULL = None  # Original resolution

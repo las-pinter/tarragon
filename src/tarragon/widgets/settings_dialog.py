@@ -304,7 +304,7 @@ class _SettingColorTagEnabled(_CheckBoxSetting):
         super().__init__(
             "Enable Color Tagging",
             "Enable automatic color tag extraction from images. "
-            "Tags like 'color:red', 'color:blue' are added based on dominant colors.",
+            "Tags like 'red', 'blue' are added based on dominant colors.",
             settings_service.color_tag_enabled,
         )
 

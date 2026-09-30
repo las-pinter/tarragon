@@ -167,7 +167,7 @@ class TestCheckAndRender:
         }
 
         emitted: list[tuple[str, object, object]] = []
-        service.thumbnail_ready.connect(lambda p, i, r: emitted.append((p, i, r)))
+        service.thumbnail_ready.connect(lambda p, r, c: emitted.append((p, r, c)))
 
         service.check_and_render(file_info)
 
@@ -175,12 +175,62 @@ class TestCheckAndRender:
         assert len(emitted) == 3, f"Expected 3 emissions, got {len(emitted)}"
         assert emitted[0][0] == str(file_info.path)
         # Resolution sizes: RESOLUTION_THUMBNAIL, RESOLUTION_PREVIEW, RESOLUTION_FULL (full)
-        resolution_sizes = [e[2] for e in emitted]
+        resolution_sizes = [e[1] for e in emitted]
         assert RESOLUTION_THUMBNAIL in resolution_sizes
         assert RESOLUTION_PREVIEW in resolution_sizes
         assert RESOLUTION_FULL in resolution_sizes
         # No render dispatch since all cached
         db_mock.upsert_thumbnail.assert_not_called()
+
+    def test_check_and_render_emits_three_element_tuple_with_path_identity(
+        self,
+        tmp_path: Path,
+        service: ThumbnailService,
+        db_mock: MagicMock,
+    ) -> None:
+        """Cache-hit emissions are exactly (source, resolution, cache_path) scalars with no image payload."""
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir(parents=True)
+        thumb_path = cache_dir / "thumb.png"
+        preview_path = cache_dir / "preview.png"
+        full_path = cache_dir / "full.png"
+        ref_img = Image.new("RGB", (64, 64), color="red")
+        ref_img.save(thumb_path)
+        ref_img.save(preview_path)
+        ref_img.save(full_path)
+
+        file_info = FileInfo(
+            path=tmp_path / "source.png",
+            mtime=1000.0,
+            size=500,
+            extension=".png",
+        )
+        db_mock.get_thumbnail.return_value = {
+            "path": str(file_info.path),
+            "mtime": 1000,
+            "size": 500,
+            "width": 64,
+            "height": 64,
+            "cache_uuid": "test-uuid",
+            "thumbnail_cache_path": str(thumb_path),
+            "preview_cache_path": str(preview_path),
+            "full_cache_path": str(full_path),
+        }
+
+        emitted: list[tuple[Any, ...]] = []
+        service.thumbnail_ready.connect(lambda *args: emitted.append(args))
+
+        service.check_and_render(file_info)
+
+        assert len(emitted) == 3
+        for emission in emitted:
+            assert len(emission) == 3, f"Expected 3-element tuple, got {emission}"
+            assert emission[0] == str(file_info.path)
+            assert all(isinstance(e, (str, int, type(None))) for e in emission)
+        by_resolution = {e[1]: e[2] for e in emitted}
+        assert by_resolution[RESOLUTION_THUMBNAIL] == str(thumb_path)
+        assert by_resolution[RESOLUTION_PREVIEW] == str(preview_path)
+        assert by_resolution[RESOLUTION_FULL] == str(full_path)
 
     def test_check_and_render_cache_miss(
         self,
@@ -275,7 +325,7 @@ class TestCallbacks:
         tmp_path: Path,
         service: ThumbnailService,
     ) -> None:
-        """_on_error emits error_occurred and thumbnail_ready (with None image)."""
+        """_on_error emits error_occurred and thumbnail_ready (with None payloads)."""
         file_info = FileInfo(
             path=tmp_path / "fail.png",
             mtime=1000.0,
@@ -283,9 +333,9 @@ class TestCallbacks:
             extension=".png",
         )
 
-        ready_emitted: list[tuple[str, object]] = []
+        ready_emitted: list[tuple[str, object, object]] = []
         error_emitted: list[tuple[str, str]] = []
-        service.thumbnail_ready.connect(lambda p, i: ready_emitted.append((p, i)))
+        service.thumbnail_ready.connect(lambda p, r, c: ready_emitted.append((p, r, c)))
         service.error_occurred.connect(lambda p, e: error_emitted.append((p, e)))
 
         service._on_error(file_info, "Something went wrong")
@@ -341,6 +391,54 @@ class TestCheckAndRenderEdgeCases:
         assert emitted[0][0] == str(file_info.path)
         # Fallback path now dispatches render via threadpool (async)
         service._threadpool.start.assert_called_once()  # type: ignore[attr-defined]
+
+    def test_check_and_render_skips_corrupt_cache_file_at_emit(
+        self,
+        tmp_path: Path,
+        service: ThumbnailService,
+        db_mock: MagicMock,
+    ) -> None:
+        """Cache hit with a corrupt file emits thumbnail_ready only for the valid resolutions."""
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir(parents=True)
+        thumb_path = cache_dir / "thumb.png"
+        preview_path = cache_dir / "preview.png"
+        full_path = cache_dir / "full.png"
+        ref_img = Image.new("RGB", (64, 64), color="red")
+        ref_img.save(preview_path)
+        ref_img.save(full_path)
+        # File exists on disk but contains garbage that Image.open cannot parse.
+        thumb_path.write_bytes(b"this is not an image at all")
+
+        file_info = FileInfo(
+            path=tmp_path / "source.png",
+            mtime=1000.0,
+            size=500,
+            extension=".png",
+        )
+        db_mock.get_thumbnail.return_value = {
+            "path": str(file_info.path),
+            "mtime": 1000,
+            "size": 500,
+            "width": 64,
+            "height": 64,
+            "cache_uuid": "test-uuid",
+            "thumbnail_cache_path": str(thumb_path),
+            "preview_cache_path": str(preview_path),
+            "full_cache_path": str(full_path),
+        }
+
+        emitted: list[tuple[str, object, object]] = []
+        service.thumbnail_ready.connect(lambda p, r, c: emitted.append((p, r, c)))
+
+        status = service.check_and_render(file_info)
+
+        assert status == "cached"
+        resolution_sizes = [e[1] for e in emitted]
+        assert RESOLUTION_THUMBNAIL not in resolution_sizes, "corrupt resolution must not be emitted"
+        assert RESOLUTION_PREVIEW in resolution_sizes
+        assert RESOLUTION_FULL in resolution_sizes
+        assert len(emitted) == 2
 
 
 class TestCancellation:
@@ -834,7 +932,7 @@ class TestDeriveMissingResolutionsSmallImages:
 
         assert result == "derived"
         # Both 256 and 1024 should have been saved
-        resolution_sizes = [e[2] for e in emitted]
+        resolution_sizes = [e[1] for e in emitted]
         assert RESOLUTION_THUMBNAIL in resolution_sizes, "256 tier should be populated for small images"
         assert RESOLUTION_PREVIEW in resolution_sizes, "1024 tier should be populated for small images"
         # DB should have been updated with all paths
@@ -881,7 +979,7 @@ class TestDeriveMissingResolutionsSmallImages:
         result = service._derive_missing_resolutions(file_info, cached)
 
         assert result == "derived"
-        resolution_sizes = [e[2] for e in emitted]
+        resolution_sizes = [e[1] for e in emitted]
         # 256 should be derived (500 > 256 -> resized), 1024 should be included as-is
         assert RESOLUTION_THUMBNAIL in resolution_sizes
         assert RESOLUTION_PREVIEW in resolution_sizes, "1024 tier should be populated for medium images"
@@ -925,8 +1023,8 @@ class TestDeriveMissingResolutionsSmallImages:
 
         # Find the 1024 emission and verify the image was NOT upscaled
         for emission in emitted:
-            if emission[2] == RESOLUTION_PREVIEW:
-                cached_preview_img = emission[1]
+            if emission[1] == RESOLUTION_PREVIEW:
+                cached_preview_img = Image.open(emission[2])
                 assert cached_preview_img.size == (
                     200,
                     150,

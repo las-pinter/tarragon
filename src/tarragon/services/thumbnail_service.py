@@ -24,6 +24,7 @@ from tarragon.renderers.cache import (
     generate_cache_paths,
     generate_cache_uuid,
     invalidate_cache_files,
+    load_image,
     save_to_cache,
 )
 from tarragon.renderers.clip import render_clip_image
@@ -76,7 +77,7 @@ class ThumbnailService(QObject):
     compositing to the module-level ProcessPoolExecutor shared singleton.
     """
 
-    thumbnail_ready = Signal(str, object, object, object)
+    thumbnail_ready = Signal(str, object, object)
     error_occurred = Signal(str, str)
     tags_updated = Signal()
 
@@ -257,8 +258,10 @@ class ThumbnailService(QObject):
             cache_path = cached.get(resolution_key)
             if cache_path and Path(cache_path).exists():
                 try:
-                    img = Image.open(cache_path)
-                    self.thumbnail_ready.emit(str(file_info.path), img, resolution_size, cache_path)
+                    # Header-only open: a full pixel decode would slow the hot emit path.
+                    with Image.open(cache_path):
+                        pass
+                    self.thumbnail_ready.emit(str(file_info.path), resolution_size, cache_path)
                 except Exception:
                     logger.warning(
                         "Corrupt cache file, skipping resolution %s: %s", resolution_size, cache_path, exc_info=True
@@ -279,7 +282,7 @@ class ThumbnailService(QObject):
         """
         save_to_cache(img, cache_path, self._cache_format)
         path_str = str(cache_path)
-        self.thumbnail_ready.emit(str(file_info.path), img, resolution_size, path_str)
+        self.thumbnail_ready.emit(str(file_info.path), resolution_size, path_str)
         return path_str
 
     def _derive_missing_resolutions(self, file_info: FileInfo, cached: dict[str, Any]) -> str:
@@ -295,14 +298,14 @@ class ThumbnailService(QObject):
 
         if full_path and Path(full_path).exists():
             try:
-                source_image = Image.open(full_path)
+                source_image = load_image(full_path)
                 source_resolution = RESOLUTION_FULL
             except Exception:
                 logger.warning("Failed to open cached full resolution: %s", full_path, exc_info=True)
 
         if source_image is None and preview_path and Path(preview_path).exists():
             try:
-                source_image = Image.open(preview_path)
+                source_image = load_image(preview_path)
                 source_resolution = RESOLUTION_PREVIEW
             except Exception:
                 logger.warning("Failed to open cached preview resolution: %s", preview_path, exc_info=True)
@@ -415,7 +418,7 @@ class ThumbnailService(QObject):
 
         if full_img is None:
             self.error_occurred.emit(str(file_info.path), "Failed to render image")
-            self.thumbnail_ready.emit(str(file_info.path), None, None, None)
+            self.thumbnail_ready.emit(str(file_info.path), None, None)
             return
 
         self._save_and_record(full_img, file_info, RESOLUTION_FULL, cache_paths["full"])
@@ -475,4 +478,4 @@ class ThumbnailService(QObject):
     def _on_error(self, file_info: FileInfo, error_message: str) -> None:
         """Handle render error."""
         self.error_occurred.emit(str(file_info.path), error_message)
-        self.thumbnail_ready.emit(str(file_info.path), None, None, None)
+        self.thumbnail_ready.emit(str(file_info.path), None, None)

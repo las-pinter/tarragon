@@ -8,6 +8,7 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
+from PIL import Image
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QLineEdit
 
@@ -130,3 +131,30 @@ class TestPreviewTagsGuard:
         controller.on_preview_tags_changed()
         assert controller._tags_query_timer.isActive() is False
         assert controller.query_calls == 0
+
+
+class TestLoadPreviewImage:
+    """Loading preview images through the cached-preview fast path."""
+
+    def test_load_preview_image_returns_cached_preview(self, controller: _SpyController, tmp_path: Path) -> None:
+        """_load_preview_image loads the cached 1024px preview with original dimensions from the DB record."""
+        source = tmp_path / "source.png"
+        preview_path = tmp_path / "preview.png"
+        Image.new("RGB", (1024, 768), color="red").save(preview_path)
+        controller._db.upsert_thumbnail(
+            str(source),
+            mtime=1,
+            size=100,
+            width=1024,
+            height=768,
+            cache_uuid="u1",
+            preview_cache_path=str(preview_path),
+        )
+
+        img, orig_w, orig_h = controller._load_preview_image(source)
+
+        assert img.size == (1024, 768)
+        assert img.getpixel((10, 10)) == (255, 0, 0)
+        assert getattr(img, "_from_cache", False) is True
+        assert orig_w == 1024
+        assert orig_h == 768

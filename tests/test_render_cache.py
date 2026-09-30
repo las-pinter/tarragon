@@ -19,6 +19,7 @@ from tarragon.renderers.cache import (
     derive_smaller_sizes,
     generate_cache_paths,
     generate_cache_uuid,
+    load_image,
     save_to_cache,
 )
 
@@ -153,6 +154,33 @@ class TestSaveToCacheEdgeCases:
         loaded = Image.open(cache_path)
         # PNG path saves whatever mode the image is in
         assert loaded.size == (50, 50)
+
+
+class TestLoadImage:
+    """Loading cached images with a released file handle."""
+
+    def test_load_image_returns_usable_image(self, tmp_path: Path) -> None:
+        """load_image returns an image whose pixels are decodable and usable after the call."""
+        img = Image.new("RGBA", (64, 64), (0, 255, 0, 128))
+        cache_path = tmp_path / "cached.png"
+        save_to_cache(img, cache_path)
+
+        loaded = load_image(cache_path)
+
+        assert loaded.size == (64, 64)
+        assert loaded.getpixel((32, 32)) == (0, 255, 0, 128)
+
+    def test_load_image_releases_file_handle(self, tmp_path: Path) -> None:
+        """load_image closes the underlying file handle after forcing the decode."""
+        img = Image.new("RGB", (32, 32), color="blue")
+        cache_path = tmp_path / "cached.png"
+        save_to_cache(img, cache_path)
+
+        loaded = load_image(cache_path)
+
+        assert loaded.fp is None
+        # The image stays fully usable once the handle is gone.
+        assert loaded.getpixel((16, 16)) == (0, 0, 255)
 
 
 class TestGenerateCacheUUID:

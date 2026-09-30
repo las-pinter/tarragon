@@ -402,23 +402,19 @@ class MainWindow(QMainWindow):
 
     # ── Thumbnail Service Callbacks ─────────────────────────────────
 
-    def _on_thumbnail_ready(
-        self, source_path: str, img: object, resolution_size: int | None, cache_path: str | None
-    ) -> None:
+    def _on_thumbnail_ready(self, source_path: str, resolution_size: int | None, cache_path: str | None) -> None:
         """Handle thumbnail render complete — update model with cache path.
 
         Parameters
         ----------
         source_path:
             The original source file path.
-        img:
-            The rendered PIL Image (or None on failure).
         resolution_size:
             The resolution tier (256, 1024, or None for full resolution).
         cache_path:
             The cache file path (str or None).
         """
-        if img is None or cache_path is None:
+        if cache_path is None:
             return
         # Update model with the emitted cache path
         if self.thumbnail_model is not None:

@@ -20,6 +20,7 @@ from tarragon.db.common.tag import Tag
 from tarragon.db.database import Database
 from tarragon.models.filter_state import FilterState
 from tarragon.models.thumbnail_model import ThumbnailModel
+from tarragon.renderers.cache import load_image
 from tarragon.scanner import FileInfo
 from tarragon.services.query_service import QueryService
 from tarragon.services.tag_service import TagService
@@ -347,16 +348,16 @@ class GalleryController:
             # Try 1024px preview first (good quality, fast)
             preview_path = thumb_record.get("preview_cache_path")
             if preview_path and Path(preview_path).is_file():
-                img = Image.open(preview_path)
+                img = load_image(preview_path)
                 img._from_cache = True  # type: ignore[attr-defined,unused-ignore]
                 return img, original_width, original_height
 
             # Fallback: full resolution cache
             full_path = thumb_record.get("full_cache_path")
             if full_path and Path(full_path).is_file():
-                img = Image.open(full_path)
+                img = load_image(full_path)
                 img._from_cache = True  # type: ignore[attr-defined,unused-ignore]
                 return img, original_width, original_height
 
         # Fallback: open the original file directly
-        return Image.open(path), original_width, original_height
+        return load_image(path), original_width, original_height

@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import sqlite3
+import threading
 from collections.abc import Generator
 from pathlib import Path
 
 import pytest
 
+from tarragon.db._base import in_clause
 from tarragon.db.common.tag import TagSource
 from tarragon.db.database import Database
 
@@ -19,6 +21,28 @@ def db() -> Generator[Database, None, None]:
     conn.init_schema()
     yield conn
     conn.close()
+
+
+class TestInClause:
+    """in_clause builds parenthesized placeholder lists for IN (...) queries."""
+
+    def test_single_placeholder(self) -> None:
+        """n=1 yields a single question mark."""
+        assert in_clause(1) == "(?)"
+
+    def test_multiple_placeholders_use_comma_space(self) -> None:
+        """n=3 yields three question marks separated by ', '."""
+        assert in_clause(3) == "(?, ?, ?)"
+
+    def test_zero_raises_value_error(self) -> None:
+        """n=0 is a programming error and is rejected loudly."""
+        with pytest.raises(ValueError):
+            in_clause(0)
+
+    def test_negative_raises_value_error(self) -> None:
+        """Negative n is a programming error and is rejected loudly."""
+        with pytest.raises(ValueError):
+            in_clause(-1)
 
 
 class TestInitSchema:
@@ -435,6 +459,29 @@ class TestEditorAssociations:
         assert db.get_editor_command(".svg") is None
 
 
+class TestRemoveTagFromFiles:
+    """remove_tag_from_files removes file-tag associations."""
+
+    def test_removes_association(self, db: Database) -> None:
+        """remove_tag_from_files removes the association for the given path/tag."""
+        tag = db.ensure_tag("red")
+        db.add_tag_to_files(["/a.jpg"], tag)
+        assert tag in db.get_tags_for_file("/a.jpg")
+
+        db.remove_tag_from_files(["/a.jpg"], tag)
+
+        assert db.get_tags_for_file("/a.jpg") == set()
+
+    def test_empty_paths_is_clean_noop(self, db: Database) -> None:
+        """Removing a tag from zero paths must not raise (in_clause(0) guard)."""
+        tag = db.ensure_tag("green")
+        db.add_tag_to_files(["/a.jpg"], tag)
+
+        db.remove_tag_from_files([], tag)  # No error
+
+        assert tag in db.get_tags_for_file("/a.jpg")
+
+
 class TestFolderCacheUuids:
     """Folder UUID mappings can be stored and retrieved."""
 
@@ -482,6 +529,58 @@ class TestGetOrCreateFolderUuid:
         first = db.get_or_create_folder_uuid("/photos/shared", "uuid-a")
         second = db.get_or_create_folder_uuid("/photos/shared", "uuid-b")
         assert first == second == "uuid-a"
+
+    def test_concurrent_callers_converge_on_single_uuid(self, tmp_path: Path) -> None:
+        """Concurrent callers for the same folder converge on a single UUID.
+
+        Regression test for the atomic read-back fix: on a real on-disk WAL
+        database, unlocked cursor consumption (fetchone after _execute
+        released the lock) corrupts Row/statement state under 16 threads,
+        surfacing as IndexError / TypeError / wrong string returns. The
+        read-back must be fully locked so every caller reads the same stored
+        UUID, with exactly one row persisted and zero exceptions.
+        """
+        db_path = tmp_path / "concurrent.db"
+        db = Database(db_path)
+        db.init_schema()
+        try:
+            n_threads = 16
+            rounds = 8
+            folder = "/photos/concurrent"
+            barrier = threading.Barrier(n_threads)
+            results: list[str] = []
+            results_lock = threading.Lock()
+            errors: list[Exception] = []
+
+            def worker(candidate: str) -> None:
+                barrier.wait()
+                try:
+                    uuid = db.get_or_create_folder_uuid(folder, candidate)
+                    with results_lock:
+                        results.append(uuid)
+                except Exception as exc:  # noqa: BLE001 — surfaced by assert below
+                    with results_lock:
+                        errors.append(exc)
+
+            for r in range(rounds):
+                threads = [threading.Thread(target=worker, args=(f"candidate-{r}-{i}",)) for i in range(n_threads)]
+                for t in threads:
+                    t.start()
+                for t in threads:
+                    t.join()
+
+            assert errors == [], f"get_or_create_folder_uuid raised: {errors[:3]}"
+            # Every call across every round returned the SAME uuid.
+            assert len(results) == n_threads * rounds
+            assert len(set(results)) == 1, f"callers diverged: {sorted(set(results))[:5]}"
+            persisted = db.fetch_all(
+                "SELECT cache_uuid FROM folder_cache_uuids WHERE folder_path = ?",
+                (folder,),
+            )
+            assert len(persisted) == 1
+            assert persisted[0]["cache_uuid"] == results[0]
+        finally:
+            db.close()
 
     def test_different_folders_get_different_uuids(self, db: Database) -> None:
         """Different folders maintain independent UUIDs through the atomic method."""

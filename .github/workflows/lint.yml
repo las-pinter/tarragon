@@ -20,14 +20,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+      - name: Set up uv and Python ${{ matrix.python-version }}
+        uses: astral-sh/setup-uv@v6
         with:
           python-version: ${{ matrix.python-version }}
-          cache: "pip"
 
-      - name: Install dependencies
-        run: pip install -e .[dev]
+      - name: Install dependencies (uv sync, dev group)
+        run: uv sync
 
       # Runs ruff check, ruff format --check, mypy, and the hygiene hooks
       # (trailing-whitespace, end-of-file-fixer) from .pre-commit-config.yaml
@@ -35,4 +34,4 @@ jobs:
       # checks, run once rather than duplicated across ci.yml's os/python
       # matrix.
       - name: Pre-commit validation (all hooks)
-        run: pre-commit run --all-files
+        run: uv run pre-commit run --all-files

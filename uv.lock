@@ -875,38 +875,38 @@ build = [
     { name = "patchelf", marker = "sys_platform == 'linux'" },
     { name = "zstandard" },
 ]
+
+[package.dev-dependencies]
 dev = [
     { name = "mypy" },
     { name = "pre-commit" },
     { name = "pytest" },
-    { name = "types-psutil" },
-]
-
-[package.dev-dependencies]
-dev = [
     { name = "pytest-xdist" },
+    { name = "types-psutil" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=2.0" },
     { name = "nuitka", marker = "extra == 'build'", specifier = ">=2.0" },
     { name = "ordered-set", marker = "extra == 'build'", specifier = ">=4.1" },
     { name = "patchelf", marker = "sys_platform == 'linux' and extra == 'build'" },
     { name = "pillow", specifier = ">=10.0" },
     { name = "platformdirs", specifier = ">=4.0" },
-    { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=3.0" },
     { name = "psd-tools", extras = ["composite"], specifier = ">=1.9.7" },
     { name = "psutil", specifier = ">=5.9" },
     { name = "pyside6", specifier = ">=6.6" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
-    { name = "types-psutil", marker = "extra == 'dev'", specifier = ">=6.0" },
     { name = "zstandard", marker = "extra == 'build'", specifier = ">=0.20" },
 ]
-provides-extras = ["build", "dev"]
+provides-extras = ["build"]
 
 [package.metadata.requires-dev]
-dev = [{ name = "pytest-xdist", specifier = ">=3.8.0" }]
+dev = [
+    { name = "mypy", specifier = ">=2.0" },
+    { name = "pre-commit", specifier = ">=3.0" },
+    { name = "pytest", specifier = ">=8.0" },
+    { name = "pytest-xdist", specifier = ">=3.8.0" },
+    { name = "types-psutil", specifier = ">=6.0" },
+]
 
 [[package]]
 name = "tifffile"

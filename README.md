@@ -74,9 +74,8 @@ cd tarragon
 # Install uv (if not already installed)
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Create virtual environment and install
-uv venv
-uv pip install -e .
+# Create virtual environment and install (including the dev tooling group)
+uv sync
 
 # Launch Tarragon
 uv run python -m tarragon

@@ -18,14 +18,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+      - name: Set up uv and Python ${{ matrix.python-version }}
+        uses: astral-sh/setup-uv@v6
         with:
           python-version: ${{ matrix.python-version }}
-          cache: "pip"
 
-      - name: Install runtime dependencies
-        run: pip install -e .
+      - name: Install runtime dependencies (uv sync, dev group)
+        run: uv sync
 
       - name: Install Qt system dependencies
         run: |
@@ -36,8 +35,8 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: |
-          python -c "import tarragon; print('tarragon OK')"
-          python -c "import tarragon.main; print('tarragon.main OK')"
+          uv run python -c "import tarragon; print('tarragon OK')"
+          uv run python -c "import tarragon.main; print('tarragon.main OK')"
 
   nuitka-smoke:
     runs-on: ubuntu-latest
@@ -49,14 +48,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+      - name: Set up uv and Python ${{ matrix.python-version }}
+        uses: astral-sh/setup-uv@v6
         with:
           python-version: ${{ matrix.python-version }}
-          cache: "pip"
 
-      - name: Install runtime and build dependencies
-        run: pip install -e . nuitka
+      - name: Install runtime and build dependencies (uv sync, dev group + build extra)
+        run: uv sync --extra build
 
       - name: Install Qt system dependencies
         run: |
@@ -69,7 +67,7 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: |
-          python -m nuitka \
+          uv run python -m nuitka \
             --onefile \
             --enable-plugin=pyside6 \
             --output-filename=tarragon-smoke.bin \

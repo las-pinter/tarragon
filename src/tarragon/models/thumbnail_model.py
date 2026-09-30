@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import override
 
@@ -12,6 +13,21 @@ from PySide6.QtCore import QAbstractListModel, QModelIndex, QObject, QPersistent
 from tarragon.renderers.cache import RESOLUTION_FULL, RESOLUTION_PREVIEW, RESOLUTION_THUMBNAIL, tier_key
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class ThumbnailUpdate:
+    """A single cached-path assignment for :meth:`ThumbnailModel.set_thumbnails`.
+
+    Attributes:
+        source_path: The original file path (as string).
+        cache_path: The cached file path on disk.
+        resolution: Pixel resolution (256, 1024) or None for full.
+    """
+
+    source_path: str
+    cache_path: Path
+    resolution: int | None = None
 
 
 class ThumbnailModel(QAbstractListModel):
@@ -25,7 +41,8 @@ class ThumbnailModel(QAbstractListModel):
         - ThumbnailRoleFull:  full-resolution cached path
 
     Use :meth:`set_paths` to replace the entire path list.
-    Use :meth:`set_thumbnail` to register a cached path for a specific resolution.
+    Use :meth:`set_thumbnails` (or the single-item :meth:`set_thumbnail`) to
+    register cached paths for a resolution.
     """
 
     PathRole: int = Qt.ItemDataRole.UserRole + 1
@@ -47,6 +64,8 @@ class ThumbnailModel(QAbstractListModel):
         # Keys: source path string, values {resolution: cache Path}
         # Resolutions: 256, 1024, None (for full)
         self._thumbnails: dict[str, dict[int | None, Path]] = {}
+        # Path string -> row cache so set_thumbnails() avoids an O(paths) scan.
+        self._path_index: dict[str, int] = {}
 
     @override
     def rowCount(self, parent: QModelIndex | QPersistentModelIndex = QPersistentModelIndex()) -> int:
@@ -93,6 +112,7 @@ class ThumbnailModel(QAbstractListModel):
 
         self.beginResetModel()
         self._paths = list(paths)
+        self._path_index = {str(path): row for row, path in enumerate(self._paths)}
         self.endResetModel()
         elapsed = time.perf_counter() - start
         logger.debug("completed in %.3fs", elapsed)
@@ -105,24 +125,43 @@ class ThumbnailModel(QAbstractListModel):
     ) -> None:
         """Update the cached thumbnail path for a specific resolution.
 
+        Thin wrapper over :meth:`set_thumbnails` kept for callers that
+        update a single entry at a time.
+
         Args:
             source_path: The original file path (as string).
             cache_path: The cached file path on disk.
             resolution: Pixel resolution (256, 1024) or None for full.
         """
-        normalized = str(Path(source_path))
-        if normalized not in self._thumbnails:
-            self._thumbnails[normalized] = {}
-        self._thumbnails[normalized][resolution] = cache_path
-        logger.debug("Called - path: %s, resolution: %s, cache: %s", normalized, resolution, cache_path)
+        self.set_thumbnails([ThumbnailUpdate(source_path=source_path, cache_path=cache_path, resolution=resolution)])
 
-        # Find row and emit dataChanged for the specific role
-        for row, path in enumerate(self._paths):
-            if str(path) == normalized:
-                index = self.index(row)
-                role = self._resolution_to_role(resolution)
-                self.dataChanged.emit(index, index, [role])
-                break
+    def set_thumbnails(self, updates: list[ThumbnailUpdate]) -> None:
+        """Apply a batch of cached-path assignments in one pass.
+
+        Stores every entry (including paths not currently in the model, so
+        filtering/unfiltering keeps its images) and emits a single
+        ``dataChanged`` per affected row with the union of the roles
+        written for that row, instead of scanning the path list per call.
+
+        Args:
+            updates: Cached-path assignments to apply.
+        """
+        per_row: dict[int, set[int]] = {}
+        for update in updates:
+            normalized = str(Path(update.source_path))
+            resolutions = self._thumbnails.setdefault(normalized, {})
+            resolutions[update.resolution] = update.cache_path
+            row = self._path_index.get(normalized)
+            if row is not None:
+                per_row.setdefault(row, set()).add(self._resolution_to_role(update.resolution))
+            logger.debug(
+                "Called - path: %s, resolution: %s, cache: %s", normalized, update.resolution, update.cache_path
+            )
+
+        for row in sorted(per_row):
+            index = self.index(row)
+            roles = sorted(per_row[row])
+            self.dataChanged.emit(index, index, roles)
 
     @staticmethod
     def _resolution_to_role(resolution: int | None) -> int:

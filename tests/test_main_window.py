@@ -670,7 +670,10 @@ class TestCachePurgeWiring:
         qapp: Any,
         mock_settings: MagicMock,
     ) -> None:
-        """The handler re-navigates to the current folder after purging."""
+        """The handler queues a purge; the completion signal triggers re-navigation."""
+        # Adapted from the pre-audit synchronous contract: purge now runs in a
+        # worker and re-navigation is driven by the cache_purged completion
+        # signal, so the handler alone no longer navigates.
         window = MainWindow(settings_service=mock_settings)
         try:
             db = Database(Path(":memory:"))
@@ -685,8 +688,12 @@ class TestCachePurgeWiring:
             ):
                 window._on_cache_purge_requested()
 
-            mock_purge.assert_called_once_with()
-            mock_navigate.assert_called_once_with(Path("/fake/folder"))
+                mock_purge.assert_called_once_with()
+                mock_navigate.assert_not_called()
+
+                # The purge worker reports completion via this signal.
+                window._thumbnail_service.cache_purged.emit()
+                mock_navigate.assert_called_once_with(Path("/fake/folder"))
         finally:
             window.close()
 

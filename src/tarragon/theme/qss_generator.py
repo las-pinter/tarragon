@@ -454,6 +454,33 @@ QLabel#galleryActiveFiltersPill {{
 }}
 
 /* -------------------------------------------------------------------------------- */
+/* Busy indicator strip */
+/* -------------------------------------------------------------------------------- */
+QLabel#busyIndicatorLabel {{
+    color: hsla{colors.TEXT_MUTED.getHsl()};
+    font-size: {typography.CAPTION_SIZE}px;
+}}
+
+QProgressBar#busyIndicatorBar {{
+    background-color: hsla{colors.BG_TERTIARY.getHsl()};
+    border: none;
+    border-radius: {constants.RADIUS_XS}px;
+}}
+
+QProgressBar#busyIndicatorBar::chunk {{
+    background-color: hsla{colors.AMBER_ACCENT.getHsl()};
+    border-radius: {constants.RADIUS_XS}px;
+}}
+
+/* -------------------------------------------------------------------------------- */
+/* Preview mosaic placeholder */
+/* -------------------------------------------------------------------------------- */
+QLabel#previewMosaicPlaceholder {{
+    color: hsla{colors.TEXT_MUTED.getHsl()};
+    font-size: {typography.BODY_SIZE}px;
+}}
+
+/* -------------------------------------------------------------------------------- */
 /* Preview panel background */
 /* -------------------------------------------------------------------------------- */
 QWidget#previewPanel {{

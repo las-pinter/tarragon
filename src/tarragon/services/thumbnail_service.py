@@ -7,7 +7,7 @@ import threading
 import time
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 from PIL import Image
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal, Slot
@@ -31,7 +31,7 @@ from tarragon.renderers.cache import (
     tier_key,
 )
 from tarragon.renderers.psd import get_executor
-from tarragon.scanner import FileInfo
+from tarragon.scanner import FileInfo, scan_folder
 from tarragon.services.color_tagger import extract_dominant_colors
 from tarragon.services.settings_service import SettingsService
 from tarragon.services.tag_service import TagService
@@ -70,19 +70,101 @@ class _RenderAllTask(QRunnable):
             self._on_error(self._file_info, str(exc))
 
 
+class _ScanFolderTask(QRunnable):
+    """Performs a folder scan (walk + stat + DB stubs + render dispatch) off the GUI thread."""
+
+    def __init__(
+        self,
+        folder_path: Path,
+        token: int,
+        service: ThumbnailService,
+        cancel_event: threading.Event,
+        supersede_event: threading.Event,
+    ) -> None:
+        super().__init__()
+        self._folder_path = folder_path
+        self._token = token
+        self._service = service
+        self._cancel_event = cancel_event
+        self._supersede_event = supersede_event
+
+    def _aborted(self) -> bool:
+        """True when the scan should stop: cancellation or a newer scan superseded it."""
+        return self._cancel_event.is_set() or self._supersede_event.is_set()
+
+    def run(self) -> None:
+        """Scan the folder; DB stubs land before the completion signal so queries see results."""
+        try:
+            if self._aborted():
+                return
+            file_infos = scan_folder(self._folder_path)
+            if self._aborted():
+                return
+            stubs = [(str(fi.path), int(fi.mtime), fi.size) for fi in file_infos]
+            self._service._db.bulk_upsert_stubs(stubs)  # noqa: SLF001
+            for fi in file_infos:
+                if self._aborted():
+                    break
+                self._service.check_and_render(fi)
+            # A superseded scan must never report completion: the single-flight
+            # supersede sets this task's event before dispatching the new scan,
+            # so a stale worker cannot emit after the newer scan has begun.
+            if self._aborted():
+                return
+            self._service.scan_completed.emit(self._token, file_infos)
+        finally:
+            self._service.scan_finished.emit(self._token)
+
+
+class _PurgeCacheTask(QRunnable):
+    """Performs the cache purge (drain-wait + unlink + DB clear) off the GUI thread."""
+
+    def __init__(self, service: ThumbnailService) -> None:
+        super().__init__()
+        self._service = service
+
+    def run(self) -> None:
+        """Run the purge body and always report completion so the GUI can re-navigate."""
+        try:
+            self._service._purge_cache_sync()  # noqa: SLF001
+        finally:
+            self._service._purge_in_progress = False  # noqa: SLF001
+            self._service.cache_purged.emit()
+
+
 class ThumbnailService(QObject):
     """Coordinates thumbnail generation, caching, and UI signal emission.
 
     Owns the QThreadPool for plain image renders and delegates PSD/PSB
     compositing to the module-level ProcessPoolExecutor shared singleton.
+    Cache purges run on a dedicated pool so the purge body can wait for
+    the render pool to drain without deadlocking (a task cannot wait on
+    the pool it is itself running on).
     """
 
     thumbnail_ready = Signal(str, object, object)
     error_occurred = Signal(str, str)
     tags_updated = Signal()
+    # Folder scan lifecycle. ``scan_completed`` carries (token, file_infos);
+    # the token lets the GUI discard results from a superseded scan.
+    scan_started = Signal(int, str)
+    scan_completed = Signal(int, object)
+    scan_finished = Signal(int)
+    # Cache purge lifecycle.
+    purge_started = Signal()
+    cache_purged = Signal()
+
+    # Test seam: when True, scan/purge QRunnables run inline on the calling
+    # thread so tests observe fully synchronous state (production is async).
+    synchronous_workers: ClassVar[bool] = False
 
     def __init__(
-        self, db: Database, settings_service: SettingsService, tag_service: TagService, parent: QObject | None = None
+        self,
+        db: Database,
+        settings_service: SettingsService,
+        tag_service: TagService,
+        parent: QObject | None = None,
+        synchronous_workers: bool | None = None,
     ) -> None:
         super().__init__(parent)
         self._db = db
@@ -90,7 +172,22 @@ class ThumbnailService(QObject):
         registry.configure_settings(lambda: self._settings_service)
         self._tag_service = tag_service
         self._cancel_event = threading.Event()
+        # Render pool: plain image thumbnails/previews are rendered here and
+        # scan tasks dispatch render requests into it.
         self._threadpool = QThreadPool()
+        # Dedicated purge pool: the purge body drains `_threadpool` before
+        # unlinking the cache, so it must never run on that same pool (a
+        # running task counts as active, making the drain unwinnable).
+        self._purge_pool = QThreadPool()
+        self._scan_token = 0
+        # Supersede event of the most recently dispatched scan; a new scan
+        # sets it BEFORE dispatching so the older worker suppresses its
+        # completion emission (closes the source-side stale-scan race).
+        self._scan_supersede_event: threading.Event | None = None
+        self._purge_in_progress = False
+        self._synchronous_workers = (
+            type(self).synchronous_workers if synchronous_workers is None else synchronous_workers
+        )
 
         # Pre-initialize the shared PSD ProcessPoolExecutor with the
         # user-configured worker count (falls back to RAM-adaptive default
@@ -124,15 +221,63 @@ class ThumbnailService(QObject):
         """
         self._cancel_event.clear()
 
+    def request_folder_scan(self, folder_path: Path) -> int:
+        """Scan *folder_path* in a worker, cancelling any previous scan.
+
+        Single-flight: the previous scan is cancelled (cancel event set +
+        pool clear) before the new one starts. The returned token appears
+        in ``scan_started``/``scan_completed``/``scan_finished`` so the GUI
+        can discard results from a superseded scan.
+
+        Returns:
+            An integer token identifying this scan.
+        """
+        self._scan_token += 1
+        token = self._scan_token
+        # Mark the previous scan as superseded before dispatching the new
+        # one so a stale worker can never emit scan_completed after the new
+        # scan has begun (previously only the GUI's token guard contained
+        # this race).
+        if self._scan_supersede_event is not None:
+            self._scan_supersede_event.set()
+        supersede_event = threading.Event()
+        self._scan_supersede_event = supersede_event
+        self._cancel_event.set()
+        self._threadpool.clear()
+        self._cancel_event.clear()
+        self.scan_started.emit(token, str(folder_path))
+        task = _ScanFolderTask(
+            folder_path=folder_path,
+            token=token,
+            service=self,
+            cancel_event=self._cancel_event,
+            supersede_event=supersede_event,
+        )
+        self._start_background_task(task)
+        return token
+
     def purge_cache(self) -> None:
-        """Purge the entire thumbnail cache: disk files and DB rows.
+        """Purge the entire thumbnail cache off the GUI thread (single-flight).
 
         Cancels pending renders and waits for the thread pool to drain so
         no in-flight render can write to the cache while files are being
-        deleted, then clears the cache tree and the thumbnails table, and
-        finally resets the cancel flag so new renders can proceed. If the
-        pool does not drain within the timeout, the purge is aborted so no
-        cache files are deleted while a render may still be writing.
+        deleted; the drain, cache-tree unlink, and DB clear all happen in
+        a worker. ``cache_purged`` is emitted when the purge attempt
+        finishes, so the GUI re-navigation follows completion.
+        """
+        if self._purge_in_progress:
+            logger.debug("purge_cache: already in progress; ignoring request")
+            return
+        self._purge_in_progress = True
+        self.purge_started.emit()
+        self._start_purge_task(_PurgeCacheTask(service=self))
+
+    def _purge_cache_sync(self) -> None:
+        """Run the purge body: cancel, drain, unlink cache tree, clear DB rows.
+
+        If the pool does not drain within the timeout, the purge is
+        aborted so no cache files are deleted while a render may still be
+        writing.
         """
         self.cancel_pending()
         if not self._threadpool.waitForDone(POOL_DRAIN_TIMEOUT_MS):
@@ -142,6 +287,26 @@ class ThumbnailService(QObject):
         clear_cache()
         self._db.clear_thumbnails()
         self.reset_cancel()
+
+    def _start_background_task(self, task: QRunnable) -> None:
+        """Dispatch *task* to the render pool, or run it inline under the test seam."""
+        if self._synchronous_workers:
+            task.run()
+        else:
+            self._threadpool.start(task)
+
+    def _start_purge_task(self, task: QRunnable) -> None:
+        """Dispatch *task* to the purge pool, or run it inline under the test seam.
+
+        Purge must run on its own pool: its body waits for the render pool
+        to drain and unlink the cache, and a task running on a pool counts
+        as active there, so draining that same pool from inside the task
+        could never complete and the purge would abort on the timeout.
+        """
+        if self._synchronous_workers:
+            task.run()
+        else:
+            self._purge_pool.start(task)
 
     def shutdown(self, timeout_ms: int = POOL_DRAIN_TIMEOUT_MS) -> None:
         """Graceful shutdown. Cancel pending tasks, wait for running ones.

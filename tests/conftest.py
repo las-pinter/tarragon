@@ -37,3 +37,25 @@ def mock_settings() -> MagicMock:
     mock.max_psd_workers.get.return_value = 3
     mock.clear_full_res_on_exit.get.return_value = False
     return mock
+
+
+@pytest.fixture(scope="session", autouse=True)
+def synchronous_workers() -> Generator[None, None, None]:
+    """Run background QRunnables inline so navigation/purge tests observe synchronous state.
+
+    Production defaults to truly async (see ``synchronous_workers`` class
+    attributes); the seam is activated here for the entire test session so
+    existing tests that assert state immediately after a navigation call
+    keep passing unmodified. Tests that exercise the real async path can
+    disable the seam per instance.
+    """
+    from tarragon.gallery_controller import GalleryController
+    from tarragon.services.thumbnail_service import ThumbnailService
+
+    previous_service = ThumbnailService.synchronous_workers
+    previous_controller = GalleryController.synchronous_workers
+    ThumbnailService.synchronous_workers = True
+    GalleryController.synchronous_workers = True
+    yield
+    ThumbnailService.synchronous_workers = previous_service
+    GalleryController.synchronous_workers = previous_controller

@@ -83,6 +83,8 @@ class PreviewPanel(QWidget):
     _cached_pixmap: QPixmap | None = None
 
     _COLOR_SQUARE_SIZE = 24
+    _LOADING_HINT = "Loading previews..."
+    _EMPTY_HINT = "No previews available"
 
     def __init__(
         self,
@@ -127,6 +129,11 @@ class PreviewPanel(QWidget):
         self._mosaic_rows_layout = QVBoxLayout(self._mosaic_container)
         self._mosaic_rows_layout.setSpacing(SPACING_S)
         self._mosaic_rows_layout.setContentsMargins(SPACING_S, SPACING_S, SPACING_S, SPACING_S)
+        self._mosaic_image_infos: list[ImageInfo] = []
+        self._mosaic_placeholder = QLabel(self._LOADING_HINT)
+        self._mosaic_placeholder.setObjectName("previewMosaicPlaceholder")
+        self._mosaic_placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._mosaic_rows_layout.addWidget(self._mosaic_placeholder)
 
         self._preview_stack = QStackedWidget()
         self._preview_stack.addWidget(self._image_label)
@@ -249,29 +256,71 @@ class PreviewPanel(QWidget):
         self._metadata_grid.update([image_info])
 
     def set_multi_preview(self, image_infos: list[ImageInfo]) -> None:
-        """Render N-up mosaic when multiple files are selected.
+        """Render an N-up mosaic from a complete list of images.
+
+        Convenience wrapper over :meth:`begin_multi_preview` +
+        :meth:`add_multi_preview_image` for callers that already hold all
+        decoded images (e.g. tests); the incremental API is preferred so
+        the mosaic fills as decode workers complete.
 
         Args:
-            images: List of images to display
-
-        Clears single-image preview state.
+            image_infos: List of images to display
         """
-
         logger.debug("Called")
-
-        for image_info in image_infos:
-            logger.debug(
-                "image_info: path: %s, size: %s, from_cache: %s",
-                image_info.path,
-                image_info.image.size,
-                getattr(image_info.image, "_from_cache", False),
-            )
 
         if not image_infos:
             self.clear()
             return
 
-        # Cap the number of images to display
+        self.begin_multi_preview()
+        for image_info in image_infos:
+            self.add_multi_preview_image(image_info)
+
+    def begin_multi_preview(self) -> None:
+        """Switch to mosaic mode and reset the accumulated preview images.
+
+        The grid stays empty (with a loading hint) until decoded images
+        land via :meth:`add_multi_preview_image`.
+        """
+        self._mosaic_image_infos = []
+        self._clear_mosaic_cells()
+        self._mosaic_placeholder.setText(self._LOADING_HINT)
+        self._mosaic_placeholder.show()
+        self._preview_stack.setCurrentWidget(self._mosaic_container)
+        self._cached_pixmap = None
+        self._metadata_grid.update([])
+
+    def show_empty_mosaic_state(self) -> None:
+        """Replace the loading hint with an empty state when a batch produced no images.
+
+        Normal batches hide the placeholder on the first successful
+        ``add_multi_preview_image``; a batch where every decode failed would
+        otherwise leave the "Loading previews..." hint stuck on screen.  No-op
+        when at least one image landed.
+        """
+        if self._mosaic_image_infos:
+            return
+        self._mosaic_placeholder.setText(self._EMPTY_HINT)
+        self._mosaic_placeholder.show()
+        self._preview_stack.setCurrentWidget(self._mosaic_container)
+        self._metadata_grid.clear()
+
+    def add_multi_preview_image(self, image_info: ImageInfo) -> None:
+        """Append one decoded image to the mosaic and re-render the grid.
+
+        Called once per image as decode workers complete, so the mosaic
+        fills incrementally instead of blocking the GUI thread on all
+        decodes.
+
+        Args:
+            image_info: The decoded image to display.
+        """
+        self._mosaic_image_infos.append(image_info)
+        self._mosaic_placeholder.hide()
+        self._render_mosaic(self._mosaic_image_infos)
+
+    def _render_mosaic(self, image_infos: list[ImageInfo]) -> None:
+        """Rebuild the mosaic rows from the accumulated image infos."""
         cap = self._settings_service.max_multi_preview.get()
         image_infos_capped = image_infos[:cap]
         n = len(image_infos_capped)
@@ -290,10 +339,6 @@ class PreviewPanel(QWidget):
             self._mosaic_rows_layout.addWidget(row_widget, stretch=1)
             self._mosaic_row_widgets.append(row_widget)
 
-        self._preview_stack.setCurrentWidget(self._mosaic_container)
-        self._cached_pixmap = None
-
-        # Update metadata
         self._metadata_grid.update(image_infos)
 
     def _clear_mosaic_cells(self) -> None:
@@ -709,6 +754,9 @@ class PreviewPanel(QWidget):
         self._clear_tag_pills()
         self._update_color_squares(set())
         self._preview_stack.setCurrentWidget(self._image_label)
+        # Drop accumulated mosaic state so a later clear→begin cannot resurrect stale images.
+        self._mosaic_image_infos = []
+        self._mosaic_placeholder.hide()
         self._clear_mosaic_cells()
 
     @staticmethod

@@ -20,6 +20,7 @@ from tarragon.renderers.cache import (
     generate_cache_paths,
     generate_cache_uuid,
     load_image,
+    resize_long_edge,
     save_to_cache,
 )
 
@@ -342,6 +343,73 @@ class TestDeriveSmallerSizes:
         assert RESOLUTION_PREVIEW in result
         assert result[RESOLUTION_THUMBNAIL].size == (256, 192)  # Aspect ratio preserved
         assert result[RESOLUTION_PREVIEW].size == (1024, 768)
+
+    def test_derive_smaller_sizes_matches_resize_long_edge(self) -> None:
+        """derive_smaller_sizes produces the same size as resize_long_edge for the same source."""
+        img = Image.new("RGB", (800, 400))
+
+        derived = derive_smaller_sizes(img, [256])[256]
+        direct = resize_long_edge(img, 256)
+
+        assert derived.size == (256, 128)
+        assert direct.size == (256, 128)
+
+
+class TestResizeLongEdge:
+    """Resizing an image to fit a maximum long edge."""
+
+    def test_resize_long_edge_does_not_upscale_small_images(self) -> None:
+        """resize_long_edge leaves images smaller than the target size unchanged."""
+        img = Image.new("RGB", (100, 100))
+
+        result = resize_long_edge(img, 256)
+
+        assert result.size == (100, 100)
+
+    def test_resize_long_edge_preserves_aspect_ratio_landscape(self) -> None:
+        """resize_long_edge scales a wide image so its long edge matches the target size."""
+        img = Image.new("RGB", (800, 400))
+
+        result = resize_long_edge(img, 256)
+
+        assert result.size == (256, 128)
+
+    def test_resize_long_edge_preserves_aspect_ratio_portrait(self) -> None:
+        """resize_long_edge scales a tall image so its long edge matches the target size."""
+        img = Image.new("RGB", (400, 800))
+
+        result = resize_long_edge(img, 256)
+
+        assert result.size == (128, 256)
+
+    def test_resize_long_edge_does_not_mutate_source_image(self) -> None:
+        """resize_long_edge returns a copy and leaves the source image unchanged."""
+        img = Image.new("RGB", (800, 400))
+        original_size = img.size
+
+        result = resize_long_edge(img, 256)
+
+        assert img.size == original_size
+        assert result is not img
+        assert result.size == (256, 128)
+
+    def test_resize_long_edge_uses_lanczos_filter(self) -> None:
+        """resize_long_edge passes Image.Resampling.LANCZOS to thumbnail."""
+        img = Image.new("RGB", (800, 400))
+        seen: list[tuple[tuple[int, int], int]] = []
+        real_thumbnail = Image.Image.thumbnail
+
+        def spy_thumbnail(
+            target: Image.Image, size: tuple[int, int], resample: int = Image.Resampling.BICUBIC, **kwargs: object
+        ) -> None:
+            """Record the resample argument, then delegate to the real thumbnail."""
+            seen.append((size, resample))
+            real_thumbnail(target, size, resample, **kwargs)
+
+        with patch.object(Image.Image, "thumbnail", spy_thumbnail):
+            resize_long_edge(img, 256)
+
+        assert seen == [((256, 256), Image.Resampling.LANCZOS)]
 
 
 class TestClearFullResCache:

@@ -25,6 +25,7 @@ from tarragon.renderers.cache import (
     generate_cache_uuid,
     invalidate_cache_files,
     load_image,
+    resize_long_edge,
     save_to_cache,
 )
 from tarragon.renderers.clip import render_clip_image
@@ -335,11 +336,7 @@ class ThumbnailService(QObject):
 
         # Save missing thumbnail
         if not cached.get("thumbnail_cache_path") or not Path(cached["thumbnail_cache_path"]).exists():
-            if max(source_image.size) > RESOLUTION_THUMBNAIL:
-                thumb_img = source_image.copy()
-                thumb_img.thumbnail((RESOLUTION_THUMBNAIL, RESOLUTION_THUMBNAIL), Image.Resampling.LANCZOS)
-            else:
-                thumb_img = source_image.copy()
+            thumb_img = resize_long_edge(source_image, RESOLUTION_THUMBNAIL)
             final_thumb_path = self._save_and_record(
                 thumb_img, file_info, RESOLUTION_THUMBNAIL, cache_paths[str(RESOLUTION_THUMBNAIL)]
             )
@@ -347,11 +344,7 @@ class ThumbnailService(QObject):
         if source_resolution == RESOLUTION_FULL and (
             not cached.get("preview_cache_path") or not Path(cached["preview_cache_path"]).exists()
         ):
-            if max(source_image.size) > RESOLUTION_PREVIEW:
-                preview_img = source_image.copy()
-                preview_img.thumbnail((RESOLUTION_PREVIEW, RESOLUTION_PREVIEW), Image.Resampling.LANCZOS)
-            else:
-                preview_img = source_image.copy()
+            preview_img = resize_long_edge(source_image, RESOLUTION_PREVIEW)
             final_preview_path = self._save_and_record(
                 preview_img, file_info, RESOLUTION_PREVIEW, cache_paths[str(RESOLUTION_PREVIEW)]
             )

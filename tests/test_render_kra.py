@@ -5,6 +5,7 @@ from __future__ import annotations
 import io
 import zipfile
 from pathlib import Path
+from unittest.mock import patch
 
 from PIL import Image
 
@@ -69,6 +70,36 @@ class TestValidKraFiles:
         assert max(result.size) == 50
         ratio = result.size[0] / result.size[1]
         assert abs(ratio - 200 / 160) < 0.05
+
+
+class TestResizeFilter:
+    """The resample filter used when resizing the merged image."""
+
+    def test_render_kra_image_resizes_with_lanczos(self, tmp_path: Path) -> None:
+        """render_kra_image passes Lanczos to thumbnail when resizing to a target size."""
+        kra_path = _make_kra_file(
+            tmp_path / "lanczos.kra",
+            {
+                "mergedimage.png": _png_bytes((200, 160), "green"),
+                "preview.png": _png_bytes((50, 40), "blue"),
+            },
+        )
+        seen: list[int] = []
+        real_thumbnail = Image.Image.thumbnail
+
+        def spy_thumbnail(
+            target: Image.Image, size: tuple[int, int], resample: int = Image.Resampling.BICUBIC, **kwargs: object
+        ) -> None:
+            """Record the resample argument, then delegate to the real thumbnail."""
+            seen.append(resample)
+            real_thumbnail(target, size, resample, **kwargs)
+
+        with patch.object(Image.Image, "thumbnail", spy_thumbnail):
+            result = render_kra_image(kra_path, target_size=50)
+
+        assert result is not None
+        assert seen and all(resample == Image.Resampling.LANCZOS for resample in seen)
+        assert result.size == (50, 40)
 
 
 class TestModeNormalization:

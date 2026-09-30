@@ -286,6 +286,13 @@ def load_image(path: str | Path) -> Image.Image:
     return img
 
 
+def resize_long_edge(img: Image.Image, size: int) -> Image.Image:
+    """Resize to at most (size, size), preserving aspect ratio and never upscaling."""
+    resized = img.copy()
+    resized.thumbnail((size, size), Image.Resampling.LANCZOS)
+    return resized
+
+
 def derive_smaller_sizes(source_image: Image.Image, target_sizes: list[int]) -> dict[int, Image.Image]:
     """Derive smaller image sizes from a source image.
 
@@ -309,11 +316,5 @@ def derive_smaller_sizes(source_image: Image.Image, target_sizes: list[int]) -> 
     """
     results: dict[int, Image.Image] = {}
     for size in target_sizes:
-        if max(source_image.size) > size:
-            derived = source_image.copy()
-            derived.thumbnail((size, size), Image.Resampling.LANCZOS)
-            results[size] = derived
-        else:
-            # Image is smaller than or equal to target. Include as-is
-            results[size] = source_image.copy()
+        results[size] = resize_long_edge(source_image, size)
     return results

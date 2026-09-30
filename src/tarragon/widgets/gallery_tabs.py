@@ -18,6 +18,9 @@ class GalleryTabs(QTabWidget):
             parent: Optional parent widget.
         """
         super().__init__(parent)
+        # Placeholder pages are required: QTabWidget needs a widget per tab,
+        # and tabs are pure scope chrome (signal source) — the thumbnail grid
+        # is a layout sibling, not a child of the tab pages.
         self.addTab(QWidget(), "Folder")
         self.addTab(QWidget(), "All Images")
         self.currentChanged.connect(self._on_tab_changed)

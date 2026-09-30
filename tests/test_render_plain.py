@@ -6,8 +6,10 @@ from pathlib import Path
 
 from PIL import Image, ImageCms
 
-from tarragon.renderers.cache import MASTER_LONG_EDGE
 from tarragon.renderers.plain import render_plain_image
+
+# Local long-edge target; the shared cache constant was deleted.
+_LONG_EDGE = 2048
 
 
 class TestRenderPlainImage:
@@ -22,12 +24,12 @@ class TestRenderPlainImage:
         result = render_plain_image(img_path)
 
         assert result is not None
-        # 1x1 should remain 1x1 since it's already <= MASTER_LONG_EDGE
+        # 1x1 should remain 1x1 since it's already <= the long-edge target
         assert result.size == (1, 1)
         assert result.mode == "RGB"
 
     def test_render_plain_image_smaller_than_master_long_edge_is_not_upscaled(self, tmp_path: Path) -> None:
-        """render_plain_image does NOT upscale images smaller than MASTER_LONG_EDGE."""
+        """render_plain_image does NOT upscale images smaller than the long-edge target."""
         img_path = tmp_path / "small.png"
         small_size = (100, 200)
         img = Image.new("RGB", small_size, color="blue")
@@ -46,10 +48,10 @@ class TestRenderPlainImage:
         img = Image.new("RGB", (6000, 4000), color="green")
         img.save(img_path, format="JPEG", quality=85)
 
-        result = render_plain_image(img_path, target_size=MASTER_LONG_EDGE)
+        result = render_plain_image(img_path, target_size=_LONG_EDGE)
 
         assert result is not None
-        assert max(result.size) <= MASTER_LONG_EDGE
+        assert max(result.size) <= _LONG_EDGE
         # Aspect ratio should be preserved
         assert abs(result.size[0] / result.size[1] - 6000 / 4000) < 0.01
 

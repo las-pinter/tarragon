@@ -16,7 +16,6 @@ from PIL import Image
 from psd_tools import PSDImage
 
 import tarragon.renderers.psd as _tmod
-from tarragon.renderers.cache import MASTER_LONG_EDGE
 from tarragon.renderers.psd import (
     PSD_RENDER_TIMEOUT_S,
     _composite_psd_in_process,
@@ -25,6 +24,9 @@ from tarragon.renderers.psd import (
     render_psd_image,
     shutdown_executor,
 )
+
+# Local long-edge target; the shared cache constant was deleted.
+_LONG_EDGE = 2048
 
 
 class TestRenderPSD:
@@ -368,14 +370,14 @@ class TestRenderPSDEdgeCases:
     def test_render_psd_image_resizes_large_composite(self, tmp_path: Path) -> None:
         """render_psd_image resizes composited output when target_size is specified."""
         psd_path = tmp_path / "large_test.psd"
-        # Create a PSD larger than MASTER_LONG_EDGE (2048)
+        # Create a PSD larger than the long-edge target (2048)
         psd = PSDImage.new(mode="RGBA", size=(4000, 3000))
         psd.save(str(psd_path))
 
-        result = render_psd_image(psd_path, 20.0, 2, 2, target_size=MASTER_LONG_EDGE)
+        result = render_psd_image(psd_path, 20.0, 2, 2, target_size=_LONG_EDGE)
 
         assert result is not None, "render_psd_image returned None for a large PSD"
-        assert max(result.size) <= MASTER_LONG_EDGE, f"Result too large: {result.size} > {MASTER_LONG_EDGE}"
+        assert max(result.size) <= _LONG_EDGE, f"Result too large: {result.size} > {_LONG_EDGE}"
         # Aspect ratio should be preserved
         orig_ratio = 4000 / 3000
         result_ratio = result.size[0] / result.size[1]

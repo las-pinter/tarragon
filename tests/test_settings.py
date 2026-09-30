@@ -179,13 +179,13 @@ class TestSettingCacheDir:
     def test_set_and_get(self, db: Database) -> None:
         """Setting a cache directory persists and reads back the path."""
         setting = _service_setting(db, "cache_dir")
-        setting.set("/tmp/cache")
-        assert setting.get() == "/tmp/cache"
+        setting.set("custom/cache")
+        assert setting.get() == "custom/cache"
 
     def test_set_none(self, db: Database) -> None:
         """Setting None clears the stored cache directory."""
         setting = _service_setting(db, "cache_dir")
-        setting.set("/tmp/cache")
+        setting.set("custom/cache")
         setting.set(None)
         assert setting.get() is None
 

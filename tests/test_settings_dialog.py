@@ -230,10 +230,10 @@ class TestSaveLoadRoundtrip:
         line_edit = dialog._cache_dir_setting._widget
         assert isinstance(line_edit, QLineEdit)
 
-        line_edit.setText("/tmp/custom_cache")
+        line_edit.setText("custom/cache")
         dialog._on_accept()
 
-        assert service.cache_dir.get() == "/tmp/custom_cache"
+        assert service.cache_dir.get() == "custom/cache"
 
 
 class TestColorTagEnableDisable:

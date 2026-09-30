@@ -66,16 +66,16 @@ class TestSubstituteFilePath:
     def test_substitute_file_path_handles_special_chars(self) -> None:
         """Paths with quotes and brackets are handled safely via shlex."""
         template = "editor --open {file}"
-        file_path = Path("/tmp/file (copy) [v2].txt")
+        file_path = Path("file (copy) [v2].txt")
 
         args = substitute_file_path(template, file_path)
 
-        assert args == ["editor", "--open", str(Path("/tmp/file (copy) [v2].txt"))]
+        assert args == ["editor", "--open", str(Path("file (copy) [v2].txt"))]
 
     def test_substitute_file_path_raises_without_placeholder(self) -> None:
         """A template without {file} raises ValueError."""
         with pytest.raises(ValueError, match=r"\{file\}"):
-            substitute_file_path("gimp --no-file", Path("/tmp/img.png"))
+            substitute_file_path("gimp --no-file", Path("img.png"))
 
 
 class TestLaunchEditor:
@@ -86,9 +86,9 @@ class TestLaunchEditor:
         db.upsert_editor_association(".png", "gimp {file}")
 
         with patch("tarragon.services.editors.subprocess.Popen") as mock_popen:
-            launch_editor(db, Path("/tmp/img.png"), ".png")
+            launch_editor(db, Path("img.png"), ".png")
 
-        mock_popen.assert_called_once_with(["gimp", str(Path("/tmp/img.png"))], shell=False)
+        mock_popen.assert_called_once_with(["gimp", str(Path("img.png"))], shell=False)
 
     def test_launch_editor_fallback_to_os_default(self, db: Database) -> None:
         """No association triggers the OS default handler."""
@@ -97,9 +97,9 @@ class TestLaunchEditor:
             patch("tarragon.services.editors.subprocess.Popen") as mock_popen,
         ):
             mock_sys.platform = "linux"
-            launch_editor(db, Path("/tmp/img.png"), ".unknown")
+            launch_editor(db, Path("img.png"), ".unknown")
 
-        mock_popen.assert_called_once_with(["xdg-open", str(Path("/tmp/img.png"))])
+        mock_popen.assert_called_once_with(["xdg-open", str(Path("img.png"))])
 
     def test_launch_editor_windows_uses_startfile(self, db: Database) -> None:
         """The Windows fallback uses os.startfile."""

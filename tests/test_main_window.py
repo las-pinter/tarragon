@@ -456,6 +456,70 @@ class TestFolderFiltering:
             window.close()
 
 
+class TestNavigateToFolderFilterState:
+    """_navigate_to_folder decides filtered vs. unfiltered from FilterState alone."""
+
+    def test_navigation_with_search_text_applies_filter(
+        self, qapp: Any, mock_settings: MagicMock, tmp_path: Path
+    ) -> None:
+        """_navigate_to_folder runs a filtered query when search text is in FilterState."""
+        window = MainWindow(settings_service=mock_settings)
+        try:
+            db = Database(Path(":memory:"))
+            db.init_schema()
+
+            folder = tmp_path / "filtered_folder"
+            folder.mkdir()
+            (folder / "cat.png").write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 100)
+            (folder / "dog.png").write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 100)
+
+            tag_service = TagService(db=db)
+            window.setup_widgets(db, tag_service)
+
+            # Search text lives in FilterState via the controller signal.
+            window._search_edit.setText("cat")
+            assert window._filter_state.filename_filter == "cat"
+
+            window._navigate_to_folder(folder)
+
+            assert window.thumbnail_model.rowCount() == 1
+            assert window.thumbnail_model.data(window.thumbnail_model.index(0, 0)) == "cat.png"
+        finally:
+            window.close()
+
+    def test_navigation_honors_folder_filters_in_filter_state(
+        self,
+        qapp: Any,
+        mock_settings: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """_navigate_to_folder treats folder filters in FilterState as active filters."""
+        window = MainWindow(settings_service=mock_settings)
+        try:
+            db = Database(Path(":memory:"))
+            db.init_schema()
+
+            folder = tmp_path / "folder_filtered"
+            folder.mkdir()
+            (folder / "a.png").write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 100)
+
+            tag_service = TagService(db=db)
+            window.setup_widgets(db, tag_service)
+
+            # Clear the search box: the previous test leaves residual search text.
+            window._search_edit.clear()
+
+            # A folder filter selected in global mode is an active filter in FilterState.
+            window._filter_state.folder_filters = {str(folder)}
+
+            window._navigate_to_folder(folder)
+
+            assert window.thumbnail_model.rowCount() == 1
+            assert window.thumbnail_model.data(window.thumbnail_model.index(0, 0)) == "a.png"
+        finally:
+            window.close()
+
+
 class TestFilterBarIntegration:
     """The combined FilterBar replaces the separate filter bars."""
 

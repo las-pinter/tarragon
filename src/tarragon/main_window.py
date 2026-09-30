@@ -580,13 +580,10 @@ class MainWindow(QMainWindow):
             except sqlite3.Error:
                 logger.warning("Failed to populate DB stubs for %s", folder_path, exc_info=True)
 
-        # Update thumbnail model — use query service if any filters are active,
+        # Update thumbnail model — use query service if any filters are active
+        # (single source of truth: FilterState shared with the controller),
         # otherwise load all paths directly.
-        has_filters = (
-            (self._search_edit is not None and self._search_edit.text())
-            or (self.filter_bar_color is not None and self.filter_bar_color.get_active_colors())
-            or (self.filter_bar_tag is not None and self.filter_bar_tag.has_active_filters())
-        )
+        has_filters = self._filter_state is not None and not self._filter_state.is_empty()
         if has_filters and self._query_service is not None:
             self._run_filtered_query()
         else:

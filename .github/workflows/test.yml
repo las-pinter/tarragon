@@ -1,0 +1,44 @@
+name: Test (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      python-versions:
+        description: JSON array of Python versions to test.
+        required: false
+        type: string
+        default: '["3.12"]'
+      oses:
+        description: JSON array of runner OSes to test.
+        required: false
+        type: string
+        default: '["ubuntu-latest"]'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJSON(inputs.oses) }}
+        python-version: ${{ fromJSON(inputs.python-versions) }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up uv, Python, and dependencies
+        uses: ./.github/actions/setup-tarragon
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install Qt system dependencies
+        uses: ./.github/actions/install-qt
+
+      - name: Run tests
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: uv run pytest -v --tb=short

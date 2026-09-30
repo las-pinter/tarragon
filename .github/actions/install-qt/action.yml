@@ -1,0 +1,11 @@
+name: Install Qt system dependencies
+description: Install the Qt runtime system libraries required on Linux runners.
+runs:
+  using: composite
+  steps:
+    - name: Install Qt system dependencies (Linux)
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libegl1 libgl1 libxkbcommon0 libdbus-1-3

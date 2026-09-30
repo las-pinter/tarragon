@@ -1539,6 +1539,24 @@ class TestInvalidateAndRender:
         assert call_args.size == source_file.stat().st_size
         assert call_args.mtime == source_file.stat().st_mtime
 
+    def test_invalidate_and_render_passes_from_stat_fileinfo(
+        self,
+        tmp_path: Path,
+        service: ThumbnailService,
+        db_mock: MagicMock,
+    ) -> None:
+        """invalidate_and_render forwards FileInfo.from_stat for the source path."""
+        source_file = tmp_path / "photo.PNG"
+        source_file.write_bytes(b"fake_image_data")
+
+        db_mock.get_thumbnail.return_value = None
+
+        with patch.object(service, "check_and_render", return_value="queued") as mock_render:
+            service.invalidate_and_render(source_file)
+
+        expected = FileInfo.from_stat(path=source_file, stat_result=source_file.stat())
+        assert mock_render.call_args[0][0] == expected
+
 
 class TestRealPathRendering:
     """End-to-end rendering through the real check_and_render path."""

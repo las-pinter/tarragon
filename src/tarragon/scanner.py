@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -21,6 +22,16 @@ class FileInfo:
     mtime: float
     size: int
     extension: str  # lowercase, e.g. ".psd"
+
+    @classmethod
+    def from_stat(cls, path: Path, stat_result: os.stat_result) -> FileInfo:
+        """Build a FileInfo from an os.stat_result for *path*."""
+        return cls(
+            path=path,
+            mtime=stat_result.st_mtime,
+            size=stat_result.st_size,
+            extension=path.suffix.lower(),
+        )
 
 
 def scan_folder(folder_path: Path, recursive: bool = False, sort_mode: SortMode = SortMode.NAME) -> list[FileInfo]:
@@ -74,14 +85,7 @@ def scan_folder(folder_path: Path, recursive: bool = False, sort_mode: SortMode 
             except OSError:
                 logger.debug("Could not stat file, skipping: %s", path, exc_info=True)
                 continue
-            results.append(
-                FileInfo(
-                    path=path,
-                    mtime=stat.st_mtime,
-                    size=stat.st_size,
-                    extension=ext,
-                )
-            )
+            results.append(FileInfo.from_stat(path=path, stat_result=stat))
 
         elapsed = time.perf_counter() - start
         logger.debug("found %d files in %.3fs", len(results), elapsed)

@@ -301,12 +301,7 @@ class GalleryController:
                     continue
                 try:
                     stat = path.stat()
-                    fi = FileInfo(
-                        path=path,
-                        mtime=stat.st_mtime,
-                        size=stat.st_size,
-                        extension=path.suffix.lower(),
-                    )
+                    fi = FileInfo.from_stat(path=path, stat_result=stat)
                     self._thumbnail_service.check_and_render(fi)
                 except OSError:
                     logger.debug("Could not stat path: %s", path)

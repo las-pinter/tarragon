@@ -642,7 +642,7 @@ class TestRenderAllResolutionsCancellation:
         service._cancel_event.set()
 
         with (
-            patch("tarragon.services.thumbnail_service.render_plain_image") as mock_render,
+            patch("tarragon.renderers.registry.DEFAULT_RENDERER") as mock_render,
             patch("tarragon.services.thumbnail_service.save_to_cache") as mock_save,
         ):
             service._render_all_resolutions(file_info)
@@ -674,7 +674,7 @@ class TestRenderAllResolutionsCancellation:
             return mock_img
 
         with (
-            patch("tarragon.services.thumbnail_service.render_plain_image", side_effect=set_cancel_on_render),
+            patch("tarragon.renderers.registry.DEFAULT_RENDERER", side_effect=set_cancel_on_render),
             patch("tarragon.services.thumbnail_service.save_to_cache") as mock_save,
             patch("tarragon.services.thumbnail_service.generate_cache_uuid", return_value="test-uuid"),
             patch("tarragon.services.thumbnail_service.generate_cache_paths") as mock_paths,
@@ -707,10 +707,12 @@ class TestRenderAllResolutionsCancellation:
             """Set cancel event during the PSD render call so subsequent steps abort."""
             service._cancel_event.set()
 
+        mock_psd = MagicMock(side_effect=set_cancel_and_return_none)
         with (
-            patch(
-                "tarragon.services.thumbnail_service.render_psd_image", side_effect=set_cancel_and_return_none
-            ) as mock_psd,
+            patch.dict(
+                "tarragon.renderers.registry.FORMAT_DISPATCH",
+                {".psd": mock_psd, ".psb": mock_psd},
+            ),
             patch("tarragon.services.thumbnail_service.generate_cache_uuid", return_value="test-uuid"),
             patch("tarragon.services.thumbnail_service.generate_cache_paths") as mock_paths,
         ):
@@ -721,10 +723,10 @@ class TestRenderAllResolutionsCancellation:
             }
             service._render_all_resolutions(file_info)
 
-        # Verify cancel_event was passed to render_psd_image
+        # Verify cancel_event was passed to the PSD renderer (third positional arg)
         mock_psd.assert_called_once()
-        call_kwargs = mock_psd.call_args.kwargs
-        assert call_kwargs.get("cancel_event") is service._cancel_event
+        rendered_args = mock_psd.call_args.args
+        assert rendered_args[2] is service._cancel_event
 
     def test_render_all_calls_render_clip_image_for_clip_files(
         self,
@@ -743,13 +745,14 @@ class TestRenderAllResolutionsCancellation:
         mock_img.width = 100
         mock_img.height = 80
 
+        mock_clip = MagicMock(return_value=mock_img)
+        mock_psd = MagicMock()
         with (
-            patch(
-                "tarragon.services.thumbnail_service.render_clip_image",
-                return_value=mock_img,
-            ) as mock_clip,
-            patch("tarragon.services.thumbnail_service.render_plain_image") as mock_plain,
-            patch("tarragon.services.thumbnail_service.render_psd_image") as mock_psd,
+            patch.dict(
+                "tarragon.renderers.registry.FORMAT_DISPATCH",
+                {".clip": mock_clip, ".psd": mock_psd, ".psb": mock_psd},
+            ),
+            patch("tarragon.renderers.registry.DEFAULT_RENDERER") as mock_plain,
             patch("tarragon.services.thumbnail_service.generate_cache_uuid", return_value="test-uuid"),
             patch("tarragon.services.thumbnail_service.generate_cache_paths") as mock_paths,
             patch("tarragon.services.thumbnail_service.save_to_cache"),
@@ -762,9 +765,9 @@ class TestRenderAllResolutionsCancellation:
             }
             service._render_all_resolutions(file_info)
 
-        # render_clip_image should have been called with the file path and RESOLUTION_FULL
-        mock_clip.assert_called_once_with(file_info.path, target_size=RESOLUTION_FULL)
-        # render_plain_image and render_psd_image should NOT have been called
+        # .clip files dispatch to the clip renderer with path, RESOLUTION_FULL, and cancel_event
+        mock_clip.assert_called_once_with(file_info.path, RESOLUTION_FULL, service._cancel_event)
+        # DEFAULT_RENDERER (plain) and the PSD renderer should NOT have been called
         mock_plain.assert_not_called()
         mock_psd.assert_not_called()
 
@@ -1065,7 +1068,7 @@ class TestAutoColorTagSignal:
         mock_img.height = 64
 
         with (
-            patch("tarragon.services.thumbnail_service.render_plain_image", return_value=mock_img),
+            patch("tarragon.renderers.registry.DEFAULT_RENDERER", return_value=mock_img),
             patch("tarragon.services.thumbnail_service.generate_cache_uuid", return_value="test-uuid"),
             patch("tarragon.services.thumbnail_service.generate_cache_paths") as mock_paths,
             patch("tarragon.services.thumbnail_service.save_to_cache"),
@@ -1116,7 +1119,7 @@ class TestAutoColorTagSignal:
         mock_img.height = 64
 
         with (
-            patch("tarragon.services.thumbnail_service.render_plain_image", return_value=mock_img),
+            patch("tarragon.renderers.registry.DEFAULT_RENDERER", return_value=mock_img),
             patch("tarragon.services.thumbnail_service.generate_cache_uuid", return_value="test-uuid"),
             patch("tarragon.services.thumbnail_service.generate_cache_paths") as mock_paths,
             patch("tarragon.services.thumbnail_service.save_to_cache"),
@@ -1155,7 +1158,7 @@ class TestAutoColorTagSignal:
         mock_img.height = 64
 
         with (
-            patch("tarragon.services.thumbnail_service.render_plain_image", return_value=mock_img),
+            patch("tarragon.renderers.registry.DEFAULT_RENDERER", return_value=mock_img),
             patch("tarragon.services.thumbnail_service.generate_cache_uuid", return_value="test-uuid"),
             patch("tarragon.services.thumbnail_service.generate_cache_paths") as mock_paths,
             patch("tarragon.services.thumbnail_service.save_to_cache"),
@@ -1197,7 +1200,7 @@ class TestPerFolderUuid:
         )
 
         with (
-            patch("tarragon.services.thumbnail_service.render_plain_image", return_value=MagicMock(spec=Image.Image)),
+            patch("tarragon.renderers.registry.DEFAULT_RENDERER", return_value=MagicMock(spec=Image.Image)),
             patch("tarragon.services.thumbnail_service.generate_cache_uuid", return_value="new-uuid-1"),
             patch("tarragon.services.thumbnail_service.generate_cache_paths") as mock_paths,
             patch("tarragon.services.thumbnail_service.save_to_cache"),
@@ -1229,7 +1232,7 @@ class TestPerFolderUuid:
         file_b = FileInfo(path=tmp_path / "image_b.png", mtime=1000.0, size=600, extension=".png")
 
         with (
-            patch("tarragon.services.thumbnail_service.render_plain_image", return_value=MagicMock(spec=Image.Image)),
+            patch("tarragon.renderers.registry.DEFAULT_RENDERER", return_value=MagicMock(spec=Image.Image)),
             patch("tarragon.services.thumbnail_service.generate_cache_uuid", return_value="shared-uuid"),
             patch("tarragon.services.thumbnail_service.generate_cache_paths") as mock_paths,
             patch("tarragon.services.thumbnail_service.save_to_cache"),

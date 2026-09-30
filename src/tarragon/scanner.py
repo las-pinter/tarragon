@@ -7,22 +7,10 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
+from tarragon.renderers.registry import SUPPORTED_EXTENSIONS
 from tarragon.sorting import SortMode, sort_paths
 
 logger = logging.getLogger(__name__)
-
-SUPPORTED_EXTENSIONS = {
-    ".jpg",
-    ".jpeg",
-    ".png",
-    ".webp",
-    ".tiff",
-    ".tif",
-    ".psd",
-    ".psb",
-    ".clip",
-    ".kra",
-}
 
 
 @dataclass(frozen=True)

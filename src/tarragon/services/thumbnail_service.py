@@ -14,6 +14,7 @@ from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal, Slot
 
 from tarragon.db.common.tag import Tag, TagSource
 from tarragon.db.database import Database
+from tarragon.renderers import registry
 from tarragon.renderers.cache import (
     RESOLUTION_FULL,
     RESOLUTION_PREVIEW,
@@ -28,10 +29,7 @@ from tarragon.renderers.cache import (
     resize_long_edge,
     save_to_cache,
 )
-from tarragon.renderers.clip import render_clip_image
-from tarragon.renderers.krita import render_kra_image
-from tarragon.renderers.plain import render_plain_image
-from tarragon.renderers.psd import get_executor, render_psd_image
+from tarragon.renderers.psd import get_executor
 from tarragon.scanner import FileInfo
 from tarragon.services.color_tagger import extract_dominant_colors
 from tarragon.services.settings_service import SettingsService
@@ -88,6 +86,7 @@ class ThumbnailService(QObject):
         super().__init__(parent)
         self._db = db
         self._settings_service = settings_service
+        registry.configure_settings(lambda: self._settings_service)
         self._tag_service = tag_service
         self._cancel_event = threading.Event()
         self._threadpool = QThreadPool()
@@ -385,24 +384,8 @@ class ThumbnailService(QObject):
         cache_uuid = self._db.get_or_create_folder_uuid(folder_path, generate_cache_uuid())
         cache_paths = generate_cache_paths(file_info.path, cache_uuid, self._cache_format)
 
-        if file_info.extension.lower() in {".psd", ".psb"}:
-            threshold = self._settings_service.large_canvas_threshold_mp.get()
-            grid_str = self._settings_service.tile_grid_size.get()
-            grid_x, grid_y = (int(d) for d in grid_str.split("x"))
-            full_img = render_psd_image(
-                file_info.path,
-                threshold,
-                grid_x,
-                grid_y,
-                target_size=RESOLUTION_FULL,
-                cancel_event=self._cancel_event,
-            )
-        elif file_info.extension.lower() == ".clip":
-            full_img = render_clip_image(file_info.path, target_size=RESOLUTION_FULL)
-        elif file_info.extension.lower() == ".kra":
-            full_img = render_kra_image(file_info.path, target_size=RESOLUTION_FULL)
-        else:
-            full_img = render_plain_image(file_info.path, target_size=RESOLUTION_FULL)
+        renderer = registry.FORMAT_DISPATCH.get(file_info.extension.lower(), registry.DEFAULT_RENDERER)
+        full_img = renderer(file_info.path, RESOLUTION_FULL, self._cancel_event)
 
         # Cancel check: after expensive render
         if self._cancel_event.is_set():

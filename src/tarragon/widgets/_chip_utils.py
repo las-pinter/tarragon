@@ -16,6 +16,24 @@ from PySide6.QtWidgets import (
 from tarragon.theme.constants import SPACING_XS
 
 
+def create_chip_close_button(text: str, object_name: str) -> QPushButton:
+    """Create a small close button used by removable chips and tag pills.
+
+    Args:
+        text: Glyph displayed on the button (e.g. ``"x"`` or ``"\u00d7"``).
+        object_name: Qt object name for QSS targeting.
+
+    Returns:
+        A configured ``QPushButton`` with a fixed 16x16 size and a
+        pointing-hand cursor.
+    """
+    btn = QPushButton(text)
+    btn.setFixedSize(16, 16)
+    btn.setCursor(Qt.CursorShape.PointingHandCursor)
+    btn.setObjectName(object_name)
+    return btn
+
+
 def create_removable_chip(
     label_text: str,
     on_remove: Callable[[], None],
@@ -52,10 +70,7 @@ def create_removable_chip(
         label.setToolTip(tooltip)
     chip_layout.addWidget(label)
 
-    remove_btn = QPushButton("\u00d7")
-    remove_btn.setFixedSize(16, 16)
-    remove_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-    remove_btn.setObjectName("filterChipRemoveBtn")
+    remove_btn = create_chip_close_button("\u00d7", "filterChipRemoveBtn")
     remove_btn.clicked.connect(lambda: on_remove())
     chip_layout.addWidget(remove_btn)
 

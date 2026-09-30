@@ -6,7 +6,9 @@ from collections.abc import Callable
 
 from PySide6.QtCore import QEvent, Qt, Signal
 from PySide6.QtGui import QEnterEvent, QMouseEvent
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QWidget
+
+from tarragon.widgets._chip_utils import create_chip_close_button
 
 
 class _ClickableLabel(QLabel):
@@ -57,10 +59,7 @@ class TagPillWidget(QWidget):
         self.setProperty("tagRole", "primary")
         self._label.setProperty("tagRole", "primary")
 
-        self._remove_btn = QPushButton("x")
-        self._remove_btn.setFixedSize(16, 16)
-        self._remove_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._remove_btn.setObjectName("tagPillRemoveBtn")
+        self._remove_btn = create_chip_close_button("x", "tagPillRemoveBtn")
         self._remove_btn.hide()
         self._remove_btn.clicked.connect(lambda _checked=False: self._on_remove())
         layout.addWidget(self._remove_btn)

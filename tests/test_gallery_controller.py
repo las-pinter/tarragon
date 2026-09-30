@@ -8,7 +8,7 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
-from PIL import Image
+from PIL import Image, ImageOps
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QLineEdit
 
@@ -17,6 +17,7 @@ from tarragon.db.database import Database
 from tarragon.gallery_controller import GalleryController
 from tarragon.models.filter_state import FilterState
 from tarragon.models.thumbnail_model import ThumbnailModel
+from tarragon.renderers.cache import load_image
 from tarragon.services.query_service import QueryService
 from tarragon.services.tag_service import TagService
 from tarragon.widgets.filter_bar import FilterBar
@@ -136,6 +137,18 @@ class TestPreviewTagsGuard:
 class TestLoadPreviewImage:
     """Loading preview images through the cached-preview fast path."""
 
+    @staticmethod
+    def _save_rotated_jpeg(path: Path) -> None:
+        """Write a 50x100 JPEG whose EXIF orientation tag demands a 90° rotation.
+
+        EXIF orientation 6 means "rotate 90° clockwise to view upright", so
+        an oriented load must report (100, 50) instead of the stored (50, 100).
+        """
+        img = Image.new("RGB", (50, 100), color="red")
+        exif = img.getexif()
+        exif[0x0112] = 6
+        img.save(path, format="JPEG", exif=exif)
+
     def test_load_preview_image_returns_cached_preview(self, controller: _SpyController, tmp_path: Path) -> None:
         """_load_preview_image loads the cached 1024px preview with original dimensions from the DB record."""
         source = tmp_path / "source.png"
@@ -151,13 +164,80 @@ class TestLoadPreviewImage:
             preview_cache_path=str(preview_path),
         )
 
-        img, orig_w, orig_h = controller._load_preview_image(source)
+        loaded = controller._load_preview_image(source)
 
-        assert img.size == (1024, 768)
-        assert img.getpixel((10, 10)) == (255, 0, 0)
-        assert getattr(img, "_from_cache", False) is True
-        assert orig_w == 1024
-        assert orig_h == 768
+        assert loaded.image.size == (1024, 768)
+        assert loaded.image.getpixel((10, 10)) == (255, 0, 0)
+        assert loaded.from_cache is True
+        assert loaded.original_width == 1024
+        assert loaded.original_height == 768
+
+    def test_load_preview_image_cached_exif_orientation_is_not_transposed(
+        self, controller: _SpyController, tmp_path: Path
+    ) -> None:
+        """A cached image with an EXIF orientation tag loads byte-identical (caches are already oriented)."""
+        source = tmp_path / "source.jpg"
+        preview_path = tmp_path / "preview.jpg"
+        self._save_rotated_jpeg(preview_path)
+        controller._db.upsert_thumbnail(
+            str(source),
+            mtime=1,
+            size=100,
+            width=50,
+            height=100,
+            cache_uuid="u1",
+            preview_cache_path=str(preview_path),
+        )
+
+        loaded = controller._load_preview_image(source)
+
+        assert loaded.from_cache is True
+        assert loaded.image.size == (50, 100)
+        assert loaded.image.tobytes() == load_image(preview_path).tobytes()
+        # Provenance travels in the LoadedImage wrapper, never on the PIL image.
+        assert not hasattr(loaded.image, "_from_cache")
+
+    def test_load_preview_image_original_exif_orientation_is_transposed(
+        self, controller: _SpyController, tmp_path: Path
+    ) -> None:
+        """The original-file fallback applies exif_transpose so uncached loads are display-oriented."""
+        source = tmp_path / "uncached.jpg"
+        self._save_rotated_jpeg(source)
+
+        loaded = controller._load_preview_image(source)
+
+        assert loaded.from_cache is False
+        assert loaded.image.size == (100, 50)
+        with Image.open(source) as raw:
+            raw.load()
+            expected = ImageOps.exif_transpose(raw) or raw
+            assert loaded.image.tobytes() == expected.tobytes()
+        assert not hasattr(loaded.image, "_from_cache")
+
+    def test_single_selection_uncached_image_is_displayed_rotated(
+        self, controller: _SpyController, tmp_path: Path
+    ) -> None:
+        """Single selection of an uncached EXIF-oriented file shows the upright (transposed) image."""
+        source = tmp_path / "portrait.jpg"
+        img = Image.new("RGB", (50, 100), color=(0, 0, 255))
+        # A 12px red band along the bottom edge; JPEG chroma subsampling smears
+        # sharp boundaries, so the band must be thick enough for reliable sampling.
+        img.paste(Image.new("RGB", (50, 12), color=(255, 0, 0)), (0, 88))
+        exif = img.getexif()
+        exif[0x0112] = 6
+        img.save(source, format="JPEG", quality=95, exif=exif)
+
+        controller.on_selection_changed([str(source)])
+
+        pixmap = controller._preview_panel._cached_pixmap
+        assert pixmap is not None
+        assert pixmap.width() == 100
+        assert pixmap.height() == 50
+        # Orientation 6 rotates 90° CW: the original bottom band lands on the left edge.
+        red = pixmap.toImage().pixelColor(0, 0)
+        assert red.red() > 200 and red.green() < 80 and red.blue() < 80
+        blue = pixmap.toImage().pixelColor(20, 0)
+        assert blue.red() < 80 and blue.green() < 80 and blue.blue() > 200
 
 
 class TestActiveFilterCount:

@@ -137,7 +137,7 @@ class TestDecodeOffloadSync:
 
         stale_epoch = ctl._decode_epoch - 1
         stale_img = Image.new("RGB", (16, 16), color="blue")
-        ctl.decode_relay.decode_ready.emit(stale_epoch, str(tmp_path / "stale.png"), stale_img, 16, 16)
+        ctl.decode_relay.decode_ready.emit(stale_epoch, str(tmp_path / "stale.png"), stale_img, 16, 16, False)
 
         infos = ctl._preview_panel._mosaic_image_infos
         assert len(infos) == 2
@@ -163,7 +163,7 @@ class TestDecodeOffloadSync:
         broken = _write_png(tmp_path / "broken.png")
         good = _write_png(tmp_path / "good.png")
 
-        def boom(_db: Database, _path: Path) -> tuple[Image.Image, int | None, int | None]:
+        def boom(_db: Database, _path: Path) -> gallery_controller.LoadedImage:
             """Simulate an unreadable source file."""
             raise OSError("decode failed")
 
@@ -192,7 +192,7 @@ class TestDecodeOffloadSync:
 
         with patch.object(ctl._preview_panel, "add_multi_preview_image", side_effect=RuntimeError("mosaic boom")):
             with pytest.raises(RuntimeError):
-                ctl._on_preview_decoded(ctl._decode_epoch, path, Image.new("RGB", (8, 8), "red"), 8, 8)
+                ctl._on_preview_decoded(ctl._decode_epoch, path, Image.new("RGB", (8, 8), "red"), 8, 8, False)
 
         # Completion accounting ran before the panel mutation, so the pending
         # counter is not left stuck and the busy indicator clears exactly once.
@@ -221,7 +221,7 @@ class TestDecodeOffloadAsync:
         threads: list[str] = []
         original_load = gallery_controller._load_preview_image_data
 
-        def spy_load(db: Database, path: Path) -> tuple[Image.Image, int | None, int | None]:
+        def spy_load(db: Database, path: Path) -> gallery_controller.LoadedImage:
             """Record the thread doing the decode."""
             threads.append(threading.current_thread().name)
             return original_load(db, path)

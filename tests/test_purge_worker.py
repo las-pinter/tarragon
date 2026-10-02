@@ -18,6 +18,7 @@ from tarragon.services.thumbnail_service import (
     ThumbnailService,
     _RenderAllTask,
 )
+from tarragon.theme.constants import PSD_WORKER_DEFAULT
 
 
 @pytest.fixture
@@ -33,7 +34,7 @@ def _make_settings() -> MagicMock:
     """MagicMock settings with the fields ThumbnailService touches at runtime."""
     settings = MagicMock()
     settings.cache_format.get.return_value = "PNG"
-    settings.max_psd_workers.get.return_value = 3
+    settings.max_psd_workers.get.return_value = PSD_WORKER_DEFAULT
     settings.color_tag_enabled.get.return_value = False
     settings.clear_full_res_on_exit.get.return_value = False
     return settings
@@ -56,7 +57,7 @@ def purge_service() -> Generator[ThumbnailService, None, None]:
     db = MagicMock()
     settings = MagicMock()
     settings.cache_format.get.return_value = "PNG"
-    settings.max_psd_workers.get.return_value = 3
+    settings.max_psd_workers.get.return_value = PSD_WORKER_DEFAULT
     settings.color_tag_enabled.get.return_value = False
     settings.clear_full_res_on_exit.get.return_value = False
     with patch("tarragon.services.thumbnail_service.get_executor"):

@@ -29,3 +29,9 @@ GRID_GAP: int = 14
 THUMBNAIL_SIZE: int = 160
 SIDEBAR_WIDTH_PX: int = 220
 MULTI_PREVIEW_MAX_DEFAULT: int = 9
+
+# PSD worker pool (single source for renderer, settings spec, and tests)
+PSD_WORKER_DEFAULT: int = 3
+PSD_WORKER_MIN: int = 1
+PSD_WORKER_MAX: int = 8
+PSD_WORKER_RAM_BYTES: int = 200_000_000

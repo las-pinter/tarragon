@@ -25,6 +25,12 @@ from tarragon.renderers.psd import (
     render_psd_image,
     shutdown_executor,
 )
+from tarragon.theme.constants import (
+    PSD_WORKER_DEFAULT,
+    PSD_WORKER_MAX,
+    PSD_WORKER_MIN,
+    PSD_WORKER_RAM_BYTES,
+)
 
 # Local long-edge target; the shared cache constant was deleted.
 _LONG_EDGE = 2048
@@ -34,31 +40,31 @@ class TestRenderPSD:
     """PSD rendering pipeline behavior."""
 
     def test_compute_worker_count_default(self) -> None:
-        """_compute_worker_count with no override returns a sensible value in [1, 8]."""
+        """_compute_worker_count with no override returns a sensible value in the clamped range."""
         result = _compute_worker_count()
         assert isinstance(result, int)
-        assert 1 <= result <= 8
+        assert PSD_WORKER_MIN <= result <= PSD_WORKER_MAX
 
     @pytest.mark.parametrize(
         ("override", "expected"),
         [
-            (3, 3),
-            (0, 1),  # below minimum - clamped to 1
-            (10, 8),  # above maximum - clamped to 8
-            (1, 1),  # at minimum
-            (8, 8),  # at maximum
-            (-5, 1),  # negative - clamped to 1
+            (PSD_WORKER_DEFAULT, PSD_WORKER_DEFAULT),
+            (0, PSD_WORKER_MIN),  # below minimum - clamped to PSD_WORKER_MIN
+            (10, PSD_WORKER_MAX),  # above maximum - clamped to PSD_WORKER_MAX
+            (PSD_WORKER_MIN, PSD_WORKER_MIN),  # at minimum
+            (PSD_WORKER_MAX, PSD_WORKER_MAX),  # at maximum
+            (-5, PSD_WORKER_MIN),  # negative - clamped to PSD_WORKER_MIN
         ],
     )
     def test_compute_worker_count_manual_override(self, override: int, expected: int) -> None:
-        """_compute_worker_count clamps manual override to [1, 8]."""
+        """_compute_worker_count clamps manual override to [PSD_WORKER_MIN, PSD_WORKER_MAX]."""
         assert _compute_worker_count(override) == expected
 
     def test_compute_worker_count_minimum_one(self) -> None:
-        """_compute_worker_count returns at least 1 even with zero available RAM."""
+        """_compute_worker_count returns at least PSD_WORKER_MIN even with zero available RAM."""
         with patch("tarragon.renderers.psd.psutil.virtual_memory") as mock_vm:
             mock_vm.return_value.available = 0
-            assert _compute_worker_count() == 1
+            assert _compute_worker_count() == PSD_WORKER_MIN
 
     def test_shared_executor_is_singleton(self) -> None:
         """Multiple calls to get_executor return the same instance."""
@@ -99,26 +105,26 @@ class TestRenderPSDEdgeCases:
     def test_compute_worker_count_multiple_calls_reevaluates_ram(self) -> None:
         """_compute_worker_count re-evaluates available RAM on each call (not cached)."""
         with patch("tarragon.renderers.psd.psutil.virtual_memory") as mock_vm:
-            # First call: 400 MB available -> 400 // 200 = 2
-            mock_vm.return_value.available = 400_000_000
+            # First call: 2 workers' RAM available -> 2 workers
+            mock_vm.return_value.available = 2 * PSD_WORKER_RAM_BYTES
             first = _compute_worker_count()
             assert first == 2
 
-            # Second call: 1.6 GB available -> 1600 // 200 = 8 -> min(8,8) = 8
-            mock_vm.return_value.available = 1_600_000_000
+            # Second call: 8 workers' RAM available -> capped at PSD_WORKER_MAX
+            mock_vm.return_value.available = PSD_WORKER_MAX * PSD_WORKER_RAM_BYTES
             second = _compute_worker_count()
-            assert second == 8
+            assert second == PSD_WORKER_MAX
 
-            # Third call: 50 MB available -> 50 // 200 = 0 -> max(1, 0) = 1
+            # Third call: 50 MB available -> below one worker's RAM -> PSD_WORKER_MIN
             mock_vm.return_value.available = 50_000_000
             third = _compute_worker_count()
-            assert third == 1
+            assert third == PSD_WORKER_MIN
 
-    def test_compute_worker_count_max_ram_returns_at_most_8(self) -> None:
-        """_compute_worker_count never exceeds 8 even with absurdly high RAM."""
+    def test_compute_worker_count_max_ram_caps_at_maximum(self) -> None:
+        """_compute_worker_count never exceeds PSD_WORKER_MAX even with absurdly high RAM."""
         with patch("tarragon.renderers.psd.psutil.virtual_memory") as mock_vm:
             mock_vm.return_value.available = 100_000_000_000  # 100 GB
-            assert _compute_worker_count() == 8
+            assert _compute_worker_count() == PSD_WORKER_MAX
 
     def test_composite_psd_in_process_nonexistent_file_returns_none(self) -> None:
         """_composite_psd_in_process returns None for a file path that does not exist."""

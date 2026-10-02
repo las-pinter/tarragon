@@ -14,6 +14,7 @@ import psutil
 from PIL import Image
 
 from tarragon.renderers.cache import resize_long_edge
+from tarragon.theme.constants import PSD_WORKER_MAX, PSD_WORKER_MIN, PSD_WORKER_RAM_BYTES
 
 logger = logging.getLogger(__name__)
 
@@ -30,13 +31,16 @@ PSD_FULL_TIER_MAX_EDGE = 8192
 def _compute_worker_count(manual_override: int | None = None) -> int:
     """Compute PSD worker count based on available RAM.
 
-    Default 3, adaptive: max(1, min(available_ram // 200MB, 8)), clamped [1, 8].
-    If *manual_override* is provided, it is clamped to [1, 8] and returned.
+    Default ``PSD_WORKER_DEFAULT``, adaptive:
+    ``max(PSD_WORKER_MIN, min(available_ram // PSD_WORKER_RAM_BYTES,
+    PSD_WORKER_MAX))``, clamped to
+    ``[PSD_WORKER_MIN, PSD_WORKER_MAX]``.  If *manual_override* is
+    provided, it is clamped to the same range and returned.
     """
     if manual_override is not None:
-        return max(1, min(manual_override, 8))
+        return max(PSD_WORKER_MIN, min(manual_override, PSD_WORKER_MAX))
     available = psutil.virtual_memory().available
-    return max(1, min(available // 200_000_000, 8))
+    return max(PSD_WORKER_MIN, min(available // PSD_WORKER_RAM_BYTES, PSD_WORKER_MAX))
 
 
 def _composite_psd_in_process(

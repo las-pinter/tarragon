@@ -7,6 +7,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from tarragon.theme.constants import PSD_WORKER_DEFAULT
+
 # Must be set BEFORE any Qt imports or QApplication creation
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 
@@ -37,7 +39,7 @@ def make_settings_mock() -> Callable[..., MagicMock]:
     def _make(**overrides: object) -> MagicMock:
         mock = MagicMock()
         mock.cache_format.get.return_value = "PNG"
-        mock.max_psd_workers.get.return_value = 3
+        mock.max_psd_workers.get.return_value = PSD_WORKER_DEFAULT
         mock.large_canvas_threshold_mp.get.return_value = 20.0
         mock.tile_grid_size.get.return_value = "2x2"
         mock.color_tag_enabled.get.return_value = True
@@ -64,7 +66,7 @@ def mock_settings() -> MagicMock:
     mock.max_multi_preview.get.return_value = 9
     # Settings accessed by ThumbnailService (created in setup_widgets)
     mock.cache_format.get.return_value = "PNG"
-    mock.max_psd_workers.get.return_value = 3
+    mock.max_psd_workers.get.return_value = PSD_WORKER_DEFAULT
     mock.clear_full_res_on_exit.get.return_value = False
     return mock
 

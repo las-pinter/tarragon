@@ -12,6 +12,7 @@ import pytest
 
 from tarragon.db.database import Database
 from tarragon.services.settings_service import _SPECS, Setting, SettingsService, _SettingSpec
+from tarragon.theme.constants import PSD_WORKER_DEFAULT, PSD_WORKER_MAX, PSD_WORKER_MIN
 
 
 @pytest.fixture
@@ -595,9 +596,9 @@ class TestSettingMaxPsdWorkers:
     """Tests for the max_psd_workers Setting entry."""
 
     def test_default_value(self, db: Database) -> None:
-        """max_psd_workers defaults to 3."""
+        """max_psd_workers defaults to PSD_WORKER_DEFAULT."""
         setting = _service_setting(db, "max_psd_workers")
-        assert setting.get() == 3
+        assert setting.get() == PSD_WORKER_DEFAULT
 
     def test_get_key(self, db: Database) -> None:
         """get_key() returns 'max_psd_workers'."""
@@ -611,37 +612,37 @@ class TestSettingMaxPsdWorkers:
         assert setting.get() == 5
 
     def test_clamps_above_max(self, db: Database) -> None:
-        """Values above the maximum are clamped to 8."""
+        """Values above the maximum are clamped to PSD_WORKER_MAX."""
         setting = _service_setting(db, "max_psd_workers")
         setting.set(99)
-        assert setting.get() == 8
+        assert setting.get() == PSD_WORKER_MAX
 
     def test_clamps_below_min(self, db: Database) -> None:
-        """Values below the minimum are clamped to 1."""
+        """Values below the minimum are clamped to PSD_WORKER_MIN."""
         setting = _service_setting(db, "max_psd_workers")
         setting.set(0)
-        assert setting.get() == 1
+        assert setting.get() == PSD_WORKER_MIN
 
     def test_boundary_low(self, db: Database) -> None:
-        """The minimum boundary value 1 is accepted unchanged."""
+        """The minimum boundary value PSD_WORKER_MIN is accepted unchanged."""
         setting = _service_setting(db, "max_psd_workers")
-        setting.set(1)
-        assert setting.get() == 1
+        setting.set(PSD_WORKER_MIN)
+        assert setting.get() == PSD_WORKER_MIN
 
     def test_boundary_high(self, db: Database) -> None:
-        """The maximum boundary value 8 is accepted unchanged."""
+        """The maximum boundary value PSD_WORKER_MAX is accepted unchanged."""
         setting = _service_setting(db, "max_psd_workers")
-        setting.set(8)
-        assert setting.get() == 8
+        setting.set(PSD_WORKER_MAX)
+        assert setting.get() == PSD_WORKER_MAX
 
     def test_stored_bool_falls_back_to_default_with_warning(
         self, db: Database, caplog: pytest.LogCaptureFixture
     ) -> None:
-        """A stored bool in max_psd_workers falls back to 3 on first load and warns."""
+        """A stored bool in max_psd_workers falls back to PSD_WORKER_DEFAULT on first load and warns."""
         db.set_setting("max_psd_workers", json.dumps(True))
         setting = _service_setting(db, "max_psd_workers")
         with caplog.at_level(logging.WARNING, logger="tarragon.services.settings_service"):
-            assert setting.get() == 3
+            assert setting.get() == PSD_WORKER_DEFAULT
         warning_messages = [
             record.message
             for record in caplog.records
@@ -654,12 +655,12 @@ class TestSettingMaxPsdWorkers:
     def test_stored_float_falls_back_to_int_default_with_warning(
         self, db: Database, caplog: pytest.LogCaptureFixture
     ) -> None:
-        """A stored float in max_psd_workers falls back to the int default 3 and warns."""
+        """A stored float in max_psd_workers falls back to the int default PSD_WORKER_DEFAULT and warns."""
         db.set_setting("max_psd_workers", json.dumps(3.5))
         setting = _service_setting(db, "max_psd_workers")
         with caplog.at_level(logging.WARNING, logger="tarragon.services.settings_service"):
             value = setting.get()
-        assert value == 3
+        assert value == PSD_WORKER_DEFAULT
         assert isinstance(value, int)
         warning_messages = [
             record.message
@@ -678,7 +679,7 @@ class TestSettingMaxPsdWorkers:
         with pytest.raises(ValueError):
             setting.set("abc")
         assert db.get_setting("max_psd_workers") is None
-        assert setting.get() == 3
+        assert setting.get() == PSD_WORKER_DEFAULT
 
 
 class TestSettingTileGridSize:
@@ -822,7 +823,7 @@ class TestSettingsServiceIntegration:
         assert service.debug_mode.get() is False
         assert service.large_canvas_threshold_mp.get() == pytest.approx(20.0)
         assert service.max_multi_preview.get() == 9
-        assert service.max_psd_workers.get() == 3
+        assert service.max_psd_workers.get() == PSD_WORKER_DEFAULT
         assert service.tile_grid_size.get() == "3x3"
         assert service.window_layout_state.get() is None
         assert service.window_geometry_state.get() is None
@@ -848,10 +849,10 @@ class TestSettingsServiceIntegration:
     def test_clamping_via_service(self, service: SettingsService) -> None:
         """Clamping works when setting values through the service."""
         service.max_psd_workers.set(99)
-        assert service.max_psd_workers.get() == 8
+        assert service.max_psd_workers.get() == PSD_WORKER_MAX
 
         service.max_psd_workers.set(0)
-        assert service.max_psd_workers.get() == 1
+        assert service.max_psd_workers.get() == PSD_WORKER_MIN
 
     def test_validation_via_service(self, service: SettingsService) -> None:
         """Validation works when setting values through the service."""
@@ -863,8 +864,8 @@ class TestSettingsServiceIntegration:
 
     def test_get_min_max(self, service: SettingsService) -> None:
         """get_min() and get_max() return the configured bounds."""
-        assert service.max_psd_workers.get_min() == 1
-        assert service.max_psd_workers.get_max() == 8
+        assert service.max_psd_workers.get_min() == PSD_WORKER_MIN
+        assert service.max_psd_workers.get_max() == PSD_WORKER_MAX
         assert service.color_tag_palette_size.get_min() == 2
         assert service.color_tag_palette_size.get_max() == 32
         assert service.large_canvas_threshold_mp.get_min() == 0.1
@@ -872,7 +873,7 @@ class TestSettingsServiceIntegration:
 
     def test_reload_refreshes_changed_numeric_and_string_settings(self, db: Database, service: SettingsService) -> None:
         """reload() re-reads numeric and string settings changed directly in the DB."""
-        assert service.max_psd_workers.get() == 3
+        assert service.max_psd_workers.get() == PSD_WORKER_DEFAULT
         assert service.cache_format.get() == "PNG"
         db.set_setting("max_psd_workers", json.dumps(6))
         db.set_setting("cache_format", json.dumps("JPEG"))

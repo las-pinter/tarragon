@@ -16,7 +16,12 @@ from dataclasses import dataclass
 from typing import Any, cast
 
 from tarragon.db.database import Database
-from tarragon.theme.constants import MULTI_PREVIEW_MAX_DEFAULT
+from tarragon.theme.constants import (
+    MULTI_PREVIEW_MAX_DEFAULT,
+    PSD_WORKER_DEFAULT,
+    PSD_WORKER_MAX,
+    PSD_WORKER_MIN,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -187,7 +192,9 @@ _SPECS: dict[str, _SettingSpec] = {
     "debug_mode": _SettingSpec(key="debug_mode", default=False),
     "large_canvas_threshold_mp": _SettingSpec(key="large_canvas_threshold_mp", default=20.0, min=0.1, max=1000.0),
     "max_multi_preview": _SettingSpec(key="max_multi_preview", default=MULTI_PREVIEW_MAX_DEFAULT, min=1, max=100),
-    "max_psd_workers": _SettingSpec(key="max_psd_workers", default=3, min=1, max=8),
+    "max_psd_workers": _SettingSpec(
+        key="max_psd_workers", default=PSD_WORKER_DEFAULT, min=PSD_WORKER_MIN, max=PSD_WORKER_MAX
+    ),
     "tile_grid_size": _SettingSpec(
         key="tile_grid_size", default="3x3", valid=("1x1", "2x2", "3x3", "4x4"), validator=_tile_grid_validator
     ),

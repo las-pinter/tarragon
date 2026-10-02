@@ -6,11 +6,11 @@ from collections.abc import Generator
 from pathlib import Path
 
 import pytest
-from PySide6.QtCore import QModelIndex, Qt
-from PySide6.QtWidgets import QLabel, QListView, QPushButton, QTreeView
+from PySide6.QtCore import QMimeData, QModelIndex, Qt
+from PySide6.QtWidgets import QAbstractItemView, QLabel, QListView, QPushButton, QTreeView
 
 from tarragon.db.database import Database
-from tarragon.models.favorites_model import FavoritesModel
+from tarragon.models.favorites_model import FAVORITE_MIME_TYPE, FavoritesModel
 from tarragon.widgets.sidebar import SidebarWidget
 
 
@@ -120,13 +120,13 @@ class TestFavoritesModelMutate:
         """Adding then removing a favourite decreases rowCount to 0."""
         model.add_favorite("/remove/me.png", label="Remove Me")
         assert model.rowCount() == 1
-        model.remove_favorite("/remove/me.png")
+        model.remove_favorite(0)
         assert model.rowCount() == 0
 
     def test_remove_only_one(self, populated_model: FavoritesModel) -> None:
         """Removing one favourite leaves the other intact."""
         assert populated_model.rowCount() == 2
-        populated_model.remove_favorite("/photos/landscape.png")
+        populated_model.remove_favorite(0)  # "/photos/landscape.png"
         assert populated_model.rowCount() == 1
         assert populated_model.index(0).data(Qt.ItemDataRole.DisplayRole) == "portrait.jpg"
 
@@ -318,3 +318,45 @@ class TestSidebarWidgetFunctionality:
 
         assert len(captured) == 1
         assert captured[0] == str(subfolder).replace("\\", "/")
+
+
+class TestSidebarDragReorder:
+    """Drag-and-drop reorder of the favorites list in the sidebar."""
+
+    def test_list_view_uses_internal_move(self, sidebar: SidebarWidget) -> None:
+        """The favorites list is configured for internal-drag reordering."""
+        list_view = sidebar.findChild(QListView)
+        assert list_view is not None
+        assert list_view.dragDropMode() == QAbstractItemView.DragDropMode.InternalMove
+        assert list_view.defaultDropAction() == Qt.DropAction.MoveAction
+
+    def test_drop_handler_reorders_and_persists(self, sidebar: SidebarWidget, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A dropped favorite is moved in the model and reindexed in the database."""
+        for folder in ("/drag/a", "/drag/b", "/drag/c"):
+            sidebar.set_current_folder(folder)
+            sidebar._on_add_clicked()
+
+        list_view = sidebar.findChild(QListView)
+        assert list_view is not None
+        model = list_view.model()
+        assert isinstance(model, FavoritesModel)
+        assert model.favorite_paths() == ["/drag/a", "/drag/b", "/drag/c"]
+
+        reordered: list[list[str]] = []
+        real_reorder = sidebar._db.reorder_favorites
+
+        def spy_reorder(paths: list[str]) -> None:
+            reordered.append(list(paths))
+            real_reorder(paths)
+
+        monkeypatch.setattr(sidebar._db, "reorder_favorites", spy_reorder)
+
+        mime = QMimeData()
+        mime.setData(FAVORITE_MIME_TYPE, b"/drag/c")
+        assert model.dropMimeData(mime, Qt.DropAction.MoveAction, 0, 0, QModelIndex())
+
+        assert model.favorite_paths() == ["/drag/c", "/drag/a", "/drag/b"]
+        assert reordered == [["/drag/c", "/drag/a", "/drag/b"]]
+        favorites = sidebar._db.list_favorites()
+        assert [f["path"] for f in favorites] == ["/drag/c", "/drag/a", "/drag/b"]
+        assert [f["sort_order"] for f in favorites] == [0, 1, 2]

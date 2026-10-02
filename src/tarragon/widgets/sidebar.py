@@ -20,6 +20,7 @@ from typing import override
 from PySide6.QtCore import QDir, QModelIndex, QPersistentModelIndex, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QApplication,
     QFileSystemModel,
     QHBoxLayout,
@@ -187,6 +188,11 @@ class SidebarWidget(QWidget):
             SidebarItemDelegate(coral_color, muted_color, parent=self._list_view),
         )
         self._list_view.clicked.connect(self._on_favorite_clicked)
+        # Internal drag-and-drop reorder: the model's dropMimeData translates
+        # the drop into move_favorite, which persists the new order.
+        self._list_view.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
+        self._list_view.setDefaultDropAction(Qt.DropAction.MoveAction)
+        self._list_view.setDragDropOverwriteMode(False)
         layout.addWidget(self._list_view, stretch=1)
 
         # Buttons
@@ -219,9 +225,7 @@ class SidebarWidget(QWidget):
         """Remove the currently selected favorite from the list."""
         indexes = self._list_view.selectedIndexes()
         if indexes:
-            path = indexes[0].data(Qt.ItemDataRole.UserRole)
-            if path:
-                self._model.remove_favorite(path)
+            self._model.remove_favorite(indexes[0].row())
 
     def _on_favorite_clicked(self, index: QModelIndex) -> None:
         """Emit ``favorite_clicked`` with the path of the clicked item."""

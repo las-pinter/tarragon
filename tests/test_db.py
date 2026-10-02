@@ -415,6 +415,55 @@ class TestListFavorites:
         assert paths == ["/a.png", "/b.png", "/c.png"]
 
 
+class TestFavoriteSortOrder:
+    """update_favorite_sort_order and reorder_favorites manage display order."""
+
+    def test_update_favorite_sort_order_roundtrip(self, db: Database) -> None:
+        """update_favorite_sort_order changes a single favorite's sort order."""
+        db.add_favorite("/a.png")
+        db.add_favorite("/b.png")
+
+        db.update_favorite_sort_order("/b.png", -1)
+
+        paths = [f["path"] for f in db.list_favorites()]
+        assert paths == ["/b.png", "/a.png"]
+
+    def test_update_favorite_sort_order_normalizes_paths(self, db: Database) -> None:
+        """update_favorite_sort_order accepts backslash paths."""
+        db.add_favorite("D:/Art/a.png")
+        db.add_favorite("D:/Art/b.png")
+
+        db.update_favorite_sort_order("D:\\Art\\b.png", -1)
+
+        paths = [f["path"] for f in db.list_favorites()]
+        assert paths == ["D:/Art/b.png", "D:/Art/a.png"]
+
+    def test_reorder_favorites_reindexes_in_given_order(self, db: Database) -> None:
+        """reorder_favorites assigns sort_order 0..n-1 matching the path list."""
+        db.add_favorite("/a.png")
+        db.add_favorite("/b.png")
+        db.add_favorite("/c.png")
+
+        db.reorder_favorites(["/c.png", "/a.png", "/b.png"])
+
+        favorites = db.list_favorites()
+        assert [f["path"] for f in favorites] == ["/c.png", "/a.png", "/b.png"]
+        assert [f["sort_order"] for f in favorites] == [0, 1, 2]
+
+    def test_reorder_favorites_commits_once(self, db: Database, monkeypatch: pytest.MonkeyPatch) -> None:
+        """reorder_favorites persists the whole reindex with a single commit."""
+        db.add_favorite("/a.png")
+        db.add_favorite("/b.png")
+
+        commits: list[object] = []
+        monkeypatch.setattr(db, "_commit", lambda: commits.append(None))
+
+        db.reorder_favorites(["/b.png", "/a.png"])
+
+        assert len(commits) == 1
+        assert [f["path"] for f in db.list_favorites()] == ["/b.png", "/a.png"]
+
+
 class TestSettingsCrud:
     """Settings can be stored, read, and overwritten."""
 

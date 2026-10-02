@@ -21,14 +21,19 @@ class TagsMixin(MixinBase):
         use to set the per-association ``file_tags.source``.
         """
         logger.debug("Called - name: %s, source: %s", name, source)
-        cursor = self._execute(
+        # _fetch_one_locked executes generically (conn.execute), so the
+        # INSERT ... RETURNING row is consumed under the lock; the returned
+        # dict carries the ``id`` alias the caller indexes.
+        row = self._fetch_one_locked(
             "INSERT INTO tags (name, source) VALUES (?, ?) ON CONFLICT(name) DO UPDATE SET name=name RETURNING id",
             (
                 name,
                 source,
             ),
         )
-        tag_id = int(cursor.fetchone()["id"])
+        if row is None:
+            raise RuntimeError(f"ensure_tag: INSERT ... RETURNING produced no row for {name!r}")
+        tag_id = int(row["id"])
         return Tag(id=tag_id, name=name, usage_paths=None, source=source)
 
     def add_tag_to_files(self, paths: list[str], tag: Tag) -> None:

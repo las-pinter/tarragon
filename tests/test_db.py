@@ -640,6 +640,93 @@ class TestGetOrCreateFolderUuid:
         assert uuid_a != uuid_b
 
 
+class TestFetchAllLocked:
+    """_fetch_all_locked returns plain dicts with column-name keys."""
+
+    def test_returns_row_dicts_with_column_keys(self, db: Database) -> None:
+        """Multi-row queries come back as dicts keyed by column name."""
+        db.upsert_thumbnail("/a.png", mtime=1, size=100, width=10, height=10, cache_uuid="ua")
+        db.upsert_thumbnail("/b.png", mtime=2, size=200, width=10, height=10, cache_uuid="ub")
+
+        rows = db._fetch_all_locked("SELECT path, cache_uuid FROM thumbnails ORDER BY path")
+
+        assert rows == [
+            {"path": "/a.png", "cache_uuid": "ua"},
+            {"path": "/b.png", "cache_uuid": "ub"},
+        ]
+        assert all(isinstance(row, dict) for row in rows)
+
+    def test_empty_result_is_empty_list(self, db: Database) -> None:
+        """No matching rows yields [] (never None)."""
+        assert db._fetch_all_locked("SELECT path FROM thumbnails WHERE path = ''") == []
+
+
+class TestConcurrentLockedReadSweep:
+    """Worker-reachable reads/writes stay correct under concurrency.
+
+    Regression test for the unlocked cursor-consumption sweep: get_thumbnail
+    (SELECT + fetchone) and ensure_tag (INSERT ... RETURNING + fetchone) must
+    consume their cursors fully under the connection lock. On a real on-disk
+    WAL database, consuming a cursor after _execute released the lock
+    corrupts Row/statement state under many threads, mirroring the #24
+    get_or_create_folder_uuid pattern.
+    """
+
+    def test_concurrent_get_thumbnail_and_ensure_tag(self, tmp_path: Path) -> None:
+        """16 threads hammering locked single-row helpers produce no corruption."""
+        db_path = tmp_path / "concurrent_reads.db"
+        db = Database(db_path)
+        db.init_schema()
+        try:
+            for i in range(12):
+                db.upsert_thumbnail(f"/img/{i}.png", mtime=i, size=100 + i, width=10, height=10, cache_uuid=f"u{i}")
+
+            n_threads = 16
+            rounds = 6
+            barrier = threading.Barrier(n_threads)
+            results: list[int] = []
+            results_lock = threading.Lock()
+            errors: list[Exception] = []
+
+            def worker(worker_id: int) -> None:
+                barrier.wait()
+                try:
+                    for _ in range(rounds):
+                        for i in range(12):
+                            row = db.get_thumbnail(f"/img/{i}.png")
+                            if row is None or row["cache_uuid"] != f"u{i}":
+                                raise AssertionError(f"corrupt thumbnail read: {row}")
+                        tag = db.ensure_tag(f"t{worker_id}")
+                        # Callers commit right after ensure_tag (render/auto-color
+                        # pipeline); release the write transaction like they do.
+                        db._commit()
+                        with results_lock:
+                            results.append(tag.get_id())
+                except Exception as exc:  # noqa: BLE001 — surfaced by assert below
+                    with results_lock:
+                        errors.append(exc)
+
+            threads = [threading.Thread(target=worker, args=(i,)) for i in range(n_threads)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
+
+            assert errors == [], f"locked helpers raised: {errors[:3]}"
+            # Every ensure_tag call resolved to one of the 16 worker tags.
+            assert len(results) == n_threads * rounds
+            assert len(set(results)) == n_threads
+            # RETURNING rows carry the id alias and are persisted under the lock.
+            names = {f"t{i}" for i in range(n_threads)}
+            for tag_id in set(results):
+                row = db._fetch_one_locked("SELECT id, name FROM tags WHERE id = ?", (tag_id,))
+                assert row is not None
+                assert row["id"] == tag_id
+                assert row["name"] in names
+        finally:
+            db.close()
+
+
 class TestCleanupStaleFolderUuids:
     """cleanup_stale_folder_uuids removes mappings for missing folders."""
 

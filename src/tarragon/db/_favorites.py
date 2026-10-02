@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from tarragon.db._base import MixinBase, _row_to_dict, normalize_path
+from tarragon.db._base import MixinBase, normalize_path
 
 logger = logging.getLogger(__name__)
 
@@ -67,5 +67,4 @@ class FavoritesMixin(MixinBase):
     def list_favorites(self) -> list[dict[str, Any]]:
         """Return all favorite records ordered by sort_order then path."""
         logger.debug("Called")
-        cursor = self._execute("SELECT * FROM favorites ORDER BY sort_order, path")
-        return [_row_to_dict(row) for row in cursor.fetchall()]
+        return self._fetch_all_locked("SELECT * FROM favorites ORDER BY sort_order, path")

@@ -15,10 +15,10 @@ class EditorsMixin(MixinBase):
     def get_editor_command(self, extension: str) -> str | None:
         """Return the editor command template for an extension; None if absent."""
         logger.debug("Called - extension: %s", extension)
-        row = self._execute(
+        row = self._fetch_one_locked(
             "SELECT command_template FROM editor_associations WHERE extension = ?",
             (extension,),
-        ).fetchone()
+        )
         return row["command_template"] if row else None
 
     def upsert_editor_association(self, extension: str, command_template: str) -> None:

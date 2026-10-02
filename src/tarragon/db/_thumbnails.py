@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from tarragon.db._base import MixinBase, _row_to_dict, folder_like, normalize_path
+from tarragon.db._base import MixinBase, folder_like, normalize_path
 
 logger = logging.getLogger(__name__)
 
@@ -109,18 +109,16 @@ class ThumbnailsMixin(MixinBase):
         """Fetch a single thumbnail record as a dict, or None if absent."""
         logger.debug("Called - path: %s", path)
         path = normalize_path(path)
-        row = self._execute("SELECT * FROM thumbnails WHERE path = ?", (path,)).fetchone()
-        return _row_to_dict(row) if row else None
+        return self._fetch_one_locked("SELECT * FROM thumbnails WHERE path = ?", (path,))
 
     def list_thumbnails_for_folder(self, folder_path: str) -> list[dict[str, Any]]:
         """List all thumbnail records whose path starts with folder_path."""
         logger.debug("Called - folder_path: %s", folder_path)
         folder_path = normalize_path(folder_path)
-        cursor = self._execute(
+        return self._fetch_all_locked(
             "SELECT * FROM thumbnails WHERE path LIKE ? ESCAPE '\\'",
             (folder_like(folder_path),),
         )
-        return [_row_to_dict(row) for row in cursor.fetchall()]
 
     def delete_thumbnails_by_folder(self, folder_path: str) -> None:
         """Remove all thumbnail records whose path starts with *folder_path*.
@@ -158,9 +156,9 @@ class ThumbnailsMixin(MixinBase):
             Sorted list of distinct folder path strings.
         """
         logger.debug("Called")
-        cursor = self._execute("SELECT path FROM thumbnails WHERE path != ''")
+        rows = self._fetch_all_locked("SELECT path FROM thumbnails WHERE path != ''")
         folders: set[str] = set()
-        for row in cursor.fetchall():
+        for row in rows:
             # Paths are stored with forward slashes; use PurePosixPath to
             # extract the parent without converting separators on Windows.
             raw_path: str = row["path"]

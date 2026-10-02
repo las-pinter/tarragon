@@ -54,7 +54,7 @@ def _resolve_platform(explicit: str | None) -> str:
         return "windows"
     if sys.platform.startswith("darwin"):
         return "macos"
-    return sys.platform  # best-effort fallback
+    raise SystemExit(f"Unsupported platform: {sys.platform!r} (expected linux, windows, or macos)")
 
 
 def check_dependencies(target_platform: str) -> None:

@@ -14,6 +14,7 @@ from PySide6.QtWidgets import QApplication
 from tarragon.db.database import Database
 from tarragon.scanner import FileInfo, scan_folder
 from tarragon.services.thumbnail_service import ThumbnailService, _ScanFolderTask
+from tarragon.theme.constants import PSD_WORKER_DEFAULT
 
 
 @pytest.fixture
@@ -29,7 +30,7 @@ def _make_settings() -> MagicMock:
     """MagicMock settings with the fields ThumbnailService touches at runtime."""
     settings = MagicMock()
     settings.cache_format.get.return_value = "PNG"
-    settings.max_psd_workers.get.return_value = 3
+    settings.max_psd_workers.get.return_value = PSD_WORKER_DEFAULT
     settings.color_tag_enabled.get.return_value = False
     settings.clear_full_res_on_exit.get.return_value = False
     return settings

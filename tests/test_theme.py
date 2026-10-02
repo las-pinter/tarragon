@@ -13,6 +13,10 @@ from tarragon.theme.constants import (
     DURATION_NORMAL,
     GRID_GAP,
     MULTI_PREVIEW_MAX_DEFAULT,
+    PSD_WORKER_DEFAULT,
+    PSD_WORKER_MAX,
+    PSD_WORKER_MIN,
+    PSD_WORKER_RAM_BYTES,
     SIDEBAR_WIDTH_PX,
     THUMBNAIL_SIZE,
 )
@@ -98,6 +102,40 @@ class TestLayoutConstants:
             ("THUMBNAIL_SIZE", THUMBNAIL_SIZE),
             ("SIDEBAR_WIDTH_PX", SIDEBAR_WIDTH_PX),
             ("MULTI_PREVIEW_MAX_DEFAULT", MULTI_PREVIEW_MAX_DEFAULT),
+        ]:
+            assert isinstance(value, int), f"{name} must be an int, got {type(value).__name__}"
+
+
+class TestPsdWorkerConstants:
+    """PSD worker-count constants are the single source for renderer and settings.
+
+    Value pins here intentionally keep the literals: they characterize the
+    constant values that every other site must reference.
+    """
+
+    def test_psd_worker_default_value(self) -> None:
+        """PSD_WORKER_DEFAULT matches the max_psd_workers setting default (3)."""
+        assert PSD_WORKER_DEFAULT == 3
+
+    def test_psd_worker_min_value(self) -> None:
+        """PSD_WORKER_MIN is the minimum worker count (1)."""
+        assert PSD_WORKER_MIN == 1
+
+    def test_psd_worker_max_value(self) -> None:
+        """PSD_WORKER_MAX is the maximum worker count (8)."""
+        assert PSD_WORKER_MAX == 8
+
+    def test_psd_worker_ram_bytes_value(self) -> None:
+        """PSD_WORKER_RAM_BYTES is 200 MB per worker (200_000_000 bytes)."""
+        assert PSD_WORKER_RAM_BYTES == 200_000_000
+
+    def test_psd_worker_constants_are_int(self) -> None:
+        """All PSD worker constants are integers."""
+        for name, value in [
+            ("PSD_WORKER_DEFAULT", PSD_WORKER_DEFAULT),
+            ("PSD_WORKER_MIN", PSD_WORKER_MIN),
+            ("PSD_WORKER_MAX", PSD_WORKER_MAX),
+            ("PSD_WORKER_RAM_BYTES", PSD_WORKER_RAM_BYTES),
         ]:
             assert isinstance(value, int), f"{name} must be an int, got {type(value).__name__}"
 

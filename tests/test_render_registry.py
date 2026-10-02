@@ -16,6 +16,7 @@ from tarragon.renderers.registry import DEFAULT_RENDERER, FORMAT_DISPATCH, SUPPO
 from tarragon.scanner import SUPPORTED_EXTENSIONS as SCANNER_SUPPORTED_EXTENSIONS
 from tarragon.scanner import FileInfo
 from tarragon.services.thumbnail_service import ThumbnailService
+from tarragon.theme.constants import PSD_WORKER_DEFAULT
 
 
 class _CannedValue:
@@ -43,7 +44,7 @@ def service() -> Generator[ThumbnailService, None, None]:
     db_mock.get_or_create_folder_uuid.return_value = "test-uuid"
     settings = MagicMock()
     settings.cache_format.get.return_value = "PNG"
-    settings.max_psd_workers.get.return_value = 3
+    settings.max_psd_workers.get.return_value = PSD_WORKER_DEFAULT
     settings.large_canvas_threshold_mp.get.return_value = 20.0
     settings.tile_grid_size.get.return_value = "2x2"
     settings.color_tag_enabled.get.return_value = False

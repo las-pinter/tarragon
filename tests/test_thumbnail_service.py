@@ -20,6 +20,7 @@ from tarragon.renderers.psd import render_psd_image
 from tarragon.scanner import FileInfo, scan_folder
 from tarragon.services.settings_service import SettingsService
 from tarragon.services.thumbnail_service import POOL_DRAIN_TIMEOUT_MS, ThumbnailService, _RenderAllTask
+from tarragon.theme.constants import PSD_WORKER_DEFAULT
 
 SUPER_LONG_PATH = "/" + "a" * 4096  # Exceeds typical FS path limits
 UNICODE_PATH = "照片/图像/画像/הוראה/ਤਸਵੀਰ/file.png"
@@ -106,7 +107,7 @@ class TestInstantiation:
         assert svc._cache_format == "PNG"
         settings_mock.cache_format.get.assert_called()
         settings_mock.max_psd_workers.get.assert_called()
-        mockget_executor.assert_called_once_with(max_workers=3)
+        mockget_executor.assert_called_once_with(max_workers=PSD_WORKER_DEFAULT)
 
     def test_signals_exist(self, service: ThumbnailService) -> None:
         """ThumbnailService exposes the required signals."""
@@ -1083,7 +1084,7 @@ class TestAutoColorTagSignal:
         """When color_tag_enabled is False, tags_updated is NOT emitted."""
         disabled_settings = MagicMock()
         disabled_settings.cache_format.get.return_value = "PNG"
-        disabled_settings.max_psd_workers.get.return_value = 3
+        disabled_settings.max_psd_workers.get.return_value = PSD_WORKER_DEFAULT
         disabled_settings.large_canvas_threshold_mp.get.return_value = 20.0
         disabled_settings.tile_grid_size.get.return_value = "2x2"
         disabled_settings.color_tag_enabled.get.return_value = False  # Disabled!
@@ -1749,7 +1750,7 @@ class TestPurgeCache:
         """purge_cache waits for an in-flight render so its late file write is deleted."""
         settings = MagicMock()
         settings.cache_format.get.return_value = "PNG"
-        settings.max_psd_workers.get.return_value = 3
+        settings.max_psd_workers.get.return_value = PSD_WORKER_DEFAULT
         settings.large_canvas_threshold_mp.get.return_value = 20.0
         settings.tile_grid_size.get.return_value = "2x2"
         settings.color_tag_enabled.get.return_value = False

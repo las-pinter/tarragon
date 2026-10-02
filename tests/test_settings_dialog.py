@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
 from tarragon.db.database import Database
 from tarragon.renderers.cache import clear_cache
 from tarragon.services.settings_service import SettingsService
+from tarragon.theme.constants import PSD_WORKER_DEFAULT, PSD_WORKER_MAX, PSD_WORKER_MIN
 from tarragon.widgets.settings_dialog import SettingsDialog
 
 
@@ -84,7 +85,7 @@ class TestDialogCreation:
         debug_check = _get_widget(dialog, "_debug_mode_setting")
         clear_full_res = _get_widget(dialog, "_clear_full_res_on_exit_setting")
 
-        assert psd_workers.value() == 3
+        assert psd_workers.value() == PSD_WORKER_DEFAULT
         assert multi_preview.value() == 9
         assert canvas_threshold.value() == pytest.approx(20.0)
         assert grid_combo.currentText() == "3x3"
@@ -294,9 +295,9 @@ class TestValidationClamping:
         min_share = _get_widget(dialog, "_color_tag_min_share_setting")
         neutral_s = _get_widget(dialog, "_color_tag_neutral_s_threshold_setting")
 
-        # max_psd_workers: [1, 8]
-        assert psd_workers.minimum() == 1
-        assert psd_workers.maximum() == 8
+        # max_psd_workers: [PSD_WORKER_MIN, PSD_WORKER_MAX]
+        assert psd_workers.minimum() == PSD_WORKER_MIN
+        assert psd_workers.maximum() == PSD_WORKER_MAX
 
         # max_multi_preview: [1, 100]
         assert multi_preview.minimum() == 1
@@ -321,10 +322,10 @@ class TestValidationClamping:
     def test_service_clamps_out_of_range_values(self, service: SettingsService) -> None:
         """SettingsService clamps values even when bypassing the UI."""
         service.max_psd_workers.set(99)
-        assert service.max_psd_workers.get() == 8
+        assert service.max_psd_workers.get() == PSD_WORKER_MAX
 
         service.max_psd_workers.set(0)
-        assert service.max_psd_workers.get() == 1
+        assert service.max_psd_workers.get() == PSD_WORKER_MIN
 
         service.color_tag_palette_size.set(100)
         assert service.color_tag_palette_size.get() == 32

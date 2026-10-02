@@ -2,8 +2,9 @@
 
 Covers the API parity between ``FilterBarTag`` and ``FilterBarFolder``,
 the incremental chip-sync fix (both bars keep the chips layout matched to
-the active set instead of tag's old clear-and-rebuild), and the container
-visibility contract shared by both bars.
+the active set instead of tag's old clear-and-rebuild), the container
+visibility contract shared by both bars, activation-order chip rendering,
+and stale-remove emit semantics.
 """
 
 from __future__ import annotations
@@ -12,7 +13,9 @@ from collections.abc import Generator
 from pathlib import Path
 
 import pytest
+from PySide6.QtWidgets import QLabel
 
+from tarragon.db.common.tag import Tag
 from tarragon.db.database import Database
 from tarragon.services.tag_service import TagService
 from tarragon.widgets.filter_bar_folder import FilterBarFolder
@@ -182,6 +185,50 @@ class TestChipCountParity:
         assert tag_bar._chips_layout.count() == 1
         assert tag_bar._chips_layout.count() == len(tag_bar.get_active_tags())
         assert tag_bar._chips_layout.count() == len(tag_bar._chips)
+
+
+class TestChipOrderingAndRemoveSemantics:
+    """Chip layout follows activation order; stale removes still emit (pre-#18 parity)."""
+
+    def test_chips_render_in_activation_order(self, tag_bar: FilterBarTag, tag_service: TagService) -> None:
+        """Chips appear in toggle order (c, a, b), not the sorted menu order (a, b, c)."""
+        tag_c = tag_service.create_tag("c")
+        tag_a = tag_service.create_tag("a")
+        tag_b = tag_service.create_tag("b")
+        tag_bar._refresh_tags()
+
+        tag_bar._toggle_tag(tag_c)
+        tag_bar._toggle_tag(tag_a)
+        tag_bar._toggle_tag(tag_b)
+
+        # The _chips dict preserves insertion (activation) order.
+        assert [tag_bar._item_label(tag) for tag in tag_bar._chips] == ["c", "a", "b"]
+
+        # The chips layout shows the same activation order.
+        chip_widgets = [tag_bar._chips_layout.itemAt(i).widget() for i in range(tag_bar._chips_layout.count())]
+        labels = [w.findChild(QLabel, "filterChipLabel").text() for w in chip_widgets]
+        assert labels == ["c", "a", "b"]
+
+    def test_remove_non_active_item_emits_current_active_set(
+        self, tag_bar: FilterBarTag, tag_service: TagService
+    ) -> None:
+        """Removing a non-active tag emits the current active set with no state change."""
+        active = tag_service.create_tag("active")
+        inactive = tag_service.create_tag("inactive")
+        tag_bar._refresh_tags()
+        tag_bar._toggle_tag(active)
+
+        captured: list[set[Tag]] = []
+        tag_bar.filter_changed.connect(captured.append)
+
+        tag_bar._remove_tag(inactive)
+
+        assert len(captured) == 1
+        assert captured[0] == {active}
+        assert tag_bar.get_active_tags() == {active}
+        assert tag_bar._chips_layout.count() == 1
+        assert len(tag_bar._chips) == 1
+        assert tag_bar.has_active_filters() is True
 
 
 class TestContainerVisibilityParity:

@@ -8,6 +8,8 @@ from pathlib import Path
 
 # Rotation tunables: each log file grows up to MAX_LOG_BYTES before rolling,
 # keeping at most LOG_BACKUP_COUNT rotated backups on disk.
+# Module constants by design, NOT a SettingsService entry: rotation is an
+# operational detail, not user-facing — change these values here.
 LOG_BACKUP_COUNT = 2
 MAX_LOG_BYTES = 10 * 1024 * 1024
 

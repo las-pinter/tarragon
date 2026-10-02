@@ -35,6 +35,10 @@ class _ChipFilterBarBase(FilterBarFilter, Generic[T]):  # noqa: UP046
     the toggle/remove selection core, incremental chip syncing, and the
     standard ``has_active_filters``/``clear_filters``/``active_items`` API.
 
+    Chips render in activation order: ``_chips`` is an insertion-ordered
+    dict, so toggling c, a, b shows chips c, a, b even though the menu
+    stays sorted.
+
     Subclasses supply:
       - ``_load_items()``: the menu's available items (or ``None`` when the
         data source is unavailable, in which case no menu is shown).
@@ -160,6 +164,8 @@ class _ChipFilterBarBase(FilterBarFilter, Generic[T]):  # noqa: UP046
             self._chips_layout.removeWidget(chip)
             chip.deleteLater()
         self._update_chips()
+        # Always emit the current active set: removing a non-active item
+        # still reports state (menu toggle fires for the action regardless).
         self._emit_signal(set(self._active))
 
     def _discard_item_silently(self, item: T) -> None:

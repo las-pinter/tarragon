@@ -288,6 +288,10 @@ class ThumbnailService(QObject):
         self._db.clear_thumbnails()
         self.reset_cancel()
 
+    # Render tasks (check_and_render / _derive_missing_resolutions)
+    # intentionally bypass this seam and always start on the real pool:
+    # they drive the emit path and their timing matters. Base MainWindow
+    # closeEvent drains the pool, covering late emissions at teardown.
     def _start_background_task(self, task: QRunnable) -> None:
         """Dispatch *task* to the render pool, or run it inline under the test seam."""
         if self._synchronous_workers:

@@ -726,3 +726,55 @@ class TestCachePurgeWiring:
             mock_dialog.cache_purge_requested.connect.assert_called_once_with(window._on_cache_purge_requested)
         finally:
             window.close()
+
+
+class TestCloseEventDrainsWorkers:
+    """closeEvent drains background workers before the window is torn down.
+
+    Renders bypass the synchronous_workers seam and run on the real render
+    pool, so a window that closes with work in flight can otherwise emit a
+    signal after its source is deleted ("Signal source has been deleted").
+    """
+
+    def test_close_event_shuts_down_thumbnail_service(
+        self,
+        qapp: Any,
+        mock_settings: MagicMock,
+    ) -> None:
+        """close() calls ThumbnailService.shutdown() so late renders cannot emit into a deleted source."""
+        window = MainWindow(settings_service=mock_settings)
+        try:
+            db = Database(Path(":memory:"))
+            db.init_schema()
+            tag_service = TagService(db=db)
+            window.setup_widgets(db, tag_service)
+
+            with patch.object(window._thumbnail_service, "shutdown") as mock_shutdown:
+                window.close()
+
+            mock_shutdown.assert_called_once_with()
+        finally:
+            window.close()
+
+    def test_close_event_shuts_down_gallery_controller(
+        self,
+        qapp: Any,
+        mock_settings: MagicMock,
+    ) -> None:
+        """close() calls GalleryController.shutdown() so decode workers drain too."""
+        window = MainWindow(settings_service=mock_settings)
+        try:
+            db = Database(Path(":memory:"))
+            db.init_schema()
+            tag_service = TagService(db=db)
+            window.setup_widgets(db, tag_service)
+
+            with (
+                patch.object(window._thumbnail_service, "shutdown"),
+                patch.object(window._gallery_controller, "shutdown") as mock_shutdown,
+            ):
+                window.close()
+
+            mock_shutdown.assert_called_once_with()
+        finally:
+            window.close()

@@ -266,13 +266,22 @@ class MainWindow(QMainWindow):
         self._settings_service.window_layout_state.set(encoded_layout)
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802
-        """Save the dock layout before the window closes.
+        """Save the dock layout and drain background workers before closing.
 
         Subclasses (e.g. the application MainWindow in main.py) that
         override closeEvent for their own teardown should call
         super().closeEvent(event) so this still runs.
         """
+        # Persist layout state first so it survives even if a drain below
+        # blocks. Then drain background workers so a late worker emit can
+        # never hit a deleted signal source at teardown ("Signal source has
+        # been deleted" noise). Both shutdowns are idempotent, so the app
+        # subclass in main.py calling them again is harmless.
         self._save_layout_state()
+        if self._thumbnail_service is not None:
+            self._thumbnail_service.shutdown()
+        if self._gallery_controller is not None:
+            self._gallery_controller.shutdown()
         super().closeEvent(event)
 
     # ── Widget Setup ─────────────────────────────────────────────────

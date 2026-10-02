@@ -126,6 +126,9 @@ class MixinBase:
     def _fetch_one_locked(self, sql: str, params: SqlParams = ()) -> dict[str, Any] | None:
         raise NotImplementedError
 
+    def _fetch_all_locked(self, sql: str, params: SqlParams = ()) -> list[dict[str, Any]]:
+        raise NotImplementedError
+
     def fetch_all(self, sql: str, params: SqlParams = ()) -> list[dict[str, Any]]:
         raise NotImplementedError
 
@@ -210,7 +213,10 @@ class Base(MixinBase):
             self._conn.commit()
 
     def _fetch_one_locked(self, sql: str, params: SqlParams = ()) -> dict[str, Any] | None:
-        """Run a single-row SELECT and return it as a plain dict, atomically.
+        """Run a single-row statement and return the row as a plain dict, atomically.
+
+        Works for any statement ``conn.execute`` accepts that yields at most
+        one row -- plain SELECTs and ``INSERT ... RETURNING`` alike.
 
         The execute, fetchone, and dict copy all happen while holding the
         connection lock, so no other thread can interleave a ``conn.execute``
@@ -226,6 +232,25 @@ class Base(MixinBase):
                 cursor = self._conn.execute(sql, params)
                 row = cursor.fetchone()
                 return _row_to_dict(row) if row is not None else None
+        except sqlite3.Error as e:
+            logger.error("failed: %s | params: %s | error: %s", sql, params, e)
+            raise
+
+    def _fetch_all_locked(self, sql: str, params: SqlParams = ()) -> list[dict[str, Any]]:
+        """Run a multi-row query and return every row as a plain dict, atomically.
+
+        Mirror of ``_fetch_one_locked`` for full result sets: execute,
+        fetchall, and the row->dict conversion all happen while holding the
+        connection lock, so no other thread can interleave a ``conn.execute``
+        between them. Consuming a cursor after ``_execute`` releases the lock
+        is unsafe on a shared connection for the same reason documented on
+        ``_fetch_one_locked``.
+        """
+        logger.debug("Called - sql: %s, params: %s", sql, params)
+        try:
+            with self._lock:
+                cursor = self._conn.execute(sql, params)
+                return [_row_to_dict(row) for row in cursor.fetchall()]
         except sqlite3.Error as e:
             logger.error("failed: %s | params: %s | error: %s", sql, params, e)
             raise
@@ -250,8 +275,7 @@ class Base(MixinBase):
             List of row dicts (column_name -> value).
         """
         logger.debug("Called - sql: %s, params: %s", sql, params)
-        cursor = self._execute(sql, params)
-        result = [_row_to_dict(row) for row in cursor.fetchall()]
+        result = self._fetch_all_locked(sql, params)
         logger.debug("result: %s", result)
         return result
 
@@ -307,7 +331,7 @@ class Base(MixinBase):
     def get_schema_version(self) -> int:
         """Return the stored schema version, or 0 if absent."""
         logger.debug("Called")
-        row = self._execute("SELECT version FROM schema_version LIMIT 1").fetchone()
+        row = self._fetch_one_locked("SELECT version FROM schema_version LIMIT 1")
         return row["version"] if row else 0
 
     # -------------------------------------------------------------------------

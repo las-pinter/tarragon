@@ -15,7 +15,7 @@ class SettingsMixin(MixinBase):
     def get_setting(self, key: str) -> str | None:
         """Read a raw string setting value; None if absent."""
         logger.debug("Called - key: %s", key)
-        row = self._execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+        row = self._fetch_one_locked("SELECT value FROM settings WHERE key = ?", (key,))
         return row["value"] if row else None
 
     def set_setting(self, key: str, value: str) -> None:

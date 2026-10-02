@@ -15,8 +15,8 @@ from pathlib import Path
 from typing import ClassVar
 
 from PIL import Image, ImageOps
-from PySide6.QtCore import QObject, QRunnable, QThreadPool, QTimer, Signal
-from PySide6.QtWidgets import QLineEdit
+from PySide6.QtCore import QCoreApplication, QEvent, QObject, QRunnable, QThreadPool, QTimer, Signal
+from PySide6.QtWidgets import QLineEdit, QWidget
 
 from tarragon.common import ImageInfo
 from tarragon.db.common.tag import Tag, TagSource
@@ -223,6 +223,7 @@ class GalleryController:
         self._synchronous_workers = (
             GalleryController.synchronous_workers if synchronous_workers is None else synchronous_workers
         )
+        self._disposed = False
 
         # Async multi-select preview decode pipeline.
         self.decode_relay = _PreviewDecodeRelay()
@@ -487,6 +488,70 @@ class GalleryController:
         """
         self._cancel_decode_batch()
         self._decode_pool.waitForDone(timeout_ms)
+
+    def dispose(self) -> None:
+        """Tear down this controller's runtime resources (idempotent).
+
+        Lifecycle teardown for tests and embedders: drains the preview
+        decode pool, detaches this controller's decode relay slots
+        (``decode_ready``/``decode_failed`` handlers connected in
+        ``__init__``), and releases the widget tree this controller
+        constructed. The relay object itself and any connections made by
+        other owners (e.g. the MainWindow busy indicator) are left intact.
+        Safe to call more than once; the first call does the work and
+        later calls are no-ops.
+
+        The MainWindow base closeEvent already calls :meth:`shutdown`
+        for the production path; tests and embedders that construct a
+        controller directly should call this instead of reaching into
+        the individual widgets.
+        """
+        if self._disposed:
+            return
+        self._disposed = True
+        self.shutdown()
+        # Detach the decode relay slots this controller connected in
+        # __init__. The former loop relied on QObject.receivers() with bare
+        # signal names, which returns 0 for connected signals unless the
+        # index-encoded form is used, so the disconnect never fired; an
+        # explicit per-slot disconnect is unambiguous and verifiable.
+        self.decode_relay.decode_ready.disconnect(self._on_preview_decoded)
+        self.decode_relay.decode_failed.disconnect(self._on_preview_decode_failed)
+        self._search_timer.stop()
+        self._tags_query_timer.stop()
+        self._dispose_widget(self._preview_panel)
+        self._dispose_widget(self._gallery_tabs)
+        self._dispose_widget(self._gallery_info_bar)
+        self._dispose_widget(self._filter_bar)
+        self._dispose_widget(self._search_edit)
+
+    @staticmethod
+    def _dispose_widget(widget: QWidget | None) -> None:
+        """Close and schedule deletion for one owned widget (idempotent).
+
+        ``close()`` alone leaves a parentless widget installed as a
+        top-level window, and the widget's internal signal closures keep
+        the C++ tree alive even after every Python reference is dropped
+        (PySide wrappers are not cyclic-gc tracked).  Scheduling deletion
+        actually destroys the C++ side, which releases those closures, so
+        the whole tree becomes collectible once the deferred deletes are
+        processed.
+
+        The deferred delete is delivered for *this widget only*.  Flushing
+        every pending DeferredDelete in the process would also deliver
+        stale events left by objects whose Python wrappers were already
+        garbage-collected; the C++ object behind such an event may already
+        be gone, so Qt would delete a dangling pointer (SIGSEGV).
+
+        Only :class:`~PySide6.QtWidgets.QWidget` instances are touched:
+        a controller wired with plain QObjects or lightweight test
+        doubles must no-op safely.
+        """
+        if widget is None or not isinstance(widget, QWidget):
+            return
+        widget.close()
+        widget.deleteLater()
+        QCoreApplication.sendPostedEvents(widget, QEvent.Type.DeferredDelete)
 
     def _on_preview_decoded(
         self,

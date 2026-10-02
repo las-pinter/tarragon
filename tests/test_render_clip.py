@@ -5,10 +5,11 @@ from __future__ import annotations
 import io
 import sqlite3
 from pathlib import Path
+from typing import Any
 
 from PIL import Image
 
-from tarragon.renderers.clip import render_clip_image
+from tarragon.renderers.clip import _SQLITE_SCAN_CHUNK_SIZE, render_clip_image
 
 
 def _make_clip_file(
@@ -111,6 +112,66 @@ class TestThumbnailExtraction:
         assert max(result.size) == 50
         ratio = result.size[0] / result.size[1]
         assert abs(ratio - 200 / 160) < 0.05, f"Aspect ratio changed: {ratio}"
+
+
+class TestStreamingRead:
+    """Streaming header scan: bounded-memory reads and chunk-boundary handling."""
+
+    def test_render_clip_image_header_at_late_offset(self, tmp_path: Path) -> None:
+        """A header located after ~2 scan chunks of junk still extracts correctly."""
+        # 600 KiB of non-header bytes puts the SQLite header into the third chunk.
+        junk = b"\x00" * 600_000
+        clip_path = _make_clip_file(
+            tmp_path / "late_offset.clip",
+            image_size=(100, 80),
+            image_color="green",
+            header=junk + b"CSFCHUNK" + b"\x00" * 16,
+        )
+
+        result = render_clip_image(clip_path)
+
+        assert result is not None
+        assert isinstance(result, Image.Image)
+        assert result.size == (100, 80)
+        assert result.mode in ("RGB", "RGBA")
+
+    def test_render_clip_image_header_straddles_chunk_boundary(self, tmp_path: Path) -> None:
+        """A SQLite header spanning a scan-chunk boundary is still detected.
+
+        The embedded database begins 10 bytes before the end of the first
+        scan chunk, so the 16-byte header magic straddles the boundary and
+        can only be found with the overlap window.
+        """
+        junk = b"\x00" * (_SQLITE_SCAN_CHUNK_SIZE - 10)
+        clip_path = _make_clip_file(
+            tmp_path / "straddle.clip",
+            image_size=(64, 64),
+            image_color="blue",
+            header=junk,
+        )
+
+        result = render_clip_image(clip_path)
+
+        assert result is not None
+        assert result.size == (64, 64)
+
+    def test_render_clip_image_never_reads_whole_file(self, tmp_path: Path, monkeypatch: Any) -> None:
+        """The renderer streams the file; a failing whole-file read must not matter."""
+        clip_path = _make_clip_file(
+            tmp_path / "stream.clip",
+            image_size=(100, 80),
+            image_color="red",
+        )
+
+        def fail_read_bytes(_self: Path) -> bytes:
+            raise AssertionError("Path.read_bytes must not be called")
+
+        monkeypatch.setattr(Path, "read_bytes", fail_read_bytes)
+
+        result = render_clip_image(clip_path)
+
+        assert result is not None
+        assert result.size == (100, 80)
 
 
 class TestUnusableFiles:

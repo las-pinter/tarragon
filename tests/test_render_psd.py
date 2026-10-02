@@ -17,6 +17,7 @@ from psd_tools import PSDImage
 
 import tarragon.renderers.psd as _tmod
 from tarragon.renderers.psd import (
+    PSD_FULL_TIER_MAX_EDGE,
     PSD_RENDER_TIMEOUT_S,
     _composite_psd_in_process,
     _compute_worker_count,
@@ -404,6 +405,71 @@ class TestRenderPSDEdgeCases:
             assert _tmod._shared_executor is None
         finally:
             _tmod._shared_executor = saved
+
+
+class TestPSDFullTierCap:
+    """Full-tier (target_size=None) composites are capped at PSD_FULL_TIER_MAX_EDGE."""
+
+    def test_full_tier_max_edge_constant_is_8192(self) -> None:
+        """PSD_FULL_TIER_MAX_EDGE caps the long edge of full-tier PNG output."""
+        assert PSD_FULL_TIER_MAX_EDGE == 8192
+
+    def test_full_tier_composite_over_cap_is_capped(self) -> None:
+        """A full-tier canvas over the cap renders at the cap with aspect preserved."""
+        mock_psd_cls = MagicMock()
+        mock_psd_instance = MagicMock()
+        mock_psd_instance.width = 9000
+        mock_psd_instance.height = 1000
+        big_img = Image.new("RGBA", (9000, 1000), (128, 128, 128, 255))
+        mock_psd_instance.composite.return_value = big_img
+        mock_psd_cls.open.return_value = mock_psd_instance
+
+        with patch("psd_tools.PSDImage", mock_psd_cls):
+            result = _composite_psd_in_process("/fake/over_cap.psd", 20.0, 2, 2)
+
+        assert result is not None
+        decoded = Image.open(io.BytesIO(result))
+        assert max(decoded.size) == PSD_FULL_TIER_MAX_EDGE
+        orig_ratio = 9000 / 1000
+        result_ratio = decoded.size[0] / decoded.size[1]
+        assert abs(result_ratio - orig_ratio) < 0.01
+
+    def test_full_tier_composite_under_cap_is_unchanged(self) -> None:
+        """A full-tier canvas under the cap is neither upscaled nor resized."""
+        mock_psd_cls = MagicMock()
+        mock_psd_instance = MagicMock()
+        mock_psd_instance.width = 3000
+        mock_psd_instance.height = 2000
+        img = Image.new("RGBA", (3000, 2000), (64, 64, 64, 255))
+        mock_psd_instance.composite.return_value = img
+        mock_psd_cls.open.return_value = mock_psd_instance
+
+        with patch("psd_tools.PSDImage", mock_psd_cls):
+            result = _composite_psd_in_process("/fake/under_cap.psd", 20.0, 2, 2)
+
+        assert result is not None
+        decoded = Image.open(io.BytesIO(result))
+        assert decoded.size == (3000, 2000)
+
+    def test_explicit_target_size_path_unchanged_by_cap(self) -> None:
+        """An explicit target_size wins over the cap and still resizes down."""
+        mock_psd_cls = MagicMock()
+        mock_psd_instance = MagicMock()
+        mock_psd_instance.width = 4000
+        mock_psd_instance.height = 3000
+        img = Image.new("RGBA", (4000, 3000), (32, 32, 32, 255))
+        mock_psd_instance.composite.return_value = img
+        mock_psd_cls.open.return_value = mock_psd_instance
+
+        with patch("psd_tools.PSDImage", mock_psd_cls):
+            result = _composite_psd_in_process("/fake/explicit.psd", 20.0, 2, 2, target_size=_LONG_EDGE)
+
+        assert result is not None
+        decoded = Image.open(io.BytesIO(result))
+        assert max(decoded.size) == _LONG_EDGE
+        orig_ratio = 4000 / 3000
+        result_ratio = decoded.size[0] / decoded.size[1]
+        assert abs(result_ratio - orig_ratio) < 0.01
 
 
 class TestRenderPSDDeadlineAndLogging:

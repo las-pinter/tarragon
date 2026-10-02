@@ -16,8 +16,8 @@ _SWATCH_SIZE = 36
 class FilterBarColor(FilterBarFilter):
     """A horizontal scrollable row of clickable color-bucket swatches.
 
-    Emits whenever a swatch is toggled.  The payload is a ``set[str]``
-    of active bucket names.
+    Emits whenever a swatch is toggled.  The payload is a ``set[ColorBucket]``
+    of active color buckets.
     """
 
     BUCKET_HUES: dict[ColorBucket, str] = dict(BUCKET_HEX_COLORS)

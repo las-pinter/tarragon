@@ -22,8 +22,8 @@ logger = logging.getLogger(__name__)
 class FilterBarTag(_ChipFilterBarBase[Tag]):
     """A compact tag filter widget with an Add Tag button and active-tag chips.
 
-    Emits whenever the set of active tag IDs changes.
-    The payload is a ``set[int]`` of active filter tag IDs.
+    Emits whenever the set of active tags changes.
+    The payload is a ``set[Tag]`` of active filter tag objects.
     """
 
     def __init__(self, tag_service: TagService, parent: QWidget | None = None) -> None:

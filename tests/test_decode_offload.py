@@ -271,3 +271,20 @@ class TestDecodeOffloadAsync:
         assert _wait_until(lambda: ctl._decode_pending == 0)
         assert len(ctl._preview_panel._mosaic_image_infos) == 1
         ctl._decode_pool.waitForDone(5000)
+
+
+class TestDecodeShutdown:
+    """GalleryController.shutdown() cancels pending decodes and drains the pool."""
+
+    def test_shutdown_drains_decode_pool_and_is_idempotent(self, tmp_path: Path) -> None:
+        """shutdown() drains the pool (waitForDone true) and a second call is safe."""
+        ctl = _make_controller(synchronous_workers=False)
+        paths = [str(_write_png(tmp_path / f"img{i}.png")) for i in range(3)]
+        ctl.on_selection_changed(paths)
+
+        ctl.shutdown()
+        assert ctl._decode_pool.waitForDone(5000)
+        assert ctl._decode_pending == 0
+
+        ctl.shutdown()
+        assert ctl._decode_pool.waitForDone(5000)

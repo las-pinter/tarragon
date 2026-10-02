@@ -36,6 +36,9 @@ from tarragon.widgets.preview_panel import PreviewPanel
 
 logger = logging.getLogger(__name__)
 
+# Maximum time to wait for in-flight preview decodes to drain before giving up.
+DECODE_POOL_DRAIN_TIMEOUT_MS = 5000
+
 
 @dataclass(frozen=True)
 class LoadedImage:
@@ -467,6 +470,18 @@ class GalleryController:
         if self._decode_pending > 0:
             self._decode_pending = 0
             self.decode_relay.decode_busy_finished.emit()
+
+    def shutdown(self, timeout_ms: int = DECODE_POOL_DRAIN_TIMEOUT_MS) -> None:
+        """Shut down the preview decode pool (idempotent).
+
+        Cancels any pending decode batch and waits for in-flight decodes
+        to finish, so a late worker can never emit ``decode_ready`` after
+        the window's receivers are gone. Safe to call more than once; the
+        base MainWindow closeEvent and the application subclass in main.py
+        may both invoke it on the way out.
+        """
+        self._cancel_decode_batch()
+        self._decode_pool.waitForDone(timeout_ms)
 
     def _on_preview_decoded(
         self,

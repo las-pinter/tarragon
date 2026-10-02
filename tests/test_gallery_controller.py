@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import gc
 from collections.abc import Generator
 from pathlib import Path
 from typing import Any
@@ -10,7 +11,7 @@ from unittest.mock import MagicMock
 import pytest
 from PIL import Image, ImageOps
 from PySide6.QtCore import QTimer
-from PySide6.QtWidgets import QLineEdit
+from PySide6.QtWidgets import QApplication, QLineEdit
 
 from tarragon.db.common.tag import Tag, TagSource
 from tarragon.db.database import Database
@@ -29,6 +30,40 @@ from tarragon.widgets.preview_panel import PreviewPanel
 _TEST_TAG = Tag(id=1, name="beach")
 _DEBOUNCE_MS = 300
 
+# How much the session QApplication's top-level widget count may grow across a
+# single controller test before the leak guard fails it. dispose() releases the
+# whole tree, so the expected growth is zero; the small allowance covers
+# legitimate transient windows (menus, popups) without masking a real leak
+# (a leaked controller adds 4-7 top-level widgets per test).
+_WIDGET_LEAK_ALLOWANCE = 2
+
+
+@pytest.fixture(autouse=True)
+def _assert_no_widget_growth() -> Generator[None, None, None]:
+    """Fail loudly if a controller test leaks top-level widgets.
+
+    Characterization guard for the intermittent setStyleSheet segfault:
+    test-created GalleryControllers used to leak their whole widget tree
+    into the session QApplication, and the next theme application polished
+    the orphaned mid-teardown trees on the GUI thread. Every controller
+    produced here is released via ``dispose()``; this guard asserts the
+    top-level widget count returns to its per-test baseline (with a small
+    allowance for legitimate transient windows), so a recurrence fails
+    here instead of segfaulting later.
+    """
+    gc.collect()
+    QApplication.processEvents()
+    baseline = len(QApplication.topLevelWidgets())
+    yield
+    gc.collect()
+    QApplication.processEvents()
+    grown = len(QApplication.topLevelWidgets()) - baseline
+    assert grown <= _WIDGET_LEAK_ALLOWANCE, (
+        "top-level widget count grew by "
+        f"{grown} across controller test (allowance {_WIDGET_LEAK_ALLOWANCE}); "
+        "a GalleryController likely leaked its widget tree - is dispose() wired?"
+    )
+
 
 class _SpyController(GalleryController):
     """GalleryController subclass that counts run_filtered_query invocations."""
@@ -40,6 +75,35 @@ class _SpyController(GalleryController):
     def run_filtered_query(self) -> None:
         """Count invocations instead of executing the real query pipeline."""
         self.query_calls += 1
+
+
+class _RelaySpyController(GalleryController):
+    """GalleryController subclass that counts decode relay slot invocations.
+
+    The real ``_on_preview_decoded`` / ``_on_preview_decode_failed`` touch
+    the preview panel, which is invalid after ``dispose()``; the spy counts
+    instead, so a stray post-dispose emission is observable without firing
+    into deleted widgets.
+    """
+
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self.decode_ready_invocations = 0
+        self.decode_failed_invocations = 0
+
+    def _on_preview_decoded(
+        self,
+        epoch: int,
+        path_str: str,
+        img: Image.Image,
+        orig_w: int | None,
+        orig_h: int | None,
+        from_cache: bool,
+    ) -> None:
+        self.decode_ready_invocations += 1
+
+    def _on_preview_decode_failed(self, epoch: int, path_str: str, error_message: str) -> None:
+        self.decode_failed_invocations += 1
 
 
 def _fire_debounce(controller: _SpyController) -> None:
@@ -73,11 +137,7 @@ def controller(qapp: Any) -> Generator[_SpyController, None, None]:
         db=db,
     )
     yield ctl
-    search_edit.close()
-    preview_panel.close()
-    filter_bar.close()
-    gallery_info_bar.close()
-    gallery_tabs.close()
+    ctl.dispose()
 
 
 @pytest.fixture
@@ -109,11 +169,7 @@ def real_controller(qapp: Any) -> Generator[GalleryController, None, None]:
         db=db,
     )
     yield ctl
-    search_edit.close()
-    preview_panel.close()
-    filter_bar.close()
-    gallery_info_bar.close()
-    gallery_tabs.close()
+    ctl.dispose()
 
 
 class TestPreviewTagsDebounce:
@@ -358,3 +414,114 @@ class TestColorFilterChain:
 
         assert real_controller._filter_state.color_tags == {Tag(id=0, name="red", source=TagSource.AUTO_COLOR)}
         assert real_controller._thumbnail_model._paths == [Path("/test/photos/red_rose.png")]
+
+
+class TestDispose:
+    """GalleryController.dispose() releases the owned widget tree and is idempotent."""
+
+    @staticmethod
+    def _build_controller() -> GalleryController:
+        """Build a controller with the real widget tree (mirrors the fixture wiring)."""
+        db = Database(Path(":memory:"))
+        db.init_schema()
+        tag_service = TagService(db=db)
+        return GalleryController(
+            query_service=QueryService(db=db),
+            filter_state=FilterState(),
+            thumbnail_model=ThumbnailModel(),
+            gallery_tabs=GalleryTabs(),
+            gallery_info_bar=GalleryInfoBar(),
+            filter_bar=FilterBar(tag_service=tag_service, db=db),
+            search_edit=QLineEdit(),
+            search_timer=QTimer(),
+            preview_panel=PreviewPanel(settings_service=MagicMock()),
+            tag_service=tag_service,
+            db=db,
+            synchronous_workers=True,
+        )
+
+    @staticmethod
+    def _build_relay_spy_controller() -> _RelaySpyController:
+        """Build a controller with the real widget tree wired to relay-slot spies."""
+        db = Database(Path(":memory:"))
+        db.init_schema()
+        tag_service = TagService(db=db)
+        return _RelaySpyController(
+            query_service=QueryService(db=db),
+            filter_state=FilterState(),
+            thumbnail_model=ThumbnailModel(),
+            gallery_tabs=GalleryTabs(),
+            gallery_info_bar=GalleryInfoBar(),
+            filter_bar=FilterBar(tag_service=tag_service, db=db),
+            search_edit=QLineEdit(),
+            search_timer=QTimer(),
+            preview_panel=PreviewPanel(settings_service=MagicMock()),
+            tag_service=tag_service,
+            db=db,
+            synchronous_workers=True,
+        )
+
+    def test_dispose_returns_top_level_widget_count_to_baseline(self) -> None:
+        """dispose() releases the whole widget tree so the GUI thread holds no orphaned windows.
+
+        Regression guard for the intermittent setStyleSheet segfault: an
+        undelivered tree stays in QApplication.topLevelWidgets() and the
+        next theme polish walks it mid-teardown.
+        """
+        before = len(QApplication.topLevelWidgets())
+        ctl = self._build_controller()
+        assert len(QApplication.topLevelWidgets()) > before
+
+        ctl.dispose()
+        gc.collect()
+        QApplication.processEvents()
+
+        assert len(QApplication.topLevelWidgets()) == before
+
+    def test_dispose_twice_is_a_safe_noop(self) -> None:
+        """A second dispose() call must not raise and must not change widget counts."""
+        before = len(QApplication.topLevelWidgets())
+        ctl = self._build_controller()
+        ctl.dispose()
+        ctl.dispose()
+        assert len(QApplication.topLevelWidgets()) == before
+
+    def test_dispose_detaches_decode_relay_slots(self) -> None:
+        """dispose() really detaches the decode relay slots the controller connected.
+
+        Regression for follow-up #18: the relay-disconnect loop guarded each
+        signal with QObject.receivers(bare_name), but PySide6 receivers()
+        needs the index-encoded form, so bare names return 0 even when the
+        signal is connected — dispose() silently kept the decode slots alive.
+        Per-slot disconnects make the detach real: emissions after dispose()
+        must invoke zero controller slots.
+        """
+        ctl = self._build_relay_spy_controller()
+        ctl.dispose()
+
+        ctl.decode_relay.decode_ready.emit(0, "/x.png", None, 1, 1, False)
+        ctl.decode_relay.decode_failed.emit(0, "/x.png", "boom")
+
+        assert ctl.decode_ready_invocations == 0
+        assert ctl.decode_failed_invocations == 0
+
+    def test_dispose_noops_when_widgets_are_not_qwidgets(self) -> None:
+        """Controllers wired with lightweight non-widget stand-ins dispose without touching them."""
+        before = len(QApplication.topLevelWidgets())
+        ctl = GalleryController(
+            query_service=MagicMock(),
+            filter_state=FilterState(),
+            thumbnail_model=MagicMock(),
+            gallery_tabs=MagicMock(),
+            gallery_info_bar=MagicMock(),
+            filter_bar=MagicMock(),
+            search_edit=MagicMock(),
+            search_timer=QTimer(),
+            preview_panel=MagicMock(),
+            tag_service=MagicMock(),
+            db=Database(Path(":memory:")),
+            synchronous_workers=True,
+        )
+        ctl.dispose()
+        ctl.dispose()
+        assert len(QApplication.topLevelWidgets()) == before

@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import gc
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Generator
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -28,6 +29,60 @@ from tarragon.widgets.preview_panel import PreviewPanel
 
 _MULTI_CAP = 9
 
+# How much the session QApplication's top-level widget count may grow across a
+# single controller test before the leak guard fails it. dispose() releases the
+# whole tree, so the expected growth is zero; the small allowance covers
+# legitimate transient windows (menus, popups) without masking a real leak
+# (a leaked controller adds 4-7 top-level widgets per test).
+_WIDGET_LEAK_ALLOWANCE = 2
+
+# Controllers built directly in test bodies (outside any yield fixture) are
+# registered here so the autouse fixture below owns their dispose() teardown.
+_ACTIVE_CONTROLLERS: list[GalleryController] = []
+
+
+@pytest.fixture(autouse=True)
+def _assert_no_widget_growth() -> Generator[None, None, None]:
+    """Fail loudly if a controller test leaks top-level widgets.
+
+    Characterization guard for the intermittent setStyleSheet segfault:
+    test-created GalleryControllers used to leak their whole widget tree
+    into the session QApplication, and the next theme application polished
+    the orphaned mid-teardown trees on the GUI thread. Every controller
+    produced here is released via ``dispose()``; this guard asserts the
+    top-level widget count returns to its per-test baseline (with a small
+    allowance for legitimate transient windows), so a recurrence fails
+    here instead of segfaulting later.
+    """
+    gc.collect()
+    QApplication.processEvents()
+    baseline = len(QApplication.topLevelWidgets())
+    yield
+    gc.collect()
+    QApplication.processEvents()
+    grown = len(QApplication.topLevelWidgets()) - baseline
+    assert grown <= _WIDGET_LEAK_ALLOWANCE, (
+        "top-level widget count grew by "
+        f"{grown} across controller test (allowance {_WIDGET_LEAK_ALLOWANCE}); "
+        "a GalleryController likely leaked its widget tree - is dispose() wired?"
+    )
+
+
+@pytest.fixture(autouse=True)
+def _dispose_controllers() -> Generator[None, None, None]:
+    """Release every GalleryController a test built through ``_make_controller``.
+
+    The decode-offload tests construct controllers directly in test bodies
+    rather than through a yield fixture, so an autouse registry owns their
+    teardown: ``dispose()`` drains decode workers and releases the widget
+    tree before the leak guard compares top-level widget counts.
+    """
+    _ACTIVE_CONTROLLERS.clear()
+    yield
+    for controller in reversed(_ACTIVE_CONTROLLERS):
+        controller.dispose()
+    _ACTIVE_CONTROLLERS.clear()
+
 
 def _write_png(path: Path, color: str = "red") -> Path:
     """Create a small real PNG for decode workers to load."""
@@ -43,7 +98,7 @@ def _make_controller(synchronous_workers: bool | None = None) -> GalleryControll
     settings = MagicMock()
     settings.max_multi_preview.get.return_value = _MULTI_CAP
     preview_panel = PreviewPanel(settings_service=settings)
-    return GalleryController(
+    ctl = GalleryController(
         query_service=QueryService(db=db),
         filter_state=FilterState(),
         thumbnail_model=ThumbnailModel(),
@@ -58,6 +113,8 @@ def _make_controller(synchronous_workers: bool | None = None) -> GalleryControll
         max_multi_preview=_MULTI_CAP,
         synchronous_workers=synchronous_workers,
     )
+    _ACTIVE_CONTROLLERS.append(ctl)
+    return ctl
 
 
 def _wait_until(condition: Callable[[], bool], timeout_ms: int = 5000) -> bool:

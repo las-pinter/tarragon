@@ -116,6 +116,43 @@ class TestAddTagsToFiles:
             for t in created_tags:
                 assert t in tags
 
+    def test_add_multiple_tags_to_multiple_files_by_name_fully_associated(self, service: TagService) -> None:
+        """Every (path, tag) pair is associated after one multi-element call."""
+        paths = [TEST_FILE_1, TEST_FILE_2, TEST_FILE_3]
+        tag_names = [TEST_TAG_NAME_1, TEST_TAG_NAME_2, TEST_TAG_NAME_3]
+        created_tags = service.add_tags_to_files_by_name(paths, tag_names)
+
+        for path in paths:
+            tags = service.get_tags_for_file(path)
+            assert len(tags) == len(tag_names)
+            for t in created_tags:
+                assert t in tags
+
+    def test_add_tags_to_files_by_name_commits_once(self, service: TagService, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A multi-tag by-name call persists via a single commit.
+
+        Regression (audit #32): the per-tag loop committed once per tag,
+        letting readers observe partial tag sets mid-batch.
+        """
+        commits: list[object] = []
+        monkeypatch.setattr(service._db, "_commit", lambda: commits.append(None))
+
+        service.add_tags_to_files_by_name([TEST_FILE_1, TEST_FILE_2], [TEST_TAG_NAME_1, TEST_TAG_NAME_2])
+
+        assert len(commits) == 1
+
+    def test_add_tags_to_files_commits_once(self, service: TagService, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A multi-tag set call persists via a single commit."""
+        created_tag_1 = service.create_tag(TEST_TAG_NAME_1)
+        created_tag_2 = service.create_tag(TEST_TAG_NAME_2)
+
+        commits: list[object] = []
+        monkeypatch.setattr(service._db, "_commit", lambda: commits.append(None))
+
+        service.add_tags_to_files([TEST_FILE_1, TEST_FILE_2], {created_tag_1, created_tag_2})
+
+        assert len(commits) == 1
+
     def test_emit_tags_changed(self, service: TagService) -> None:
         """Emits tags_changed."""
         emitted: list[bool] = []

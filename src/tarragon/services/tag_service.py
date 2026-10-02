@@ -46,7 +46,7 @@ class TagService(QObject):
         for tag_name in tag_names:
             tag = self._db.ensure_tag(tag_name, source)
             ensured_tags.add(tag)
-            self._db.add_tag_to_files(paths, tag)
+        self._db.add_tags_to_files_batch(paths, list(ensured_tags))
         logger.debug("Added tags %s to %s", tag_names, paths)
         self.tags_changed.emit()
         return ensured_tags
@@ -61,8 +61,7 @@ class TagService(QObject):
 
     def add_tags_to_files(self, paths: list[str], tags: set[Tag]) -> None:
         """Add *tags* to every path in *paths*."""
-        for tag in tags:
-            self._db.add_tag_to_files(paths, tag)
+        self._db.add_tags_to_files_batch(paths, list(tags))
         logger.debug("Added tags %s to %s", tags, paths)
         self.tags_changed.emit()
 

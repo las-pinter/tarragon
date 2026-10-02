@@ -121,6 +121,93 @@ class TestAddTagsToFile:
             assert tag.get_source() == TagSource.USER
 
 
+class TestAddTagsToFilesBatch:
+    """Batch association of multiple tags with multiple paths."""
+
+    def test_associates_all_pairs(self, db: Database) -> None:
+        """The cross product of paths and tags is associated in one call."""
+        tag_1 = db.ensure_tag(TEST_TAG_NAME_1)
+        tag_2 = db.ensure_tag(TEST_TAG_NAME_2)
+        paths = [TEST_FILE_1, TEST_FILE_2, TEST_FILE_3]
+
+        db.add_tags_to_files_batch(paths, [tag_1, tag_2])
+
+        for p in paths:
+            tags = db.get_tags_for_file(p)
+            assert len(tags) == 2
+            assert tag_1 in tags
+            assert tag_2 in tags
+
+    def test_idempotent_for_existing_associations(self, db: Database) -> None:
+        """Re-adding an existing pair does not duplicate the row."""
+        tag = db.ensure_tag(TEST_TAG_NAME_1)
+        db.add_tag_to_file(TEST_FILE_1, tag)
+
+        db.add_tags_to_files_batch([TEST_FILE_1], [tag])
+
+        assert _is_tag_associated_with_file(db, TEST_FILE_1, tag)
+        rows = db.fetch_all("SELECT COUNT(*) AS cnt FROM file_tags")
+        assert rows[0]["cnt"] == 1
+
+    def test_user_pair_promotes_auto_association(self, db: Database) -> None:
+        """A user pair in the batch promotes an auto row, like the single-path CASE.
+
+        Regression: the per-pair promote-only ON CONFLICT must apply within
+        the executemany so a user batch add upgrades an existing auto_color
+        association and survives a later cleanup pass.
+        """
+        color = db.ensure_tag(TEST_TAG_NAME_1, TagSource.AUTO_COLOR)
+        db.add_tag_to_file(TEST_FILE_1, color)
+        assert _is_tag_associated_with_file(db, TEST_FILE_1, color)
+
+        user_tag = db.ensure_tag(TEST_TAG_NAME_1, TagSource.USER)
+        db.add_tags_to_files_batch([TEST_FILE_1], [user_tag])
+
+        rows = db.fetch_all("SELECT source FROM file_tags WHERE path = ?", (TEST_FILE_1,))
+        assert [r["source"] for r in rows] == ["user"]
+
+    def test_auto_pair_never_downgrades_user_association(self, db: Database) -> None:
+        """An auto pair in the batch never downgrades a user-owned row."""
+        user_tag = db.ensure_tag(TEST_TAG_NAME_1, TagSource.USER)
+        db.add_tag_to_file(TEST_FILE_1, user_tag)
+
+        color_tag = db.ensure_tag(TEST_TAG_NAME_1, TagSource.AUTO_COLOR)
+        db.add_tags_to_files_batch([TEST_FILE_1], [color_tag])
+
+        rows = db.fetch_all("SELECT source FROM file_tags WHERE path = ?", (TEST_FILE_1,))
+        assert [r["source"] for r in rows] == ["user"]
+
+    def test_batch_commits_once(self, db: Database, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The whole batch persists with a single commit.
+
+        Regression (audit #32): the per-tag loop committed once per tag,
+        letting readers observe partial tag sets mid-batch.
+        """
+        tag_1 = db.ensure_tag(TEST_TAG_NAME_1)
+        tag_2 = db.ensure_tag(TEST_TAG_NAME_2)
+
+        commits: list[object] = []
+        monkeypatch.setattr(db, "_commit", lambda: commits.append(None))
+
+        db.add_tags_to_files_batch([TEST_FILE_1, TEST_FILE_2], [tag_1, tag_2])
+
+        assert len(commits) == 1
+
+    def test_empty_paths_or_tags_are_noop(self, db: Database, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Empty inputs return without executing SQL or committing."""
+        tag = db.ensure_tag(TEST_TAG_NAME_1)
+
+        commits: list[object] = []
+        monkeypatch.setattr(db, "_commit", lambda: commits.append(None))
+
+        db.add_tags_to_files_batch([], [tag])
+        db.add_tags_to_files_batch([TEST_FILE_1], [])
+        db.add_tags_to_files_batch([], [])
+
+        assert len(commits) == 0
+        assert db.get_tags_for_file(TEST_FILE_1) == set()
+
+
 class TestGetTagsForFiles:
     """Returns the tags for file paths."""
 

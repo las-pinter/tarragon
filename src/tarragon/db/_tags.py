@@ -52,6 +52,26 @@ class TagsMixin(MixinBase):
         )
         self._commit()
 
+    def add_tags_to_files_batch(self, paths: list[str], tags: list[Tag]) -> None:
+        """Associate every *tag* with every *path* in one executemany + commit.
+
+        All ``(path, tag)`` pairs are written in a single transaction so
+        readers never observe a partially-applied batch. Per-pair source
+        semantics match ``add_tag_to_files`` exactly: a ``user`` pair promotes
+        an existing row to user-owned and ``auto`` sources never downgrade it.
+        """
+        logger.debug("Called - paths: %s, tags: %s", paths, tags)
+        if not paths or not tags:
+            return
+        normalized = [normalize_path(p) for p in paths]
+        self._executemany(
+            "INSERT INTO file_tags (path, tag_id, source) VALUES (?, ?, ?) "
+            "ON CONFLICT(path, tag_id) DO UPDATE SET "
+            "source = CASE WHEN excluded.source = 'user' THEN 'user' ELSE file_tags.source END",
+            [(p, tag.get_id(), tag.get_source() or TagSource.USER) for p in normalized for tag in tags],
+        )
+        self._commit()
+
     def add_tag_to_file(self, path: str, tag: Tag) -> None:
         self.add_tag_to_files([path], tag)
 

@@ -212,6 +212,9 @@ def render_psd_image(
         while not future.done():
             if cancel_event is not None and cancel_event.is_set():
                 future.cancel()
+                # Cancelling only aborts the wait here; an already-running
+                # worker keeps going and its result is discarded on completion.
+                logger.debug("PSD render cancelled for %s", file_path)
                 return None
             if time.monotonic() >= deadline:
                 future.cancel()

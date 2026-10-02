@@ -178,7 +178,7 @@ class PreviewPanel(QWidget):
         # ---------------------------------------------------------------------
         self._tags_container = QWidget()
         self._tags_container.setMinimumHeight(36)  # ensure visible even when empty (one row of pills)
-        self._tags_flow = FlowLayout(self._tags_container, spacing=4)
+        self._tags_flow = FlowLayout(self._tags_container, spacing=SPACING_XS)
         layout.addWidget(self._tags_container)
 
         self._add_tag_btn = QPushButton("+ add")

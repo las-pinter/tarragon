@@ -12,7 +12,7 @@ from PIL import Image, ImageOps
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QLineEdit
 
-from tarragon.db.common.tag import Tag
+from tarragon.db.common.tag import Tag, TagSource
 from tarragon.db.database import Database
 from tarragon.gallery_controller import GalleryController
 from tarragon.models.filter_state import FilterState
@@ -20,6 +20,7 @@ from tarragon.models.thumbnail_model import ThumbnailModel
 from tarragon.renderers.cache import load_image
 from tarragon.services.query_service import QueryService
 from tarragon.services.tag_service import TagService
+from tarragon.theme.color_buckets import ColorBucket
 from tarragon.widgets.filter_bar import FilterBar
 from tarragon.widgets.gallery_info_bar import GalleryInfoBar
 from tarragon.widgets.gallery_tabs import GalleryTabs
@@ -59,6 +60,42 @@ def controller(qapp: Any) -> Generator[_SpyController, None, None]:
     search_edit = QLineEdit()
     preview_panel = PreviewPanel(settings_service=MagicMock())
     ctl = _SpyController(
+        query_service=QueryService(db=db),
+        filter_state=FilterState(),
+        thumbnail_model=ThumbnailModel(),
+        gallery_tabs=gallery_tabs,
+        gallery_info_bar=gallery_info_bar,
+        filter_bar=filter_bar,
+        search_edit=search_edit,
+        search_timer=QTimer(),
+        preview_panel=preview_panel,
+        tag_service=tag_service,
+        db=db,
+    )
+    yield ctl
+    search_edit.close()
+    preview_panel.close()
+    filter_bar.close()
+    gallery_info_bar.close()
+    gallery_tabs.close()
+
+
+@pytest.fixture
+def real_controller(qapp: Any) -> Generator[GalleryController, None, None]:
+    """Provide a real GalleryController wired to a real QueryService.
+
+    Unlike the spy fixture, ``run_filtered_query`` executes the real query
+    pipeline so the color emit → handler → QueryService chain runs end to end.
+    """
+    db = Database(Path(":memory:"))
+    db.init_schema()
+    tag_service = TagService(db=db)
+    gallery_tabs = GalleryTabs()
+    gallery_info_bar = GalleryInfoBar()
+    filter_bar = FilterBar(tag_service=tag_service, db=db)
+    search_edit = QLineEdit()
+    preview_panel = PreviewPanel(settings_service=MagicMock())
+    ctl = GalleryController(
         query_service=QueryService(db=db),
         filter_state=FilterState(),
         thumbnail_model=ThumbnailModel(),
@@ -286,3 +323,38 @@ class TestActiveFilterCount:
         """update_gallery_info_bar hides the pill when the scope-aware count is zero."""
         controller.update_gallery_info_bar()
         assert controller._gallery_info_bar._filter_pill.isHidden() is True
+
+
+class TestColorFilterChain:
+    """End-to-end color filter chain: emit → handler → QueryService.
+
+    Regression coverage for finding #17: the live color-filter path stored
+    ``ColorBucket`` values verbatim into ``filter_state.color_tags``, and the
+    query color branch called ``get_name()`` on them, raising AttributeError
+    at runtime. The handler now converts buckets to ``AUTO_COLOR`` tags at the
+    controller boundary.
+    """
+
+    def test_handler_converts_buckets_to_auto_color_tags(self, controller: _SpyController) -> None:
+        """on_color_filter_changed stores Tag objects (name=bucket value, source=AUTO_COLOR)."""
+        controller.on_color_filter_changed({ColorBucket.RED, ColorBucket.BLUE})
+
+        assert controller._filter_state.color_tags == {
+            Tag(id=0, name="red", source=TagSource.AUTO_COLOR),
+            Tag(id=0, name="blue", source=TagSource.AUTO_COLOR),
+        }
+
+    def test_color_bucket_toggle_filters_through_real_query_service(self, real_controller: GalleryController) -> None:
+        """Toggling a swatch runs the real emit→handler→QueryService chain without AttributeError."""
+        db = real_controller._db
+        db.upsert_thumbnail("/test/photos/red_rose.png", mtime=1, size=100, width=10, height=10, cache_uuid="c1")
+        db.upsert_thumbnail("/test/photos/blue_sky.png", mtime=2, size=200, width=10, height=10, cache_uuid="c2")
+        red = db.ensure_tag("red")
+        red.set_source(TagSource.AUTO_COLOR)
+        db.add_tag_to_files(["/test/photos/red_rose.png"], red)
+        real_controller.current_folder = "/test/photos/"
+
+        real_controller._filter_bar.filter_bar_color.toggle_color(ColorBucket.RED)
+
+        assert real_controller._filter_state.color_tags == {Tag(id=0, name="red", source=TagSource.AUTO_COLOR)}
+        assert real_controller._thumbnail_model._paths == [Path("/test/photos/red_rose.png")]

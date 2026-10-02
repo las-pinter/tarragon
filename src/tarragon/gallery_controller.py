@@ -19,7 +19,7 @@ from PySide6.QtCore import QObject, QRunnable, QThreadPool, QTimer, Signal
 from PySide6.QtWidgets import QLineEdit
 
 from tarragon.common import ImageInfo
-from tarragon.db.common.tag import Tag
+from tarragon.db.common.tag import Tag, TagSource
 from tarragon.db.database import Database
 from tarragon.models.filter_state import FilterState
 from tarragon.models.thumbnail_model import ThumbnailModel
@@ -28,6 +28,7 @@ from tarragon.scanner import FileInfo
 from tarragon.services.query_service import QueryService
 from tarragon.services.tag_service import TagService
 from tarragon.services.thumbnail_service import ThumbnailService
+from tarragon.theme.color_buckets import ColorBucket
 from tarragon.theme.constants import MULTI_PREVIEW_MAX_DEFAULT
 from tarragon.widgets.filter_bar import FilterBar
 from tarragon.widgets.gallery_info_bar import GalleryInfoBar
@@ -253,10 +254,14 @@ class GalleryController:
         self._filter_state.filename_filter = text
         self._search_timer.start()
 
-    def on_color_filter_changed(self, color_tags: set[Tag]) -> None:
+    def on_color_filter_changed(self, color_tags: set[ColorBucket]) -> None:
         """Re-run the filtered query when color filter swatches change."""
         logger.debug("Called - color_tags %s", color_tags)
-        self._filter_state.color_tags = color_tags
+        # Color-bucket values convert to AUTO_COLOR Tag objects here. The id is
+        # a don't-care for the color branch, which only reads get_name().
+        self._filter_state.color_tags = {
+            Tag(id=0, name=bucket.value, source=TagSource.AUTO_COLOR) for bucket in color_tags
+        }
         self.run_filtered_query()
 
     def on_tag_filter_changed(self, tags: set[Tag]) -> None:

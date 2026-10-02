@@ -90,7 +90,7 @@ class TestMenuActions:
             assert hasattr(window, "_setup_actions")
             assert callable(getattr(window, "_setup_actions"))
 
-            # Action callback exists (wired in M3).
+            # Action callback exists (wired to _on_open_folder).
             assert hasattr(window, "_on_open_folder")
             assert callable(getattr(window, "_on_open_folder"))
 
@@ -493,7 +493,7 @@ class TestNavigateToFolderFilterState:
         mock_settings: MagicMock,
         tmp_path: Path,
     ) -> None:
-        """_navigate_to_folder treats folder filters in FilterState as active filters."""
+        """Local navigation ignores FilterState folder filters (global-only)."""
         window = MainWindow(settings_service=mock_settings)
         try:
             db = Database(Path(":memory:"))
@@ -502,6 +502,10 @@ class TestNavigateToFolderFilterState:
             folder = tmp_path / "folder_filtered"
             folder.mkdir()
             (folder / "a.png").write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 100)
+            # A different, empty folder in FilterState: if local scope wrongly
+            # honored folder_filters, the query would target it (0 files).
+            other = tmp_path / "other_filtered"
+            other.mkdir()
 
             tag_service = TagService(db=db)
             window.setup_widgets(db, tag_service)
@@ -510,7 +514,7 @@ class TestNavigateToFolderFilterState:
             window._search_edit.clear()
 
             # A folder filter selected in global mode is an active filter in FilterState.
-            window._filter_state.folder_filters = {str(folder)}
+            window._filter_state.folder_filters = {str(other)}
 
             window._navigate_to_folder(folder)
 

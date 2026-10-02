@@ -21,6 +21,11 @@ logger = logging.getLogger(__name__)
 # Real overall render deadline in seconds (fulfills the 2-minute contract).
 PSD_RENDER_TIMEOUT_S = 120
 
+# Full-tier (target_size=None) composites are capped at this long edge so the
+# PNG bytes crossing the process boundary stay bounded (worker encode +
+# transfer + caller decode would otherwise spike with native-size canvases).
+PSD_FULL_TIER_MAX_EDGE = 8192
+
 
 def _compute_worker_count(manual_override: int | None = None) -> int:
     """Compute PSD worker count based on available RAM.
@@ -53,8 +58,9 @@ def _composite_psd_in_process(
     ----------
     target_size:
         If specified, shrink the composited image so the longest side is
-        at most *target_size* pixels.  If ``None``, no resizing is performed
-        (full resolution output).
+        at most *target_size* pixels.  If ``None``, the full-resolution
+        output is rendered, capped at ``PSD_FULL_TIER_MAX_EDGE`` pixels
+        on the longest side.
 
     Returns raw PNG bytes on success, or ``None`` on any failure (failure
     isolation never crash the worker).
@@ -99,6 +105,9 @@ def _composite_psd_in_process(
         # Resize to target_size if specified (resize_long_edge never upscales)
         if target_size is not None:
             image = resize_long_edge(image, target_size)
+        elif max(image.size) > PSD_FULL_TIER_MAX_EDGE:
+            # Full tier: cap the long edge so PNG bytes stay bounded.
+            image = resize_long_edge(image, PSD_FULL_TIER_MAX_EDGE)
 
         # Return as PNG bytes (PIL Image is not picklable)
         buf = io.BytesIO()
@@ -176,8 +185,9 @@ def render_psd_image(
     ----------
     target_size:
         If specified, the composited image is shrunk so the longest side
-        is at most *target_size* pixels.  If ``None``, no resizing is
-        performed (full resolution output).
+        is at most *target_size* pixels.  If ``None``, the full-resolution
+        output is rendered, capped at ``PSD_FULL_TIER_MAX_EDGE`` pixels
+        on the longest side.
     cancel_event:
         Optional ``threading.Event`` for cooperative cancellation.  When
         set, the future is cancelled and ``None`` is returned immediately.

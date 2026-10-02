@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import logging
+import shutil
 import sqlite3
 import tempfile
 from pathlib import Path
@@ -18,6 +19,35 @@ logger = logging.getLogger(__name__)
 _PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 _IEND_CHUNK_END = b"IEND"
 _SQLITE_HEADER = b"SQLite format 3\x00"
+
+# Bounded-memory scan: the .clip file is read in fixed-size chunks instead of
+# whole-file read_bytes() (files can exceed 1 GB).  The chunk size also bounds
+# the streamed copy of the SQLite portion into the temp file.
+_SQLITE_SCAN_CHUNK_SIZE = 256 * 1024
+
+
+def _find_sqlite_header_offset(file_path: Path, header: bytes) -> int | None:
+    """Return the byte offset of *header* in *file_path*, or ``None``.
+
+    Scans the file in fixed-size chunks with an overlap of
+    ``len(header) - 1`` bytes so a header that straddles a chunk boundary
+    is still detected.  Memory use stays bounded to one chunk regardless
+    of the file size.
+    """
+    tail_len = len(header) - 1
+    offset = 0
+    previous_tail = b""
+    with file_path.open("rb") as fh:
+        while True:
+            chunk = fh.read(_SQLITE_SCAN_CHUNK_SIZE)
+            if not chunk:
+                return None
+            window = previous_tail + chunk
+            pos = window.find(header)
+            if pos != -1:
+                return offset - len(previous_tail) + pos
+            previous_tail = window[-tail_len:] if tail_len else b""
+            offset += len(chunk)
 
 
 def render_clip_image(
@@ -46,25 +76,29 @@ def render_clip_image(
         (file not found, no SQLite header, missing table, corrupt data, …).
     """
     try:
-        data = file_path.read_bytes()
+        # Locate the embedded SQLite database within the .clip binary,
+        # streaming the file so memory stays bounded for multi-GB files.
+        sqlite_offset = _find_sqlite_header_offset(file_path, _SQLITE_HEADER)
     except Exception:
         logger.warning("render_clip_image: cannot read file %s", file_path)
         return None
 
-    # Locate the embedded SQLite database within the .clip binary
-    sqlite_offset = data.find(_SQLITE_HEADER)
-    if sqlite_offset == -1:
+    if sqlite_offset is None:
         logger.warning("render_clip_image: no SQLite header found in %s", file_path)
         return None
-
-    sqlite_data = data[sqlite_offset:]
 
     # Write the SQLite portion to a temp file so sqlite3 can open it
     tmp = None
     try:
         tmp = tempfile.NamedTemporaryFile(suffix=".sqlite", delete=False)
-        tmp.write(sqlite_data)
-        tmp.close()
+        try:
+            # Stream the remainder from the header offset into the temp file
+            # (sqlite3 cannot open an offset into a larger file).
+            with file_path.open("rb") as src:
+                src.seek(sqlite_offset)
+                shutil.copyfileobj(src, tmp, length=_SQLITE_SCAN_CHUNK_SIZE)
+        finally:
+            tmp.close()
 
         conn = sqlite3.connect(tmp.name)
         try:

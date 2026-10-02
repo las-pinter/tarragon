@@ -10,7 +10,7 @@ Usage:
 System dependencies:
     - Python packages: nuitka, patchelf, zstandard
     - Linux: python3-dev (for headers), patchelf (apt-get install python3-dev patchelf)
-    - Windows: Visual Studio Build Tools (MSVC compiler)
+    - Windows: MinGW-w64 compiler (Nuitka auto-downloads it via --mingw64 / --assume-yes-for-downloads)
     - macOS: Xcode command line tools (clang) — xcode-select --install
     - Recommended: ccache (for faster repeat builds — apt-get install ccache)
 """

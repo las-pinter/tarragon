@@ -91,6 +91,7 @@ do not repeat it by hand).
 - [ ] Linting passes: `uv run ruff check .` (or `ruff check .`)
 - [ ] Version bumped: `version` in `pyproject.toml` **and** `__version__` in `src/tarragon/__init__.py` (kept in sync; `--version` prints this)
 - [ ] Release notes drafted (paste into the GitHub release body in step 3)
+- [ ] Attribution ledger appended (`last_release..HEAD`) and `assets/attribution.svg` regenerated; README `## Attribution` section in sync.
 
 ### 2. Create and push the tag (LOCAL)
 

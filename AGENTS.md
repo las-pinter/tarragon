@@ -46,3 +46,15 @@ This runs ruff, ruff-format, and the mypy hook.
 `uv run python scripts/package_nuitka.py`
 
 Optional flag: `--platform linux|windows|macos`. The platform auto-detects when omitted.
+
+## Attribution ledger
+
+`AI-ATTRIBUTION.yaml` records each commit as `ai` or `human` with a confidence.
+
+On every release, append every commit in `last_release..HEAD` to the ledger.
+Derive the class from the commit prefix: `ai:` present means `ai` (the legacy `ai-` form also counts), absent means `human`.
+Set confidence to 1.0, then refresh `last_updated`.
+
+The commit that writes the ledger cannot list its own hash. Append it at the next release.
+
+The file is data only. Never add a script, hook, or pipeline beside it.

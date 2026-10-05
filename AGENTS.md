@@ -4,9 +4,9 @@ Guide for AI coding agents working in this repository.
 
 ## Commit rule (mandatory)
 
-Every commit made by an AI agent MUST have its message heading prefixed with `ai-`.
+Every commit made by an AI agent MUST have its message heading prefixed with `ai:`.
 
-Example: `ai- docs: create AGENTS.md for AI agents`
+Example: `ai: docs: create AGENTS.md for AI agents`
 
 There are no exceptions.
 

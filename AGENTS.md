@@ -49,12 +49,15 @@ Optional flag: `--platform linux|windows|macos`. The platform auto-detects when 
 
 ## Attribution ledger
 
-`AI-ATTRIBUTION.yaml` records each commit as `ai` or `human` with a confidence.
+`AI-ATTRIBUTION.yaml` records each commit as `ai` or `human`.
 
 On every release, append every commit in `last_release..HEAD` to the ledger.
 Derive the class from the commit prefix: `ai:` present means `ai` (the legacy `ai-` form also counts), absent means `human`.
-Set confidence to 1.0, then refresh `last_updated`.
+Then refresh `last_updated`.
 
 The commit that writes the ledger cannot list its own hash. Append it at the next release.
 
 The file is data only. Never add a script, hook, or pipeline beside it.
+
+After the ledger append, a human refreshes `assets/attribution.svg` with the out-of-repo generator `ai_attribution_svg.py`.
+Keep the `## Attribution` section in `README.md` in sync with that chart. Do not add the generator to this repo.

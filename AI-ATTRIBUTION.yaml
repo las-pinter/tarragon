@@ -17,9 +17,10 @@
 # and the legacy 'ai-' form used by the early ledger commits also
 # counts as ai. No prefix means human.
 #
-# CONFIDENCE DEFINITION: 'class' is ai when the final AI probability
-# is >= 0.5, else human. 'confidence' is the probability of the
-# assigned class, in [0.5, 1.0].
+# BEST-ESTIMATE BINARY CLASS: each commit is recorded as the
+# best-estimate binary class 'ai' or 'human'. The classification
+# comes from repo evidence: the commit prefix after the cutover,
+# and forensic analysis for the historic commits.
 #
 # DATA FILE ONLY. No script, hook, or pipeline may be added alongside
 # this file.
@@ -31,232 +32,232 @@ frozen_list_sha256: 6a6b91be6c7b36c601e911dfeccd132cfab285e360414171d5a42db89a28
 last_updated: 2026-10-05
 source_range: 9639ef4..b21f0d7
 commits:
-  9639ef4135fe7ce68e99e89720e9a092b72d346a: {class: human, confidence: 0.88}
-  0e7d42c7323a1165ba5efe1f0cd1847c23273039: {class: ai, confidence: 0.82}
-  23ae8e8a9b741937b91b5e83d53d9550ddf031c3: {class: ai, confidence: 0.95}
-  28b2977562d69751f147b1888b279f65f074d2c6: {class: ai, confidence: 0.95}
-  4d828785d96d77711bbac7d50ee5c2acdd9c77d6: {class: ai, confidence: 0.92}
-  9c90afc1199fe024c900ca2078c31b5083e252dd: {class: ai, confidence: 0.92}
-  a8fac1087c728e2cd098233eeb6327700b81017e: {class: ai, confidence: 0.92}
-  de44db0ba7478fb29697aba86b6069a759d68f0c: {class: ai, confidence: 0.92}
-  02016b7b1f97df32444d961b9ca668dc065ef2ae: {class: ai, confidence: 0.95}
-  17c608c6a3521a66fa4f53220eec534d014848c1: {class: ai, confidence: 0.92}
-  73f9ee07423abf7685976ee2aa20d58a81750fb3: {class: ai, confidence: 0.92}
-  920da9025c5028c9cb09960f571c6772fe6204b3: {class: ai, confidence: 0.95}
-  da6d5019c69a3aac51760da8e26a0e434cd51338: {class: ai, confidence: 0.95}
-  e13b4429cb4cab1d4be6100e22de4d233d188c79: {class: ai, confidence: 0.95}
-  0a0682e9df4e43195bd0bb1f287423e2c1030de2: {class: ai, confidence: 0.92}
-  45ea3909d972d216340b752bb9ec3e4efd7067fd: {class: ai, confidence: 0.95}
-  54e8ff4e713ddd59ded61e67845640f608f2f66e: {class: ai, confidence: 0.92}
-  78c3da923f7cce57a70f915bef688ae779ac348f: {class: ai, confidence: 0.95}
-  8268a3c48a2513cf223859a7cb7d87794840fdbf: {class: ai, confidence: 0.92}
-  c9981a63fdc80061aaf113ac631d0f281a1b4d31: {class: ai, confidence: 0.95}
-  cb66268a31c1f8f99058b9716e97948a325c879a: {class: ai, confidence: 0.95}
-  db9424a5f0ad5329f98fb08f83ee6d531153893c: {class: ai, confidence: 0.92}
-  e7a6d58f59666776ca5421c0162efbcb978a2933: {class: ai, confidence: 0.92}
-  efc7e0f431e24cbf43ad92d978bdf8f75b58870b: {class: ai, confidence: 0.92}
-  f03ca700c3db71cc008bceabc5d8ce8ed3cabfb8: {class: ai, confidence: 0.92}
-  fd6a0f9e8a6807cbb3d580b22e14ef6925b28bd3: {class: ai, confidence: 0.92}
-  606e4b7b4d0a060648afac29d16a16f9c3858a60: {class: ai, confidence: 0.62}
-  727cd4f307dbe807a477c19e4477f711a2cca612: {class: ai, confidence: 0.75}
-  7291844d07f593575517bc53278becea7200d591: {class: ai, confidence: 0.92}
-  95a4d93775cd506852165bbe4e0548fb47e56a45: {class: ai, confidence: 0.75}
-  bb4b85203fa9d073de8ce1d0a83561c466104498: {class: ai, confidence: 0.55}
-  bde797758387a0512e3e0153ac327e0bf3d1617a: {class: ai, confidence: 0.50}
-  c801d9c9c5dc82338057cf93df568cbc11bd80fe: {class: ai, confidence: 0.84}
-  d3e1f4700a96363eaa0ed27d76052c4dd5fa355c: {class: ai, confidence: 0.82}
-  e42d3e1c8602d97ccd70e275343696067781c12f: {class: ai, confidence: 0.55}
-  3b7f9426ee233111d4a9caae7e98a47f1480414a: {class: ai, confidence: 0.78}
-  6abc74d3d73e0c28cab4261fd60a2139a4900156: {class: ai, confidence: 0.62}
-  b24f29dcd2fbe3bff4cddcb7a6d2d1a7218419fe: {class: ai, confidence: 0.50}
-  c804c491d3c5911ee8c29ce7b3f51e885ddca6a0: {class: human, confidence: 0.60}
-  d54f7abfdd44b99d4d5f291f86d4e9b262f37a4c: {class: ai, confidence: 0.58}
-  ebea84be003acc0b1d76358cbbcd77caa02ed9c8: {class: ai, confidence: 0.60}
-  370a110b93f21f21f14f3c75419b27976e1a556d: {class: ai, confidence: 0.56}
-  392fae2332531520597471bee2d5bc5c23076c99: {class: ai, confidence: 0.58}
-  45e1b04542f7ca20646c2ba77965b0a6f576b4e6: {class: ai, confidence: 0.62}
-  6ec625fe7466333012605ee1037ce31c7926de09: {class: ai, confidence: 0.70}
-  75dc10517df51cd935c4f24f0b3316e4b660c830: {class: ai, confidence: 0.50}
-  814bb5c0bf6c479a19426ca07262a3c7f446e47b: {class: ai, confidence: 0.68}
-  825df64ce9957fbfa3145606142ffe7e02bbe96f: {class: ai, confidence: 0.85}
-  c08cea6c8f6821e452aa24867523b945c400e94c: {class: ai, confidence: 0.62}
-  f45427e8692492d967c6700ee513f57f5c72f367: {class: ai, confidence: 0.86}
-  f724029d6e3c5dd4ef3a3ee682cd19691f569660: {class: ai, confidence: 0.82}
-  fb4aded5a4fb277f47ee19bd62b04bdb4a80d670: {class: ai, confidence: 0.62}
-  332f7b39ad66c6337303dd0a5c28c3d2e2842e7b: {class: ai, confidence: 0.86}
-  33baf2c8beebdc5d31a1839e79348cb8f630eafa: {class: ai, confidence: 0.88}
-  64b8dc4160dc074479c5f805508fcbc6b0864dda: {class: ai, confidence: 0.85}
-  8772a55832f6ce34bef434844ac5349378d9f2c6: {class: human, confidence: 0.68}
-  c9fa56db5e2588f2a329568dcf5e7a9184644e6c: {class: ai, confidence: 0.93}
-  d144eedf12905926e6ae3e4ff13cf1902c5a78af: {class: ai, confidence: 0.88}
-  d3128975fdfdb2eef0cf246901d32d187788a8b5: {class: ai, confidence: 0.82}
-  0c4b6683c04fbbabf82e0be3e55da23c8e505b95: {class: ai, confidence: 0.55}
-  3008624165e0fd3dcf9bae968bdff33886bb7291: {class: ai, confidence: 0.82}
-  61c65a40a99815f6ae89da02c23e60e02cb3edd9: {class: ai, confidence: 0.83}
-  b6056e78ddda5c251095cfad753fe051acca40dc: {class: ai, confidence: 0.82}
-  17f3e006751e7fe2bf94a5a397e8ce1b80d1dda8: {class: ai, confidence: 0.54}
-  4429043d2648be17b7f884b7689231b991e2cf25: {class: ai, confidence: 0.82}
-  86dff084b907342a46c10c5ff652f227a09084c8: {class: ai, confidence: 0.55}
-  9044b4ec48b65401d9afecfe436435b6d683bb6c: {class: ai, confidence: 0.82}
-  d1f78e1b5ce53efa8df3c28ea8e3b929f32ff9de: {class: ai, confidence: 0.72}
-  f58af27aca4d75013bc84998a226667aaaae8719: {class: ai, confidence: 0.82}
-  0e2728920150dea0ab8a3a845dfb93b15323bab4: {class: ai, confidence: 0.88}
-  10998db81d0cce68c48b27aadf1eca9f54c57fe6: {class: ai, confidence: 0.95}
-  5223a5fa93a1588eaf2051e44a615d1407f7687d: {class: ai, confidence: 0.52}
-  76fd326be278bc8199fa786de69108c6ad72dee2: {class: ai, confidence: 0.70}
-  cb0f9ade15ef16b2e38ebc71ab6d57ae31df63b4: {class: ai, confidence: 0.75}
-  dd33f7c87cb79306c097308a25c9875646cbd4b4: {class: ai, confidence: 0.92}
-  ec312d8993cbfaa7b82a7c67d2a488001ed2efad: {class: ai, confidence: 0.92}
-  240cd119d6a408e57ec1ba304123a96c3e5fca28: {class: ai, confidence: 0.95}
-  39f4e83fc4c801ddeedaaf3113f7898faa16f506: {class: ai, confidence: 0.75}
-  47fbb166fb02eee762b540cfed7bdfa2c3682eb1: {class: ai, confidence: 0.82}
-  57d3fd80950631f1f366ad75817ecefd6954d6b0: {class: ai, confidence: 0.88}
-  84b970520399631f18286e892d20c897fd5c2f97: {class: ai, confidence: 0.68}
-  c3956a93c832f10b17a8c81d565ef888c2e2be87: {class: ai, confidence: 0.92}
-  d054335b65b7b32d82300bcdc94e739761bd72f0: {class: human, confidence: 0.72}
-  db2768c002d770673decee9caa3cca7f1dbf9c26: {class: ai, confidence: 0.92}
-  ddab2ed764e271246d365096ba4a4d08bfa4835a: {class: ai, confidence: 0.92}
-  e2e64f110b3d24a5ecdae1fbfe697db70fa01933: {class: ai, confidence: 0.55}
-  ef5855c6f515bd551356ad6ff6eec40b2635a3f1: {class: ai, confidence: 0.92}
-  fd55a6b26ac615e14b93171a2c2f454b51adcf26: {class: ai, confidence: 0.66}
-  2411b1f2d51b65da5b695eb3bfcca46537faa416: {class: ai, confidence: 0.68}
-  6c6ccc54dd064c71232954c7332c3fbcb6a511ab: {class: ai, confidence: 0.82}
-  b4d90361158c2ff1cdb73d9d2c036288b3636c62: {class: ai, confidence: 0.82}
-  c3be23dea82cc4b18022577c5816aa9aec37aba5: {class: ai, confidence: 0.88}
-  c6a9750b4f31d520f7eb36b99d920829c36290b0: {class: ai, confidence: 0.86}
-  f43a8bf3520a6e4a5bc8a14e0ad6cc524e1de727: {class: ai, confidence: 0.82}
-  f88a809cfdec89d37c6006a84f366a49d30c6a26: {class: ai, confidence: 0.82}
-  5a0f0ba071d45b77b93ab7376f9ce92582d399db: {class: human, confidence: 0.65}
-  956debe72ebfd889d0153d61f71ce960f422b0ec: {class: ai, confidence: 0.88}
-  d85090bd7ee894a7f02e7bacae5a1535d5d35fc8: {class: ai, confidence: 0.82}
-  9d659acd361e01a100cc59797daba3f05fd98fcb: {class: human, confidence: 0.70}
-  df15c2ff2b630072a62c935a7de9c0c928d308b4: {class: ai, confidence: 0.82}
-  108a71ee34ddda6b6dcfe1534ebf77e1c6ffbfba: {class: ai, confidence: 0.74}
-  39bf2612b89b7fb2f51085fac2a7468b80fe0175: {class: ai, confidence: 0.62}
-  4d46d93a399d22adf67743984d259a2f4cfc3a0c: {class: ai, confidence: 0.54}
-  5ece119766827b409713ea16f60ff79d87486124: {class: ai, confidence: 0.82}
-  64819456a3be492ecdb0e603401df010a3a12c42: {class: ai, confidence: 0.95}
-  6988b38349787f66a453f7b4b5a6e615c2923356: {class: human, confidence: 0.52}
-  a856319ba5c0f3f94c0dd3976aebbc2e32ad0c6f: {class: ai, confidence: 0.55}
-  cb9210703c87554ad9ee173f9ca3c92c670a7b85: {class: ai, confidence: 0.87}
-  e93ee83f476469966637db014b93ff66d39a3168: {class: ai, confidence: 0.60}
-  3325b27592d4dd3e063acbbb5933043c1feeda87: {class: human, confidence: 0.68}
-  7c9dc6f209b5e258075b1a5057c65882d7b015f9: {class: ai, confidence: 0.78}
-  d3e6daa4d5462ac136fa5c07b2c6cb6a21cd3b2e: {class: ai, confidence: 0.90}
-  e943eacce6354c47a1ee2b8b48bbc6faeabf4091: {class: human, confidence: 0.68}
-  06ffba68601e341f97bf89e541187d04f43e346b: {class: ai, confidence: 0.82}
-  3509b3f64872617c1c7f8c72f56a253aed45775a: {class: ai, confidence: 0.50}
-  438ed97d3e9baf65591169a0265bf75ff5c96376: {class: ai, confidence: 0.52}
-  9ca72ad51ecfb85688c1abc91eea68922c7d4f38: {class: ai, confidence: 0.72}
-  d8fb78caf6487970c6ce04e8d2cd170b30005df6: {class: ai, confidence: 0.60}
-  f5546ff313475415c68a30bb32ddd5fbe1df40bb: {class: human, confidence: 0.55}
-  29b82e35ccc8c40c947fedcd5791501a66143054: {class: ai, confidence: 0.95}
-  87af545f064f29d8928dea46bf7d471cf437797e: {class: ai, confidence: 0.95}
-  b5b339c03983788ded29d7d85f50f7f76eef6378: {class: ai, confidence: 0.80}
-  faf5dcf054885ff3b92ca47e0afa2ab563b83d27: {class: ai, confidence: 0.95}
-  111f06cfa9cc3bc7a1d1b33657e4eae2850167f2: {class: ai, confidence: 0.82}
-  22cd0a5439f6a777814c72c394056848f2c26e9c: {class: ai, confidence: 0.55}
-  951deefce971f1d91253780955da720b0c40c656: {class: ai, confidence: 0.76}
-  b5e705b56be0467319f04e6a3cfc4d31901075f6: {class: ai, confidence: 0.72}
-  0d0f49fa54014cd6b6006b0afde3e5c22306ce85: {class: ai, confidence: 0.50}
-  426027e311d91c7e8c1e463420e0c258f652068c: {class: human, confidence: 0.58}
-  46d46e04770f024e6469455920bebfeb4ca9a604: {class: ai, confidence: 0.50}
-  df9a908f77a90387e18a228c3f7f189caf6497e4: {class: ai, confidence: 0.62}
-  122af7a7199b754a3e91f47982f9a0f73b9ece92: {class: ai, confidence: 0.62}
-  2695c89b8c96cdd1272a9021d18479dfa95d4e88: {class: ai, confidence: 0.82}
-  32560c2fe4a46da3b49dcfe779a34187ddc5f8aa: {class: human, confidence: 0.60}
-  5ea9b7c3235305f3cdfd361db10b653d5bb33c79: {class: ai, confidence: 0.55}
-  cff29946c9b77a7613c80ad82682096eea5abbad: {class: human, confidence: 0.55}
-  1fae7894285f5b36fe7e12f6aeff06c6ee687140: {class: human, confidence: 0.60}
-  2af4c67441a740f8c1f103ebc4d2bb7ae3cf31c4: {class: ai, confidence: 0.68}
-  5dbb44375d486e4ef10c389651e0f3a712a8f773: {class: ai, confidence: 0.55}
-  66c87a62a4a8b28e36e90123b88b2da68ff84613: {class: human, confidence: 0.53}
-  70c67bb812ed93060e111dfe4a3307cd67c19c5d: {class: ai, confidence: 0.50}
-  81bfadf6da58675da9c0c367fb459eb12e61e975: {class: human, confidence: 0.55}
-  9fc13412cbd0c6efd688739b049a71557e3f1f2d: {class: human, confidence: 0.60}
-  d167423b29901b22dc2bf4f8a544ea1bb6321542: {class: ai, confidence: 0.62}
-  f27144229891a127c7dd5449900ed02f50ad6eef: {class: human, confidence: 0.58}
-  f76076c49bcd9bfdd4aa719dc03ff1ba321ad22b: {class: human, confidence: 0.58}
-  0acbbee326b4d97f87917e06eb8054ee3836c5dd: {class: ai, confidence: 0.58}
-  2e0b3fcb41d1e2534dad29d6a57853c932264149: {class: human, confidence: 1.00}
-  4cdb10d9a440fb65bb25e819d99d8067ac8d3d65: {class: ai, confidence: 0.88}
-  5612d4f726a238338bdc807c3030219cfc8e1a41: {class: human, confidence: 0.52}
-  a63869c267ad03d52807dd4f16e3ed002838e557: {class: human, confidence: 0.65}
-  456f500e11aa66c9b4800961f4f4c06dc0616dfd: {class: human, confidence: 0.78}
-  b769da785c274e9da95461bfdc4654e09e3350f5: {class: human, confidence: 0.60}
-  f580dd40cbf91135d349cb1d69a648a0336ee515: {class: human, confidence: 0.65}
-  bf1a411d8f28f51c778a588698c9ec7cbe57991d: {class: ai, confidence: 0.82}
-  f49306224624933072497b7238f8e6796141f9d8: {class: human, confidence: 0.70}
-  f6efb6700b017e4a2e0977b3ef22e4deb8a8bc1b: {class: ai, confidence: 0.82}
-  8f5b4461f11f73bcd4d2271a2efac4e6deb40f5a: {class: ai, confidence: 0.82}
-  739a815a1fe44873c511daabae1f2fe57d97f623: {class: human, confidence: 0.62}
-  0d14a39e6d41769108040d811094c1e8dd925371: {class: ai, confidence: 0.50}
-  1211dffa28e2daab858bb64fc9dfbe634a2804c6: {class: human, confidence: 0.56}
-  1b473488fa8b1405a7d781628826ca602317595b: {class: human, confidence: 0.55}
-  34f24dac4995cc569a2a7f31d748f0f6a07b3cad: {class: ai, confidence: 0.50}
-  6c2398679bf1106f71a2c911610792ad845f67b3: {class: ai, confidence: 0.52}
-  fce7d13512b728ae7cf4317c3a593f73e392842b: {class: human, confidence: 0.62}
-  af6f242c0d95f7c67e349273e6fd7c5e8ed56fde: {class: human, confidence: 0.55}
-  54fb38a5f7bd0ddead851eedb511649580d325fb: {class: ai, confidence: 0.82}
-  3363e4410aac2c070a56180c0601780921e21ab6: {class: ai, confidence: 0.72}
-  80cff3fb20a8abe564f5f2bd85d5fd3737eeeb5f: {class: ai, confidence: 0.65}
-  bef6a99baca0d6580ebbf02c7a08885966e9bf66: {class: human, confidence: 0.55}
-  bc9d329b0293bb9cdc6b6625fd120f025a0aabc4: {class: human, confidence: 0.72}
-  b0119c520dae9aa48b495a6865da6cfd99467c09: {class: ai, confidence: 0.52}
-  09bdef9ba24cfbd0d1699d44365cca1e49fed165: {class: ai, confidence: 0.55}
-  e0a062be66c5da8daa1f5a6879d4709992e05819: {class: ai, confidence: 0.80}
-  240a0fb058f4a20888ffcf323b01043abba45884: {class: ai, confidence: 0.82}
-  96f82c9770bd5b4ed501216c0ec3ed28b13394fd: {class: human, confidence: 0.60}
-  a1567ae5deabd7cef783559b631682fab00fc053: {class: ai, confidence: 0.52}
-  cc5709dcd9ac1bb27c002a778bf89e1c84f04adb: {class: ai, confidence: 0.85}
-  e14f2d7c9d79b64af97ad0df8462dce45bece83b: {class: ai, confidence: 0.84}
-  5b14012e146fb5c465a1d5272ebe4f3192c7ccec: {class: ai, confidence: 0.82}
-  6509a821678622357ca8acfae5989030a150a326: {class: ai, confidence: 0.50}
-  0ff0d37b0316c7b50303dd99ac23fa2a032b49c1: {class: ai, confidence: 0.88}
-  566dd6512d03bea238585f874a5a91dbbdce2876: {class: ai, confidence: 0.76}
-  4443607c1bfdd4e7c85f93cea94f7c54755677eb: {class: ai, confidence: 0.88}
-  8c4cb0cf5440ca7f177362d8a476cfb3fb22e030: {class: ai, confidence: 0.58}
-  95a32322024b123610f38db0a8ee2d262ebf77f3: {class: ai, confidence: 0.92}
-  fd8ce6e0864b728209000aed9bac2db2a80969a0: {class: ai, confidence: 0.90}
-  1a5ffa09b61720a90973db307b455a5255e6c9df: {class: ai, confidence: 0.92}
-  80029ae01b53e00c827602c0b0e5134396ab8098: {class: ai, confidence: 0.90}
-  b72e7c9005f543270b96f35f1d292d56877ae5d5: {class: ai, confidence: 0.90}
-  ee99a2ce7f7fe1441f35c5352be1f74412ed53c1: {class: ai, confidence: 0.58}
-  19b71854903c99aee4b035f1508487ff4d7c9ff3: {class: ai, confidence: 0.97}
-  1df7e352d4bbfadb4e0cc9ff5e2a42440d26da6a: {class: ai, confidence: 0.97}
-  2d65615276c439e9b9495fe37a0ab6f22f9d799d: {class: ai, confidence: 0.90}
-  3df1d5f8e9ee35334d788a9d7d3d8a7c16781791: {class: ai, confidence: 0.97}
-  41709d29f10bfb97609f45b592c05a2cd8a1ddd3: {class: ai, confidence: 0.99}
-  42797aeba7c3029a84bd6b7da0d986449e75037e: {class: ai, confidence: 0.99}
-  5ce7de8e9543e2c47cccad12f6974160cc729549: {class: ai, confidence: 0.99}
-  7da1ffd3b25fedb199bd1c9d84d9eeb3232e3ab3: {class: ai, confidence: 0.99}
-  87f827af749833b0e063f4070bb36167c7957b25: {class: ai, confidence: 0.99}
-  8adf62013cb2d119145bc5537bb53d63b89811a1: {class: ai, confidence: 0.97}
-  8bedacd3d0a1e5f61b21b8922b859f90476ca7ec: {class: ai, confidence: 0.88}
-  8d2e44430b7cec0d0bf93302c75c59b8af10abe7: {class: ai, confidence: 0.80}
-  98cdb11dee2485d706cd46154801c3ae363ed976: {class: ai, confidence: 0.99}
-  99a19a41c09cb1631f7bf2951d14c90c136fd89a: {class: ai, confidence: 0.99}
-  b03db66c304f1d0ab396117b5c78769a9211c0ef: {class: ai, confidence: 0.99}
-  b16458b4066db0b2b28b4d4d10c7e94472a88a83: {class: ai, confidence: 0.99}
-  b3d35a7678c8c90c54fc8f4bf4730274d408b979: {class: ai, confidence: 0.97}
-  c8ae8679010f3c39791d5d93136fb19889cacde5: {class: ai, confidence: 0.80}
-  cefedbf2819c2390838d61927d034f319dfacbdf: {class: ai, confidence: 0.99}
-  dc639a1266e4f6bc96890ebb510f44aad2a8adef: {class: ai, confidence: 0.99}
-  e87ab75ed8190bbf43293f45630e9cf949473192: {class: ai, confidence: 0.99}
-  1d488a9271910768f266dee5a5148f75f018fec0: {class: ai, confidence: 0.99}
-  22442d35efb06e7ed017e13afe9b40ba175bcd45: {class: ai, confidence: 0.99}
-  2dcbbbb81b3b5e71b81de877b6c47bc788069224: {class: ai, confidence: 0.99}
-  31c1b56e1a523f0b72cf9379599a65a33e858754: {class: ai, confidence: 0.99}
-  33410c312ec2fd3fdbd78ecbb0ade01165a1eab7: {class: ai, confidence: 0.99}
-  4574c9dca176ed2483f458706d534395c257d374: {class: ai, confidence: 0.99}
-  4b62a40061c4895721adf71cdab60ca75115fbf6: {class: ai, confidence: 0.99}
-  8303a3ffa2334409513998b81aa0aba6cf776dfc: {class: ai, confidence: 1.00}
-  b88293b3d51e5a88492ccd49733904f8a70334d1: {class: ai, confidence: 0.99}
-  c63968d45db4172f3c27122f6530b7d2393e2f0d: {class: ai, confidence: 0.97}
-  c80d5faa77c1abb3b968562ba87e8330fc2fd79f: {class: ai, confidence: 0.99}
-  ca27aec7c68681caf0801e220edc49b5b6d1021c: {class: ai, confidence: 0.99}
-  cd8678acdfd8a749ba36db336560135b934984c0: {class: ai, confidence: 0.99}
-  d60c1c00640deb07edde7fb4dcf40d2f01a72a0a: {class: ai, confidence: 0.99}
-  eb4609766c7b5facb672e4fb30e1ef4078e5b656: {class: ai, confidence: 0.99}
-  6fe484d93ee63181ed29fd1c861242bcbcf176cb: {class: ai, confidence: 0.99}
-  b21f0d74092daa0388eef93db3786eadf7950c8a: {class: human, confidence: 0.92}
+  9639ef4135fe7ce68e99e89720e9a092b72d346a: human
+  0e7d42c7323a1165ba5efe1f0cd1847c23273039: ai
+  23ae8e8a9b741937b91b5e83d53d9550ddf031c3: ai
+  28b2977562d69751f147b1888b279f65f074d2c6: ai
+  4d828785d96d77711bbac7d50ee5c2acdd9c77d6: ai
+  9c90afc1199fe024c900ca2078c31b5083e252dd: ai
+  a8fac1087c728e2cd098233eeb6327700b81017e: ai
+  de44db0ba7478fb29697aba86b6069a759d68f0c: ai
+  02016b7b1f97df32444d961b9ca668dc065ef2ae: ai
+  17c608c6a3521a66fa4f53220eec534d014848c1: ai
+  73f9ee07423abf7685976ee2aa20d58a81750fb3: ai
+  920da9025c5028c9cb09960f571c6772fe6204b3: ai
+  da6d5019c69a3aac51760da8e26a0e434cd51338: ai
+  e13b4429cb4cab1d4be6100e22de4d233d188c79: ai
+  0a0682e9df4e43195bd0bb1f287423e2c1030de2: ai
+  45ea3909d972d216340b752bb9ec3e4efd7067fd: ai
+  54e8ff4e713ddd59ded61e67845640f608f2f66e: ai
+  78c3da923f7cce57a70f915bef688ae779ac348f: ai
+  8268a3c48a2513cf223859a7cb7d87794840fdbf: ai
+  c9981a63fdc80061aaf113ac631d0f281a1b4d31: ai
+  cb66268a31c1f8f99058b9716e97948a325c879a: ai
+  db9424a5f0ad5329f98fb08f83ee6d531153893c: ai
+  e7a6d58f59666776ca5421c0162efbcb978a2933: ai
+  efc7e0f431e24cbf43ad92d978bdf8f75b58870b: ai
+  f03ca700c3db71cc008bceabc5d8ce8ed3cabfb8: ai
+  fd6a0f9e8a6807cbb3d580b22e14ef6925b28bd3: ai
+  606e4b7b4d0a060648afac29d16a16f9c3858a60: ai
+  727cd4f307dbe807a477c19e4477f711a2cca612: ai
+  7291844d07f593575517bc53278becea7200d591: ai
+  95a4d93775cd506852165bbe4e0548fb47e56a45: ai
+  bb4b85203fa9d073de8ce1d0a83561c466104498: ai
+  bde797758387a0512e3e0153ac327e0bf3d1617a: ai
+  c801d9c9c5dc82338057cf93df568cbc11bd80fe: ai
+  d3e1f4700a96363eaa0ed27d76052c4dd5fa355c: ai
+  e42d3e1c8602d97ccd70e275343696067781c12f: ai
+  3b7f9426ee233111d4a9caae7e98a47f1480414a: ai
+  6abc74d3d73e0c28cab4261fd60a2139a4900156: ai
+  b24f29dcd2fbe3bff4cddcb7a6d2d1a7218419fe: ai
+  c804c491d3c5911ee8c29ce7b3f51e885ddca6a0: human
+  d54f7abfdd44b99d4d5f291f86d4e9b262f37a4c: ai
+  ebea84be003acc0b1d76358cbbcd77caa02ed9c8: ai
+  370a110b93f21f21f14f3c75419b27976e1a556d: ai
+  392fae2332531520597471bee2d5bc5c23076c99: ai
+  45e1b04542f7ca20646c2ba77965b0a6f576b4e6: ai
+  6ec625fe7466333012605ee1037ce31c7926de09: ai
+  75dc10517df51cd935c4f24f0b3316e4b660c830: ai
+  814bb5c0bf6c479a19426ca07262a3c7f446e47b: ai
+  825df64ce9957fbfa3145606142ffe7e02bbe96f: ai
+  c08cea6c8f6821e452aa24867523b945c400e94c: ai
+  f45427e8692492d967c6700ee513f57f5c72f367: ai
+  f724029d6e3c5dd4ef3a3ee682cd19691f569660: ai
+  fb4aded5a4fb277f47ee19bd62b04bdb4a80d670: ai
+  332f7b39ad66c6337303dd0a5c28c3d2e2842e7b: ai
+  33baf2c8beebdc5d31a1839e79348cb8f630eafa: ai
+  64b8dc4160dc074479c5f805508fcbc6b0864dda: ai
+  8772a55832f6ce34bef434844ac5349378d9f2c6: human
+  c9fa56db5e2588f2a329568dcf5e7a9184644e6c: ai
+  d144eedf12905926e6ae3e4ff13cf1902c5a78af: ai
+  d3128975fdfdb2eef0cf246901d32d187788a8b5: ai
+  0c4b6683c04fbbabf82e0be3e55da23c8e505b95: ai
+  3008624165e0fd3dcf9bae968bdff33886bb7291: ai
+  61c65a40a99815f6ae89da02c23e60e02cb3edd9: ai
+  b6056e78ddda5c251095cfad753fe051acca40dc: ai
+  17f3e006751e7fe2bf94a5a397e8ce1b80d1dda8: ai
+  4429043d2648be17b7f884b7689231b991e2cf25: ai
+  86dff084b907342a46c10c5ff652f227a09084c8: ai
+  9044b4ec48b65401d9afecfe436435b6d683bb6c: ai
+  d1f78e1b5ce53efa8df3c28ea8e3b929f32ff9de: ai
+  f58af27aca4d75013bc84998a226667aaaae8719: ai
+  0e2728920150dea0ab8a3a845dfb93b15323bab4: ai
+  10998db81d0cce68c48b27aadf1eca9f54c57fe6: ai
+  5223a5fa93a1588eaf2051e44a615d1407f7687d: ai
+  76fd326be278bc8199fa786de69108c6ad72dee2: ai
+  cb0f9ade15ef16b2e38ebc71ab6d57ae31df63b4: ai
+  dd33f7c87cb79306c097308a25c9875646cbd4b4: ai
+  ec312d8993cbfaa7b82a7c67d2a488001ed2efad: ai
+  240cd119d6a408e57ec1ba304123a96c3e5fca28: ai
+  39f4e83fc4c801ddeedaaf3113f7898faa16f506: ai
+  47fbb166fb02eee762b540cfed7bdfa2c3682eb1: ai
+  57d3fd80950631f1f366ad75817ecefd6954d6b0: ai
+  84b970520399631f18286e892d20c897fd5c2f97: ai
+  c3956a93c832f10b17a8c81d565ef888c2e2be87: ai
+  d054335b65b7b32d82300bcdc94e739761bd72f0: human
+  db2768c002d770673decee9caa3cca7f1dbf9c26: ai
+  ddab2ed764e271246d365096ba4a4d08bfa4835a: ai
+  e2e64f110b3d24a5ecdae1fbfe697db70fa01933: ai
+  ef5855c6f515bd551356ad6ff6eec40b2635a3f1: ai
+  fd55a6b26ac615e14b93171a2c2f454b51adcf26: ai
+  2411b1f2d51b65da5b695eb3bfcca46537faa416: ai
+  6c6ccc54dd064c71232954c7332c3fbcb6a511ab: ai
+  b4d90361158c2ff1cdb73d9d2c036288b3636c62: ai
+  c3be23dea82cc4b18022577c5816aa9aec37aba5: ai
+  c6a9750b4f31d520f7eb36b99d920829c36290b0: ai
+  f43a8bf3520a6e4a5bc8a14e0ad6cc524e1de727: ai
+  f88a809cfdec89d37c6006a84f366a49d30c6a26: ai
+  5a0f0ba071d45b77b93ab7376f9ce92582d399db: human
+  956debe72ebfd889d0153d61f71ce960f422b0ec: ai
+  d85090bd7ee894a7f02e7bacae5a1535d5d35fc8: ai
+  9d659acd361e01a100cc59797daba3f05fd98fcb: human
+  df15c2ff2b630072a62c935a7de9c0c928d308b4: ai
+  108a71ee34ddda6b6dcfe1534ebf77e1c6ffbfba: ai
+  39bf2612b89b7fb2f51085fac2a7468b80fe0175: ai
+  4d46d93a399d22adf67743984d259a2f4cfc3a0c: ai
+  5ece119766827b409713ea16f60ff79d87486124: ai
+  64819456a3be492ecdb0e603401df010a3a12c42: ai
+  6988b38349787f66a453f7b4b5a6e615c2923356: human
+  a856319ba5c0f3f94c0dd3976aebbc2e32ad0c6f: ai
+  cb9210703c87554ad9ee173f9ca3c92c670a7b85: ai
+  e93ee83f476469966637db014b93ff66d39a3168: ai
+  3325b27592d4dd3e063acbbb5933043c1feeda87: human
+  7c9dc6f209b5e258075b1a5057c65882d7b015f9: ai
+  d3e6daa4d5462ac136fa5c07b2c6cb6a21cd3b2e: ai
+  e943eacce6354c47a1ee2b8b48bbc6faeabf4091: human
+  06ffba68601e341f97bf89e541187d04f43e346b: ai
+  3509b3f64872617c1c7f8c72f56a253aed45775a: ai
+  438ed97d3e9baf65591169a0265bf75ff5c96376: ai
+  9ca72ad51ecfb85688c1abc91eea68922c7d4f38: ai
+  d8fb78caf6487970c6ce04e8d2cd170b30005df6: ai
+  f5546ff313475415c68a30bb32ddd5fbe1df40bb: human
+  29b82e35ccc8c40c947fedcd5791501a66143054: ai
+  87af545f064f29d8928dea46bf7d471cf437797e: ai
+  b5b339c03983788ded29d7d85f50f7f76eef6378: ai
+  faf5dcf054885ff3b92ca47e0afa2ab563b83d27: ai
+  111f06cfa9cc3bc7a1d1b33657e4eae2850167f2: ai
+  22cd0a5439f6a777814c72c394056848f2c26e9c: ai
+  951deefce971f1d91253780955da720b0c40c656: ai
+  b5e705b56be0467319f04e6a3cfc4d31901075f6: ai
+  0d0f49fa54014cd6b6006b0afde3e5c22306ce85: ai
+  426027e311d91c7e8c1e463420e0c258f652068c: human
+  46d46e04770f024e6469455920bebfeb4ca9a604: ai
+  df9a908f77a90387e18a228c3f7f189caf6497e4: ai
+  122af7a7199b754a3e91f47982f9a0f73b9ece92: ai
+  2695c89b8c96cdd1272a9021d18479dfa95d4e88: ai
+  32560c2fe4a46da3b49dcfe779a34187ddc5f8aa: human
+  5ea9b7c3235305f3cdfd361db10b653d5bb33c79: ai
+  cff29946c9b77a7613c80ad82682096eea5abbad: human
+  1fae7894285f5b36fe7e12f6aeff06c6ee687140: human
+  2af4c67441a740f8c1f103ebc4d2bb7ae3cf31c4: ai
+  5dbb44375d486e4ef10c389651e0f3a712a8f773: ai
+  66c87a62a4a8b28e36e90123b88b2da68ff84613: human
+  70c67bb812ed93060e111dfe4a3307cd67c19c5d: ai
+  81bfadf6da58675da9c0c367fb459eb12e61e975: human
+  9fc13412cbd0c6efd688739b049a71557e3f1f2d: human
+  d167423b29901b22dc2bf4f8a544ea1bb6321542: ai
+  f27144229891a127c7dd5449900ed02f50ad6eef: human
+  f76076c49bcd9bfdd4aa719dc03ff1ba321ad22b: human
+  0acbbee326b4d97f87917e06eb8054ee3836c5dd: ai
+  2e0b3fcb41d1e2534dad29d6a57853c932264149: human
+  4cdb10d9a440fb65bb25e819d99d8067ac8d3d65: ai
+  5612d4f726a238338bdc807c3030219cfc8e1a41: human
+  a63869c267ad03d52807dd4f16e3ed002838e557: human
+  456f500e11aa66c9b4800961f4f4c06dc0616dfd: human
+  b769da785c274e9da95461bfdc4654e09e3350f5: human
+  f580dd40cbf91135d349cb1d69a648a0336ee515: human
+  bf1a411d8f28f51c778a588698c9ec7cbe57991d: ai
+  f49306224624933072497b7238f8e6796141f9d8: human
+  f6efb6700b017e4a2e0977b3ef22e4deb8a8bc1b: ai
+  8f5b4461f11f73bcd4d2271a2efac4e6deb40f5a: ai
+  739a815a1fe44873c511daabae1f2fe57d97f623: human
+  0d14a39e6d41769108040d811094c1e8dd925371: ai
+  1211dffa28e2daab858bb64fc9dfbe634a2804c6: human
+  1b473488fa8b1405a7d781628826ca602317595b: human
+  34f24dac4995cc569a2a7f31d748f0f6a07b3cad: ai
+  6c2398679bf1106f71a2c911610792ad845f67b3: ai
+  fce7d13512b728ae7cf4317c3a593f73e392842b: human
+  af6f242c0d95f7c67e349273e6fd7c5e8ed56fde: human
+  54fb38a5f7bd0ddead851eedb511649580d325fb: ai
+  3363e4410aac2c070a56180c0601780921e21ab6: ai
+  80cff3fb20a8abe564f5f2bd85d5fd3737eeeb5f: ai
+  bef6a99baca0d6580ebbf02c7a08885966e9bf66: human
+  bc9d329b0293bb9cdc6b6625fd120f025a0aabc4: human
+  b0119c520dae9aa48b495a6865da6cfd99467c09: ai
+  09bdef9ba24cfbd0d1699d44365cca1e49fed165: ai
+  e0a062be66c5da8daa1f5a6879d4709992e05819: ai
+  240a0fb058f4a20888ffcf323b01043abba45884: ai
+  96f82c9770bd5b4ed501216c0ec3ed28b13394fd: human
+  a1567ae5deabd7cef783559b631682fab00fc053: ai
+  cc5709dcd9ac1bb27c002a778bf89e1c84f04adb: ai
+  e14f2d7c9d79b64af97ad0df8462dce45bece83b: ai
+  5b14012e146fb5c465a1d5272ebe4f3192c7ccec: ai
+  6509a821678622357ca8acfae5989030a150a326: ai
+  0ff0d37b0316c7b50303dd99ac23fa2a032b49c1: ai
+  566dd6512d03bea238585f874a5a91dbbdce2876: ai
+  4443607c1bfdd4e7c85f93cea94f7c54755677eb: ai
+  8c4cb0cf5440ca7f177362d8a476cfb3fb22e030: ai
+  95a32322024b123610f38db0a8ee2d262ebf77f3: ai
+  fd8ce6e0864b728209000aed9bac2db2a80969a0: ai
+  1a5ffa09b61720a90973db307b455a5255e6c9df: ai
+  80029ae01b53e00c827602c0b0e5134396ab8098: ai
+  b72e7c9005f543270b96f35f1d292d56877ae5d5: ai
+  ee99a2ce7f7fe1441f35c5352be1f74412ed53c1: ai
+  19b71854903c99aee4b035f1508487ff4d7c9ff3: ai
+  1df7e352d4bbfadb4e0cc9ff5e2a42440d26da6a: ai
+  2d65615276c439e9b9495fe37a0ab6f22f9d799d: ai
+  3df1d5f8e9ee35334d788a9d7d3d8a7c16781791: ai
+  41709d29f10bfb97609f45b592c05a2cd8a1ddd3: ai
+  42797aeba7c3029a84bd6b7da0d986449e75037e: ai
+  5ce7de8e9543e2c47cccad12f6974160cc729549: ai
+  7da1ffd3b25fedb199bd1c9d84d9eeb3232e3ab3: ai
+  87f827af749833b0e063f4070bb36167c7957b25: ai
+  8adf62013cb2d119145bc5537bb53d63b89811a1: ai
+  8bedacd3d0a1e5f61b21b8922b859f90476ca7ec: ai
+  8d2e44430b7cec0d0bf93302c75c59b8af10abe7: ai
+  98cdb11dee2485d706cd46154801c3ae363ed976: ai
+  99a19a41c09cb1631f7bf2951d14c90c136fd89a: ai
+  b03db66c304f1d0ab396117b5c78769a9211c0ef: ai
+  b16458b4066db0b2b28b4d4d10c7e94472a88a83: ai
+  b3d35a7678c8c90c54fc8f4bf4730274d408b979: ai
+  c8ae8679010f3c39791d5d93136fb19889cacde5: ai
+  cefedbf2819c2390838d61927d034f319dfacbdf: ai
+  dc639a1266e4f6bc96890ebb510f44aad2a8adef: ai
+  e87ab75ed8190bbf43293f45630e9cf949473192: ai
+  1d488a9271910768f266dee5a5148f75f018fec0: ai
+  22442d35efb06e7ed017e13afe9b40ba175bcd45: ai
+  2dcbbbb81b3b5e71b81de877b6c47bc788069224: ai
+  31c1b56e1a523f0b72cf9379599a65a33e858754: ai
+  33410c312ec2fd3fdbd78ecbb0ade01165a1eab7: ai
+  4574c9dca176ed2483f458706d534395c257d374: ai
+  4b62a40061c4895721adf71cdab60ca75115fbf6: ai
+  8303a3ffa2334409513998b81aa0aba6cf776dfc: ai
+  b88293b3d51e5a88492ccd49733904f8a70334d1: ai
+  c63968d45db4172f3c27122f6530b7d2393e2f0d: ai
+  c80d5faa77c1abb3b968562ba87e8330fc2fd79f: ai
+  ca27aec7c68681caf0801e220edc49b5b6d1021c: ai
+  cd8678acdfd8a749ba36db336560135b934984c0: ai
+  d60c1c00640deb07edde7fb4dcf40d2f01a72a0a: ai
+  eb4609766c7b5facb672e4fb30e1ef4078e5b656: ai
+  6fe484d93ee63181ed29fd1c861242bcbcf176cb: ai
+  b21f0d74092daa0388eef93db3786eadf7950c8a: human

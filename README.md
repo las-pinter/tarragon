@@ -134,6 +134,12 @@ first user-installed database that needs an upgrade.
 
 *Coming soon, we're polishing the interface for its close-up.*
 
+## Attribution
+
+![AI vs human code split](assets/attribution.svg)
+
+Every commit is classified in [`AI-ATTRIBUTION.yaml`](AI-ATTRIBUTION.yaml).
+
 ## License
 
 Tarragon is open source software licensed under the [MIT License](LICENSE). Free to use, modify, and share.

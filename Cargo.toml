@@ -8,6 +8,19 @@ edition = "2024"
 rust-version = "1.99"
 license = "MIT"
 
+[workspace.dependencies]
+# Q8: egui/eframe 0.36.2. One pin, shared by every crate. tarragon-ui uses
+# egui only and never eframe (Q8, Q16).
+#
+# Default fonts are off. The `epaint_default_fonts` crate carries the
+# `OFL-1.1` and `Ubuntu-font-1.0` licenses, which are off the Q7 allowlist.
+# The app must ship a font that passes the allowlist. The spike loads a system
+# font at run time (see `examples/grid_spike.rs`).
+egui = { version = "=0.36.2", default-features = false }
+# Q19 names rayon for CPU-bound work. The grid spike uses a 4-thread pool as
+# the Q10 four-core pin.
+rayon = "1.11"
+
 [workspace.lints.rust]
 unsafe_code = "forbid"
 missing_docs = "warn"

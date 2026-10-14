@@ -4,6 +4,7 @@ description = "Binary entry point that wires the tarragon crates together."
 version.workspace = true
 edition.workspace = true
 publish = false
+license.workspace = true
 
 [lints]
 workspace = true

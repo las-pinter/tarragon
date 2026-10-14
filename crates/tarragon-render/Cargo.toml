@@ -4,6 +4,10 @@ description = "Renderers for plain images, CLIP files, and Krita documents."
 version.workspace = true
 edition.workspace = true
 publish = false
+license.workspace = true
+
+[dependencies]
+image = { version = "=0.25.10", default-features = false, features = ["jpeg", "png", "tiff", "webp"] }
 
 [lints]
 workspace = true

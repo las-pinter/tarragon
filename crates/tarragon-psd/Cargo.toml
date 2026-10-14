@@ -4,6 +4,7 @@ description = "PSD and PSB parsing, merged preview, and layer compositor."
 version.workspace = true
 edition.workspace = true
 publish = false
+license.workspace = true
 
 [lints]
 workspace = true

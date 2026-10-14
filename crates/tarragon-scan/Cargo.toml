@@ -4,6 +4,10 @@ description = "Recursive folder scanning and change detection."
 version.workspace = true
 edition.workspace = true
 publish = false
+license.workspace = true
+
+[dependencies]
+notify = "=8.2.0"
 
 [lints]
 workspace = true

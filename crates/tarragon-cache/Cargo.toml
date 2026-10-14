@@ -4,6 +4,7 @@ description = "Cache store: tier directories, keys, atomic writes, and purge."
 version.workspace = true
 edition.workspace = true
 publish = false
+license.workspace = true
 
 [lints]
 workspace = true

@@ -4,6 +4,7 @@ description = "Shared domain types, paths, errors, filter state, and sorting rul
 version.workspace = true
 edition.workspace = true
 publish = false
+license.workspace = true
 
 [lints]
 workspace = true

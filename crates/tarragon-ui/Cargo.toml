@@ -4,6 +4,7 @@ description = "egui widgets and theme tokens for the tarragon interface."
 version.workspace = true
 edition.workspace = true
 publish = false
+license.workspace = true
 
 [lints]
 workspace = true

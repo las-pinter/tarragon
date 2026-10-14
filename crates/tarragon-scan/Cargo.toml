@@ -1,6 +1,6 @@
 [package]
 name = "tarragon-scan"
-description = "Recursive folder scanning and change detection."
+description = "Non-recursive folder scanning and change detection."
 version.workspace = true
 edition.workspace = true
 publish = false
@@ -8,6 +8,11 @@ license.workspace = true
 
 [dependencies]
 notify = "=8.2.0"
+rayon.workspace = true
+tarragon-core.workspace = true
+
+[dev-dependencies]
+tarragon-db = { path = "../tarragon-db", version = "0.1.0" }
 
 [lints]
 workspace = true

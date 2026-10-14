@@ -923,6 +923,9 @@ name = "tarragon-scan"
 version = "0.1.0"
 dependencies = [
  "notify",
+ "rayon",
+ "tarragon-core",
+ "tarragon-db",
 ]
 
 [[package]]

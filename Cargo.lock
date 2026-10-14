@@ -788,6 +788,9 @@ version = "0.1.0"
 [[package]]
 name = "tarragon-core"
 version = "0.1.0"
+dependencies = [
+ "thiserror",
+]
 
 [[package]]
 name = "tarragon-db"

@@ -20,6 +20,9 @@ egui = { version = "=0.36.2", default-features = false }
 # Q19 names rayon for CPU-bound work. The grid spike uses a 4-thread pool as
 # the Q10 four-core pin.
 rayon = "1.11"
+# Shared error types. `tarragon-core` owns the error enums; the other crates
+# depend on them through core (Q16).
+thiserror = "2"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

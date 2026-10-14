@@ -9,6 +9,10 @@ rust-version = "1.99"
 license = "MIT"
 
 [workspace.dependencies]
+# Internal crates. The `version` key stops `cargo deny` from reading a bare
+# path dependency as a wildcard. `tarragon-db` depends on `tarragon-core`
+# only (Q16).
+tarragon-core = { path = "crates/tarragon-core", version = "0.1.0" }
 # Q8: egui/eframe 0.36.2. One pin, shared by every crate. tarragon-ui uses
 # egui only and never eframe (Q8, Q16).
 #
@@ -23,6 +27,10 @@ rayon = "1.11"
 # Shared error types. `tarragon-core` owns the error enums; the other crates
 # depend on them through core (Q16).
 thiserror = "2"
+# Q21: SQLite access uses `rusqlite` 0.40 with the `bundled` feature. The
+# bundled SQLite keeps the build self-contained. `tarragon-db` is the only
+# crate that links SQLite (Q16).
+rusqlite = { version = "0.40", features = ["bundled"] }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

@@ -8,3 +8,8 @@ license.workspace = true
 
 [lints]
 workspace = true
+
+[dependencies]
+tarragon-core.workspace = true
+rusqlite.workspace = true
+thiserror.workspace = true

@@ -4,8 +4,10 @@
 
 # Python leftovers still on disk
 /src/
-/tests/
 /scripts/
+
+# Fixture corpus is tracked (Q20). Python caches are ignored by the
+# __pycache__ and *.py[cod] rules below.
 .venv/
 __pycache__/
 *.py[cod]

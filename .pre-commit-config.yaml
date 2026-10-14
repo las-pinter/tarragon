@@ -1,0 +1,29 @@
+# Local quality-gate hooks (Q45). They run the four Q7 gates only.
+# A commit runs these hooks without --no-verify.
+repos:
+  - repo: local
+    hooks:
+      - id: cargo-fmt
+        name: cargo fmt --check
+        entry: cargo fmt --check
+        language: system
+        pass_filenames: false
+        always_run: true
+      - id: cargo-clippy
+        name: cargo clippy --all-targets -- -D warnings
+        entry: cargo clippy --all-targets -- -D warnings
+        language: system
+        pass_filenames: false
+        always_run: true
+      - id: cargo-nextest
+        name: cargo nextest run (fall back to cargo test)
+        entry: sh -c 'cargo nextest run || cargo test'
+        language: system
+        pass_filenames: false
+        always_run: true
+      - id: cargo-deny
+        name: cargo deny check
+        entry: cargo deny check
+        language: system
+        pass_filenames: false
+        always_run: true

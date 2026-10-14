@@ -1,0 +1,41 @@
+name: Rust
+
+on:
+  push:
+    branches: [rust]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  psd-fixtures:
+    name: Build the large PSB
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install psd-tools
+        run: pip install -r tests/fixtures/psd/requirements.txt
+      - name: Build the large PSB
+        run: sh tests/fixtures/psd/build_large_psb.sh "${{ runner.temp }}/large.psb"
+      - name: Verify the large PSB
+        env:
+          LARGE_PSB: ${{ runner.temp }}/large.psb
+        run: |
+          python3 - <<'PY'
+          import os
+
+          from psd_tools import PSDImage
+
+          image = PSDImage.open(os.environ["LARGE_PSB"])
+          size = (image.width, image.height)
+          assert size == (9000, 9000), size
+          print(f"large PSB reopens: {image.width}x{image.height}")
+          PY

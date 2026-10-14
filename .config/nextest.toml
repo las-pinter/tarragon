@@ -1,0 +1,3 @@
+# Test runner configuration for the tarragon workspace.
+[profile.default]
+fail-fast = true

@@ -1,0 +1,9 @@
+[package]
+name = "tarragon-ui"
+description = "egui widgets and theme tokens for the tarragon interface."
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[lints]
+workspace = true

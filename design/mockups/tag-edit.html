@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>D18 Tag edit - Tarragon mockups</title>
+<link rel="stylesheet" href="theme.css">
+</head>
+<body>
+<main class="mock">
+<div class="window">
+  <div class="titlebar">
+    <span class="tb-title">Tarragon</span>
+    <span class="tb-controls"><i></i><i></i><i></i></span>
+  </div>
+  <div class="menubar">
+    <span class="menu-item">File</span>
+    <span class="menu-item">View</span>
+    <span class="menu-item">Settings</span>
+  </div>
+
+  <div class="workspace">
+    <aside class="sidebar">
+      <div class="panel-title">Library</div>
+      <div class="side-head">Folders</div>
+      <div class="tree"><div class="tree-row selected"><span class="ico-folder"></span>sketches</div></div>
+    </aside>
+
+    <div class="col-main">
+      <section class="gallery">
+        <div class="gallery-top">
+          <div class="tabs"><span class="tab active">Folder</span><span class="tab">All Images</span></div>
+          <div class="infobar"><span>sketches - 12 files</span></div>
+        </div>
+
+        <div style="position:relative;flex:1">
+          <div style="padding:16px;color:var(--text-secondary);font-size:11px">
+            State A - the + add menu lists existing custom tags plus "Create new...".<br>
+            State B - choosing Create new... swaps + add for an inline input. Enter adds the tag; focus loss cancels.
+          </div>
+          <div class="menu" style="top:8px;left:8px">
+            <div class="menu-row"><span class="lead">environment</span></div>
+            <div class="menu-row"><span class="lead">hands</span></div>
+            <div class="menu-row"><span class="lead">todo</span></div>
+            <div class="menu-sep"></div>
+            <div class="menu-row"><span class="lead">Create new...</span></div>
+          </div>
+
+          <div class="menu" style="top:8px;left:250px">
+            <div class="menu-sub">Inline input state</div>
+            <div style="padding:6px 10px 10px">
+              <span class="field focus" style="display:inline-block;width:180px;border-color:var(--coral-strong)">Tag name...</span>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <aside class="preview">
+      <div class="panel-title">Preview</div>
+      <div class="preview-body">
+        <div class="preview-img"><div class="thumb g7" style="width:70%;height:88%"></div></div>
+        <div class="sec-head">Tags</div>
+        <div class="tag-pills">
+          <span class="tag-pill">character <span class="x">x</span></span>
+          <span class="tag-pill">lighting <span class="x">x</span></span>
+        </div>
+        <span class="field focus" style="width:100%;border-color:var(--coral-strong)">Tag name...</span>
+        <span style="color:var(--text-muted);font-size:10px">Press Enter to add. Escape or focus loss cancels.</span>
+      </div>
+    </aside>
+  </div>
+
+  <div class="statusbar"><span>Edit tags</span></div>
+  <span class="sample">sample</span>
+</div>
+<p class="mock-note">D18 - Tag edit. The Create new menu and the inline tag input. Sample data.</p>
+</main>
+</body>
+</html>

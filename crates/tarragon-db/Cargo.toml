@@ -1,0 +1,9 @@
+[package]
+name = "tarragon-db"
+description = "SQLite storage layer: schema and repositories."
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[lints]
+workspace = true

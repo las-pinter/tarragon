@@ -1,0 +1,9 @@
+[package]
+name = "tarragon-core"
+description = "Shared domain types, paths, errors, filter state, and sorting rules."
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[lints]
+workspace = true

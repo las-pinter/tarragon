@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>D12 Info bar - Tarragon mockups</title>
+<link rel="stylesheet" href="theme.css">
+</head>
+<body>
+<main class="mock">
+<div class="window">
+  <div class="titlebar">
+    <span class="tb-title">Tarragon</span>
+    <span class="tb-controls"><i></i><i></i><i></i></span>
+  </div>
+  <div class="menubar">
+    <span class="menu-item">File</span>
+    <span class="menu-item">View</span>
+    <span class="menu-item">Settings</span>
+  </div>
+
+  <div class="workspace">
+    <aside class="sidebar">
+      <div class="panel-title">Library</div>
+      <div class="side-head">Folders</div>
+      <div class="tree">
+        <div class="tree-row selected"><span class="caret down"></span><span class="ico-folder"></span>sketches</div>
+      </div>
+    </aside>
+
+    <div class="col-main">
+      <section class="gallery">
+        <div class="gallery-top">
+          <div class="tabs"><span class="tab active">Folder</span><span class="tab">All Images</span></div>
+          <div class="search"><span class="mag"></span><span>Search files and tags</span></div>
+
+          <div style="padding:6px 8px 0;color:var(--text-muted);font-size:10px">1 - folder with files, no filters</div>
+          <div class="infobar"><span>sketches - 12 files</span></div>
+
+          <div style="padding:6px 8px 0;color:var(--text-muted);font-size:10px">2 - active filters show the amber pill</div>
+          <div class="infobar"><span>sketches - 3 files</span><span class="pill">2 filters active</span></div>
+
+          <div style="padding:6px 8px 0;color:var(--text-muted);font-size:10px">3 - All Images scope</div>
+          <div class="infobar"><span>All Images - 3,204 files</span></div>
+
+          <div style="padding:6px 8px 0;color:var(--text-muted);font-size:10px">4 - sort toggle and filter pill in separate slots. Natural name sort or DATE sort by file mtime. The choice persists.</div>
+          <div class="infobar">
+            <span>sketches - 3 files</span>
+            <span style="display:flex;gap:6px;align-items:center">
+              <span style="color:var(--text-muted);font-size:10px">Sort</span>
+              <span class="pill" style="background:var(--bg-tertiary);color:var(--amber-accent);border:1px solid var(--amber-accent)">Name</span>
+              <span class="pill" style="background:transparent;color:var(--text-secondary)">Date</span>
+            </span>
+            <span class="pill">2 filters active</span>
+          </div>
+        </div>
+        <div class="empty">
+          <div class="hint">The info bar shows "{folder} - {n} files" on the left and "{n} filters active" on the right. The pill is hidden at zero active filters.</div>
+        </div>
+      </section>
+    </div>
+
+    <aside class="preview">
+      <div class="panel-title">Preview</div>
+      <div class="preview-body">
+        <div class="preview-img"><span style="color:var(--text-muted)">No preview</span></div>
+      </div>
+    </aside>
+  </div>
+  <div class="statusbar"><span>Info bar</span></div>
+  <span class="sample">sample</span>
+</div>
+<p class="mock-note">D12 - Info bar. Folder count on the left, active filter count pill on the right. Sample data.</p>
+</main>
+</body>
+</html>

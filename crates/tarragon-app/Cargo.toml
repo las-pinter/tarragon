@@ -1,0 +1,9 @@
+[package]
+name = "tarragon-app"
+description = "Binary entry point that wires the tarragon crates together."
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[lints]
+workspace = true

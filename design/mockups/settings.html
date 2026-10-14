@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>D21 Settings - Tarragon mockups</title>
+<link rel="stylesheet" href="theme.css">
+</head>
+<body>
+<main class="mock">
+<div class="window">
+  <div class="titlebar">
+    <span class="tb-title">Tarragon</span>
+    <span class="tb-controls"><i></i><i></i><i></i></span>
+  </div>
+  <div class="menubar">
+    <span class="menu-item">File</span>
+    <span class="menu-item">View</span>
+    <span class="menu-item open">Settings</span>
+  </div>
+
+  <div class="workspace">
+    <aside class="sidebar">
+      <div class="panel-title">Library</div>
+      <div class="side-head">Folders</div>
+      <div class="tree"><div class="tree-row selected"><span class="ico-folder"></span>sketches</div></div>
+    </aside>
+    <div class="col-main">
+      <section class="gallery">
+        <div class="empty"><div class="hint">Preferences dialog is modal. Settings are read on open and written only on OK.</div></div>
+      </section>
+    </div>
+    <aside class="preview"><div class="panel-title">Preview</div></aside>
+  </div>
+
+  <div class="scrim">
+    <div class="dialog">
+      <div class="dialog-head"><span>Preferences</span><span style="color:var(--text-secondary)">x</span></div>
+      <div class="dialog-body">
+        <div class="group">
+          <span class="group-title">Performance</span>
+          <div class="form-row"><label>Max PSD Workers</label><span class="field">3</span></div>
+          <div class="form-row"><label>Max Multi-Preview</label><span class="field">9</span></div>
+          <div class="form-row"><label>Large Canvas Threshold (MP)</label><span class="field">20.0</span></div>
+          <div class="form-row"><label>Tile Grid Size</label><span class="field">3x3</span></div>
+        </div>
+
+        <div class="group">
+          <span class="group-title">Color Tagging</span>
+          <div class="form-row">
+            <label>Enable Color Tagging</label>
+            <span class="check on"><span class="box"></span></span>
+          </div>
+          <div class="form-row"><label>Color Tag Palette Size</label><span class="field">8</span></div>
+          <div class="form-row"><label>Color Tag Minimum Share</label><span class="field">0.10</span></div>
+          <div class="form-row"><label>Neutral Saturation Threshold</label><span class="field">0.15</span></div>
+        </div>
+
+        <div class="group">
+          <span class="group-title">Cache</span>
+          <div class="form-row"><label>Cache Directory</label><span style="display:flex;gap:8px"><span class="field" style="flex:1">Default cache directory</span><button class="btn small">Browse...</button></span></div>
+          <div class="form-row"><label>Cache Format</label><span class="field">PNG</span></div>
+          <div class="form-row">
+            <label>Clear Full-Res Cache on Exit</label>
+            <span class="check on"><span class="box"></span></span>
+          </div>
+          <div class="form-row">
+            <label>Cache Size</label>
+            <span class="cache-size"><span class="meta-val">1.4 GB</span><button class="btn small">Purge Cache</button></span>
+          </div>
+        </div>
+
+        <div class="group">
+          <span class="group-title">Debug</span>
+          <div class="form-row">
+            <label>Enable Debug Logging</label>
+            <span class="check"><span class="box"></span></span>
+          </div>
+        </div>
+      </div>
+      <div class="dialog-foot">
+        <button class="btn pressed">OK</button>
+        <button class="btn">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <span class="sample">sample</span>
+</div>
+<p class="mock-note">D21 - Settings. Four groups: Performance, Color Tagging, Cache, Debug. Twelve typed settings plus the Cache Size row. Sample data.</p>
+</main>
+</body>
+</html>

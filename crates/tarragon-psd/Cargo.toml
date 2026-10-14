@@ -1,0 +1,9 @@
+[package]
+name = "tarragon-psd"
+description = "PSD and PSB parsing, merged preview, and layer compositor."
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[lints]
+workspace = true

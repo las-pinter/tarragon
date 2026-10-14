@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>D23 Log panel - Tarragon mockups</title>
+<link rel="stylesheet" href="theme.css">
+</head>
+<body>
+<main class="mock">
+<div class="window">
+  <div class="titlebar">
+    <span class="tb-title">Tarragon</span>
+    <span class="tb-controls"><i></i><i></i><i></i></span>
+  </div>
+  <div class="menubar">
+    <span class="menu-item">File</span>
+    <span class="menu-item">View</span>
+    <span class="menu-item">Settings</span>
+  </div>
+
+  <div class="workspace">
+    <aside class="sidebar">
+      <div class="panel-title">Library</div>
+      <div class="side-head">Folders</div>
+      <div class="tree"><div class="tree-row selected"><span class="ico-folder"></span>sketches</div></div>
+    </aside>
+
+    <div class="col-main">
+      <section class="gallery">
+        <div class="gallery-top">
+          <div class="tabs"><span class="tab active">Folder</span><span class="tab">All Images</span></div>
+          <div class="infobar"><span>sketches - 12 files</span></div>
+        </div>
+        <div class="grid">
+          <div class="cell"><div class="thumb g7"><span class="thumb-badge badge-navy">PNG</span></div><div class="cell-name">sketch_014.png</div></div>
+          <div class="cell"><div class="thumb g1"><span class="thumb-badge badge-sage">JPG</span></div><div class="cell-name">ref_042.jpg</div></div>
+          <div class="cell"><div class="thumb g8"><span class="thumb-badge badge-vinous">PSD</span></div><div class="cell-name">poster_v2.psd</div></div>
+          <div class="cell"><div class="thumb g5"><span class="thumb-badge badge-teal">WEBP</span></div><div class="cell-name">palette.webp</div></div>
+        </div>
+      </section>
+
+      <!-- Log dock (bottom, toggled by View - Log) -->
+      <section class="logpanel">
+        <div class="panel-title">Log <span class="float">dock</span></div>
+        <div class="log-toolbar">
+          <button class="btn small">Clear</button>
+          <span class="check on" style="font-size:11px"><span class="box"></span>Debug</span>
+        </div>
+        <div class="log-lines">
+          <div class="lvl-debug">[21:04:02] DEBUG    tarragon.scan: incremental rescan found 3 changed files</div>
+          <div class="lvl-info">[21:04:02] INFO     tarragon.scan: Scan completed - 1280 files in 2.4s</div>
+          <div class="lvl-info">[21:04:03] INFO     tarragon.cache: tier 256 hit for sketch_014.png</div>
+          <div class="lvl-debug">[21:04:03] DEBUG    tarragon.render: decoded 2048x1536 in 41 ms</div>
+          <div class="lvl-warn">[21:04:04] WARNING  tarragon.render: PSD layer count 214 exceeds soft limit; tiled render</div>
+          <div class="lvl-info">[21:04:05] INFO     tarragon.db: WAL checkpoint complete</div>
+          <div class="lvl-err">[21:04:06] ERROR    tarragon.render: failed to read poster_v3.psd: unexpected end of file</div>
+          <div class="lvl-crit">[21:04:06] CRITICAL tarragon.app: cache directory is read-only</div>
+          <div class="lvl-info">[21:04:07] INFO     tarragon.app: user opened editor for concept.kra</div>
+        </div>
+      </section>
+    </div>
+
+    <aside class="preview">
+      <div class="panel-title">Preview</div>
+      <div class="preview-body">
+        <div class="preview-img"><div class="thumb g7" style="width:70%;height:88%"></div></div>
+      </div>
+    </aside>
+  </div>
+
+  <div class="statusbar"><span>Log panel</span><span style="margin-left:auto">Debug toggles root level DEBUG/INFO</span></div>
+  <span class="sample">sample</span>
+</div>
+<p class="mock-note">D23 - Log panel. Live color-coded lines and the Debug toggle. Sample data.</p>
+</main>
+</body>
+</html>

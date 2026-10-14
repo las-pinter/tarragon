@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>D27 Error state - Tarragon mockups</title>
+<link rel="stylesheet" href="theme.css">
+</head>
+<body>
+<main class="mock">
+<div class="window">
+  <div class="titlebar">
+    <span class="tb-title">Tarragon</span>
+    <span class="tb-controls"><i></i><i></i><i></i></span>
+  </div>
+  <div class="menubar">
+    <span class="menu-item">File</span>
+    <span class="menu-item">View</span>
+    <span class="menu-item">Settings</span>
+  </div>
+
+  <div class="workspace">
+    <aside class="sidebar">
+      <div class="panel-title">Library</div>
+      <div class="side-head">Folders</div>
+      <div class="tree"><div class="tree-row selected"><span class="ico-folder"></span>sketches</div></div>
+    </aside>
+
+    <div class="col-main">
+      <section class="gallery">
+        <div class="gallery-top">
+          <div class="tabs"><span class="tab active">Folder</span><span class="tab">All Images</span></div>
+          <div class="infobar"><span>sketches - 3 files</span></div>
+        </div>
+        <div class="grid">
+          <div class="cell"><div class="thumb g7"><span class="thumb-badge badge-navy">PNG</span></div><div class="cell-name">sketch_014.png</div></div>
+          <div class="cell selected">
+            <div class="thumb" style="display:flex;align-items:center;justify-content:center;background:var(--bg-secondary)"><span class="err-icon">!</span></div>
+            <div class="cell-name err-cell-name">poster_v3.psd</div>
+          </div>
+          <div class="cell"><div class="thumb g1"><span class="thumb-badge badge-sage">JPG</span></div><div class="cell-name">ref_042.jpg</div></div>
+        </div>
+      </section>
+
+      <!-- Log dock with the matching error line -->
+      <section class="logpanel">
+        <div class="panel-title">Log <span class="float">dock</span></div>
+        <div class="log-toolbar">
+          <button class="btn small">Clear</button>
+          <span class="check on" style="font-size:11px"><span class="box"></span>Debug</span>
+        </div>
+        <div class="log-lines">
+          <div class="lvl-info">[21:10:01] INFO     tarragon.scan: Scan completed - 1280 files in 2.4s</div>
+          <div class="lvl-warn">[21:10:03] WARNING  tarragon.render: poster_v3.psd is 0 bytes; skipping merged preview</div>
+          <div class="lvl-err">[21:10:03] ERROR    tarragon.render: failed to read poster_v3.psd: unexpected end of file</div>
+          <div class="lvl-err">[21:10:03] ERROR    tarragon.preview: preview job failed for poster_v3.psd</div>
+        </div>
+      </section>
+    </div>
+
+    <aside class="preview">
+      <div class="panel-title">Preview</div>
+      <div class="preview-body">
+        <div class="err-card">
+          <div style="display:flex;align-items:center;gap:12px">
+            <span class="err-icon">!</span>
+            <div>
+              <div class="err-title">Preview failed</div>
+              <div class="meta-val">poster_v3.psd</div>
+            </div>
+          </div>
+          <div class="meta-val">Failed to render the PSD merged preview: unexpected end of file.</div>
+          <div class="err-hint">Retry: reselect the file or use Regenerate Thumbnail. Check the log for the full trace.</div>
+          <div style="display:flex;gap:8px">
+            <button class="btn small">Retry</button>
+            <button class="btn ghost">Open in editor</button>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <div class="statusbar"><span>Error state</span><span style="margin-left:auto">Render failure</span></div>
+  <span class="sample">sample</span>
+</div>
+<p class="mock-note">D27 - Error state. A file that fails to render shows an error icon, a message, and a retry hint. The log panel shows the matching error line. Sample data.</p>
+</main>
+</body>
+</html>

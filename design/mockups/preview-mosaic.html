@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>D17 Preview mosaic - Tarragon mockups</title>
+<link rel="stylesheet" href="theme.css">
+</head>
+<body>
+<main class="mock">
+<div class="window">
+  <div class="titlebar">
+    <span class="tb-title">Tarragon</span>
+    <span class="tb-controls"><i></i><i></i><i></i></span>
+  </div>
+  <div class="menubar">
+    <span class="menu-item">File</span>
+    <span class="menu-item">View</span>
+    <span class="menu-item">Settings</span>
+  </div>
+
+  <div class="workspace">
+    <aside class="sidebar">
+      <div class="panel-title">Library</div>
+      <div class="side-head">Folders</div>
+      <div class="tree"><div class="tree-row selected"><span class="ico-folder"></span>sketches</div></div>
+    </aside>
+
+    <div class="col-main">
+      <section class="gallery">
+        <div class="gallery-top">
+          <div class="tabs"><span class="tab active">Folder</span><span class="tab">All Images</span></div>
+          <div class="infobar"><span>sketches - 12 files</span><span>9 files selected</span></div>
+        </div>
+        <div class="grid">
+          <div class="cell selected"><span class="check-badge">v</span><div class="thumb g1"><span class="thumb-badge badge-sage">JPG</span></div><div class="cell-name">ref_042.jpg</div></div>
+          <div class="cell selected"><span class="check-badge">v</span><div class="thumb g7"><span class="thumb-badge badge-navy">PNG</span></div><div class="cell-name">sketch_014.png</div></div>
+          <div class="cell selected"><span class="check-badge">v</span><div class="thumb g8"><span class="thumb-badge badge-vinous">PSD</span></div><div class="cell-name">poster_v2.psd</div></div>
+          <div class="cell selected"><span class="check-badge">v</span><div class="thumb g5"><span class="thumb-badge badge-teal">WEBP</span></div><div class="cell-name">palette.webp</div></div>
+          <div class="cell selected"><span class="check-badge">v</span><div class="thumb g3"><span class="thumb-badge badge-plum">GIF</span></div><div class="cell-name">doodle.gif</div></div>
+          <div class="cell selected"><span class="check-badge">v</span><div class="thumb g10"><span class="thumb-badge badge-umber">TIFF</span></div><div class="cell-name">scan_07.tiff</div></div>
+        </div>
+      </section>
+    </div>
+
+    <aside class="preview">
+      <div class="panel-title">Preview - mosaic (cap 9)</div>
+      <div class="preview-body">
+        <div class="mosaic c3" style="flex:1;align-content:start">
+          <div class="mosaic-cell g1"><span class="thumb-badge badge-sage">JPG</span></div>
+          <div class="mosaic-cell g7"><span class="thumb-badge badge-navy">PNG</span></div>
+          <div class="mosaic-cell g8"><span class="thumb-badge badge-vinous">PSD</span></div>
+          <div class="mosaic-cell g5"><span class="thumb-badge badge-teal">WEBP</span></div>
+          <div class="mosaic-cell g3"><span class="thumb-badge badge-plum">GIF</span></div>
+          <div class="mosaic-cell g10"><span class="thumb-badge badge-umber">TIFF</span></div>
+          <div class="mosaic-cell g4"><span class="thumb-badge badge-olive">BMP</span></div>
+          <div class="mosaic-cell g12"><span class="thumb-badge badge-plum">KRA</span></div>
+          <div class="mosaic-cell g2"><span class="thumb-badge badge-azure">CLIP</span></div>
+        </div>
+
+        <div class="sec-head">Loading hint (batch in flight)</div>
+        <div style="height:60px;display:flex;align-items:center;justify-content:center;gap:8px;border-radius:8px;background:var(--bg-secondary);color:var(--text-muted);font-size:11px">
+          <span class="spinner"></span> Loading previews...
+        </div>
+
+        <div class="sec-head">Empty mosaic (batch produced no images)</div>
+        <div style="height:44px;display:flex;align-items:center;justify-content:center;border-radius:8px;background:var(--bg-secondary);color:var(--text-muted);font-size:11px">
+          No previews available
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <div class="statusbar"><span>9 files selected</span><span style="margin-left:auto">Mosaic fills as decode workers finish</span></div>
+  <span class="sample">sample</span>
+</div>
+<p class="mock-note">D17 - Preview mosaic. Multi-select cap 9, loading hint, and empty mosaic states. Sample data.</p>
+</main>
+</body>
+</html>

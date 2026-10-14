@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>D5 Favorites reorder - Tarragon mockups</title>
+<link rel="stylesheet" href="theme.css">
+</head>
+<body>
+<main class="mock">
+<div class="window">
+  <div class="titlebar">
+    <span class="tb-title">Tarragon</span>
+    <span class="tb-controls"><i></i><i></i><i></i></span>
+  </div>
+  <div class="menubar">
+    <span class="menu-item">File</span>
+    <span class="menu-item">View</span>
+    <span class="menu-item">Settings</span>
+  </div>
+
+  <div class="workspace">
+    <aside class="sidebar">
+      <div class="panel-title">Library</div>
+      <div class="side-head">Folders</div>
+      <div class="tree">
+        <div class="tree-row"><span class="caret right"></span><span class="ico-folder"></span>references</div>
+        <div class="tree-row"><span class="caret right"></span><span class="ico-folder"></span>sketches</div>
+        <div class="tree-row"><span class="ico-folder"></span>studies</div>
+      </div>
+
+      <div class="side-head gap">Favorites (drag to reorder)</div>
+      <div class="fav-row"><span class="grip">::</span><span class="ico-folder"></span>references/hands</div>
+      <div class="drop-line"></div>
+      <div class="fav-row dragging"><span class="grip">::</span><span class="ico-folder"></span>sketches/2026-10</div>
+      <div class="fav-row"><span class="grip">::</span><span class="ico-folder"></span>studies/color</div>
+      <div class="drop-line"></div>
+      <div class="fav-row"><span class="grip">::</span><span class="ico-folder"></span>psd_sources</div>
+      <div style="padding:6px 10px;color:var(--text-muted);font-size:10px">Drop between rows to set order 0..n-1 in one commit.</div>
+
+      <div class="side-buttons">
+        <button class="btn small">Add Current Folder</button>
+        <button class="btn small">Remove</button>
+      </div>
+    </aside>
+
+    <div class="col-main">
+      <section class="gallery">
+        <div class="gallery-top">
+          <div class="tabs"><span class="tab active">Folder</span><span class="tab">All Images</span></div>
+          <div class="infobar"><span>sketches/2026-10 - 12 files</span></div>
+        </div>
+        <div class="grid">
+          <div class="cell"><div class="thumb g7"><span class="thumb-badge badge-navy">PNG</span></div><div class="cell-name">sketch_014.png</div></div>
+          <div class="cell"><div class="thumb g1"><span class="thumb-badge badge-sage">JPG</span></div><div class="cell-name">ref_042.jpg</div></div>
+          <div class="cell"><div class="thumb g8"><span class="thumb-badge badge-vinous">PSD</span></div><div class="cell-name">poster_v2.psd</div></div>
+          <div class="cell"><div class="thumb g5"><span class="thumb-badge badge-teal">WEBP</span></div><div class="cell-name">palette.webp</div></div>
+        </div>
+      </section>
+    </div>
+
+    <aside class="preview">
+      <div class="panel-title">Preview</div>
+      <div class="preview-body">
+        <div class="preview-img"><span style="color:var(--text-muted)">No preview</span></div>
+      </div>
+    </aside>
+  </div>
+  <div class="statusbar"><span>Reorder favorites</span></div>
+  <span class="sample">sample</span>
+</div>
+<p class="mock-note">D5 - Favorites drag-reorder. The dragged row is dashed; the amber lines show the drop target. Sample data.</p>
+</main>
+</body>
+</html>

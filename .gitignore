@@ -1,0 +1,17 @@
+# Rust build output
+/target/
+**/*.rs.bk
+
+# Python leftovers still on disk
+/src/
+/tests/
+/scripts/
+.venv/
+__pycache__/
+*.py[cod]
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+/dist/
+*.log

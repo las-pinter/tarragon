@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>D3 Menu bar - Tarragon mockups</title>
+<link rel="stylesheet" href="theme.css">
+</head>
+<body>
+<main class="mock">
+<!-- Frame 1: File menu open -->
+<div class="window" style="height:300px">
+  <div class="titlebar">
+    <span class="tb-title">Tarragon</span>
+    <span class="tb-controls"><i></i><i></i><i></i></span>
+  </div>
+  <div class="menubar">
+    <span class="menu-item open">File</span>
+    <span class="menu-item">View</span>
+    <span class="menu-item">Settings</span>
+  </div>
+
+  <div class="workspace" style="position:relative">
+    <div style="flex:1;padding:16px;color:var(--text-muted);font-size:11px">
+      Frame 1 - File menu open. Only one menu is open. The Python File menu holds Open Folder only; there is no Quit item and no shortcut.
+    </div>
+    <div class="menu" style="top:8px;left:8px">
+      <div class="menu-row"><span class="lead"><span class="tick"> </span>Open Folder...</span></div>
+    </div>
+  </div>
+  <span class="sample">sample</span>
+</div>
+
+<!-- Frame 2: View menu open -->
+<div class="window" style="height:300px">
+  <div class="titlebar">
+    <span class="tb-title">Tarragon</span>
+    <span class="tb-controls"><i></i><i></i><i></i></span>
+  </div>
+  <div class="menubar">
+    <span class="menu-item">File</span>
+    <span class="menu-item open">View</span>
+    <span class="menu-item">Settings</span>
+  </div>
+
+  <div class="workspace" style="position:relative">
+    <div style="flex:1;padding:16px;color:var(--text-muted);font-size:11px">
+      Frame 2 - View menu open. Dock toggles for Library, Gallery, Preview, and Log, then Reset Window Layout. No shortcut text.
+    </div>
+    <div class="menu" style="top:8px;left:56px">
+      <div class="menu-row checked"><span class="lead"><span class="tick">v</span>Library</span></div>
+      <div class="menu-row checked"><span class="lead"><span class="tick">v</span>Gallery</span></div>
+      <div class="menu-row checked"><span class="lead"><span class="tick">v</span>Preview</span></div>
+      <div class="menu-row"><span class="lead"><span class="tick"> </span>Log</span></div>
+      <div class="menu-sep"></div>
+      <div class="menu-row"><span class="lead"><span class="tick"> </span>Reset Window Layout</span></div>
+    </div>
+  </div>
+  <span class="sample">sample</span>
+</div>
+
+<!-- Frame 3: Settings menu open -->
+<div class="window" style="height:300px">
+  <div class="titlebar">
+    <span class="tb-title">Tarragon</span>
+    <span class="tb-controls"><i></i><i></i><i></i></span>
+  </div>
+  <div class="menubar">
+    <span class="menu-item">File</span>
+    <span class="menu-item">View</span>
+    <span class="menu-item open">Settings</span>
+  </div>
+
+  <div class="workspace" style="position:relative">
+    <div style="flex:1;padding:16px;color:var(--text-muted);font-size:11px">
+      Frame 3 - Settings menu open. The Python Settings menu holds Preferences only; there is no shortcut.
+    </div>
+    <div class="menu" style="top:8px;left:112px">
+      <div class="menu-row"><span class="lead"><span class="tick"> </span>Preferences...</span></div>
+    </div>
+  </div>
+  <span class="sample">sample</span>
+</div>
+
+<p class="mock-note">D3 - Menu bar. File, View, and Settings. The screenshot is split so one menu is open at a time. Sample data.</p>
+</main>
+</body>
+</html>

@@ -1,0 +1,9 @@
+[package]
+name = "tarragon-render"
+description = "Renderers for plain images, CLIP files, and Krita documents."
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[lints]
+workspace = true

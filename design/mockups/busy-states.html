@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>D25 Busy states - Tarragon mockups</title>
+<link rel="stylesheet" href="theme.css">
+</head>
+<body>
+<main class="mock">
+<div class="window">
+  <div class="titlebar">
+    <span class="tb-title">Tarragon</span>
+    <span class="tb-controls"><i></i><i></i><i></i></span>
+  </div>
+  <div class="menubar">
+    <span class="menu-item">File</span>
+    <span class="menu-item">View</span>
+    <span class="menu-item">Settings</span>
+  </div>
+
+  <div class="workspace">
+    <aside class="sidebar">
+      <div class="panel-title">Library</div>
+      <div class="side-head">Folders</div>
+      <div class="tree"><div class="tree-row selected"><span class="ico-folder"></span>sketches</div></div>
+    </aside>
+
+    <div class="col-main">
+      <section class="gallery">
+        <div class="gallery-top">
+          <div class="tabs"><span class="tab active">Folder</span><span class="tab">All Images</span></div>
+
+          <div style="padding:6px 8px 0;color:var(--text-muted);font-size:10px">State 1 - folder scan</div>
+          <div class="busy">
+            <span class="blabel">Working...</span>
+            <span class="bbar"><i></i></span>
+          </div>
+
+          <div style="padding:6px 8px 0;color:var(--text-muted);font-size:10px">State 2 - cache purge</div>
+          <div class="busy">
+            <span class="blabel">Working...</span>
+            <span class="bbar"><i></i></span>
+          </div>
+
+          <div style="padding:6px 8px 0;color:var(--text-muted);font-size:10px">State 3 - multi-select decode</div>
+          <div class="busy">
+            <span class="blabel">Working...</span>
+            <span class="bbar"><i></i></span>
+          </div>
+
+          <div style="padding:6px 8px 4px;color:var(--text-muted);font-size:10px">The strip is hidden when idle. Overlapping operations keep it visible until the last one ends.</div>
+        </div>
+
+        <div class="grid">
+          <div class="cell fade-in"><div class="thumb g1"><span class="thumb-badge badge-sage">JPG</span></div><div class="cell-name">ref_042.jpg</div></div>
+          <div class="cell fade-in fade-mid"><div class="thumb g7"><span class="thumb-badge badge-navy">PNG</span></div><div class="cell-name">sketch_014.png</div></div>
+          <div class="cell fade-in"><div class="thumb g8"><span class="thumb-badge badge-vinous">PSD</span></div><div class="cell-name">poster_v2.psd</div></div>
+          <div class="cell"><div class="thumb g5"><span class="thumb-badge badge-teal">WEBP</span></div><div class="cell-name">palette.webp</div></div>
+          <div class="cell"><div class="thumb g3"><span class="thumb-badge badge-plum">GIF</span></div><div class="cell-name">doodle.gif</div></div>
+          <div class="cell"><div class="thumb g10"><span class="thumb-badge badge-umber">TIFF</span></div><div class="cell-name">scan_07.tiff</div></div>
+          <div class="cell"><div class="thumb g4"><span class="thumb-badge badge-olive">BMP</span></div><div class="cell-name">matte.bmp</div></div>
+          <div class="cell"><div class="thumb g12"><span class="thumb-badge badge-plum">KRA</span></div><div class="cell-name">concept.kra</div></div>
+        </div>
+      </section>
+    </div>
+
+    <aside class="preview">
+      <div class="panel-title">Preview</div>
+      <div class="preview-body">
+        <div class="mosaic c2" style="flex:1;align-content:start">
+          <div class="mosaic-cell g1"></div>
+          <div class="mosaic-cell g7"></div>
+          <div class="mosaic-cell g8"></div>
+          <div class="mosaic-cell" style="display:flex;align-items:center;justify-content:center;background:var(--bg-secondary)"><span class="spinner"></span></div>
+        </div>
+        <div style="color:var(--text-muted);font-size:11px">Mosaic cells fill as decode workers land. A stale selection is dropped by the generation token.</div>
+      </div>
+    </aside>
+  </div>
+
+  <div class="statusbar"><span>Busy states</span><span style="margin-left:auto">Scan, purge, decode</span></div>
+  <span class="sample">sample</span>
+</div>
+<p class="mock-note">D25 - Busy states. Scan, purge, and decode strips. Sample data.</p>
+</main>
+</body>
+</html>

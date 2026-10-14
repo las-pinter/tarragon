@@ -1,0 +1,9 @@
+[package]
+name = "tarragon-scan"
+description = "Recursive folder scanning and change detection."
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[lints]
+workspace = true

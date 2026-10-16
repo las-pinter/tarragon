@@ -9,6 +9,8 @@
 
 use std::path::Path;
 
+use crate::adjustments::{parse_adjustment, parse_brightness_contrast};
+use crate::content::{LayerContent, parse_gradient_fill, parse_solid_color};
 use crate::decode::{ChannelRegion, ImageRegion, Viewport, decode_channel};
 use crate::error::PsdError;
 use crate::limits::{MAX_DIMENSION, ParseOptions, full_tier_size};
@@ -25,8 +27,17 @@ const BLEND_SIGNATURE: &[u8; 4] = b"8BIM";
 const BLEND_SIGNATURE_64: &[u8; 4] = b"8B64";
 /// The additional-layer-info key for the unicode layer name.
 const UNICODE_NAME_KEY: &[u8; 4] = b"luni";
+/// The additional-layer-info key for the fill opacity.
+const FILL_OPACITY_KEY: &[u8; 4] = b"iOpa";
 /// The additional-layer-info keys for the layer section divider.
 const SECTION_KEYS: [&[u8; 4]; 2] = [b"lsct", b"lsdk"];
+/// The additional-layer-info key for the vector mask path.
+const VECTOR_MASK_KEYS: [&[u8; 4]; 2] = [b"vmsk", b"vsms"];
+/// The adjustment-layer block keys this parser recognizes.
+const ADJUSTMENT_KEYS: [&[u8; 4]; 16] = [
+    b"levl", b"curv", b"hue2", b"brit", b"nvrt", b"thrs", b"post", b"expA", b"vibA", b"blnc",
+    b"mixr", b"grdm", b"phfl", b"selc", b"blwh", b"clrL",
+];
 /// The smallest possible layer record in bytes.
 const MIN_LAYER_RECORD: usize = 34;
 
@@ -309,7 +320,7 @@ pub struct MergedImage {
 }
 
 /// One parsed layer record.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct LayerRecord {
     /// The layer name. The unicode name wins over the ASCII name.
     pub name: String,
@@ -321,6 +332,8 @@ pub struct LayerRecord {
     pub blend_key: [u8; 4],
     /// The opacity, 0 to 255.
     pub opacity: u8,
+    /// The fill opacity, 0 to 255. Defaults to 255 when the block is absent.
+    pub fill_opacity: u8,
     /// The clipping flag.
     pub clipping: Clipping,
     /// The raw layer flag bits.
@@ -333,10 +346,14 @@ pub struct LayerRecord {
     pub blending_ranges: BlendingRanges,
     /// The layer section divider, when the record carries one.
     pub section: Option<LayerSection>,
+    /// The parsed layer content: pixels, a fill, or an adjustment.
+    pub content: LayerContent,
+    /// True when the record carries a vector mask path block.
+    pub has_vector_mask: bool,
 }
 
 /// The parsed header, layers, global mask, and image data of a PSD or PSB.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PsdFile {
     /// The file header.
     pub header: PsdHeader,
@@ -410,7 +427,7 @@ impl PsdFile {
     }
 
     /// Validate a viewport against the canvas and the full-tier cap.
-    fn check_region(&self, viewport: Viewport) -> Result<(), PsdError> {
+    pub(crate) fn check_region(&self, viewport: Viewport) -> Result<(), PsdError> {
         // The cap guard runs first so a huge request never reaches an alloc.
         let edge = viewport.width().max(viewport.height());
         if edge > crate::limits::FULL_TIER_MAX_EDGE {
@@ -617,7 +634,7 @@ fn parse_layer_info(
     let mut layers = Vec::new();
     for _ in 0..layer_count {
         options.check()?;
-        layers.push(read_layer_record(body, header.version, options)?);
+        layers.push(read_layer_record(body, header, options)?);
     }
     assign_channel_offsets(&mut layers, body, header.version)?;
     Ok((layer_count, layers))
@@ -906,12 +923,19 @@ fn read_length(reader: &mut Reader, version: PsdVersion) -> Result<u64, PsdError
     }
 }
 
+/// The sample count of a document depth, used by adjustment lookup tables.
+#[must_use]
+const fn sample_levels(depth: u16) -> u32 {
+    if depth >= 16 { 65_536 } else { 256 }
+}
+
 /// Read one layer record.
 fn read_layer_record(
     reader: &mut Reader,
-    version: PsdVersion,
+    header: &PsdHeader,
     options: &ParseOptions,
 ) -> Result<LayerRecord, PsdError> {
+    let version = header.version;
     let bounds = LayerBounds {
         top: reader.read_i32()?,
         left: reader.read_i32()?,
@@ -954,7 +978,7 @@ fn read_layer_record(
 
     let extra_length = reader.read_u32()?;
     let extra = reader.take(to_usize(u64::from(extra_length))?)?;
-    let parsed = read_layer_extra(extra)?;
+    let parsed = read_layer_extra(extra, sample_levels(header.depth))?;
 
     // A mask channel uses the mask rectangle, not the layer rectangle.
     for channel in &mut channels {
@@ -976,12 +1000,15 @@ fn read_layer_record(
         channels,
         blend_key,
         opacity,
+        fill_opacity: parsed.fill_opacity,
         clipping,
         flags,
         visible: flags & 0x02 == 0,
         mask: parsed.mask,
         blending_ranges: parsed.blending_ranges,
         section: parsed.section,
+        content: parsed.content,
+        has_vector_mask: parsed.has_vector_mask,
     })
 }
 
@@ -995,20 +1022,33 @@ struct LayerExtra {
     name: String,
     /// The layer section divider.
     section: Option<LayerSection>,
+    /// The fill opacity, 0 to 255.
+    fill_opacity: u8,
+    /// The parsed layer content.
+    content: LayerContent,
+    /// True when a vector mask block is present.
+    has_vector_mask: bool,
 }
 
 /// Read the extra data block of a layer record.
-fn read_layer_extra(extra: &[u8]) -> Result<LayerExtra, PsdError> {
+fn read_layer_extra(extra: &[u8], lut_size: u32) -> Result<LayerExtra, PsdError> {
     let mut reader = Reader::new(extra);
     let mask = read_mask(&mut reader)?;
     let blending_ranges = read_blending_ranges(&mut reader)?;
     let ascii = read_pascal_name(&mut reader);
-    let (unicode, section) = read_extra_blocks(&mut reader)?;
+    let blocks = read_extra_blocks(&mut reader, lut_size)?;
     Ok(LayerExtra {
         mask,
         blending_ranges,
-        name: if unicode.is_empty() { ascii } else { unicode },
-        section,
+        name: if blocks.name.is_empty() {
+            ascii
+        } else {
+            blocks.name
+        },
+        section: blocks.section,
+        fill_opacity: blocks.fill_opacity,
+        content: blocks.content,
+        has_vector_mask: blocks.has_vector_mask,
     })
 }
 
@@ -1074,10 +1114,30 @@ fn read_mask(reader: &mut Reader) -> Result<Option<LayerMask>, PsdError> {
     }))
 }
 
-/// Read the unicode name and section divider from the extra blocks.
-fn read_extra_blocks(reader: &mut Reader) -> Result<(String, Option<LayerSection>), PsdError> {
-    let mut unicode = String::new();
+/// The unicode name, section divider, fill opacity, and content from the extra
+/// blocks.
+struct ExtraBlocks {
+    /// The unicode layer name.
+    name: String,
+    /// The section divider, when present.
+    section: Option<LayerSection>,
+    /// The fill opacity, 0 to 255. Defaults to 255 when absent.
+    fill_opacity: u8,
+    /// The parsed layer content.
+    content: LayerContent,
+    /// True when a vector mask block is present.
+    has_vector_mask: bool,
+}
+
+/// Read the unicode name, section divider, fill opacity, and content blocks.
+fn read_extra_blocks(reader: &mut Reader, lut_size: u32) -> Result<ExtraBlocks, PsdError> {
+    let mut name = String::new();
     let mut section = None;
+    let mut fill_opacity = 255;
+    let mut content = LayerContent::Pixels;
+    let mut has_vector_mask = false;
+    let mut brightness_contrast: Option<Vec<u8>> = None;
+    let mut cged: Option<Vec<u8>> = None;
     while reader.remaining() >= 12 {
         let signature = reader.read_array::<4>()?;
         if &signature != BLEND_SIGNATURE && &signature != BLEND_SIGNATURE_64 {
@@ -1087,16 +1147,46 @@ fn read_extra_blocks(reader: &mut Reader) -> Result<(String, Option<LayerSection
         let length = to_usize(u64::from(reader.read_u32()?))?;
         let block = reader.take(length)?;
         if &key == UNICODE_NAME_KEY {
-            if let Some(name) = decode_utf16be(block) {
-                unicode = name;
+            if let Some(decoded) = decode_utf16be(block) {
+                name = decoded;
             }
+        } else if &key == FILL_OPACITY_KEY && !block.is_empty() {
+            fill_opacity = block[0];
         } else if SECTION_KEYS.contains(&&key) && block.len() >= 4 {
             section = Some(LayerSection::from_code(u32::from_be_bytes([
                 block[0], block[1], block[2], block[3],
             ])));
+        } else if VECTOR_MASK_KEYS.contains(&&key) {
+            has_vector_mask = true;
+        } else if &key == b"SoCo" {
+            content = parse_solid_color(block)
+                .map_or(LayerContent::Unsupported, LayerContent::SolidColor);
+        } else if &key == b"GdFl" {
+            content = parse_gradient_fill(block)
+                .map_or(LayerContent::Unsupported, LayerContent::Gradient);
+        } else if &key == b"PtFl" {
+            // A pattern fill needs the document pattern table (a documented gap).
+            content = LayerContent::Unsupported;
+        } else if &key == b"brit" {
+            brightness_contrast = Some(block.to_vec());
+        } else if &key == b"CgEd" {
+            cged = Some(block.to_vec());
+        } else if ADJUSTMENT_KEYS.contains(&&key) {
+            content = parse_adjustment(&key, block, lut_size)
+                .map_or(LayerContent::Unsupported, LayerContent::Adjustment);
         }
     }
-    Ok((unicode, section))
+    if let Some(block) = brightness_contrast {
+        content = parse_brightness_contrast(&block, cged.as_deref())
+            .map_or(LayerContent::Unsupported, LayerContent::Adjustment);
+    }
+    Ok(ExtraBlocks {
+        name,
+        section,
+        fill_opacity,
+        content,
+        has_vector_mask,
+    })
 }
 
 /// Read the padded Pascal string layer name.

@@ -8,6 +8,8 @@ use std::path::{Path, PathBuf};
 
 use tarragon_core::error::RenderError;
 
+use crate::parse::ColorMode;
+
 /// A PSD or PSB parse failed.
 #[derive(Debug, thiserror::Error)]
 pub enum PsdError {
@@ -51,6 +53,62 @@ pub enum PsdError {
         /// The declared length in bytes.
         length: u64,
     },
+    /// The parse deadline expired before the work finished.
+    #[error("PSD parse timed out")]
+    Timeout,
+    /// The color mode and depth pair has no channel reader.
+    #[error("unsupported PSD color mode {mode:?} at depth {depth}")]
+    UnsupportedColorMode {
+        /// The file color mode.
+        mode: ColorMode,
+        /// The bit depth per channel.
+        depth: u16,
+    },
+    /// The channel compression code is not raw nor RLE.
+    #[error("unsupported PSD channel compression: {0}")]
+    UnsupportedCompression(u16),
+    /// The requested viewport is empty or outside the canvas.
+    #[error("invalid viewport ({left}, {top})-({right}, {bottom}) for {width}x{height}")]
+    InvalidViewport {
+        /// The left edge.
+        left: u32,
+        /// The top edge.
+        top: u32,
+        /// The right edge.
+        right: u32,
+        /// The bottom edge.
+        bottom: u32,
+        /// The canvas width.
+        width: u32,
+        /// The canvas height.
+        height: u32,
+    },
+    /// A single decode would exceed the full-tier long-edge cap.
+    #[error("image edge {edge} px exceeds the {cap} px full-tier cap")]
+    CapExceeded {
+        /// The requested long edge in pixels.
+        edge: u32,
+        /// The allowed cap in pixels.
+        cap: u32,
+    },
+    /// A layer index is out of range.
+    #[error("layer index {index} is out of range for {count} layers")]
+    LayerOutOfRange {
+        /// The requested index.
+        index: usize,
+        /// The number of layers.
+        count: usize,
+    },
+    /// The image dimensions are outside the Adobe spec limit.
+    #[error("image dimensions {width}x{height} exceed the {limit} px limit")]
+    BadDimensions {
+        /// The header width.
+        width: u32,
+        /// The header height.
+        height: u32,
+        /// The allowed limit in pixels.
+        limit: u32,
+    },
 }
 
 impl PsdError {
@@ -65,6 +123,7 @@ impl PsdError {
                 path: path.to_path_buf(),
                 source,
             },
+            PsdError::CapExceeded { edge, cap } => RenderError::TooLarge { edge, cap },
             other => RenderError::Decode {
                 path: path.to_path_buf(),
                 reason: other.to_string(),

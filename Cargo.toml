@@ -31,6 +31,9 @@ thiserror = "2"
 # bundled SQLite keeps the build self-contained. `tarragon-db` is the only
 # crate that links SQLite (Q16).
 rusqlite = { version = "0.40", features = ["bundled"] }
+# Q28: settings values store as JSON text, and the hidden `window_state` key
+# holds a JSON blob. Only `tarragon-db` parses them.
+serde_json = "1"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

@@ -17,6 +17,7 @@ mod like;
 pub mod query;
 pub mod repository;
 pub mod schema;
+pub mod settings;
 
 #[cfg(test)]
 mod tests;

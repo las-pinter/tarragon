@@ -1,10 +1,15 @@
 [package]
 name = "tarragon-cache"
-description = "Cache store: tier directories, keys, atomic writes, and purge."
+description = "Cache store: tier directories, cache keys, atomic writes, and format markers."
 version.workspace = true
 edition.workspace = true
 publish = false
 license.workspace = true
+
+[dependencies]
+image = { version = "=0.25.10", default-features = false, features = ["jpeg"] }
+tarragon-core.workspace = true
+thiserror.workspace = true
 
 [lints]
 workspace = true

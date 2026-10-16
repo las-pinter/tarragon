@@ -372,6 +372,38 @@ fn delete_thumbnails_by_folder_removes_every_descendant() {
 }
 
 #[test]
+fn clear_thumbnails_removes_every_row() {
+    let temp = TempDb::new();
+    temp.db
+        .write_scan_group(&[file("/refs", "a.png", 1, 10), file("/refs", "b.png", 2, 20)])
+        .expect("write the rows");
+    assert_eq!(temp.db.count_thumbnails().expect("count"), 2);
+
+    let removed = temp.db.clear_thumbnails().expect("clear the table");
+
+    assert_eq!(removed, 2, "the clear must report every removed row");
+    assert_eq!(
+        temp.db.count_thumbnails().expect("count"),
+        0,
+        "DELETE FROM thumbnails must empty the table"
+    );
+}
+
+#[test]
+fn clear_thumbnails_on_an_empty_table_removes_nothing() {
+    let temp = TempDb::new();
+
+    let removed = temp.db.clear_thumbnails().expect("clear an empty table");
+
+    assert_eq!(removed, 0, "an empty clear must report no removed rows");
+    assert_eq!(
+        temp.db.count_thumbnails().expect("count"),
+        0,
+        "an empty clear must leave the table empty"
+    );
+}
+
+#[test]
 fn distinct_folders_lists_every_parent_folder() {
     let temp = TempDb::new();
     temp.db

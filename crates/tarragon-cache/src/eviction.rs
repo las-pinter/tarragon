@@ -181,7 +181,7 @@ fn remove_entry_files(entry: &CacheEntry, root: &Path) -> Result<Removed, CacheE
 ///
 /// A missing root or a missing path is not under the root. The check follows
 /// symlinks, so a link that points outside the root is rejected.
-fn is_within_root(canonical_root: Option<&Path>, path: &Path) -> bool {
+pub(crate) fn is_within_root(canonical_root: Option<&Path>, path: &Path) -> bool {
     let Some(root) = canonical_root else {
         return false;
     };

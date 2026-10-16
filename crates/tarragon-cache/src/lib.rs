@@ -3,10 +3,12 @@
 //!
 //! This crate performs I/O. It does not depend on the GUI or the database. The
 //! three Q23 tiers are written as JPEG q90 (Q28 revised). Every tier file is
-//! written through a temp file and an atomic rename (Q15).
+//! written through a temp file and an atomic rename (Q15). The size cap and
+//! the LRU eviction (Q25, Q33) live in [`eviction`].
 
 use std::path::PathBuf;
 
+pub mod eviction;
 pub mod store;
 
 /// A cache store error.

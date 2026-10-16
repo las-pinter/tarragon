@@ -164,6 +164,37 @@ fn thumbnails_have_a_last_accessed_column() {
 }
 
 #[test]
+fn thumbnails_are_listed_in_last_accessed_order() {
+    let temp = TempDb::new();
+    let files = [
+        file("/refs", "a.png", 1, 10),
+        file("/refs", "b.png", 1, 10),
+        file("/refs", "c.png", 1, 10),
+    ];
+    temp.db.write_scan_group(&files).expect("write the rows");
+    temp.db
+        .touch_last_accessed(&["/refs/a.png".to_owned()], 30)
+        .expect("touch a");
+    temp.db
+        .touch_last_accessed(&["/refs/b.png".to_owned()], 10)
+        .expect("touch b");
+    temp.db
+        .touch_last_accessed(&["/refs/c.png".to_owned()], 20)
+        .expect("touch c");
+
+    let ordered = temp
+        .db
+        .thumbnails_by_last_accessed()
+        .expect("list the rows");
+    let paths: Vec<&str> = ordered.iter().map(|row| row.path.as_str()).collect();
+    assert_eq!(
+        paths,
+        vec!["/refs/b.png", "/refs/c.png", "/refs/a.png"],
+        "the list must run least recently accessed first"
+    );
+}
+
+#[test]
 fn scan_group_writes_every_row_and_commits_once() {
     let temp = TempDb::new();
     let files = [

@@ -275,6 +275,30 @@ impl Database {
         Ok(record)
     }
 
+    /// List every thumbnail row in least-recently-accessed-first order.
+    ///
+    /// The order drives the Q33 LRU eviction. The `path` column breaks a tie
+    /// between equal `last_accessed` values, so the order is stable. The
+    /// caller builds the eviction list from the stored cache paths.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DbError::Sqlite`] when the read fails. Returns
+    /// [`DbError::LockPoisoned`] after a panic poisoned the lock.
+    pub fn thumbnails_by_last_accessed(&self) -> Result<Vec<Thumbnail>, DbError> {
+        let conn = self.lock()?;
+        let sql = format!(
+            "SELECT {THUMBNAIL_COLUMNS} FROM thumbnails ORDER BY last_accessed ASC, path ASC"
+        );
+        let mut stmt = conn.prepare(&sql)?;
+        let rows = stmt.query_map([], row_to_thumbnail)?;
+        let mut out = Vec::new();
+        for row in rows {
+            out.push(row?);
+        }
+        Ok(out)
+    }
+
     /// List every thumbnail row under `folder`, direct children only.
     ///
     /// # Errors

@@ -7,7 +7,12 @@
 //! The scan does not read pixel dimensions. The stored `width` and `height`
 //! stay zero until a render fills them, which matches the Python scan (Q1).
 //!
-//! This crate performs I/O. It depends on `tarragon-core` only (Q16).
+//! The optional watcher reports a change in the open folder after a 500 ms
+//! debounce (Q26). It watches only while a folder is open.
+//!
+//! This crate performs I/O. Among the tarragon crates it depends on
+//! `tarragon-core` only (Q16).
 
 pub mod extensions;
 pub mod scan;
+pub mod watch;

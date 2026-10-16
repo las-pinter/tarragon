@@ -47,6 +47,14 @@ pub enum ScanError {
     /// The scan was cancelled.
     #[error("scan cancelled")]
     Cancelled,
+    /// A filesystem watch failed.
+    #[error("cannot watch {path}: {reason}")]
+    Watch {
+        /// The folder path.
+        path: PathBuf,
+        /// The backend message.
+        reason: String,
+    },
 }
 
 /// A render failed.

@@ -11,6 +11,7 @@ use std::str::FromStr;
 use rusqlite::{Connection, OptionalExtension, Row, params};
 use tarragon_core::entity::{FileInfo, Tag, TagSource};
 
+use crate::like::{folder_deep_like, folder_like, normalize_path};
 use crate::{Database, DbError};
 
 /// A thumbnail row read from the database.
@@ -103,42 +104,12 @@ ON CONFLICT(path) DO UPDATE SET mtime = thumbnails.mtime, size = thumbnails.size
 const PATH_CHUNK: usize = 500;
 
 /// The column list for a thumbnail read.
-const THUMBNAIL_COLUMNS: &str = "\
+pub(crate) const THUMBNAIL_COLUMNS: &str = "\
 path, mtime, size, thumb_hash, width, height, created_at, cache_uuid, \
 thumbnail_cache_path, preview_cache_path, full_cache_path, last_accessed";
 
-/// Return `path` with backslashes changed to forward slashes.
-fn normalize_path(path: &str) -> String {
-    path.replace('\\', "/")
-}
-
-/// Escape the LIKE wildcards `%`, `_`, and `\` so they match literally.
-fn escape_like(value: &str) -> String {
-    value
-        .replace('\\', "\\\\")
-        .replace('%', "\\%")
-        .replace('_', "\\_")
-}
-
-/// Return the LIKE pattern that matches a folder and its direct children.
-fn folder_like(folder: &str) -> String {
-    let normalized = normalize_path(folder);
-    let trimmed = normalized.trim_end_matches('/');
-    format!("{}/%", escape_like(trimmed))
-}
-
-/// Return the LIKE pattern that matches the deeper descendants of a folder.
-///
-/// SQLite `%` also matches `/`. The extra `/%` tail therefore matches a path
-/// with one more separator, which is a nested child and never a direct child.
-fn folder_deep_like(folder: &str) -> String {
-    let normalized = normalize_path(folder);
-    let trimmed = normalized.trim_end_matches('/');
-    format!("{}/%/%", escape_like(trimmed))
-}
-
 /// Map a thumbnail row.
-fn row_to_thumbnail(row: &Row<'_>) -> rusqlite::Result<Thumbnail> {
+pub(crate) fn row_to_thumbnail(row: &Row<'_>) -> rusqlite::Result<Thumbnail> {
     Ok(Thumbnail {
         path: row.get("path")?,
         mtime: row.get("mtime")?,

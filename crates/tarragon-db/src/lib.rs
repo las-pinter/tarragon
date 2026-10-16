@@ -13,6 +13,8 @@ use std::time::Duration;
 
 use rusqlite::Connection;
 
+mod like;
+pub mod query;
 pub mod repository;
 pub mod schema;
 

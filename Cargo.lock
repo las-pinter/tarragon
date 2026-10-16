@@ -976,6 +976,7 @@ name = "tarragon-render"
 version = "0.1.0"
 dependencies = [
  "image",
+ "tarragon-core",
 ]
 
 [[package]]

@@ -6,5 +6,12 @@ edition.workspace = true
 publish = false
 license.workspace = true
 
+[dependencies]
+# Q16: the psd crate depends on core. The parser error converts to the shared
+# RenderError at the composite boundary.
+tarragon-core.workspace = true
+# One error derive. It is on the Q7 allowlist and already in the workspace.
+thiserror.workspace = true
+
 [lints]
 workspace = true

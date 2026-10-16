@@ -970,6 +970,10 @@ dependencies = [
 [[package]]
 name = "tarragon-psd"
 version = "0.1.0"
+dependencies = [
+ "tarragon-core",
+ "thiserror",
+]
 
 [[package]]
 name = "tarragon-render"

@@ -1,10 +1,8 @@
-//! Adjustment-layer math for the compositor (study task 19, Q27).
+//! Adjustment-layer math for the compositor.
 //!
 //! The core set covers invert, posterize, threshold, levels, curves and
 //! brightness/contrast. The block binary layouts follow the Adobe PSD
-//! specification; the working reference is `photocraft`
-//! (`crates/io/src/adjust_map.rs`, `crates/compose/src/adjust.rs`, MIT OR
-//! Apache-2.0). See the crate README for the attribution note.
+//! specification.
 //!
 //! Values are normalized `f32` in `0.0..=1.0`. Hue/Saturation, Color Balance,
 //! Channel Mixer, Gradient Map, Photo Filter, Selective Color, Black & White,
@@ -15,7 +13,7 @@ use crate::descriptor::parse_versioned;
 /// The number of samples in a tone lookup table.
 const LUT_SIZE: usize = 256;
 
-/// The Rec. 601 grey weights, used by Threshold (matching `psd-tools`).
+/// The Rec. 601 grey weights, used by Threshold.
 const GREY_WEIGHTS: [f32; 3] = [0.299, 0.587, 0.114];
 
 /// The PDF luminance weights, used by the non-separable blend modes.
@@ -69,8 +67,7 @@ impl LevelsChannel {
 /// A plain `base^(1/gamma)` has infinite slope at black; Photoshop bounds it with a
 /// linear toe (initial slope about `2^gamma`). A soft-min of the power curve and that
 /// line keeps the exact power curve in the body and lifts only the darkest values.
-/// `gamma <= 1` is untouched. Ports `levels_q` from the reference
-/// (`crates/compose/src/adjust.rs`).
+/// `gamma <= 1` is untouched.
 #[must_use]
 fn levels_shape(base: f32, gamma: f32) -> f32 {
     if gamma <= 1.0 {

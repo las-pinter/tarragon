@@ -5,10 +5,7 @@
 //! such as `levl` or `curv`. The parser turns those blocks into a
 //! [`LayerContent`]; the compositor draws the fill or applies the adjustment.
 //!
-//! The binary layouts follow the Adobe PSD specification. The working
-//! reference for the block keys and the descriptor shape is `photocraft`
-//! (`crates/io/src/adjust_map.rs`, `crates/io/src/blocks.rs`,
-//! `crates/psd/src/descriptor.rs`, MIT OR Apache-2.0).
+//! The binary layouts follow the Adobe PSD specification.
 
 use crate::adjustments::Adjustment;
 use crate::descriptor::{Descriptor, Value, parse_versioned};
@@ -87,7 +84,7 @@ impl GradientFill {
     /// The ramp parameter for one canvas point.
     ///
     /// `frame` is the gradient frame: left, top, width, height. A transparent
-    /// fill uses the whole canvas frame (Q9 tiling), so tiles agree on the ramp.
+    /// fill uses the whole canvas frame, so tiles agree on the ramp.
     #[must_use]
     pub fn parameter_at(&self, frame: (f32, f32, f32, f32), x: f32, y: f32) -> f32 {
         let (x0, y0, width, height) = frame;
@@ -276,8 +273,7 @@ fn parse_gradient_stops(gradient: &Descriptor) -> GradientStops {
     let mut order: Vec<usize> = (0..stops.len()).collect();
     order.sort_by(|a, b| stops[*a].0.total_cmp(&stops[*b].0));
     let sorted: Vec<(f32, [f32; 4])> = order.iter().map(|i| stops[*i]).collect();
-    // Each midpoint is stored on the stop that ends its segment
-    // (photocraft/crates/io/src/blocks.rs:305-308).
+    // Each midpoint is stored on the stop that ends its segment.
     let mids: Vec<f32> = order
         .iter()
         .skip(1)
@@ -437,9 +433,8 @@ mod tests {
 
     #[test]
     fn a_gradient_midpoint_on_a_stop_maps_to_its_segment() {
-        // Each midpoint is stored on the stop that ends its segment
-        // (photocraft/crates/io/src/blocks.rs:305-308): black at 0 with the
-        // default 50, white at 1 with `Mdpn` 25.
+        // Each midpoint is stored on the stop that ends its segment: black at
+        // 0 with the default 50, white at 1 with `Mdpn` 25.
         let gradient = Descriptor {
             class_id: b"Grdn".to_vec(),
             items: vec![(

@@ -1,7 +1,7 @@
-//! PSD and PSB parser behavior (study task 18).
+//! PSD and PSB parser behavior.
 //!
 //! These tests read the committed fixture corpus in `tests/fixtures/psd/`.
-//! They prove the acceptance criteria: every Q20 fixture parses every layer,
+//! They prove the parser contract: every fixture parses every layer,
 //! the tiled viewport read returns the right pixels, the 8192 px cap is
 //! enforced, and the 120 s deadline returns a typed timeout.
 //!

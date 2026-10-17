@@ -1,17 +1,13 @@
-//! Photoshop blend modes for the layer compositor (study task 19, Q27).
+//! Photoshop blend modes for the layer compositor.
 //!
-//! The formulas follow `psd_tools/composite/blend.py`, which in turn follows
-//! Adobe's PDF blend-mode specification. Separable modes run per color channel.
-//! Non-separable modes convert to a luminance and saturation form. Dissolve is
-//! not a blend function in `psd-tools`; it falls back to normal, and this
-//! module does the same.
+//! The formulas follow Adobe's PDF blend-mode specification. Separable modes
+//! run per color channel. Non-separable modes convert to a luminance and
+//! saturation form. Dissolve is not a blend function; it falls back to normal.
 //!
 //! All values are normalized `f32` in `0.0..=1.0`.
 //!
 //! Vivid Light, Hard Mix, Color Burn and Color Dodge use Photoshop's variant,
 //! where a source extreme wins and near-extreme backdrop values count as exact.
-//! This follows the working reference `photocraft` (`crates/compose/src/psblend.rs`,
-//! MIT OR Apache-2.0); see the crate README for the attribution note.
 
 /// Backdrop values this close to 0 or 1 count as exact where the result jumps.
 const EDGE: f32 = 1e-4;
@@ -23,7 +19,7 @@ pub enum BlendMode {
     PassThrough,
     /// The default source-over mode.
     Normal,
-    /// Dissolve. `psd-tools` treats it as normal; this crate does the same.
+    /// Dissolve. It is treated as normal.
     Dissolve,
     /// Darken.
     Darken,
@@ -80,7 +76,7 @@ pub enum BlendMode {
 impl BlendMode {
     /// Map the four blend-key bytes of a layer record to a [`BlendMode`].
     ///
-    /// An unknown key falls back to normal, as `psd-tools` does.
+    /// An unknown key falls back to normal.
     #[must_use]
     pub const fn from_key(key: [u8; 4]) -> Self {
         match &key {
@@ -132,8 +128,6 @@ pub(crate) fn union(a: f32, b: f32) -> f32 {
 }
 
 /// A division that returns `1.0` when the result is not finite.
-///
-/// This matches `psd_tools/composite/utils.py::divide`.
 #[inline]
 #[must_use]
 pub(crate) fn safe_div(a: f32, b: f32) -> f32 {
@@ -306,7 +300,7 @@ fn median(c: [f32; 3]) -> f32 {
 /// Clip a color back into the unit cube, preserving luminance.
 ///
 /// A luminosity outside `0.0..=1.0` has no in-gamut color, so the input becomes
-/// its grey. This keeps the result stable and finite (matching the reference).
+/// its grey. This keeps the result stable and finite.
 #[must_use]
 fn clip_color(mut c: [f32; 3]) -> [f32; 3] {
     let l = luminance(c);

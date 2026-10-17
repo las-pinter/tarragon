@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate the PSD/PSB fixture corpus (study task 3, decision Q20).
+"""Generate the PSD/PSB fixture corpus.
 
 The tool is psd-tools. See tests/fixtures/psd/SOURCES.md for the tool, its
 version, its license, and the full fixture list.
@@ -56,8 +56,8 @@ from psd_tools.psd.layer_and_mask import (
 
 FIXTURE_DIR = Path(__file__).resolve().parent
 
-# The large PSB is larger than the 8192 px cap (Q9) and larger than the 20 MP
-# large-canvas threshold (Q28), so CI exercises both limits.
+# The large PSB is larger than the 8192 px cap and larger than the 20 MP
+# large-canvas threshold, so CI exercises both limits.
 LARGE_PSB_EDGE = 9000
 
 RGB = ColorMode.RGB
@@ -429,7 +429,7 @@ FIXTURES: list[Fixture] = [
     ),
     Fixture("layer_groups.psd", "Layer groups", spec_layer_groups),
     Fixture("clipping_mask.psd", "Clipping masks", spec_clipping_mask),
-    Fixture("layer_mask.psd", "Layer mask (Q27 fixture)", spec_layer_mask),
+    Fixture("layer_mask.psd", "Layer mask", spec_layer_mask),
     Fixture("psb_8bit.psb", "One PSB (8-bit RGB, version 2)", spec_psb_8bit),
     Fixture("truncated.psd", "One truncated file", None),
 ]

@@ -2,7 +2,7 @@
 //!
 //! The reader walks the Photoshop binary format by hand. It reads the full
 //! layer-and-mask section, the global layer mask, and the merged image data
-//! section (study task 18). The tiled read decodes only a requested viewport.
+//! section. The tiled read decodes only a requested viewport.
 //!
 //! Every read is checked. A bad byte offset returns [`PsdError::Truncated`].
 //! Every declared length is validated before an allocation. No input can panic.
@@ -377,7 +377,7 @@ impl PsdFile {
     /// Decode the merged image over `viewport`.
     ///
     /// The returned channels cover exactly the viewport. A pixel outside a
-    /// channel rectangle is zero. The compositor (task 19) reads this.
+    /// channel rectangle is zero. The compositor reads this.
     ///
     /// # Errors
     ///
@@ -1353,7 +1353,7 @@ impl MergedImage {
     }
 }
 
-/// The uncapped and capped sizes of a file, for the full tier (Q9).
+/// The uncapped and capped sizes of a file, for the full tier.
 #[must_use]
 pub fn capped_dimensions(header: &PsdHeader) -> (u32, u32) {
     full_tier_size(header.width, header.height)

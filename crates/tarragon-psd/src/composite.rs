@@ -1,4 +1,4 @@
-//! Layer compositor for PSD and PSB documents (study task 19, Q27).
+//! Layer compositor for PSD and PSB documents.
 //!
 //! The compositor reads layers in order, bottom to top, and composites each one
 //! onto a viewport-sized canvas. It honors visibility, opacity, fill opacity,
@@ -6,13 +6,11 @@
 //! It converts CMYK to RGB and normalizes 8-bit and 16-bit samples to `f32`.
 //!
 //! The work is tiled. The caller passes one [`Viewport`]; every buffer is
-//! viewport-sized, and the full canvas is never allocated. The merge order and
-//! the per-pixel math follow `psd_tools/composite/composite.py` (the Q27
-//! oracle). The blend formulas live in [`crate::blend`].
+//! viewport-sized, and the full canvas is never allocated. The blend formulas
+//! live in [`crate::blend`].
 //!
-//! Layer effects are out of scope (task 20). Vector masks parse but are not
-//! rasterized. Adjustment and fill descriptors parse and apply; see the crate
-//! README for the done set.
+//! Layer effects are out of scope. Vector masks parse but are not rasterized.
+//! Adjustment and fill descriptors parse and apply.
 
 use std::mem;
 
@@ -28,8 +26,8 @@ use crate::parse::{Clipping, ColorMode, LayerBounds, LayerRecord};
 /// The composited pixels of one viewport.
 ///
 /// Colors are straight (not premultiplied) RGB in `0.0..=1.0`. The alpha is the
-/// composite coverage. A fully transparent pixel keeps the `psd-tools` white
-/// backdrop, so its color is white.
+/// composite coverage. A fully transparent pixel keeps the white backdrop, so
+/// its color is white.
 #[derive(Debug, Clone, PartialEq)]
 pub struct CompositeRegion {
     /// The viewport this region covers.
@@ -91,7 +89,7 @@ impl CompositeRegion {
         ])
     }
 
-    /// Encode the region as straight RGBA8, truncating like `psd-tools`.
+    /// Encode the region as straight RGBA8, truncating to 8 bits.
     #[must_use]
     pub fn rgba8(&self) -> Vec<u8> {
         let mut out = Vec::with_capacity(self.alpha.len() * 4);
@@ -134,7 +132,7 @@ impl PsdDocument {
     /// Composite the document layers over a viewport.
     ///
     /// The region is viewport-sized. The full canvas is never allocated, so
-    /// the caller composites one tile at a time (Q9). The 120 s deadline and
+    /// the caller composites one tile at a time. The 120 s deadline and
     /// the 8192 px cap are enforced by the underlying reads.
     ///
     /// # Errors
@@ -148,8 +146,8 @@ impl PsdDocument {
         options: &ParseOptions,
     ) -> Result<CompositeRegion, PsdError> {
         self.file().check_region(viewport)?;
-        // A flattened document has no layer records, so `psd-tools` falls back
-        // to the merged preview image (the background).
+        // A flattened document has no layer records, so the compositor falls
+        // back to the merged preview image (the background).
         if self.file().layers.is_empty() {
             return self.composite_merged_background(viewport, options);
         }
@@ -176,8 +174,8 @@ impl PsdDocument {
 
     /// Composite the merged preview when the file has no layer records.
     ///
-    /// `psd-tools` falls back to the merged image for a flattened document.
-    /// The merged data is a preview over a white background, so the RGB is
+    /// A flattened document falls back to the merged image. The merged data is
+    /// a preview over a white background, so the RGB is
     /// un-composited with the alpha channel.
     fn composite_merged_background(
         &self,
@@ -216,7 +214,7 @@ impl PsdDocument {
             None => vec![1.0f32; area],
         };
         let mut color = color;
-        // `psd-tools` only recovers the straight color when a merged alpha
+        // The compositor recovers the straight color only when a merged alpha
         // channel exists and the preview sits on white.
         if region.color_mode == ColorMode::Rgb && has_alpha {
             for index in 0..area {
@@ -237,7 +235,7 @@ impl PsdDocument {
     }
 }
 
-/// Truncate a normalized value to `u8`, matching `psd-tools` `astype`.
+/// Truncate a normalized value to `u8`.
 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 #[must_use]
 fn to_u8(value: f32) -> u8 {
@@ -313,7 +311,7 @@ impl LayerNode {
 ///
 /// A bounding divider opens a group, an open or closed folder closes it, and
 /// the close record carries the group settings. Consecutive clipping layers
-/// attach to the base below them. This matches `psd-tools/api/psd_image.py`.
+/// attach to the base below them.
 fn build_tree(layers: &[LayerRecord]) -> Vec<LayerNode> {
     let mut cursor = 0;
     let (nodes, _) = parse_level(layers, &mut cursor);
@@ -386,8 +384,7 @@ struct LayerRead {
 /// Read one layer's color, coverage, and mask over a viewport.
 ///
 /// A layer without a transparency channel is fully covered inside its bounds.
-/// A CMYK layer converts to RGB with `R = (1 - C) * (1 - K)`, the same formula
-/// `psd-tools` uses for non-separable blending.
+/// A CMYK layer converts to RGB with `R = (1 - C) * (1 - K)`.
 fn read_layer(
     document: &PsdDocument,
     index: usize,
@@ -467,7 +464,7 @@ fn cmyk_color(region: &ImageRegion, count: usize, scale: f32) -> Vec<f32> {
 }
 
 /// Build the coverage. A missing transparency channel means full coverage
-/// inside the layer rectangle, as `psd-tools` `numpy("shape")` does.
+/// inside the layer rectangle.
 #[must_use]
 fn shape_from(
     region: &ImageRegion,
@@ -565,10 +562,9 @@ struct GroupResult {
 
 /// The running compositor state over one viewport.
 ///
-/// The names follow `psd_tools/composite/composite.py::Compositor`: `color_0`
-/// and `alpha_0` are the initial backdrop, `shape_g` and `alpha_g` are the
-/// accumulated group coverage and alpha, and `color` and `alpha` are the
-/// running accumulators.
+/// `color_0` and `alpha_0` are the initial backdrop, `shape_g` and `alpha_g`
+/// are the accumulated group coverage and alpha, and `color` and `alpha` are
+/// the running accumulators.
 struct Compositor {
     /// The viewport width.
     width: usize,
@@ -687,8 +683,7 @@ impl Compositor {
     /// Apply one adjustment layer to the running backdrop.
     ///
     /// The adjustment transforms the backdrop, then blends the result back by
-    /// the layer opacity times its mask. Alpha is unchanged (matching the
-    /// reference and `psd-tools`).
+    /// the layer opacity times its mask. Alpha is unchanged.
     fn apply_adjustment(
         &mut self,
         node: &LayerNode,
@@ -727,8 +722,8 @@ impl Compositor {
 
     /// Render a gradient fill over the viewport.
     ///
-    /// The frame is the whole canvas, so tiles agree on the ramp (Q9). The
-    /// returned color is straight RGB and the shape is the fill alpha.
+    /// The frame is the whole canvas, so tiles agree on the ramp. The returned
+    /// color is straight RGB and the shape is the fill alpha.
     #[allow(
         clippy::cast_precision_loss,
         reason = "canvas and viewport coordinates are small enough for f32"
@@ -870,8 +865,7 @@ impl Compositor {
 
     /// Apply one source over the backdrop with a blend mode.
     ///
-    /// This ports `Compositor._apply_source`. The shape term may differ from
-    /// the alpha when fill opacity is below one.
+    /// The shape term may differ from the alpha when fill opacity is below one.
     fn apply_source(&mut self, color: &[f32], shape: &[f32], alpha: &[f32], mode: BlendMode) {
         let backdrop_color = mem::take(&mut self.color);
         let backdrop_alpha = mem::take(&mut self.alpha);
@@ -885,7 +879,7 @@ impl Compositor {
         for index in 0..self.count {
             let out_alpha = new_alpha[index];
             if out_alpha <= 0.0 {
-                // `divide` returns 1.0 when the result is not finite.
+                // The ratio is not finite, so use white.
                 new_color[index * 3] = 1.0;
                 new_color[index * 3 + 1] = 1.0;
                 new_color[index * 3 + 2] = 1.0;
@@ -914,8 +908,8 @@ impl Compositor {
 
     /// Apply a pass-through group source over the backdrop.
     ///
-    /// This ports `Compositor._apply_passthrough_source`. The group color is
-    /// blended with the existing backdrop instead of an isolated buffer.
+    /// The group color is blended with the existing backdrop instead of an
+    /// isolated buffer.
     fn apply_passthrough_source(
         &mut self,
         color: &[f32],
@@ -953,8 +947,7 @@ impl Compositor {
 
     /// The final color with the backdrop-alpha correction.
     ///
-    /// This ports the `Compositor.color` property. A transparent result keeps
-    /// the white backdrop, matching `psd-tools`.
+    /// A transparent result keeps the white backdrop.
     #[must_use]
     fn corrected_color(&self) -> Vec<f32> {
         let mut out = self.color.clone();

@@ -1,7 +1,5 @@
 # PSD/PSB fixture corpus — sources
 
-Decision record: Q20. Task: study task 3. Branch: `rust`.
-
 ## Tool
 
 - **Name:** psd-tools
@@ -9,14 +7,12 @@ Decision record: Q20. Task: study task 3. Branch: `rust`.
 - **License:** MIT License
 - **Home:** https://github.com/psd-tools/psd-tools
 
-psd-tools is the one open tool that makes every fixture. The generator uses
-the psd-tools low-level writer. psd-tools is also the Q27 golden oracle. One
-tool makes the fixtures and reads them back, so the corpus and the oracle agree
-by construction.
+psd-tools 1.9.30 generated the corpus. The generator uses the psd-tools
+low-level writer.
 
 psd-tools is a test-only tool. It is not linked into the Rust binary. Its
-Python runtime dependencies in this environment are Pillow 10.2.0 (HPND) and
-NumPy 1.26.4 (BSD-3-Clause). Install it in CI with
+Python runtime dependencies are Pillow 10.2.0 (HPND) and NumPy 1.26.4
+(BSD-3-Clause). Install it in CI with
 `pip install -r tests/fixtures/psd/requirements.txt`. The requirements file
 pins the tool and its runtime dependencies: `psd-tools==1.9.30`,
 `Pillow==10.2.0`, and `numpy==1.26.4`.
@@ -34,9 +30,7 @@ generator fails when a file is 5 MB or larger.
 
 ## Cases
 
-Q20 names the fixed case list. This task commits the eight Q20 cases plus one
-Q27 fixture, the layer-mask fixture. The count is nine. Q27's other two
-fixtures, adjustment/fill and layer effects, arrive with tasks 19 and 20.
+The corpus has nine fixtures.
 
 | # | File | Case | Bytes |
 |---|------|------|-------|
@@ -46,7 +40,7 @@ fixtures, adjustment/fill and layer effects, arrive with tasks 19 and 20.
 | 4 | `layered_blend_modes.psd` | Layered PSD, common blend modes | 28378 |
 | 5 | `layer_groups.psd` | Layer groups | 23726 |
 | 6 | `clipping_mask.psd` | Clipping masks | 23426 |
-| 7 | `layer_mask.psd` | Layer mask (Q27 fixture) | 14462 |
+| 7 | `layer_mask.psd` | Layer mask | 14462 |
 | 8 | `psb_8bit.psb` | One PSB (version 2, 8-bit RGB) | 10682 |
 | 9 | `truncated.psd` | One truncated file | 200 |
 
@@ -100,10 +94,11 @@ The large PSB is built at CI time and is not committed.
 - **Wrapper:** `sh tests/fixtures/psd/build_large_psb.sh [PATH]` (default output
   is a temp path, `${TMPDIR:-/tmp}/tarragon-large.psb`)
 - **Shape:** 9000x9000 px, PSB (version 2), RGB, depth 8, merged image only.
-- **Size:** about 3.9 MB. Build time is about 21 s on the Q10 reference.
+- **Size:** about 3.9 MB. Build time is roughly 21 s on a development
+  machine.
 
-The 9000 px edge is larger than the 8192 px full-tier cap (Q9) and larger than
-the 20 MP large-canvas threshold (Q28). CI exercises both limits with this file.
+The 9000 px edge is larger than the 8192 px full-tier cap and larger than the
+20 MP large-canvas threshold. CI exercises both limits with this file.
 
-Task 3 wires `build_large_psb.sh` into CI. Task 36 extends the workflow with
-the cross-platform `--release` build and test matrix.
+CI runs `build_large_psb.sh` in the cross-platform `--release` build and test
+matrix.

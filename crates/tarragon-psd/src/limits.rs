@@ -1,18 +1,18 @@
 //! Parse limits: the full-tier cap, the deadline, and the parse options.
 //!
-//! The two limits come from the Python renderer (Q9). The full-tier render
-//! caps the long edge at [`FULL_TIER_MAX_EDGE`] pixels. The whole render has a
-//! [`PARSE_DEADLINE_SECS`] second deadline. A deadline that is already expired
-//! returns [`PsdError::Timeout`] before any pixel work.
+//! The full-tier render caps the long edge at [`FULL_TIER_MAX_EDGE`] pixels.
+//! The whole render has a [`PARSE_DEADLINE_SECS`] second deadline. A deadline
+//! that is already expired returns [`PsdError::Timeout`] before any pixel
+//! work.
 
 use std::time::{Duration, Instant};
 
 use crate::error::PsdError;
 
-/// The full-tier long-edge cap in pixels (Q9).
+/// The full-tier long-edge cap in pixels.
 pub const FULL_TIER_MAX_EDGE: u32 = 8192;
 
-/// The whole-parse budget in seconds, matching the Python renderer (Q9).
+/// The whole-parse budget in seconds.
 pub const PARSE_DEADLINE_SECS: u64 = 120;
 
 /// The Adobe PSD and PSB dimension limit in pixels.
@@ -95,7 +95,7 @@ impl ParseOptions {
 }
 
 impl Default for ParseOptions {
-    /// The default options use the 120 s deadline (Q9).
+    /// The default options use the 120 s deadline.
     fn default() -> Self {
         Self::in_seconds(PARSE_DEADLINE_SECS)
     }

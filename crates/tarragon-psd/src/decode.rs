@@ -1,8 +1,8 @@
 //! Tiled channel decoding: a viewport, its regions, and the `PackBits` reader.
 //!
 //! The decoder reads only the rows and columns a viewport needs. RLE rows are
-//! independent, so the row-length table gives direct access to each row group
-//! (Q9). The full canvas is never decoded into memory. No input can panic.
+//! independent, so the row-length table gives direct access to each row group.
+//! The full canvas is never decoded into memory. No input can panic.
 
 use crate::error::PsdError;
 use crate::limits::ParseOptions;
@@ -285,7 +285,7 @@ fn read_samples(bytes: &[u8], bytes_per_sample: usize, row: &mut [u16]) {
     }
 }
 
-/// Decode one `PackBits` row. A short run zero-pads, matching `psd-tools`.
+/// Decode one `PackBits` row. A short run zero-pads to the row length.
 fn decode_packbits(input: &[u8], scratch: &mut [u8], bytes_per_sample: usize, row: &mut [u16]) {
     scratch.fill(0);
     let row_bytes = scratch.len();

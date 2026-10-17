@@ -3,13 +3,13 @@
 //! This crate is pure CPU work. It does not depend on the GUI or the database.
 //!
 //! The parser reads the Photoshop binary format directly. It does not use a
-//! `psd` crate (Q9). The parser reads the full layer-and-mask section and the
+//! `psd` crate. The parser reads the full layer-and-mask section and the
 //! merged image data section. A region read decodes only a viewport. The
 //! 8192 px full-tier cap and the 120 s deadline live in [`limits`].
 //!
 //! The compositor reads layers in order over one viewport at a time. It honors
 //! visibility, opacity, fill opacity, blend mode, masks, clipping masks, and
-//! groups (Q27).
+//! groups.
 
 pub mod adjustments;
 pub mod blend;

@@ -6,8 +6,7 @@
 //! and the caller marks the layer content unsupported.
 //!
 //! The binary layout is the documented Adobe `ActionDescriptor` format. This is
-//! our own reader; the working reference is `photocraft`
-//! (`crates/psd/src/descriptor.rs`, MIT OR Apache-2.0).
+//! our own reader.
 
 /// The deepest nested descriptor this reader accepts.
 const MAX_DEPTH: usize = 32;

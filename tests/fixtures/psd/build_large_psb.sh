@@ -1,6 +1,6 @@
 #!/bin/sh
 # Build the large PSB for CI. The output is not committed.
-# Task 3 wires this script into CI; task 36 extends the workflow.
+# This script runs in the CI workflow.
 set -eu
 
 out="${1:-${TMPDIR:-/tmp}/tarragon-large.psb}"

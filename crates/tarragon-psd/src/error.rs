@@ -1,8 +1,7 @@
 //! Errors for the PSD and PSB parser.
 //!
 //! The parser never panics on bad input. Every failure is a [`PsdError`]. The
-//! conversion to the shared render error sits at the composite boundary that
-//! task 18 adds.
+//! conversion to the shared render error sits at the composite boundary.
 
 use std::path::{Path, PathBuf};
 
@@ -115,7 +114,7 @@ impl PsdError {
     /// Convert to the shared render error and tag the file path.
     ///
     /// The composite path returns [`RenderError`], so the parser error
-    /// crosses the crate boundary through this method (task 18).
+    /// crosses the crate boundary through this method.
     #[must_use]
     pub fn into_render_error(self, path: &Path) -> RenderError {
         match self {

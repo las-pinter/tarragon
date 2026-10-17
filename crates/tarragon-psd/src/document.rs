@@ -1,6 +1,6 @@
 //! The owning PSD document: the parsed file plus its bytes.
 //!
-//! The layer compositor (task 19) opens one [`PsdDocument`], reads the layer
+//! The layer compositor opens one [`PsdDocument`], reads the layer
 //! tree, and then reads one tile at a time. The document owns the file bytes so
 //! a region read does not re-read the file.
 

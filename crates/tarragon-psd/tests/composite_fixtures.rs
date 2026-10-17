@@ -1,12 +1,12 @@
-//! PSD and PSB compositor behavior (study task 19).
+//! PSD and PSB compositor behavior.
 //!
 //! The fixture tests read the committed corpus in `tests/fixtures/psd/`. The
 //! synthetic tests build small PSD files in memory to cover the features the
 //! corpus lacks: hidden layers, fill opacity, 8/16-bit parity, and the
 //! pass-through versus isolated group difference.
 //!
-//! The `psd-tools` golden oracle is task 23. These tests use the generator's
-//! known pixel formulas and analytic blend math instead.
+//! These tests use the generator's known pixel formulas and analytic blend
+//! math.
 
 use std::path::{Path, PathBuf};
 
@@ -551,7 +551,7 @@ fn gdfl_black_to_white(angle: f64) -> Vec<u8> {
 
 /// [`gdfl_black_to_white`] with the ending stop's `Mdpn` set to
 /// `ending_midpoint` percent. A midpoint is stored on the stop that ends its
-/// segment (photocraft/crates/io/src/blocks.rs:305-308).
+/// segment.
 fn gdfl_black_to_white_midpoint(angle: f64, ending_midpoint: i32) -> Vec<u8> {
     let stop = |location: i32, midpoint: i32, red: f64, green: f64, blue: f64| {
         value_descriptor(&descriptor_body(
@@ -1032,8 +1032,7 @@ fn a_gradient_midpoint_moves_the_halfway_color() {
     );
     let region = composite_bytes(build_psd(&spec));
     // The ending stop carries Mdpn 25, so the ramp is half-way at t = 0.25
-    // (x = 4). A midpoint is stored on the stop that ends its segment
-    // (photocraft/crates/io/src/blocks.rs:305-308).
+    // (x = 4). A midpoint is stored on the stop that ends its segment.
     let early = sample_rgba8(&region, 4, 0);
     assert!((i32::from(early[0]) - 128).abs() <= 2, "{early:?}");
     // At t = 0.5 (x = 8) the ramp then sits two-thirds of the way up the segment.

@@ -8,7 +8,7 @@ use crate::error::CoreError;
 /// One cache tier.
 ///
 /// The cache key is also the `thumbnails.tier` column value and the cache
-/// directory name (Q23).
+/// directory name.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Tier {
     /// The 256 px grid thumbnail.
@@ -36,7 +36,7 @@ impl Tier {
     /// Return the longest-edge limit in pixels for this tier.
     ///
     /// The full tier has no tier limit. The render pass applies the 8192 px
-    /// cap (Q23). A renderer never upscales.
+    /// cap. A renderer never upscales.
     #[must_use]
     pub const fn max_edge(self) -> Option<u32> {
         match self {

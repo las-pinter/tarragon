@@ -1,8 +1,8 @@
 //! Folder walk and file metadata collection.
 //!
-//! The walk is non-recursive (Q26). Only direct children are read. The `stat`
-//! calls run on a `rayon` pool (Q19). The pool default is `min(4, cores)`,
-//! which is the Q10 four-core pin.
+//! The walk is non-recursive. Only direct children are read. The `stat` calls
+//! run on a `rayon` pool. The pool default is `min(4, logical CPUs)`. The cap
+//! is four worker threads, counted on logical CPUs, not physical cores.
 
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -14,14 +14,14 @@ use tarragon_core::sorting::SortMode;
 
 use crate::extensions::is_supported;
 
-/// The maximum number of scan threads. The value is the Q10 four-core pin.
+/// The maximum number of scan threads. The value is a cap of four worker threads.
 pub const MAX_SCAN_THREADS: usize = 4;
 
-/// Return the scan pool size: `min(4, available cores)` (Q10, Q19).
+/// Return the scan pool size: `min(4, logical CPUs)`.
 ///
-/// `std::thread::available_parallelism` returns LOGICAL CPUs. The value is an
-/// approximation: a cgroup or an affinity mask can change it. The Q10
-/// reference pins four PHYSICAL cores, so this size is a cap, not a reading.
+/// `std::thread::available_parallelism` returns LOGICAL CPUs, not physical
+/// cores. The value is an approximation: a cgroup or an affinity mask can
+/// change it. The cap of four limits threads, not a measured core count.
 ///
 /// When the core count is unknown, the size is one.
 #[must_use]
@@ -34,7 +34,7 @@ pub fn worker_pool_size() -> usize {
 /// Build a `rayon` pool for scanning, capped at [`worker_pool_size`] threads.
 ///
 /// Callers install the pool around a scan, so the [`scan_folder`] `stat` calls
-/// run on the capped pool. The app owns one pool for its lifetime (Q19).
+/// run on the capped pool. The app owns one pool for its lifetime.
 ///
 /// # Errors
 ///
@@ -45,20 +45,20 @@ pub fn build_pool() -> Result<rayon::ThreadPool, rayon::ThreadPoolBuildError> {
         .build()
 }
 
-/// Scan one folder. The scan is non-recursive (Q26).
+/// Scan one folder. The scan is non-recursive.
 ///
-/// The function reads the direct children and keeps only the ten extensions
-/// from Q26, matched case-insensitively. Each kept file is stat'ed for its
+/// The function reads the direct children and keeps only the ten supported
+/// extensions, matched case-insensitively. Each kept file is stat'ed for its
 /// size and mtime. Pixel dimensions are not read, so `width` and `height` are
-/// zero. The result is sorted in natural full-path order (Q48).
+/// zero. The result is sorted in natural full-path order.
 ///
-/// A missing folder, or a path that is not a folder, gives an empty list, as
-/// the Python scanner does. Any other read fault, such as a permission fault,
+/// A missing folder, or a path that is not a folder, gives an empty list. Any
+/// other read fault, such as a permission fault,
 /// gives [`ScanError::ReadFolder`]. A file that cannot stat is skipped. A file
 /// that stats but has an unreadable mtime is kept with an mtime of zero.
 ///
 /// The `stat` calls run on the current `rayon` pool. Install a capped pool
-/// with [`build_pool`] for the Q10 four-core pin.
+/// with [`build_pool`] for the four-thread cap.
 ///
 /// # Errors
 ///
@@ -67,7 +67,7 @@ pub fn scan_folder(folder: &Path) -> Result<Vec<FileInfo>, ScanError> {
     let entries = match std::fs::read_dir(folder) {
         Ok(entries) => entries,
         Err(source) => {
-            // A missing or non-directory path is not an error, as in Python.
+            // A missing or non-directory path is not an error.
             return match source.kind() {
                 std::io::ErrorKind::NotFound | std::io::ErrorKind::NotADirectory => Ok(Vec::new()),
                 _ => Err(ScanError::ReadFolder {

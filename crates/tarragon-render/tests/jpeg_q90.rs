@@ -1,12 +1,12 @@
-//! JPEG quality-90 cache check (study task 4).
+//! JPEG quality-90 cache check.
 //!
-//! Q28 (revised) fixes the cache output: JPEG at quality 90 through the
-//! `image` crate, with alpha flattened onto white `(255, 255, 255)`.
+//! The cache output is JPEG at quality 90 through the `image` crate, with
+//! alpha flattened onto white `(255, 255, 255)`.
 //!
 //! Two properties are checked here, so the quality gate covers them:
 //!
 //! 1. A fully transparent pixel becomes white after the round trip.
-//! 2. The encoded size at the Q23 tier sizes falls in the expected range.
+//! 2. The encoded size at the tier sizes falls in the expected range.
 //!
 //! The size range and its justification are in `SIZE_RANGE` below. The timing
 //! measurement lives in `examples/jpeg_q90_check.rs`.
@@ -22,7 +22,7 @@
 use image::codecs::jpeg::JpegEncoder;
 use image::{ImageFormat, Rgb, RgbImage, Rgba, RgbaImage};
 
-/// JPEG quality from Q28 (revised). Fixed.
+/// JPEG quality. Fixed.
 const QUALITY: u8 = 90;
 
 /// Expected encoded-size band in bytes per pixel at quality 90.
@@ -101,7 +101,7 @@ fn synthetic_rgba(width: u32, height: u32) -> RgbaImage {
     image
 }
 
-/// Flatten RGBA onto white, matching the Python `paste(img, mask=alpha)` call.
+/// Flatten RGBA onto white with the alpha as the mask.
 fn flatten_onto_white(source: &RgbaImage) -> RgbImage {
     let mut out = RgbImage::new(source.width(), source.height());
     for (x, y, pixel) in source.enumerate_pixels() {
@@ -118,7 +118,7 @@ fn flatten_onto_white(source: &RgbaImage) -> RgbImage {
     out
 }
 
-/// Encode an RGB image as JPEG at the Q28 quality.
+/// Encode an RGB image as JPEG at [`QUALITY`].
 fn encode_q90(image: &RgbImage) -> Vec<u8> {
     let mut bytes = Vec::new();
     let mut encoder = JpegEncoder::new_with_quality(&mut bytes, QUALITY);

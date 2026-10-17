@@ -37,8 +37,7 @@ impl FileInfo {
 pub enum TagSource {
     /// A tag the user made.
     User,
-    /// A tag the color-tag pipeline made. The name is a bare color bucket
-    /// (Q20).
+    /// A tag the color-tag pipeline made. The name is a bare color bucket.
     AutoColor,
 }
 
@@ -84,7 +83,7 @@ impl FromStr for TagSource {
 pub struct Tag {
     /// Database row id.
     pub id: i64,
-    /// Tag name. A color tag uses the bare bucket name (Q20).
+    /// Tag name. A color tag uses the bare bucket name.
     pub name: String,
     /// Where the tag came from.
     pub source: TagSource,

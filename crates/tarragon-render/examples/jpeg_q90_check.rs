@@ -1,10 +1,10 @@
-//! JPEG quality-90 encoder check for the thumbnail cache (study task 4).
+//! JPEG quality-90 encoder check for the thumbnail cache.
 //!
-//! Q28 (revised) fixes the cache output: JPEG at quality 90 through the
-//! `image` crate, pinned at 0.25.10, with alpha flattened onto white
-//! `(255, 255, 255)`. This example checks three things on the Q10 reference:
+//! The cache output is JPEG at quality 90 through the `image` crate, pinned
+//! at 0.25.10, with alpha flattened onto white `(255, 255, 255)`. This example
+//! checks three things:
 //!
-//! 1. The encoded byte size at the Q23 tier sizes falls in an expected range.
+//! 1. The encoded byte size at the tier sizes falls in an expected range.
 //! 2. A fully transparent pixel becomes white after the round trip.
 //! 3. The encode and decode times (min / median / p95).
 //!
@@ -28,13 +28,13 @@ use std::time::{Duration, Instant};
 use image::codecs::jpeg::JpegEncoder;
 use image::{ImageFormat, Rgb, RgbImage, Rgba, RgbaImage};
 
-/// JPEG quality from Q28 (revised). Fixed.
+/// JPEG quality. Fixed.
 const QUALITY: u8 = 90;
 /// Measured iterations per size. The first two runs are warmup.
 const ITERATIONS: usize = 12;
 /// Warmup runs per size. The first run fills lazily allocated buffers.
 const WARMUP: usize = 2;
-/// Tier sizes from Q23: 256 px, 1024 px, and the 8192 px full cap.
+/// Tier sizes: 256 px, 1024 px, and the 8192 px full cap.
 const TIERS: [(u32, u32); 4] = [(256, 256), (1024, 1024), (4096, 4096), (8192, 8192)];
 
 /// One measured size.
@@ -54,9 +54,9 @@ struct Timing {
 }
 
 fn main() {
-    println!("== tarragon JPEG q90 encoder check (study task 4) ==");
+    println!("== tarragon JPEG q90 encoder check ==");
     println!("crate:       image 0.25.10 (in-repo JPEG encoder, no jpeg-encoder)");
-    println!("quality:     {QUALITY} (Q28 revised)");
+    println!("quality:     {QUALITY}");
     println!("flatten:     white (255, 255, 255) onto RGB before encode");
     println!("cpu:         {}", cpu_model());
     println!("cpu affinity: {}", cpu_affinity());
@@ -204,7 +204,7 @@ fn synthetic_rgba(width: u32, height: u32) -> RgbaImage {
     image
 }
 
-/// Flatten RGBA onto white, matching the Python `paste(img, mask=alpha)` call.
+/// Flatten RGBA onto white with the alpha as the mask.
 fn flatten_onto_white(source: &RgbaImage) -> RgbImage {
     let mut out = RgbImage::new(source.width(), source.height());
     for (x, y, pixel) in source.enumerate_pixels() {
@@ -221,7 +221,7 @@ fn flatten_onto_white(source: &RgbaImage) -> RgbImage {
     out
 }
 
-/// Encode an RGB image as JPEG at the Q28 quality.
+/// Encode an RGB image as JPEG at [`QUALITY`].
 fn encode_q90(image: &RgbImage) -> Vec<u8> {
     let mut bytes = Vec::new();
     let mut encoder = JpegEncoder::new_with_quality(&mut bytes, QUALITY);

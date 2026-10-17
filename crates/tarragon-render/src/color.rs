@@ -1,15 +1,14 @@
 //! Dominant-color tag computation for the color filter.
 //!
-//! This module ports `tarragon/services/color_tagger.py`. It is pure CPU
-//! work: it takes a decoded image and the three Q28 color-tag settings, and
-//! returns bare bucket names. The `image` crate owns the decode (Q16).
+//! This module is pure CPU work: it takes a decoded image and the three
+//! color-tag settings, and returns bare bucket names. The `image` crate owns
+//! the decode.
 //!
-//! The forced-square 64x64 resize is a separate resize path. Python keeps it
-//! separate from the aspect-preserving cache resize (`color_tagger.py:77`).
+//! The forced-square 64x64 resize is a separate resize path, distinct from
+//! the aspect-preserving cache resize.
 //!
 //! This module always computes. It does not read the settings and it does not
-//! check `color_tag_enabled`. Task 34 owns that gate, like the Python service
-//! (`thumbnail_service.py:594`).
+//! check `color_tag_enabled`. The caller owns that gate.
 
 #![allow(clippy::module_name_repetitions)]
 
@@ -19,13 +18,13 @@ use image::imageops::FilterType;
 use image::{DynamicImage, Rgb, RgbImage};
 use tarragon_core::color::ColorBucket;
 
-/// The forced-square edge for the palette downsample. Fixed in Python.
+/// The forced-square edge for the palette downsample.
 const PALETTE_EDGE: u32 = 64;
 
-/// A very bright color is neutral. Fixed in Python.
+/// A very bright color is neutral.
 const VALUE_HIGH: f64 = 0.92;
 
-/// A very dark color is neutral. Fixed in Python.
+/// A very dark color is neutral.
 const VALUE_LOW: f64 = 0.08;
 
 /// Hue ranges for the chromatic buckets. The gap 310..345 maps to neutral.
@@ -41,17 +40,17 @@ const HUE_BUCKETS: [(ColorBucket, &[(f64, f64)]); 9] = [
     (ColorBucket::Magenta, &[(270.0, 310.0)]),
 ];
 
-/// The three Q28 color-tag settings, passed in as parameters.
+/// The three color-tag settings, passed in as parameters.
 ///
-/// Task 34 reads these from the typed settings registry and builds this
+/// The caller reads these from the typed settings registry and builds this
 /// struct. The registry bounds them (`palette_size` 2..32, shares 0.0..1.0).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ColorTagConfig {
-    /// Median-cut palette size. The Q28 default is 8.
+    /// Median-cut palette size. The default is 8.
     pub palette_size: usize,
-    /// Minimum bucket share for a tag. The Q28 default is 0.10.
+    /// Minimum bucket share for a tag. The default is 0.10.
     pub min_share: f64,
-    /// Saturation at or below this value is neutral. The Q28 default is 0.15.
+    /// Saturation at or below this value is neutral. The default is 0.15.
     pub neutral_s_threshold: f64,
 }
 
@@ -67,10 +66,10 @@ impl Default for ColorTagConfig {
 
 /// Return the dominant-color tags for `image`.
 ///
-/// The algorithm matches the Python color tagger: downsample to a 64x64
-/// square, median-cut quantize to `config.palette_size` colors, map each
-/// palette color to a bucket, and keep buckets at or above
-/// `config.min_share`. An empty image has no tags.
+/// The algorithm downsamples the image to a 64x64 square, median-cut
+/// quantizes to `config.palette_size` colors, maps each palette color to a
+/// bucket, and keeps buckets at or above `config.min_share`. An empty image
+/// has no tags.
 #[must_use]
 pub fn extract_dominant_colors(
     image: &DynamicImage,
@@ -95,8 +94,8 @@ pub fn extract_dominant_colors(
         *bucket_counts.entry(bucket).or_insert(0) += palette_box.count();
     }
 
-    // Python sums float bucket shares; Rust sums integer counts and divides
-    // once. Integer sums are more exact at the min-share boundary.
+    // Sum integer counts and divide once; this is more exact at the min-share
+    // boundary than a float share sum.
     bucket_counts
         .into_iter()
         .filter(|(_, count)| f64::from(*count) / f64::from(total) >= config.min_share)
@@ -325,12 +324,12 @@ mod tests {
 
     use super::{ColorTagConfig, extract_dominant_colors};
 
-    /// Round a 0..1 channel to 8 bits, as the Python test helper does.
+    /// Round a 0..1 channel to 8 bits.
     fn channel(value: f64) -> u8 {
         (value * 255.0).round() as u8
     }
 
-    /// Convert HSV to an 8-bit RGB color (Python test helper).
+    /// Convert HSV to an 8-bit RGB color.
     fn hsv_to_rgb(hue: f64, saturation: f64, value: f64) -> Rgb<u8> {
         let c = value * saturation;
         let x = c * (1.0 - ((hue / 60.0) % 2.0 - 1.0).abs());
@@ -488,7 +487,7 @@ mod tests {
     }
 
     /// The chromatic share is about 12%, just above the default 0.10 min
-    /// share. The expected set is derived from the Python tagger rules.
+    /// share. The expected set follows the tagger rules.
     #[test]
     fn a_split_near_the_min_share_keeps_both_buckets() {
         let image = split(hsv_to_rgb(10.0, 0.8, 0.7), hsv_to_rgb(0.0, 0.0, 0.5), 0.12);

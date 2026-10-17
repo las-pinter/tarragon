@@ -1,13 +1,12 @@
 //! The ten image extensions shared by the scanner and the render registry.
 //!
-//! Q26 fixes the set. The scanner indexes a file only when its extension is in
-//! the set. The render registry dispatches only the same set. One definition
-//! here keeps the two from drifting.
+//! The scanner indexes a file only when its extension is in the set. The
+//! render registry dispatches only the same set. One definition here keeps the
+//! two from drifting.
 
 use std::path::Path;
 
-/// The ten indexed image extensions, lower case, each with its leading dot
-/// (Q26).
+/// The ten indexed image extensions, lower case, each with its leading dot.
 pub const SUPPORTED_EXTENSIONS: [&str; 10] = [
     ".jpg", ".jpeg", ".png", ".webp", ".tiff", ".tif", ".psd", ".psb", ".clip", ".kra",
 ];
@@ -44,7 +43,7 @@ mod tests {
     use crate::format::{SUPPORTED_EXTENSIONS, is_supported, is_supported_extension};
 
     #[test]
-    fn the_set_holds_the_ten_q26_extensions() {
+    fn the_set_holds_the_ten_extensions() {
         let expected = [
             ".jpg", ".jpeg", ".png", ".webp", ".tiff", ".tif", ".psd", ".psb", ".clip", ".kra",
         ];

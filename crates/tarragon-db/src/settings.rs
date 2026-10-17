@@ -1,10 +1,8 @@
 //! Typed settings registry: 13 settings plus the hidden `window_state` key.
 //!
-//! The registry mirrors the Python `_SPECS` table on `dev`. Values store as
-//! JSON text, as the Python app stores them. A stored value whose exact JSON
-//! type differs from the declared type is repaired to the default, as the
-//! Python `dev` code already does. The hidden `window_state` key is not a
-//! typed setting (Q28).
+//! Values store as JSON text. A stored value whose exact JSON type differs
+//! from the declared type is repaired to the default. The hidden
+//! `window_state` key is not a typed setting.
 
 use serde_json::Value;
 
@@ -16,8 +14,9 @@ pub const WINDOW_STATE_KEY: &str = "window_state";
 /// The number of typed settings.
 pub const TYPED_SETTING_COUNT: usize = 13;
 
-/// The accepted tile grid sizes. Only square grids from `1x1` to `4x4` count
-/// (Q28). The Python regex accepted any `NxN`; that bug is fixed here.
+/// The accepted tile grid sizes. Only square grids from `1x1` to `4x4` count.
+/// `set` rejects a value outside the set. A stored value outside the set is
+/// repaired to the default on read.
 pub const TILE_GRID_SIZES: &[&str] = &["1x1", "2x2", "3x3", "4x4"];
 
 /// A typed setting key.
@@ -52,7 +51,7 @@ pub enum SettingKey {
 }
 
 impl SettingKey {
-    /// Every typed key, in the Q28 decision-table order.
+    /// Every typed key, in fixed order.
     pub const ALL: [Self; TYPED_SETTING_COUNT] = [
         Self::CacheDir,
         Self::CacheFormat,
@@ -149,8 +148,8 @@ impl SettingKey {
     }
 }
 
-/// The accepted cache formats. The Rust app writes JPEG only, so this list
-/// holds one value for parity with the Python settings table (Q28 revised).
+/// The accepted cache formats. The app writes JPEG only, so this list holds
+/// one value.
 pub const CACHE_FORMATS: &[&str] = &["jpeg"];
 
 /// A declarative setting kind: the value type, the bounds, and the default.

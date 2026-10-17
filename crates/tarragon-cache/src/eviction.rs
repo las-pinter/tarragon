@@ -1,12 +1,12 @@
-//! Cache size cap and LRU eviction (Q25, Q33).
+//! Cache size cap and LRU eviction.
 //!
 //! The cap is a total disk-size limit with a default of 20 GB. When the total
 //! exceeds the cap, eviction deletes the three tier files of the
 //! least-recently-accessed source first, until the total is at or under the
-//! cap (Q25, Q33). A cap of zero bytes disables the cap.
+//! cap. A cap of zero bytes disables the cap.
 //!
-//! The cache crate cannot reach the database (Q16), so the caller supplies the
-//! eviction order from `thumbnails.last_accessed` (Q21, Q33).
+//! The cache crate cannot reach the database, so the caller supplies the
+//! eviction order from `thumbnails.last_accessed`.
 
 use std::path::Path;
 
@@ -28,12 +28,11 @@ pub struct EvictionOutcome {
 impl CacheStore {
     /// Return the total byte size of every regular file under the cache root.
     ///
-    /// The total counts every file, including the `format=1` markers, as the
-    /// Python `compute_cache_size_bytes` does. A missing root gives zero.
+    /// The total counts every file, including the `format=1` markers. A
+    /// missing root gives zero.
     ///
-    /// The Rust walk intentionally skips symlinks, unlike the Python `rglob`
-    /// walk, which follows them. A tree with links can give two different
-    /// totals. The Rust behavior avoids a link cycle and a double count.
+    /// The walk intentionally skips symlinks. A tree with links can give two
+    /// different totals. The skip avoids a link cycle and a double count.
     ///
     /// # Errors
     ///
@@ -46,9 +45,9 @@ impl CacheStore {
     /// `cap_bytes`.
     ///
     /// `lru_order` holds the cache entries ordered least recently accessed
-    /// first. The caller derives the order from `thumbnails.last_accessed`
-    /// (Q33). A `cap_bytes` of zero disables the cap, so the pass evicts
-    /// nothing (Q33). A source with a partial tier set loses only the files
+    /// first. The caller derives the order from `thumbnails.last_accessed`.
+    /// A `cap_bytes` of zero disables the cap, so the pass evicts nothing. A
+    /// source with a partial tier set loses only the files
     /// it has. A source with no tier files changes nothing and is not listed
     /// as evicted.
     ///
@@ -193,9 +192,8 @@ pub(crate) fn is_within_root(canonical_root: Option<&Path>, path: &Path) -> bool
 /// The walk uses an explicit stack, so a deep tree cannot overflow the call
 /// stack. A missing directory contributes zero. The walk never follows a
 /// symlink, so a link cycle cannot loop it and a symlink is not counted. The
-/// Python `rglob` walk follows links, so it can count a link target twice.
-/// The Rust skip is intentional. A `NotFound` file is skipped, because a
-/// concurrent atomic write can remove a file in the middle of the walk.
+/// skip is intentional. A `NotFound` file is skipped, because a concurrent
+/// atomic write can remove a file in the middle of the walk.
 ///
 /// # Errors
 ///
@@ -552,7 +550,7 @@ mod tests {
         assert_eq!(
             store.total_size().expect("total"),
             300,
-            "the walk must skip the symlink, unlike the Python rglob walk"
+            "the walk must skip the symlink"
         );
     }
 

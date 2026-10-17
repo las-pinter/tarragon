@@ -1,21 +1,20 @@
 //! Tier directory layout, cache keys, atomic writes, and format markers.
 //!
 //! The path is `<root>/<tier>/<folder>_<uuid>/<source_name>.jpg`, with the
-//! lowercase tiers `256`, `1024`, and `full` (Q15, Q23). Each tier is scaled
-//! to its own longest edge and is never upscaled. The `full` tier uses the
-//! source size up to the 8192 px cap (Q9, Q23).
+//! lowercase tiers `256`, `1024`, and `full`. Each tier is scaled to its own
+//! longest edge and is never upscaled. The `full` tier uses the source size up
+//! to the 8192 px cap.
 //!
 //! The cache file name is the source base name plus the `.jpg` payload
 //! extension. The store never trusts the source extension, which can lie about
-//! the payload (Q28 revised). Python appends the cache extension to the whole
-//! source basename, so `photo.png` becomes `photo.png.jpg`.
+//! the payload, so `photo.png` becomes `photo.png.jpg`.
 //!
 //! Every tier file is written as JPEG q90 through a temp file and an atomic
-//! rename (Q15, Q28 revised). Alpha flattens onto white `(255, 255, 255)`.
-//! Each tier directory holds one `format=1` marker (Q15).
+//! rename. Alpha flattens onto white `(255, 255, 255)`. Each tier directory
+//! holds one `format=1` marker.
 //!
-//! Staleness uses the source mtime in whole seconds and the source size (Q15,
-//! Q25). A cache hit needs a matching source stamp and all three tier files.
+//! Staleness uses the source mtime in whole seconds and the source size. A
+//! cache hit needs a matching source stamp and all three tier files.
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -27,19 +26,19 @@ use tarragon_core::tier::Tier;
 
 use crate::CacheError;
 
-/// The JPEG quality from Q28 (revised). Fixed.
+/// The JPEG quality. Fixed.
 pub const JPEG_QUALITY: u8 = 90;
 
-/// The 8192 px render cap for the `full` tier (Q9, Q23).
+/// The 8192 px render cap for the `full` tier.
 pub const FULL_EDGE_CAP: u32 = 8192;
 
-/// The marker file name that records the cache format version (Q15).
+/// The marker file name that records the cache format version.
 pub const FORMAT_MARKER: &str = "format=1";
 
 /// The source change stamp: mtime in whole seconds and size in bytes.
 ///
-/// The stamp is the stored value from the DB row (Q25). A difference in
-/// either field makes the cache entry stale.
+/// The stamp is the stored value from the DB row. A difference in either field
+/// makes the cache entry stale.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SourceStamp {
     /// Source last-modified time in whole epoch seconds.
@@ -50,8 +49,8 @@ pub struct SourceStamp {
 
 /// Return true when the stored source stamp differs from the current one.
 ///
-/// Staleness uses the source mtime in whole seconds and the source size
-/// (Q15, Q25). A difference in either field is stale.
+/// Staleness uses the source mtime in whole seconds and the source size. A
+/// difference in either field is stale.
 #[must_use]
 pub fn is_stale(stored: SourceStamp, source: SourceStamp) -> bool {
     stored != source
@@ -87,8 +86,8 @@ impl CacheEntry {
 
     /// Return true when the entry is a cache hit.
     ///
-    /// A hit needs a matching source stamp and all three tier files (Q15,
-    /// Q25). A missing tier file is a miss.
+    /// A hit needs a matching source stamp and all three tier files. A
+    /// missing tier file is a miss.
     #[must_use]
     pub fn is_fresh(&self, stored: SourceStamp, source: SourceStamp) -> bool {
         !is_stale(stored, source) && self.all_files_exist()
@@ -97,7 +96,7 @@ impl CacheEntry {
 
 /// A cache store rooted at one cache directory.
 ///
-/// The layout is `<root>/<tier>/<folder>_<uuid>/<file_name>` (Q15, Q23).
+/// The layout is `<root>/<tier>/<folder>_<uuid>/<file_name>`.
 #[derive(Debug, Clone)]
 pub struct CacheStore {
     root: PathBuf,
@@ -132,8 +131,8 @@ impl CacheStore {
     /// Build the three tier file paths without writing.
     ///
     /// `file_name` is the source base name. The store appends the `.jpg`
-    /// payload extension, so the cache name never lies about the format
-    /// (Q28 revised). A `.png` source yields `photo.png.jpg`.
+    /// payload extension, so the cache name never lies about the format. A
+    /// `.png` source yields `photo.png.jpg`.
     #[must_use]
     pub fn entry(&self, folder: &str, uuid: &str, file_name: &str) -> CacheEntry {
         let cache_name = cache_jpg_name(file_name);
@@ -153,7 +152,7 @@ impl CacheStore {
     /// `file_name` is the source base name. The cache name appends the `.jpg`
     /// payload extension (see [`CacheStore::entry`]).
     ///
-    /// Each tier is scaled to its own Q23 longest edge and is never upscaled.
+    /// Each tier is scaled to its own longest edge and is never upscaled.
     /// The `full` tier is capped at [`FULL_EDGE_CAP`]. Every file is written
     /// through a temp file and an atomic rename. The `format=1` marker is
     /// ensured in each tier directory.
@@ -206,9 +205,8 @@ impl CacheStore {
 /// Return the cache file name for one source base name.
 ///
 /// The name is the source base name plus the `.jpg` payload extension. The
-/// store never trusts the source extension, which can lie about the payload.
-/// Python keeps the whole source basename and appends the cache extension, so
-/// `photo.png` becomes `photo.png.jpg` (Q28 revised).
+/// store never trusts the source extension, which can lie about the payload,
+/// so `photo.png` becomes `photo.png.jpg`.
 #[must_use]
 fn cache_jpg_name(source_name: &str) -> String {
     format!("{source_name}.jpg")
@@ -217,7 +215,7 @@ fn cache_jpg_name(source_name: &str) -> String {
 /// Scale `source` to fit within `edge` on the longest side.
 ///
 /// A source that already fits is cloned unchanged, so the cache never
-/// upscales (Q23).
+/// upscales.
 fn fit_to_edge(source: &DynamicImage, edge: u32) -> DynamicImage {
     if source.width() <= edge && source.height() <= edge {
         source.clone()
@@ -226,7 +224,7 @@ fn fit_to_edge(source: &DynamicImage, edge: u32) -> DynamicImage {
     }
 }
 
-/// Flatten alpha onto white, as Q28 (revised) fixes.
+/// Flatten alpha onto white.
 fn flatten_onto_white(source: &DynamicImage) -> RgbImage {
     let rgba = source.to_rgba8();
     let mut out = RgbImage::new(rgba.width(), rgba.height());
@@ -249,7 +247,7 @@ fn flatten_onto_white(source: &DynamicImage) -> RgbImage {
     out
 }
 
-/// Encode an RGB image as JPEG at the Q28 quality.
+/// Encode an RGB image as JPEG at [`JPEG_QUALITY`].
 ///
 /// # Errors
 ///

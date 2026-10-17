@@ -1,26 +1,22 @@
 /*
  * Tarragon design mockups -- single source of dark tokens and mockup styles.
  *
- * Palette source: the previous Python theme (colors.py)
- * Spacing and radii source: the previous Python theme (constants.py)
- * Type scale source: the previous Python theme (typography.py)
- * Color buckets source: the previous Python theme (color_buckets.py)
- * File badges source: the previous Python theme (file_type_badge.py)
- * Widget look source: the previous Python theme (qss_generator.py)
+ * Token groups: palette, spacing, radii, type scale, color buckets, file
+ * badges, and widget look.
  *
  * Offline only. No framework, no web font, no remote image.
- * All palette values are copied from the Python app. Nothing is invented.
+ * All palette values come from the design of record.
  */
 
 :root {
-  /* ---- Backgrounds (colors.py) ---- */
+  /* ---- Backgrounds ---- */
   --bg-primary: #16151a;
   --bg-secondary: #1c1b22;
   --bg-tertiary: #211f29;
   --surface-highlight: #3d3b44;
   --surface-hover: #2a2836;
 
-  /* ---- Accents (colors.py) ---- */
+  /* ---- Accents ---- */
   --coral-strong: #f0997b;
   --coral-muted: #d85a30;
   --coral-dark: #4a1b0c;
@@ -29,26 +25,26 @@
   --amber-light: #ffd480;
   --amber-dark: #412402;
 
-  /* ---- Text (colors.py) ---- */
+  /* ---- Text ---- */
   --text-primary: #ece9f2;
   --text-secondary: #8d8a98;
   --text-tertiary: #a8a5b0;
   --text-muted: #65626f;
 
-  /* ---- Borders (colors.py) ---- */
+  /* ---- Borders ---- */
   --border-subtle: rgba(255, 255, 255, 0.06);
   --border-card: rgba(255, 255, 255, 0.08);
   --border-interactive: rgba(255, 255, 255, 0.12);
   --border-inactive: #555555;
   --border-disabled: #3a3845;
 
-  /* ---- Misc (colors.py) ---- */
+  /* ---- Misc ---- */
   --bg-disabled: #1a1820;
   --bg-log-panel: #1a1a2e;
   --highlight-disabled: #4a3a35;
   --separator: #1e1d23;
 
-  /* ---- File-type badges (colors.py + file_type_badge.py) ---- */
+  /* ---- File-type badges ---- */
   --badge-bg-vinous: #4a1b0c;
   --badge-fg-vinous: #f0997b;
   --badge-bg-sage: #1a3a2a;
@@ -68,7 +64,7 @@
   --badge-bg-neutral: #2a2a2a;
   --badge-fg-neutral: #a8a5b0;
 
-  /* ---- Color buckets (color_buckets.py) ---- */
+  /* ---- Color buckets ---- */
   --bucket-red: #e74c3c;
   --bucket-orange: #f39c12;
   --bucket-yellow: #f1c40f;
@@ -80,14 +76,14 @@
   --bucket-magenta: #e91e63;
   --bucket-neutral: #7f8c8d;
 
-  /* ---- Spacing (constants.py) ---- */
+  /* ---- Spacing ---- */
   --space-xs: 4px;
   --space-s: 8px;
   --space-m: 12px;
   --space-l: 16px;
   --space-xl: 24px;
 
-  /* ---- Radii (constants.py) ---- */
+  /* ---- Radii ---- */
   --radius-none: 0px;
   --radius-xs: 3px;
   --radius-s: 4px;
@@ -95,17 +91,17 @@
   --radius-l: 8px;
   --radius-xl: 10px;
 
-  /* ---- Motion (constants.py) ---- */
+  /* ---- Motion ---- */
   --dur-fast: 150ms;
   --dur-normal: 200ms;
 
-  /* ---- Layout (constants.py) ---- */
+  /* ---- Layout ---- */
   --grid-gap: 14px;
   --thumbnail: 160px;
   --sidebar-width: 220px;
   --preview-width: 490px;
 
-  /* ---- Type (typography.py) ---- */
+  /* ---- Type ---- */
   --font-sans: "Segoe UI", -apple-system, sans-serif;
   --font-mono: ui-monospace, "Consolas", "Courier New", monospace;
   --size-body: 12px;

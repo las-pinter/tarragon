@@ -1,11 +1,10 @@
 //! SQLite storage layer for tarragon: schema and repositories.
 //!
-//! The crate uses `rusqlite` with the `bundled` feature (Q21). It performs
-//! I/O. It depends on `tarragon-core` only and does not depend on the GUI
-//! (Q16).
+//! The crate uses `rusqlite` with the `bundled` feature. It performs I/O. It
+//! depends on `tarragon-core` only and does not depend on the GUI.
 //!
-//! The app keeps one connection on one database thread (Q19). [`Database`]
-//! guards that connection with a mutex so the type is `Send + Sync`.
+//! The app keeps one connection on one database thread. [`Database`] guards
+//! that connection with a mutex so the type is `Send + Sync`.
 
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard};
@@ -48,7 +47,7 @@ pub enum DbError {
     Core(#[from] tarragon_core::error::CoreError),
 }
 
-/// One SQLite connection with the Q21 connection settings.
+/// One SQLite connection with the fixed connection settings.
 ///
 /// This type is the only connect site. Opening sets WAL, `foreign_keys=ON`,
 /// and a five second busy timeout.

@@ -22,7 +22,7 @@ pub enum FilterScope {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct FilterState {
     /// Filename substring, used as-is. Only the empty string is inactive, so
-    /// a whitespace-only string counts as one filter (Q49).
+    /// a whitespace-only string counts as one filter.
     pub text: String,
     /// Dominant-color buckets. The query matches all of them.
     pub colors: BTreeSet<ColorBucket>,
@@ -38,7 +38,7 @@ impl FilterState {
     /// The text counts once. Each color, tag, and folder counts once. Folder
     /// chips count in global scope only. This is the single filter-count
     /// source for the info bar. The text is used as-is, so a whitespace-only
-    /// text still counts once (Q49).
+    /// text still counts once.
     #[must_use]
     pub fn active_count(&self, scope: FilterScope) -> usize {
         let text = usize::from(!self.text.is_empty());

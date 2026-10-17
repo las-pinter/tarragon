@@ -1,4 +1,4 @@
-//! The ten indexed image extensions from Q26.
+//! The ten indexed image extensions.
 //!
 //! The set lives in `tarragon-core` so the scanner and the render registry
 //! share one definition. This module re-exports it for scan callers.

@@ -1,9 +1,8 @@
-//! Render registry and plain renderer behavior (study task 16).
+//! Render registry and plain renderer behavior.
 //!
-//! The tests prove the acceptance criteria: JPEG, PNG, WebP, and TIFF render
-//! to an image, the extension match ignores case, the EXIF orientation is
-//! applied, and an unknown, corrupt, or missing file takes the typed error path
-//! (D27).
+//! The tests prove the behavior: JPEG, PNG, WebP, and TIFF render to an image,
+//! the extension match ignores case, the EXIF orientation is applied, and an
+//! unknown, corrupt, or missing file takes the typed error path.
 //!
 //! Every fixture is a small image generated in a temporary folder. The tests
 //! never touch the real user data directory.
@@ -154,7 +153,7 @@ fn a_jpeg_with_exif_orientation_6_is_rotated() {
     let temp = TempDir::new("exif");
     let path = write_exif_orientation_6_jpeg(temp.path(), "portrait.jpg");
     let rendered = registry::render(&path).expect("render the exif jpeg");
-    // Python `ImageOps.exif_transpose` swaps the sides for orientation 6.
+    // EXIF orientation 6 swaps the sides.
     assert_eq!((rendered.width(), rendered.height()), (100, 50));
     // The source top-left pixel is (0, 0, 128). Orientation 6 turns the image
     // clockwise, so that pixel lands at the top-right of the 100x50 output.

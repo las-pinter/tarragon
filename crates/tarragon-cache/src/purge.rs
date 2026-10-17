@@ -1,12 +1,12 @@
-//! Cache purge and the `clear_full_res_on_exit` rule (Q25).
+//! Cache purge and the `clear_full_res_on_exit` rule.
 //!
 //! The manual purge deletes every file under the cache root. The caller
 //! cancels the pending renders and drains the worker pool first, so no render
-//! writes while the purge deletes (Q25). The `DELETE FROM thumbnails` clear is
-//! a separate call, because the cache crate cannot reach the database (Q16).
+//! writes while the purge deletes. The `DELETE FROM thumbnails` clear is a
+//! separate call, because the cache crate cannot reach the database.
 //!
 //! The shutdown rule clears only the `full` tier when the setting is true. The
-//! `256` and `1024` tiers always stay (Q25). A false setting deletes nothing.
+//! `256` and `1024` tiers always stay. A false setting deletes nothing.
 //!
 //! Every delete reuses the [`is_within_root`] guard, so a path that resolves
 //! outside the cache root is never removed. The walk never follows a symlink.
@@ -15,8 +15,8 @@
 //!
 //! The caller passes the application data directory as `protected`. The purge
 //! refuses a cache root that is the data directory or an ancestor of it, so
-//! the purge cannot delete `tarragon.db` (Q25). The cache crate cannot resolve
-//! the data path itself (Q16), so task 34 supplies it.
+//! the purge cannot delete `tarragon.db`. The cache crate cannot resolve
+//! the data path itself, so the caller supplies it.
 
 use std::path::{Path, PathBuf};
 
@@ -39,16 +39,15 @@ impl CacheStore {
     /// Delete every file under the cache root and prune the empty
     /// directories. The cache root itself stays.
     ///
-    /// This is the filesystem half of the Q25 purge. The caller cancels the
+    /// This is the filesystem half of the purge. The caller cancels the
     /// pending renders and drains the worker pool first. The
-    /// `DELETE FROM thumbnails` clear is a separate call on the database
-    /// (Q16).
+    /// `DELETE FROM thumbnails` clear is a separate call on the database.
     ///
     /// A missing cache root gives a zero outcome. An unsafe root, for example
     /// the filesystem root, is refused. A root that is `protected`, or an
-    /// ancestor of it, is refused. Task 34 passes the application data
-    /// directory as `protected`, so the purge cannot delete `tarragon.db`
-    /// (Q25). A `None` value skips the data-dir guard.
+    /// ancestor of it, is refused. The caller passes the application data
+    /// directory as `protected`, so the purge cannot delete `tarragon.db`.
+    /// A `None` value skips the data-dir guard.
     ///
     /// # Errors
     ///
@@ -77,8 +76,7 @@ impl CacheStore {
     /// canonical tier directory must be exactly `<root>/<tier>`.
     ///
     /// A cache root that is `protected`, or an ancestor of it, is refused.
-    /// Task 34 passes the application data directory as `protected` (Q16,
-    /// Q25).
+    /// The caller passes the application data directory as `protected`.
     ///
     /// # Errors
     ///
@@ -139,10 +137,10 @@ impl CacheStore {
     /// Clear the `full` tier when `enabled` is true. A false value deletes
     /// nothing.
     ///
-    /// This is the Q25 shutdown rule. The `256` and `1024` tiers always stay.
+    /// This is the shutdown rule. The `256` and `1024` tiers always stay.
     /// The caller drains the worker pool first, as [`CacheStore::purge`] does.
-    /// Task 34 passes the application data directory as `protected`, so the
-    /// clear cannot touch `tarragon.db` (Q16, Q25).
+    /// The caller passes the application data directory as `protected`, so the
+    /// clear cannot touch `tarragon.db`.
     ///
     /// # Errors
     ///
@@ -176,12 +174,12 @@ impl CacheStore {
 /// Return true when `resolved` is safe to purge recursively.
 ///
 /// Refuses the filesystem root and any ancestor of the home directory, so a
-/// misconfigured cache root cannot delete the wrong tree (Q25).
+/// misconfigured cache root cannot delete the wrong tree.
 ///
 /// Refuses `resolved` when it is `protected` or an ancestor of `protected`.
-/// Task 34 passes the application data directory as `protected`, so the purge
-/// cannot delete `tarragon.db` (Q16, Q25). A missing `protected` path is
-/// compared by its literal components.
+/// The caller passes the application data directory as `protected`, so the
+/// purge cannot delete `tarragon.db`. A missing `protected` path is compared
+/// by its literal components.
 fn is_safe_purge_root(resolved: &Path, protected: Option<&Path>) -> bool {
     if resolved.parent().is_none() {
         return false;

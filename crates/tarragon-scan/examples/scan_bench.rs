@@ -1,13 +1,14 @@
-//! Time a 10k-file folder scan with a four-thread `rayon` pool (task 8, Q10).
+//! Time a 10k-file folder scan with a four-thread `rayon` pool.
 //!
 //! The example makes a synthetic folder of 10,000 empty `.png` files, then
 //! times:
 //!
-//! 1. [`scan_folder`] inside a pool capped at `min(4, cores)` threads.
+//! 1. [`scan_folder`] inside a pool capped at `min(4, logical CPUs)` threads.
 //! 2. [`Database::write_scan_group`] for the same files (one transaction).
 //!
-//! `taskset` is not available in this environment, so the four-core pin is a
-//! `rayon` pool cap. This is the same alternative the grid spike uses.
+//! `taskset` is not available in this environment, so the run caps the `rayon`
+//! pool at four worker threads. This is the same alternative the grid example
+//! uses.
 //!
 //! ```text
 //! cargo run --release --example scan_bench -p tarragon-scan
@@ -22,8 +23,8 @@ use tarragon_scan::scan::{build_pool, scan_folder};
 
 /// Number of files in the synthetic folder.
 const FILES: usize = 10_000;
-/// The Q6 scan target in seconds.
-const Q6_TARGET_SECS: f64 = 120.0;
+/// The scan target in seconds.
+const SCAN_TARGET_SECS: f64 = 120.0;
 
 fn main() {
     let work = TempDir::new();
@@ -49,24 +50,24 @@ fn main() {
 
     let total = scan_time + write_time;
     let total_secs = total.as_secs_f64();
-    println!("== tarragon scan benchmark (study task 8) ==");
+    println!("== tarragon scan benchmark ==");
     println!("files in folder:  {FILES}");
     println!("files indexed:    {}", files.len());
     println!("rows written:     {written}");
-    println!("rayon pool:       {threads} threads (Q10 four-core cap)");
+    println!("rayon pool:       {threads} threads (four-thread cap)");
     println!("scan elapsed:     {:.3} s", scan_time.as_secs_f64());
     println!("write elapsed:    {:.3} s", write_time.as_secs_f64());
     println!("total elapsed:    {total_secs:.3} s");
-    println!("Q6 target:        < {Q6_TARGET_SECS:.0} s");
+    println!("scan target:      < {SCAN_TARGET_SECS:.0} s");
     println!(
         "result:           {}",
-        if total_secs < Q6_TARGET_SECS {
+        if total_secs < SCAN_TARGET_SECS {
             "PASS"
         } else {
             "FAIL"
         }
     );
-    assert!(total_secs < Q6_TARGET_SECS, "the Q6 scan target is missed");
+    assert!(total_secs < SCAN_TARGET_SECS, "the scan target is missed");
 }
 
 /// Create `count` empty `.png` files in `folder`.

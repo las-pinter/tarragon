@@ -11,27 +11,26 @@ license = "MIT"
 [workspace.dependencies]
 # Internal crates. The `version` key stops `cargo deny` from reading a bare
 # path dependency as a wildcard. `tarragon-db` depends on `tarragon-core`
-# only (Q16).
+# only.
 tarragon-core = { path = "crates/tarragon-core", version = "0.1.0" }
-# Q8: egui/eframe 0.36.2. One pin, shared by every crate. tarragon-ui uses
-# egui only and never eframe (Q8, Q16).
+# egui/eframe 0.36.2. One pin, shared by every crate. tarragon-ui uses
+# egui only and never eframe.
 #
 # Default fonts are off. The `epaint_default_fonts` crate carries the
-# `OFL-1.1` and `Ubuntu-font-1.0` licenses, which are off the Q7 allowlist.
-# The app must ship a font that passes the allowlist. The spike loads a system
-# font at run time (see `examples/grid_spike.rs`).
+# `OFL-1.1` and `Ubuntu-font-1.0` licenses, which are off the allowlist.
+# The app must ship a font that passes the allowlist. The example loads a
+# system font at run time (see `examples/grid_bench.rs`).
 egui = { version = "=0.36.2", default-features = false }
-# Q19 names rayon for CPU-bound work. The grid spike uses a 4-thread pool as
-# the Q10 four-core pin.
+# rayon handles CPU-bound work. The grid example caps its pool at four threads.
 rayon = "1.11"
 # Shared error types. `tarragon-core` owns the error enums; the other crates
-# depend on them through core (Q16).
+# depend on them through core.
 thiserror = "2"
-# Q21: SQLite access uses `rusqlite` 0.40 with the `bundled` feature. The
+# SQLite access uses `rusqlite` 0.40 with the `bundled` feature. The
 # bundled SQLite keeps the build self-contained. `tarragon-db` is the only
-# crate that links SQLite (Q16).
+# crate that links SQLite.
 rusqlite = { version = "0.40", features = ["bundled"] }
-# Q28: settings values store as JSON text, and the hidden `window_state` key
+# Settings values store as JSON text, and the hidden `window_state` key
 # holds a JSON blob. Only `tarragon-db` parses them.
 serde_json = "1"
 

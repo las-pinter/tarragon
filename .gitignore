@@ -2,12 +2,11 @@
 /target/
 **/*.rs.bk
 
-# Python leftovers still on disk
+# Legacy application source still on disk
 /src/
 /scripts/
 
-# Fixture corpus is tracked (Q20). Python caches are ignored by the
-# __pycache__ and *.py[cod] rules below.
+# Fixture corpus is tracked. Caches are ignored by the rules below.
 .venv/
 __pycache__/
 *.py[cod]

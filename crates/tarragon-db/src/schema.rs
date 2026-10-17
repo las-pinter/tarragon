@@ -1,8 +1,9 @@
 //! Database schema: the eight tables, the generation marker, and creation.
 //!
-//! The schema is one generation, not a migration chain (Q21). Creation is
+//! The schema is one generation, not a migration chain. Creation is
 //! idempotent, so the marker only records which shape is present. The app
-//! uses a fresh database and never reads or migrates Python data (Q4).
+//! uses a fresh database and never reads or migrates data from an earlier
+//! schema.
 
 use rusqlite::{Connection, OptionalExtension};
 
@@ -10,15 +11,15 @@ use crate::DbError;
 
 /// The current schema generation.
 ///
-/// The Python app re-stamps its marker to `2` (Q21). The Rust app keeps that
-/// number for the same table shape plus `thumbnails.last_accessed` (Q33).
+/// The schema generation is `2`. The table shape adds
+/// `thumbnails.last_accessed`.
 pub const SCHEMA_VERSION: i64 = 2;
 
 /// The `CREATE TABLE IF NOT EXISTS` statements for the eight tables.
 ///
 /// `file_tags.tag_id` carries the only foreign key. It cascades a tag delete
-/// (`ON DELETE CASCADE`, Q21). `thumbnails.last_accessed` holds epoch seconds
-/// for the Q33 LRU order.
+/// (`ON DELETE CASCADE`). `thumbnails.last_accessed` holds epoch seconds for
+/// the LRU order.
 pub const INITIAL_SCHEMA: &str = "\
 CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS thumbnails (

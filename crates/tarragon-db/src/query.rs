@@ -2,7 +2,7 @@
 //!
 //! The semantics are tags AND, colors AND, folders OR, and a filename
 //! substring. The filename text is used as-is, so a whitespace-only text is a
-//! real filter (Q49). The result comes back in natural full-path order (Q48).
+//! real filter. The result comes back in natural full-path order.
 //! The query runs on the shared connection. The caller chooses the folder
 //! scope, so a folder scope passes only the current folder in `folders`.
 
@@ -20,7 +20,7 @@ use crate::{Database, DbError};
 ///
 /// The `HAVING COUNT` clause gives AND semantics: a path must carry all
 /// names, not just one. The names come from the user tags or the color
-/// buckets, which are bare color names (Q20).
+/// buckets, which are bare color names.
 fn push_name_group(conditions: &mut Vec<String>, params: &mut Vec<Value>, names: &[&str]) {
     let placeholders = vec!["?"; names.len()].join(", ");
     conditions.push(format!(
@@ -40,7 +40,7 @@ fn push_name_group(conditions: &mut Vec<String>, params: &mut Vec<Value>, names:
 ///
 /// The conditions join with AND. The folder terms join with OR inside one
 /// condition. A whitespace-only text is not empty, so it adds one condition
-/// and is not trimmed (Q49).
+/// and is not trimmed.
 fn filter_sql(filters: &FilterState) -> (String, Vec<Value>) {
     let mut conditions: Vec<String> = Vec::new();
     let mut params: Vec<Value> = Vec::new();
@@ -91,7 +91,7 @@ impl Database {
     ///
     /// Folders combine with OR. Tags and colors each require every selected
     /// name. The filename text is a substring of the stored path and is used
-    /// as-is, with no trim. Rows come back in natural full-path order (Q48).
+    /// as-is, with no trim. Rows come back in natural full-path order.
     ///
     /// # Errors
     ///

@@ -2,7 +2,7 @@
 //! engine.
 //!
 //! SQLite `LIKE` has no default escape character. Every pattern that carries
-//! a user value pairs with an explicit `ESCAPE '\'` clause (Q21).
+//! a user value pairs with an explicit `ESCAPE '\'` clause.
 
 /// Return `path` with backslashes changed to forward slashes.
 pub(crate) fn normalize_path(path: &str) -> String {

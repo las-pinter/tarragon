@@ -3,7 +3,7 @@
 //! The plain renderer decodes JPEG, PNG, WebP, and TIFF through the `image`
 //! crate. It returns a `DynamicImage` with the EXIF orientation applied: the
 //! pixels the cache store and the UI consume. The registry uses this renderer
-//! as the default fallback (task 16).
+//! as the default fallback.
 
 #![allow(clippy::module_name_repetitions)]
 
@@ -19,8 +19,7 @@ use crate::renderer::RenderedImage;
 ///
 /// The format is guessed from the file content, so a wrong extension does not
 /// hide the real format. The registry validates the extension first. The
-/// orientation step matches Python `ImageOps.exif_transpose` in
-/// `renderers/plain.py`.
+/// orientation step applies the EXIF orientation.
 ///
 /// # Errors
 ///

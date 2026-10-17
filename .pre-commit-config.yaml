@@ -1,4 +1,4 @@
-# Local quality-gate hooks (Q45). They run the four Q7 gates only.
+# Local quality-gate hooks. They run the four gates only.
 # A commit runs these hooks without --no-verify.
 repos:
   - repo: local

@@ -1,9 +1,9 @@
-//! Virtualized grid for the image library (Q8).
+//! Virtualized grid for the image library.
 //!
 //! The grid owns a fixed cell size. It builds a cell only when the cell is
 //! inside the scroll viewport. An off-screen item costs no work.
 //!
-//! The widget is a spike. Task 25 turns it into the full grid.
+//! The widget is not the full grid yet.
 
 use std::ops::Range;
 

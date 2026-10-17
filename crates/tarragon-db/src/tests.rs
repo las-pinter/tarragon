@@ -86,8 +86,7 @@ fn attach_tags(temp: &TempDb, path: &str, tags: &[&Tag]) {
 
 /// Populate the filter fixture: two folders, user tags, and color tags.
 ///
-/// The rows match the Python `_populate_test_data` fixture, so the ported
-/// behavior tests compare equal results.
+/// The rows are a fixed fixture, so the behavior tests compare equal results.
 fn populate_filter_fixture(temp: &TempDb) {
     let files = [
         file("/test/photos", "sunset_beach.png", 1, 100),
@@ -548,7 +547,7 @@ fn remove_tags_from_files_covers_every_path_chunk() {
 }
 
 // ---------------------------------------------------------------------------
-// Filter engine (task 13). Ported from the Python `test_query_service.py`.
+// Filter engine.
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -637,7 +636,7 @@ fn filter_engine_filename_filter_escapes_like_wildcards() {
 fn filter_engine_filename_filter_escapes_a_literal_backslash() {
     let temp = TempDb::new();
     populate_filter_fixture(&temp);
-    // Without the escape do\c would match doc.txt; Q51 records this delta in the study decisions record.
+    // Without the escape do\c would match doc.txt.
     let filters = FilterState {
         text: "do\\c".to_owned(),
         ..scoped("/test/photos")

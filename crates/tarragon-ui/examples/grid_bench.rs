@@ -1,4 +1,4 @@
-//! Headless CPU frame-time spike for the virtualized grid (study task 2).
+//! Headless CPU frame-time benchmark for the virtualized grid.
 //!
 //! The example drives a 10k-item grid through egui with no window. It measures
 //! the CPU cost of one frame:
@@ -9,15 +9,15 @@
 //! It reports min, median, p95, and max frame time. It also reports how many
 //! cells each frame builds, so the virtualization is visible.
 //!
-//! The build keeps the egui default fonts off (their licenses are off the Q7
+//! The build keeps the egui default fonts off (their licenses are off the
 //! allowlist). The example loads a system font at run time. It measures the
 //! text path too when a system font is found.
 //!
-//! The measured frame loop runs inside a rayon pool capped at four threads.
-//! That is the Q10 four-core pin alternative from the task.
+//! The measured frame loop runs inside a rayon pool capped at four worker
+//! threads.
 //!
 //! ```text
-//! cargo run --release --example grid_spike -p tarragon-ui
+//! cargo run --release --example grid_bench -p tarragon-ui
 //! ```
 //!
 //! The numeric casts are for a measurement harness, not for the library.
@@ -45,7 +45,7 @@ const VIEW_WIDTH: f32 = 1600.0;
 const VIEW_HEIGHT: f32 = 900.0;
 /// Grid column count.
 const COLUMNS: usize = 6;
-/// Thread count of the measurement pool. This is the four-core cap.
+/// Thread count of the measurement pool. This is the four-thread cap.
 const POOL_THREADS: usize = 4;
 /// Cell colors. The value is fixed, so the run repeats.
 const CELL_COLORS: [Color32; 4] = [
@@ -79,7 +79,7 @@ fn main() {
     let p95 = samples[samples.len() * 95 / 100];
     let average = samples.iter().map(Duration::as_secs_f64).sum::<f64>() / samples.len() as f64;
 
-    println!("== tarragon grid spike (study task 2) ==");
+    println!("== tarragon grid bench ==");
     println!("items:            {ITEM_COUNT}");
     println!("grid:             {COLUMNS} columns, cell 240x180 pt, spacing 8 pt");
     println!(
@@ -201,7 +201,7 @@ fn millis(duration: Duration) -> f64 {
 /// Install a system font so the text path is measured.
 ///
 /// The example keeps the egui default fonts off, because their licenses are off
-/// the Q7 allowlist. The font is read at run time, so no font enters the binary.
+/// the allowlist. The font is read at run time, so no font enters the binary.
 fn install_system_font(ctx: &Context) -> bool {
     const CANDIDATES: [&str; 3] = [
         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
@@ -215,7 +215,7 @@ fn install_system_font(ctx: &Context) -> bool {
         };
         let mut fonts = FontDefinitions::empty();
         fonts.font_data.insert(
-            "spike-sans".to_owned(),
+            "grid-sans".to_owned(),
             Arc::new(FontData::from_owned(bytes)),
         );
         for family in [FontFamily::Proportional, FontFamily::Monospace] {
@@ -223,7 +223,7 @@ fn install_system_font(ctx: &Context) -> bool {
                 .families
                 .entry(family)
                 .or_default()
-                .push("spike-sans".to_owned());
+                .push("grid-sans".to_owned());
         }
         ctx.set_fonts(fonts);
         return true;

@@ -7,9 +7,9 @@ use crate::error::CoreError;
 
 /// A dominant-color bucket.
 ///
-/// The name is bare, for example `red`. The app never writes `color:red`
-/// (Q20). The set matches the Python app: red, orange, yellow, green, teal,
-/// cyan, blue, purple, magenta, and neutral.
+/// The name is bare, for example `red`. The app never writes `color:red`.
+/// The set is red, orange, yellow, green, teal, cyan, blue, purple, magenta,
+/// and neutral.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ColorBucket {
     /// Red hues.

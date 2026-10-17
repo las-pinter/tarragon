@@ -1,8 +1,7 @@
 //! Repository methods for the eight stored tables.
 //!
-//! Paths are stored with forward slashes on every platform, as the Python app
-//! does. Reads and writes run on the shared connection. Every batched write
-//! uses one transaction.
+//! Paths are stored with forward slashes on every platform. Reads and writes
+//! run on the shared connection. Every batched write uses one transaction.
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -23,7 +22,7 @@ pub struct Thumbnail {
     pub mtime: i64,
     /// Source file size in bytes.
     pub size: i64,
-    /// Unused legacy hash from the Python schema.
+    /// Unused legacy hash column.
     pub thumb_hash: Option<String>,
     /// Pixel width. Zero means unknown.
     pub width: u32,
@@ -39,7 +38,7 @@ pub struct Thumbnail {
     pub preview_cache_path: Option<String>,
     /// Path of the full tier file.
     pub full_cache_path: Option<String>,
-    /// Last cache access in epoch seconds. It orders the Q33 LRU eviction.
+    /// Last cache access in epoch seconds. It orders the LRU eviction.
     pub last_accessed: i64,
 }
 
@@ -248,7 +247,7 @@ impl Database {
 
     /// List every thumbnail row in least-recently-accessed-first order.
     ///
-    /// The order drives the Q33 LRU eviction. The `path` column breaks a tie
+    /// The order drives the LRU eviction. The `path` column breaks a tie
     /// between equal `last_accessed` values, so the order is stable. The
     /// caller builds the eviction list from the stored cache paths.
     ///
@@ -330,7 +329,7 @@ impl Database {
 
     /// Set `last_accessed` on many paths in one transaction.
     ///
-    /// This is the batched LRU write from Q33. The method returns the number
+    /// This is the batched LRU write. The method returns the number
     /// of rows it changed.
     ///
     /// # Errors
@@ -385,7 +384,7 @@ impl Database {
         Ok(changed)
     }
 
-    /// Delete every thumbnail row. The cache purge calls this (Q25).
+    /// Delete every thumbnail row. The cache purge calls this.
     ///
     /// # Errors
     ///
@@ -578,7 +577,7 @@ impl Database {
         Ok(changed)
     }
 
-    /// Delete a tag. The `file_tags` foreign key cascades the delete (Q21).
+    /// Delete a tag. The `file_tags` foreign key cascades the delete.
     ///
     /// # Errors
     ///

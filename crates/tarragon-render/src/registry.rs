@@ -1,13 +1,12 @@
 //! Registry that maps file extensions to renderers.
 //!
-//! The registry wraps the core Q26 extension list, re-exported here so the two
+//! The registry wraps the core extension list, re-exported here so the two
 //! cannot drift. A specialized format adds an entry to [`FORMAT_DISPATCH`];
 //! every other supported format uses [`DEFAULT_RENDERER`], the plain renderer.
 //!
 //! The registry refuses an unknown extension with
-//! [`RenderError::UnsupportedFormat`]. This gate is deliberate and differs from
-//! Python, which falls back to the plain renderer. Task 16 of the study fixes
-//! the D27 path for an unknown type.
+//! [`RenderError::UnsupportedFormat`]. The refusal is deliberate. An unknown
+//! type takes the error-state path.
 
 use std::ffi::OsStr;
 use std::path::Path;
@@ -21,8 +20,8 @@ use crate::renderer::{RenderedImage, Renderer};
 
 /// The specialized format dispatch. Keys are lower case with a leading dot.
 ///
-/// Task 16 adds no entries: the PSD, CLIP, and Krita renderers arrive in tasks
-/// 19, 21, and 22. Until then those formats use the plain fallback.
+/// The table is empty. The PSD, CLIP, and Krita formats use the plain
+/// fallback.
 pub const FORMAT_DISPATCH: &[(&str, Renderer)] = &[];
 
 /// The renderer for a format with no specialized entry: the plain renderer.
@@ -58,7 +57,7 @@ pub fn renderer_for(extension: &str) -> Renderer {
 pub fn render(path: &Path) -> Result<RenderedImage, RenderError> {
     let Some(extension) = path.extension().and_then(OsStr::to_str) else {
         // No extension means no dotted key. Report the file name, not a bare
-        // dot, so the task-31 card shows a clear token.
+        // dot, so the error-state card shows a clear token.
         let name = path
             .file_name()
             .and_then(OsStr::to_str)
@@ -127,7 +126,7 @@ mod tests {
             assert!(SUPPORTED_EXTENSIONS.contains(&key), "missing key: {key}");
             assert!(
                 std::ptr::fn_addr_eq(renderer_for(key), DEFAULT_RENDERER),
-                "specialized format has a renderer before its task: {key}"
+                "specialized format already has a renderer: {key}"
             );
         }
     }

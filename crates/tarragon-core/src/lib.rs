@@ -1,12 +1,11 @@
 //! Shared domain types, paths, errors, filter state, and sorting rules.
 //!
 //! This crate stays pure. It does no I/O, no database work, and no GUI work.
-//! Every other tarragon crate may depend on it. It depends on no local crate
-//! (Q16).
+//! Every other tarragon crate may depend on it. It depends on no local crate.
 //!
-//! The module names `filter_state` and `sorting` come from the crate map in
-//! the study, so the type names repeat the module names on purpose. Turn off
-//! the repetition lint for the whole crate.
+//! `filter_state::FilterState`, `tier::Tier`, and `color::ColorBucket` repeat
+//! their module names on purpose. Turn off the repetition lint for the whole
+//! crate.
 #![allow(clippy::module_name_repetitions)]
 
 pub mod color;

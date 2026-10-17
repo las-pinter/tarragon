@@ -1,13 +1,13 @@
-//! A live folder watcher with a 500 ms debounce (Q26).
+//! A live folder watcher with a 500 ms debounce.
 //!
-//! The watcher runs only while a folder is open (Q26). One burst of
-//! filesystem events gives one rescan callback after [`DEBOUNCE`]. The watch
-//! is non-recursive: only direct children of the folder report events.
+//! The watcher runs only while a folder is open. One burst of filesystem
+//! events gives one rescan callback after [`DEBOUNCE`]. The watch is
+//! non-recursive: only direct children of the folder report events.
 //!
 //! The backend `notify` handler sends a small message to a debounce thread.
 //! The thread waits out the quiet window, then calls the rescan callback.
 //! Stopping the watcher drops the backend and joins the thread, so a stale
-//! rescan cannot escape after the folder closes (Q19).
+//! rescan cannot escape after the folder closes.
 
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
@@ -17,7 +17,7 @@ use std::time::Duration;
 use notify::{EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use tarragon_core::error::ScanError;
 
-/// The debounce window: one burst of events gives one rescan after 500 ms (Q26).
+/// The debounce window: one burst of events gives one rescan after 500 ms.
 pub const DEBOUNCE: Duration = Duration::from_millis(500);
 
 /// A running watcher for one open folder.
@@ -31,7 +31,7 @@ pub struct FolderWatcher {
 }
 
 impl FolderWatcher {
-    /// Start a non-recursive watch on `folder` (Q26).
+    /// Start a non-recursive watch on `folder`.
     ///
     /// `on_rescan` runs on the debounce thread after each quiet window. The
     /// callback must not block for long, because it holds up the next window.

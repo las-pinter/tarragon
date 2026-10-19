@@ -16,6 +16,8 @@ pub struct MaskSpec {
 
 /// One layer in a synthetic document.
 pub struct LayerSpec {
+    /// The layer name. A missing name uses the layer index.
+    pub name: Option<String>,
     /// The layer rectangle: top, left, bottom, right.
     pub rect: (i32, i32, i32, i32),
     /// The channel samples: `(id, width * height samples)`.
@@ -54,6 +56,7 @@ impl LayerSpec {
             })
             .collect();
         Self {
+            name: None,
             rect,
             channels,
             blend: *b"norm",
@@ -84,6 +87,7 @@ impl LayerSpec {
             })
             .collect();
         Self {
+            name: None,
             rect,
             channels,
             blend: *b"norm",
@@ -100,6 +104,7 @@ impl LayerSpec {
     /// A color-only layer that carries no channel data, for a fill or adjustment.
     pub fn content(rect: (i32, i32, i32, i32)) -> Self {
         Self {
+            name: None,
             rect,
             channels: Vec::new(),
             blend: *b"norm",
@@ -132,6 +137,7 @@ impl LayerSpec {
     /// An empty group marker record.
     pub fn group_marker(section: u32, blend: [u8; 4]) -> Self {
         Self {
+            name: None,
             rect: (0, 0, 0, 0),
             channels: Vec::new(),
             blend,
@@ -160,6 +166,8 @@ pub struct DocumentSpec {
     pub layers: Vec<LayerSpec>,
     /// The merged image planes. Empty means zeros.
     pub merged: Vec<Vec<u16>>,
+    /// The image resource blocks: `(id, data)` pairs.
+    pub resources: Vec<(u16, Vec<u8>)>,
 }
 
 impl DocumentSpec {
@@ -172,6 +180,7 @@ impl DocumentSpec {
             color_mode,
             layers: Vec::new(),
             merged: Vec::new(),
+            resources: Vec::new(),
         }
     }
 }
@@ -306,9 +315,28 @@ pub fn build_psd(spec: &DocumentSpec) -> Vec<u8> {
     push_u32(&mut data, spec.width);
     push_u16(&mut data, spec.depth);
     push_u16(&mut data, spec.color_mode);
-    // Empty color-mode data and image resources.
+    // Empty color-mode data, then the image resources.
     push_u32(&mut data, 0);
-    push_u32(&mut data, 0);
+    let mut resources = Vec::new();
+    for (id, body) in &spec.resources {
+        resources.extend_from_slice(b"8BIM");
+        push_u16(&mut resources, *id);
+        // An empty Pascal name, padded to an even count.
+        resources.extend_from_slice(&[0, 0]);
+        push_u32(
+            &mut resources,
+            u32::try_from(body.len()).expect("resource length"),
+        );
+        resources.extend_from_slice(body);
+        if body.len() % 2 == 1 {
+            resources.push(0);
+        }
+    }
+    push_u32(
+        &mut data,
+        u32::try_from(resources.len()).expect("resources length"),
+    );
+    data.extend_from_slice(&resources);
 
     let mut info = Vec::new();
     push_u16(
@@ -316,7 +344,11 @@ pub fn build_psd(spec: &DocumentSpec) -> Vec<u8> {
         u16::try_from(spec.layers.len()).expect("layer count"),
     );
     for (index, layer) in spec.layers.iter().enumerate() {
-        info.extend_from_slice(&layer_record(layer, spec.depth, &format!("Layer {index}")));
+        let name = layer
+            .name
+            .clone()
+            .unwrap_or_else(|| format!("Layer {index}"));
+        info.extend_from_slice(&layer_record(layer, spec.depth, &name));
     }
     // The channel data blocks follow the records, in record order.
     for layer in &spec.layers {

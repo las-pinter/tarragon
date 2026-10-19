@@ -14,6 +14,7 @@ use crate::layer::parse_layer_section;
 use crate::limits::{MAX_DIMENSION, ParseOptions, full_tier_size};
 use crate::merged::read_merged_image;
 use crate::reader::{Reader, to_usize};
+use crate::resources::parse_global_light;
 
 pub use crate::layer::{
     BlendingRanges, ChannelInfo, Clipping, GlobalMask, LayerBounds, LayerMask, LayerRecord,
@@ -82,8 +83,9 @@ fn parse(data: &[u8], options: &ParseOptions) -> Result<PsdFile, PsdError> {
     let color_mode_length = reader.read_u32()?;
     reader.skip(to_usize(u64::from(color_mode_length))?)?;
     // Image resources: a four-byte length then the data.
-    let resources_length = reader.read_u32()?;
-    reader.skip(to_usize(u64::from(resources_length))?)?;
+    let resources_length = to_usize(u64::from(reader.read_u32()?))?;
+    let resources = reader.take(resources_length)?;
+    let global_light = parse_global_light(resources);
 
     // Layer and mask information. The section length bounds every layer read.
     // The length field is four bytes in PSD and eight bytes in PSB.
@@ -103,6 +105,7 @@ fn parse(data: &[u8], options: &ParseOptions) -> Result<PsdFile, PsdError> {
         layer_count,
         layers,
         global_mask,
+        global_light,
         merged,
     })
 }

@@ -1,6 +1,7 @@
 //! File header, color mode, compression, and the parsed file model.
 
 use crate::decode::{ChannelRegion, ImageRegion, Viewport, decode_channel};
+use crate::effects::GlobalLight;
 use crate::error::PsdError;
 use crate::layer::{ChannelInfo, GlobalMask, LayerRecord};
 use crate::limits::ParseOptions;
@@ -166,6 +167,8 @@ pub struct PsdFile {
     pub layers: Vec<LayerRecord>,
     /// The global layer mask, when present.
     pub global_mask: Option<GlobalMask>,
+    /// The document global light for the effects that follow it.
+    pub global_light: GlobalLight,
     /// The merged image data description.
     pub merged: MergedImage,
 }

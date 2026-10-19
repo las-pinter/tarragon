@@ -211,6 +211,19 @@ pub fn parse_solid_color(data: &[u8]) -> Option<[f32; 4]> {
 #[must_use]
 pub fn parse_gradient_fill(data: &[u8]) -> Option<GradientFill> {
     let (descriptor, _) = parse_versioned(data)?;
+    Some(gradient_from_descriptor(&descriptor))
+}
+
+/// Build a [`GradientFill`] from a parsed gradient descriptor.
+///
+/// The same descriptor shape appears in a `GdFl` fill layer, a gradient
+/// overlay, and a gradient paint.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "the descriptor holds small percentage values"
+)]
+#[must_use]
+pub(crate) fn gradient_from_descriptor(descriptor: &Descriptor) -> GradientFill {
     let gradient = descriptor.descriptor(b"Grad");
     let (stops, midpoints, opacity_stops) = gradient.map(parse_gradient_stops).unwrap_or_default();
     let stops = if stops.is_empty() {
@@ -224,7 +237,7 @@ pub fn parse_gradient_fill(data: &[u8]) -> Option<GradientFill> {
             o.number(b"Vrtc").unwrap_or(0.0) as f32 / 100.0,
         )
     });
-    Some(GradientFill {
+    GradientFill {
         stops,
         midpoints,
         opacity_stops,
@@ -241,7 +254,7 @@ pub fn parse_gradient_fill(data: &[u8]) -> Option<GradientFill> {
         offset,
         dither: descriptor.boolean(b"Dthr").unwrap_or(false),
         align: !matches!(descriptor.get(b"Algn"), Some(Value::Boolean(false))),
-    })
+    }
 }
 
 /// Parse the `Clrs`, midpoints and `Trns` of a `Grad` descriptor.
@@ -303,7 +316,7 @@ fn parse_gradient_stops(gradient: &Descriptor) -> GradientStops {
     reason = "the descriptor holds 0..=255 and 0..=100 channel values"
 )]
 #[must_use]
-fn color_from_descriptor(descriptor: &Descriptor) -> Option<[f32; 3]> {
+pub(crate) fn color_from_descriptor(descriptor: &Descriptor) -> Option<[f32; 3]> {
     match descriptor.class_id.as_slice() {
         // Newer Photoshop writes 0..1 floats in an `RGBC` descriptor.
         b"RGBC" if descriptor.get(b"redFloat").is_some() => {

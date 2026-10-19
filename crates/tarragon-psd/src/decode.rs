@@ -100,6 +100,8 @@ struct RegionGeometry {
     columns: usize,
     /// The output column of the first copied sample.
     output_col: usize,
+    /// The output row of the first copied sample.
+    output_row: usize,
     /// The number of bytes in a full channel row.
     row_bytes: usize,
     /// The channel width in pixels.
@@ -172,6 +174,7 @@ pub(crate) fn decode_channel(
         source_col: usize::try_from(x0 - i64::from(bounds.left)).unwrap_or(0),
         columns: usize::try_from(x1 - x0).unwrap_or(0),
         output_col: usize::try_from(x0 - i64::from(viewport.left)).unwrap_or(0),
+        output_row: usize::try_from(y0 - i64::from(viewport.top)).unwrap_or(0),
         row_bytes: channel_width
             .checked_mul(bytes_per_sample)
             .ok_or(PsdError::LengthTooLarge { length: 0 })?,
@@ -209,7 +212,12 @@ fn decode_raw_rows(
             .saturating_add((row_index as u64).saturating_mul(geometry.row_bytes as u64));
         let bytes = block_slice(data, channel, offset, geometry.row_bytes)?;
         read_samples(bytes, geometry.bytes_per_sample, &mut row);
-        copy_row(&row, geometry, samples, row_index - geometry.first_row);
+        copy_row(
+            &row,
+            geometry,
+            samples,
+            geometry.output_row + (row_index - geometry.first_row),
+        );
     }
     Ok(())
 }
@@ -253,7 +261,12 @@ fn decode_rle_rows(
             geometry.bytes_per_sample,
             &mut row,
         );
-        copy_row(&row, geometry, samples, row_index - geometry.first_row);
+        copy_row(
+            &row,
+            geometry,
+            samples,
+            geometry.output_row + (row_index - geometry.first_row),
+        );
         cursor = cursor
             .checked_add(length)
             .ok_or(PsdError::LengthTooLarge { length: cursor })?;

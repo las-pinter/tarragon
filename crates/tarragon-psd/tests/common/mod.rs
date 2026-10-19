@@ -8,6 +8,7 @@
 #![allow(dead_code)]
 
 mod builder;
+mod effects;
 mod encoders;
 
 // Each test binary uses only part of this module, so the re-exports can look
@@ -16,6 +17,14 @@ mod encoders;
 pub use builder::{
     DocumentSpec, LayerSpec, MaskSpec, build_psd, layer_extra, layer_record, push_i32,
     push_samples, push_u16, push_u32, sample_bytes,
+};
+#[allow(unused_imports)]
+pub use effects::{
+    bevel_effect, bool_item, color_item, common, glow_effect, gradient_overlay_effect,
+    gradient_stroke_effect, legacy_lrfx, legacy_shadow_body, legacy_shadow_body_with_light, lfx2,
+    lfx2_disabled, linear_contour, satin_effect, set_bool_item, set_enum_item, shadow_effect,
+    solid_overlay_effect, square_document_with_fill_opacity, square_document_with_opacity,
+    stroke_effect,
 };
 #[allow(unused_imports)]
 pub use encoders::{
@@ -44,6 +53,14 @@ pub fn composite_fixture(name: &str) -> CompositeRegion {
     document
         .composite_region(viewport, &ParseOptions::none())
         .unwrap_or_else(|e| panic!("{name}: {e}"))
+}
+
+/// Composite owned PSD bytes over one viewport.
+pub fn composite(bytes: Vec<u8>, viewport: Viewport) -> CompositeRegion {
+    let document = PsdDocument::from_bytes(bytes, &ParseOptions::none()).expect("the file parses");
+    document
+        .composite_region(viewport, &ParseOptions::none())
+        .expect("the file composites")
 }
 
 /// Composite owned PSD bytes over the full canvas.

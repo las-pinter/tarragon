@@ -2,25 +2,34 @@
 //!
 //! The compositor reads layers in order, bottom to top, and composites each one
 //! onto a viewport-sized canvas. It honors visibility, opacity, fill opacity,
-//! blend mode, layer masks, clipping masks, groups, and pass-through groups.
-//! It converts CMYK to RGB and normalizes 8-bit and 16-bit samples to `f32`.
+//! blend mode, layer masks, clipping masks, groups, pass-through groups, and
+//! layer effects. It converts CMYK to RGB and normalizes 8-bit and 16-bit
+//! samples to `f32`.
 //!
 //! The work is tiled. The caller passes one [`Viewport`]; every buffer is
 //! viewport-sized, and the full canvas is never allocated. The blend formulas
 //! live in [`crate::blend`].
 //!
-//! Layer effects are out of scope. Vector masks parse but are not rasterized.
-//! Adjustment and fill descriptors parse and apply.
+//! A layer effect paints behind the layer or over it, depending on the effect
+//! kind. A tile with an effect pads the read by the effect reach before the
+//! coverage is built, so no tile boundary cuts a shadow, a glow, or a stroke.
+//! Vector masks parse but are not rasterized. Adjustment and fill descriptors
+//! parse and apply.
+//!
+//! This file holds the compositor state machine and the composite region type.
+//! The layer and group paint, including the effects path, lives in
+//! [`crate::composite_paint`].
 
 use std::mem;
 
 use crate::adjustments::Adjustment;
 use crate::blend::{BlendMode, safe_div, union};
+use crate::composite_paint::active_effects;
 use crate::content::{GradientFill, LayerContent};
 use crate::decode::Viewport;
 use crate::document::PsdDocument;
 use crate::error::PsdError;
-use crate::layer_source::{channel_samples, cmyk_color, read_layer, rgb_color, solid_color};
+use crate::layer_source::{channel_samples, cmyk_color, read_layer, rgb_color};
 use crate::layer_tree::{LayerNode, build_tree};
 use crate::limits::ParseOptions;
 use crate::model::ColorMode;
@@ -252,6 +261,7 @@ fn to_u16(value: f32) -> u16 {
 }
 
 /// The result of compositing a group's children.
+#[derive(Clone)]
 struct GroupResult {
     /// The group color, three `f32` per pixel.
     color: Vec<f32>,
@@ -267,31 +277,36 @@ struct GroupResult {
 ///
 /// `color_0` and `alpha_0` are the initial backdrop, `shape_g` and `alpha_g`
 /// are the accumulated group coverage and alpha, and `color` and `alpha` are
-/// the running accumulators.
-struct Compositor {
+/// the running accumulators. `clip_base` holds the base layer index when this
+/// compositor paints the clipping layers of that base.
+#[derive(Clone)]
+pub(crate) struct Compositor {
     /// The viewport width.
-    width: usize,
+    pub(crate) width: usize,
     /// The viewport height.
-    height: usize,
+    pub(crate) height: usize,
     /// The pixel count.
-    count: usize,
+    pub(crate) count: usize,
     /// The initial backdrop color, three `f32` per pixel.
-    color_0: Vec<f32>,
+    pub(crate) color_0: Vec<f32>,
     /// The initial backdrop alpha, one `f32` per pixel.
-    alpha_0: Vec<f32>,
+    pub(crate) alpha_0: Vec<f32>,
     /// The accumulated coverage, one `f32` per pixel.
-    shape_g: Vec<f32>,
+    pub(crate) shape_g: Vec<f32>,
     /// The accumulated alpha, one `f32` per pixel.
-    alpha_g: Vec<f32>,
+    pub(crate) alpha_g: Vec<f32>,
     /// The running color, three `f32` per pixel.
-    color: Vec<f32>,
+    pub(crate) color: Vec<f32>,
     /// The running alpha, one `f32` per pixel.
-    alpha: Vec<f32>,
+    pub(crate) alpha: Vec<f32>,
+    /// The base layer index of a clipping stack, when this compositor paints
+    /// the clipping layers of that base.
+    pub(crate) clip_base: Option<usize>,
 }
 
 impl Compositor {
     /// Create a compositor over a viewport.
-    fn new(
+    pub(crate) fn new(
         width: usize,
         height: usize,
         color_0: Vec<f32>,
@@ -314,11 +329,12 @@ impl Compositor {
             alpha_0,
             shape_g: vec![0.0f32; count],
             alpha_g: vec![0.0f32; count],
+            clip_base: None,
         }
     }
 
     /// Apply one layer node.
-    fn apply(
+    pub(crate) fn apply(
         &mut self,
         node: &LayerNode,
         document: &PsdDocument,
@@ -343,9 +359,9 @@ impl Compositor {
         viewport: Viewport,
         options: &ParseOptions,
     ) -> Result<(), PsdError> {
-        let Some(index) = node.index else {
+        if node.index.is_none() {
             return Ok(());
-        };
+        }
         if let LayerContent::Adjustment(adjustment) = &node.content {
             return self.apply_adjustment(node, adjustment, document, viewport, options);
         }
@@ -353,33 +369,11 @@ impl Compositor {
         if node.content == LayerContent::Unsupported {
             return Ok(());
         }
-        let read = read_layer(document, index, viewport, options)?;
-        let (color, shape) = match &node.content {
-            LayerContent::SolidColor(rgba) => {
-                (solid_color(*rgba, self.count), vec![rgba[3]; self.count])
-            }
-            LayerContent::Gradient(fill) => self.render_gradient(fill, viewport, document),
-            LayerContent::Pixels | LayerContent::Unsupported | LayerContent::Adjustment(_) => {
-                (read.color.clone(), read.shape.clone())
-            }
-        };
-        let color = if node.clips.is_empty() {
-            color
-        } else {
-            self.apply_clip_layers(node, &color, &shape, document, viewport, options)?
-        };
-        let mask = read.mask.unwrap_or_else(|| vec![1.0f32; self.count]);
-        let mut shape = shape;
-        let mut alpha = shape.clone();
-        for index in 0..self.count {
-            shape[index] *= mask[index];
-            alpha[index] *= mask[index] * node.opacity;
+        if let Some(effects) = active_effects(node) {
+            return self.apply_pixels_with_effects(node, effects, document, viewport, options);
         }
-        for index in 0..self.count {
-            shape[index] *= node.fill_opacity;
-            alpha[index] *= node.fill_opacity;
-        }
-        self.apply_source(&color, &shape, &alpha, node.blend);
+        let paint = Self::layer_paint(node, document, viewport, options)?;
+        self.apply_source(&paint.color, &paint.shape, &paint.alpha, node.blend);
         Ok(())
     }
 
@@ -431,22 +425,23 @@ impl Compositor {
         clippy::cast_precision_loss,
         reason = "canvas and viewport coordinates are small enough for f32"
     )]
-    fn render_gradient(
-        &self,
+    pub(crate) fn render_gradient(
         fill: &GradientFill,
         viewport: Viewport,
         document: &PsdDocument,
     ) -> (Vec<f32>, Vec<f32>) {
-        let mut color = vec![0.0f32; self.count * 3];
-        let mut shape = vec![0.0f32; self.count];
+        let width = usize::try_from(viewport.width()).unwrap_or(0);
+        let height = usize::try_from(viewport.height()).unwrap_or(0);
+        let mut color = vec![0.0f32; width * height * 3];
+        let mut shape = vec![0.0f32; width * height];
         let header = document.file().header;
         let frame = (0.0, 0.0, header.width as f32, header.height as f32);
-        for y in 0..self.height {
-            for x in 0..self.width {
+        for y in 0..height {
+            for x in 0..width {
                 let canvas_x = viewport.left as f32 + x as f32 + 0.5;
                 let canvas_y = viewport.top as f32 + y as f32 + 0.5;
                 let sample = fill.sample(fill.parameter_at(frame, canvas_x, canvas_y));
-                let index = y * self.width + x;
+                let index = y * width + x;
                 color[index * 3] = sample[0];
                 color[index * 3 + 1] = sample[1];
                 color[index * 3 + 2] = sample[2];
@@ -464,6 +459,9 @@ impl Compositor {
         viewport: Viewport,
         options: &ParseOptions,
     ) -> Result<(), PsdError> {
+        if let Some(effects) = active_effects(node) {
+            return self.apply_group_with_effects(node, effects, document, viewport, options);
+        }
         let GroupResult {
             color,
             shape,
@@ -544,9 +542,10 @@ impl Compositor {
     /// Composite the clipping layers of a base layer over its color.
     ///
     /// The base coverage and alpha stay unchanged, so clipping restricts the
-    /// clip layers to the base shape.
-    fn apply_clip_layers(
-        &self,
+    /// clip layers to the base shape. The clip compositor remembers the base
+    /// layer index, so an effect on a clipped layer also stops at the base
+    /// shape.
+    pub(crate) fn clip_color(
         node: &LayerNode,
         base_color: &[f32],
         base_shape: &[f32],
@@ -554,13 +553,16 @@ impl Compositor {
         viewport: Viewport,
         options: &ParseOptions,
     ) -> Result<Vec<f32>, PsdError> {
+        let width = usize::try_from(viewport.width()).unwrap_or(0);
+        let height = usize::try_from(viewport.height()).unwrap_or(0);
         let mut clip = Self::new(
-            self.width,
-            self.height,
+            width,
+            height,
             base_color.to_vec(),
             base_shape.to_vec(),
             false,
         );
+        clip.clip_base = node.index;
         for layer in &node.clips {
             clip.apply(layer, document, viewport, options)?;
         }
@@ -570,7 +572,13 @@ impl Compositor {
     /// Apply one source over the backdrop with a blend mode.
     ///
     /// The shape term may differ from the alpha when fill opacity is below one.
-    fn apply_source(&mut self, color: &[f32], shape: &[f32], alpha: &[f32], mode: BlendMode) {
+    pub(crate) fn apply_source(
+        &mut self,
+        color: &[f32],
+        shape: &[f32],
+        alpha: &[f32],
+        mode: BlendMode,
+    ) {
         let backdrop_color = mem::take(&mut self.color);
         let backdrop_alpha = mem::take(&mut self.alpha);
         let mut new_alpha = vec![0.0f32; self.count];
@@ -653,7 +661,7 @@ impl Compositor {
     ///
     /// A transparent result keeps the white backdrop.
     #[must_use]
-    fn corrected_color(&self) -> Vec<f32> {
+    pub(crate) fn corrected_color(&self) -> Vec<f32> {
         let mut out = self.color.clone();
         for index in 0..self.count {
             let ratio = safe_div(self.alpha_0[index], self.alpha_g[index]);

@@ -188,6 +188,24 @@ fn a_clipping_layer_is_restricted_to_the_base_alpha() {
 }
 
 #[test]
+fn a_layer_below_the_viewport_top_writes_its_first_row_at_its_own_offset() {
+    // The layer starts at canvas row 5. A viewport from row 0 must write the
+    // layer's first row at output row 5, not at row 0.
+    let mut spec = DocumentSpec::new(8, 8, 8, 3);
+    spec.layers
+        .push(LayerSpec::opaque((0, 0, 8, 8), [200, 200, 200]));
+    spec.layers
+        .push(LayerSpec::opaque((5, 0, 8, 8), [10, 20, 30]));
+    let region = composite_bytes(build_psd(&spec));
+    assert_eq!(sample_rgba8(&region, 0, 4), [200, 200, 200, 255]);
+    assert_eq!(
+        sample_rgba8(&region, 0, 5),
+        [10, 20, 30, 255],
+        "the layer starts at output row 5"
+    );
+}
+
+#[test]
 fn an_eight_bit_and_a_sixteen_bit_image_agree() {
     let mut eight = DocumentSpec::new(2, 1, 8, 3);
     eight

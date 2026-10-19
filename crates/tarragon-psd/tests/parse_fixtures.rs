@@ -45,8 +45,8 @@ struct Expected {
     layer_channels: usize,
 }
 
-/// The eight valid fixtures and their real header and first-layer values.
-const VALID: [Expected; 8] = [
+/// The nine valid fixtures and their real header and first-layer values.
+const VALID: [Expected; 9] = [
     Expected {
         file: "rgb_8bit.psd",
         version: PsdVersion::Psd,
@@ -137,6 +137,19 @@ const VALID: [Expected; 8] = [
         layer_name: "Masked",
         bounds: (0, 0, 64, 64),
         layer_channels: 5,
+    },
+    Expected {
+        file: "layer_effects.psd",
+        version: PsdVersion::Psd,
+        channels: 3,
+        height: 192,
+        width: 192,
+        depth: 8,
+        color_mode: ColorMode::Rgb,
+        layer_count: 10,
+        layer_name: "Backdrop",
+        bounds: (0, 0, 192, 192),
+        layer_channels: 3,
     },
     Expected {
         file: "psb_8bit.psb",
@@ -342,7 +355,13 @@ fn the_first_channel_offset_points_at_the_rle_marker() {
             .expect("a first channel");
         let start = usize::try_from(channel.data_offset).expect("offset fits");
         assert!(channel.length > 2, "{}: channel is too short", case.file);
-        // Every layer channel in the corpus is RLE compressed.
+        // The layer-effects fixture is raw-compressed: its Rust builder writes
+        // raw channel rows.
+        if case.file == "layer_effects.psd" {
+            assert_eq!(channel.compression, 0, "{}", case.file);
+            continue;
+        }
+        // Every other layer channel in the corpus is RLE compressed.
         assert_eq!(
             bytes.get(start..start + 2),
             Some(&[0, 1][..]),

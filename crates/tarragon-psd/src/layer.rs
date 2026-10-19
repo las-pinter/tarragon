@@ -2,6 +2,9 @@
 
 use crate::adjustments::{parse_adjustment, parse_brightness_contrast};
 use crate::content::{LayerContent, parse_gradient_fill, parse_solid_color};
+use crate::effects::Effects;
+use crate::effects_legacy::parse_legacy_effects;
+use crate::effects_parse::parse_object_effects;
 use crate::error::PsdError;
 use crate::limits::{MAX_DIMENSION, ParseOptions};
 use crate::model::{Compression, PsdHeader, PsdVersion, sample_levels};
@@ -19,6 +22,13 @@ const FILL_OPACITY_KEY: &[u8; 4] = b"iOpa";
 const SECTION_KEYS: [&[u8; 4]; 2] = [b"lsct", b"lsdk"];
 /// The additional-layer-info key for the vector mask path.
 const VECTOR_MASK_KEYS: [&[u8; 4]; 2] = [b"vmsk", b"vsms"];
+/// The object-based layer effects keys. `lfx2` is current and `lfxs` carries
+/// the effects of a group layer.
+const OBJECT_EFFECT_KEYS: [&[u8; 4]; 2] = [b"lfx2", b"lfxs"];
+/// The older object-based layer effects key. It wins over `lfx2` and `lfxs`.
+const OLD_OBJECT_EFFECT_KEY: &[u8; 4] = b"lmfx";
+/// The legacy layer effects key. Photoshop ignores it on a group layer.
+const LEGACY_EFFECT_KEY: &[u8; 4] = b"lrFX";
 /// The adjustment-layer block keys this parser recognizes.
 const ADJUSTMENT_KEYS: [&[u8; 4]; 16] = [
     b"levl", b"curv", b"hue2", b"brit", b"nvrt", b"thrs", b"post", b"expA", b"vibA", b"blnc",
@@ -209,6 +219,8 @@ pub struct LayerRecord {
     pub content: LayerContent,
     /// True when the record carries a vector mask path block.
     pub has_vector_mask: bool,
+    /// The parsed layer effects, when the record carries an effects block.
+    pub effects: Option<Effects>,
 }
 
 /// Parse the bounded layer-and-mask section.
@@ -403,6 +415,7 @@ fn read_layer_record(
         section: parsed.section,
         content: parsed.content,
         has_vector_mask: parsed.has_vector_mask,
+        effects: parsed.effects,
     })
 }
 
@@ -422,6 +435,8 @@ struct LayerExtra {
     content: LayerContent,
     /// True when a vector mask block is present.
     has_vector_mask: bool,
+    /// The parsed layer effects.
+    effects: Option<Effects>,
 }
 
 /// Read the extra data block of a layer record.
@@ -443,6 +458,7 @@ fn read_layer_extra(extra: &[u8], lut_size: u32) -> Result<LayerExtra, PsdError>
         fill_opacity: blocks.fill_opacity,
         content: blocks.content,
         has_vector_mask: blocks.has_vector_mask,
+        effects: blocks.effects,
     })
 }
 
@@ -521,6 +537,8 @@ struct ExtraBlocks {
     content: LayerContent,
     /// True when a vector mask block is present.
     has_vector_mask: bool,
+    /// The parsed layer effects.
+    effects: Option<Effects>,
 }
 
 /// Read the unicode name, section divider, fill opacity, and content blocks.
@@ -532,6 +550,9 @@ fn read_extra_blocks(reader: &mut Reader, lut_size: u32) -> Result<ExtraBlocks, 
     let mut has_vector_mask = false;
     let mut brightness_contrast: Option<Vec<u8>> = None;
     let mut cged: Option<Vec<u8>> = None;
+    let mut object_effects: Option<Vec<u8>> = None;
+    let mut old_object_effects: Option<Vec<u8>> = None;
+    let mut legacy_effects: Option<Vec<u8>> = None;
     while reader.remaining() >= 12 {
         let signature = reader.read_array::<4>()?;
         if &signature != BLEND_SIGNATURE && &signature != BLEND_SIGNATURE_64 {
@@ -565,6 +586,18 @@ fn read_extra_blocks(reader: &mut Reader, lut_size: u32) -> Result<ExtraBlocks, 
             brightness_contrast = Some(block.to_vec());
         } else if &key == b"CgEd" {
             cged = Some(block.to_vec());
+        } else if &key == OLD_OBJECT_EFFECT_KEY {
+            if old_object_effects.is_none() {
+                old_object_effects = Some(block.to_vec());
+            }
+        } else if OBJECT_EFFECT_KEYS.contains(&&key) {
+            if object_effects.is_none() {
+                object_effects = Some(block.to_vec());
+            }
+        } else if &key == LEGACY_EFFECT_KEY {
+            if legacy_effects.is_none() {
+                legacy_effects = Some(block.to_vec());
+            }
         } else if ADJUSTMENT_KEYS.contains(&&key) {
             content = parse_adjustment(&key, block, lut_size)
                 .map_or(LayerContent::Unsupported, LayerContent::Adjustment);
@@ -574,12 +607,23 @@ fn read_extra_blocks(reader: &mut Reader, lut_size: u32) -> Result<ExtraBlocks, 
         content = parse_brightness_contrast(&block, cged.as_deref())
             .map_or(LayerContent::Unsupported, LayerContent::Adjustment);
     }
+    // The oldest object block wins over `lfx2` and `lfxs`. Photoshop ignores
+    // the legacy block on a group record, so this parser does the same.
+    let is_group = section.is_some_and(|value| value.opens_group() || value.closes_group());
+    let mut effects = old_object_effects
+        .as_deref()
+        .and_then(parse_object_effects)
+        .or_else(|| object_effects.as_deref().and_then(parse_object_effects));
+    if effects.is_none() && !is_group {
+        effects = legacy_effects.as_deref().and_then(parse_legacy_effects);
+    }
     Ok(ExtraBlocks {
         name,
         section,
         fill_opacity,
         content,
         has_vector_mask,
+        effects,
     })
 }
 

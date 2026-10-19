@@ -6,7 +6,8 @@
 
 use crate::blend::BlendMode;
 use crate::content::LayerContent;
-use crate::layer::{Clipping, LayerRecord};
+use crate::effects::Effects;
+use crate::layer::{Clipping, LayerBounds, LayerRecord};
 
 /// One node of the resolved layer tree.
 pub(crate) struct LayerNode {
@@ -30,6 +31,10 @@ pub(crate) struct LayerNode {
     clipping: bool,
     /// The parsed layer content.
     pub(crate) content: LayerContent,
+    /// The parsed layer effects.
+    pub(crate) effects: Option<Effects>,
+    /// The layer rectangle, or the union of the child rectangles for a group.
+    pub(crate) bounds: LayerBounds,
 }
 
 impl LayerNode {
@@ -46,11 +51,18 @@ impl LayerNode {
             visible: layer.visible,
             clipping: layer.clipping == Clipping::NonBase,
             content: layer.content.clone(),
+            effects: layer.effects.clone(),
+            bounds: layer.bounds,
         }
     }
 
-    /// Build a group node from its close record and children.
-    fn group(index: Option<usize>, layer: &LayerRecord, children: Vec<LayerNode>) -> Self {
+    /// Build a group node from its close record, children, and frame.
+    fn group(
+        index: Option<usize>,
+        layer: &LayerRecord,
+        children: Vec<LayerNode>,
+        bounds: LayerBounds,
+    ) -> Self {
         Self {
             index,
             is_group: true,
@@ -62,6 +74,8 @@ impl LayerNode {
             visible: layer.visible,
             clipping: layer.clipping == Clipping::NonBase,
             content: layer.content.clone(),
+            effects: layer.effects.clone(),
+            bounds,
         }
     }
 }
@@ -85,14 +99,13 @@ fn parse_level(layers: &[LayerRecord], cursor: &mut usize) -> (Vec<LayerNode>, O
         let layer = &layers[index];
         match layer.section {
             Some(section) if section.opens_group() => {
+                let divider_bounds = layer.bounds;
                 *cursor += 1;
                 let (children, close_index) = parse_level(layers, cursor);
                 let group_layer = close_index.map_or(layer, |close| &layers[close]);
-                nodes.push(LayerNode::group(
-                    close_index,
-                    group_layer,
-                    attach_clips(children),
-                ));
+                let children = attach_clips(children);
+                let bounds = group_bounds(&children).unwrap_or(divider_bounds);
+                nodes.push(LayerNode::group(close_index, group_layer, children, bounds));
                 continue;
             }
             Some(section) if section.closes_group() => {
@@ -130,6 +143,29 @@ fn attach_clips(nodes: Vec<LayerNode>) -> Vec<LayerNode> {
     result
 }
 
+/// The union of the child rectangles, or `None` when no child has area.
+fn group_bounds(children: &[LayerNode]) -> Option<LayerBounds> {
+    let mut bounds: Option<LayerBounds> = None;
+    for child in children {
+        for node in std::iter::once(child).chain(&child.clips) {
+            let rect = node.bounds;
+            if rect.width() <= 0 || rect.height() <= 0 {
+                continue;
+            }
+            bounds = Some(match bounds {
+                Some(current) => LayerBounds {
+                    top: current.top.min(rect.top),
+                    left: current.left.min(rect.left),
+                    bottom: current.bottom.max(rect.bottom),
+                    right: current.right.max(rect.right),
+                },
+                None => rect,
+            });
+        }
+    }
+    bounds
+}
+
 #[cfg(test)]
 mod tests {
     use super::build_tree;
@@ -161,6 +197,7 @@ mod tests {
             section,
             content: crate::content::LayerContent::Pixels,
             has_vector_mask: false,
+            effects: None,
         }
     }
 

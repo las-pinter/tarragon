@@ -8,17 +8,23 @@
 //! 8192 px full-tier cap and the 120 s deadline live in [`limits`].
 //!
 //! The compositor reads layers in order over one viewport at a time. It honors
-//! visibility, opacity, fill opacity, blend mode, masks, clipping masks, and
-//! groups.
+//! visibility, opacity, fill opacity, blend mode, masks, clipping masks,
+//! groups, and layer effects.
 
 mod adjustment_parse;
 pub mod adjustments;
 pub mod blend;
 pub mod composite;
+mod composite_paint;
 pub mod content;
 pub mod decode;
 mod descriptor;
 pub mod document;
+pub mod effects;
+mod effects_apply;
+mod effects_legacy;
+mod effects_map;
+mod effects_parse;
 pub mod error;
 mod layer;
 mod layer_source;
@@ -28,6 +34,7 @@ pub mod merged;
 mod model;
 pub mod parse;
 mod reader;
+mod resources;
 
 pub use adjustments::{Adjustment, Curve, CurvePoint, LevelsChannel};
 pub use blend::BlendMode;
@@ -35,6 +42,10 @@ pub use composite::CompositeRegion;
 pub use content::{GradientFill, GradientStyle, LayerContent};
 pub use decode::{ChannelRegion, ImageRegion, Viewport};
 pub use document::PsdDocument;
+pub use effects::{
+    Bevel, BevelStyle, Contour, Effect, EffectCommon, Effects, GlobalLight, Glow, GlowPaint,
+    GlowSource, GradientOverlay, Overlay, Satin, Shadow, Stroke, StrokePaint, StrokePosition,
+};
 pub use error::PsdError;
 pub use layer::{
     BlendingRanges, ChannelInfo, Clipping, GlobalMask, LayerBounds, LayerMask, LayerRecord,

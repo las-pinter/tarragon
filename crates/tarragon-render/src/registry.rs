@@ -16,6 +16,7 @@ pub use tarragon_core::format::SUPPORTED_EXTENSIONS;
 use tarragon_core::format::is_supported_extension;
 
 use crate::clip::render_clip_image;
+use crate::krita::render_kra_image;
 use crate::plain::render_plain_image;
 use crate::renderer::{RenderedImage, Renderer};
 
@@ -23,7 +24,8 @@ use crate::renderer::{RenderedImage, Renderer};
 ///
 /// The table holds the formats that decode their own container. Every other
 /// supported format uses the plain renderer.
-pub const FORMAT_DISPATCH: &[(&str, Renderer)] = &[(".clip", render_clip_image)];
+pub const FORMAT_DISPATCH: &[(&str, Renderer)] =
+    &[(".clip", render_clip_image), (".kra", render_kra_image)];
 
 /// The renderer for a format with no specialized entry: the plain renderer.
 ///
@@ -78,6 +80,7 @@ mod tests {
     use image::DynamicImage;
 
     use crate::clip::render_clip_image;
+    use crate::krita::render_kra_image;
     use crate::plain::render_plain_image;
     use crate::registry::{
         DEFAULT_RENDERER, FORMAT_DISPATCH, SUPPORTED_EXTENSIONS, render, renderer_for,
@@ -131,8 +134,16 @@ mod tests {
     }
 
     #[test]
+    fn the_kra_format_uses_the_krita_renderer() {
+        assert!(std::ptr::fn_addr_eq(
+            renderer_for(".kra"),
+            render_kra_image as Renderer
+        ));
+    }
+
+    #[test]
     fn the_remaining_specialized_formats_use_the_fallback_for_now() {
-        for key in [".psd", ".psb", ".kra"] {
+        for key in [".psd", ".psb"] {
             assert!(SUPPORTED_EXTENSIONS.contains(&key), "missing key: {key}");
             assert!(
                 std::ptr::fn_addr_eq(renderer_for(key), DEFAULT_RENDERER),

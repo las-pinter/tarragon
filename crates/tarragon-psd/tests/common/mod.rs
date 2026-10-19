@@ -112,17 +112,19 @@ pub fn load_golden(name: &str) -> Option<image::RgbaImage> {
     Some(image.to_rgba8())
 }
 
-/// Compare composited RGBA8 bytes with a golden image.
+/// Compare composited RGB bytes with a golden image.
 ///
-/// The comparison prints the observed maximum channel delta when
-/// `TARRAGON_GOLDEN_REPORT` is set. The same value is always in the failure
-/// message.
+/// The compositor stores straight color, so each pixel compares by its R, G,
+/// and B channels and alpha is not compared. The comparison prints the observed
+/// maximum color-channel delta when `TARRAGON_GOLDEN_REPORT` is set. The same
+/// value is always in the failure message.
 ///
 /// # Panics
 ///
-/// Panics when the sizes differ or any pixel exceeds `tolerance` on a channel.
+/// Panics when the sizes differ or any pixel exceeds `tolerance` on a color
+/// channel.
 pub fn assert_matches_golden(
-    actual: &[u8],
+    composited: &[u8],
     width: u32,
     height: u32,
     golden: &image::RgbaImage,
@@ -136,12 +138,14 @@ pub fn assert_matches_golden(
         "{label}: size {width}x{height} does not match the golden size {golden_width}x{golden_height}"
     );
 
+    assert!(width > 0 && height > 0, "{label}: empty region");
+
     let expected = golden.as_raw();
     assert_eq!(
-        actual.len(),
+        composited.len(),
         expected.len(),
         "{label}: composited {} bytes, golden {} bytes",
-        actual.len(),
+        composited.len(),
         expected.len()
     );
 
@@ -151,7 +155,7 @@ pub fn assert_matches_golden(
     let mut over = 0usize;
     let mut first_over = None;
 
-    for (row, (got_row, want_row)) in actual
+    for (row, (got_row, want_row)) in composited
         .chunks_exact(row_bytes)
         .zip(expected.chunks_exact(row_bytes))
         .enumerate()
@@ -163,8 +167,10 @@ pub fn assert_matches_golden(
             .zip(want_row.as_chunks::<4>().0.iter())
             .enumerate()
         {
+            let got_color = [got[0], got[1], got[2]];
+            let want_color = [want[0], want[1], want[2]];
             let mut pixel_over = false;
-            for (&got_channel, &want_channel) in got.iter().zip(want.iter()) {
+            for (&got_channel, &want_channel) in got_color.iter().zip(want_color.iter()) {
                 let delta = got_channel.abs_diff(want_channel);
                 max_delta = max_delta.max(delta);
                 pixel_over = pixel_over || delta > tolerance;
@@ -174,14 +180,14 @@ pub fn assert_matches_golden(
                 if first_over.is_none() {
                     let x = u32::try_from(column).expect("column");
                     let y = u32::try_from(row).expect("row");
-                    first_over = Some((x, y, *got, *want));
+                    first_over = Some((x, y, got_color, want_color));
                 }
             }
         }
     }
 
     if std::env::var_os("TARRAGON_GOLDEN_REPORT").is_some() {
-        println!("{label}: observed max channel delta {max_delta} (tolerance {tolerance})");
+        println!("{label}: observed max color-channel delta {max_delta} (tolerance {tolerance})");
     }
 
     if over > 0 {

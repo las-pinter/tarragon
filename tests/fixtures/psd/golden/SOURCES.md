@@ -78,6 +78,16 @@ cargo nextest run -p tarragon-psd --test golden_fixtures --run-ignored ignored-o
 
 A default `cargo nextest run` shows the nine golden tests as skipped.
 
+## Known deltas
+
+The golden suite compares straight RGB with alpha ignored. The two alpha
+differences below are recorded deltas, not failures.
+
+| Fixture | Delta |
+|---------|-------|
+| `layer_mask` | At the first differing coordinate the composite is `[255,255,255,0]` and the golden is `[255,255,255,255]`. The pixel-mask alpha cut is covered by the rule test `the_layer_mask_fixture_cuts_the_layer_alpha` in `crates/tarragon-psd/tests/composite_fixtures.rs`. This row proves only that the composite RGB agrees. |
+| `layered_blend_modes` | The fixture holds five layers whose channel alpha is 160 with layer opacity 200. The straight-alpha stack gives `255 * (1 - (1 - (160/255) * (200/255))^5)`, which is about 246.4, so 246 is correct for a document with no merged background. The oracle's 255 is the delta. |
+
 ## Tolerance
 
 The tests use a provisional per-channel tolerance of 2 on 8-bit values. A small

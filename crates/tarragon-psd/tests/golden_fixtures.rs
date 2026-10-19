@@ -3,6 +3,9 @@
 //! The golden PNG files come from `tests/fixtures/psd/generate_goldens.py`,
 //! which renders each fixture with psd-tools. CI writes the files before it
 //! runs these tests with `--run-ignored ignored-only`.
+//!
+//! The comparison uses straight RGB and ignores alpha, because the oracle
+//! composites onto an opaque canvas.
 
 mod common;
 

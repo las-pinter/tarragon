@@ -3,6 +3,8 @@ name: Rust
 on:
   push:
     branches: [rust]
+  pull_request:
+    branches: [rust]
   workflow_dispatch:
 
 permissions:
@@ -39,3 +41,57 @@ jobs:
           assert size == (9000, 9000), size
           print(f"large PSB reopens: {image.width}x{image.height}")
           PY
+
+  psd-goldens:
+    name: PSD golden images
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install psd-tools
+        run: pip install -r tests/fixtures/psd/requirements.txt
+      # Write first. The Rust golden tests and the drift gate need the bytes.
+      - name: Write the golden bytes
+        run: python3 tests/fixtures/psd/generate_goldens.py --write
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: nextest
+      - name: Run the PSD tests
+        run: cargo nextest run -p tarragon-psd
+      - name: Run the golden tests
+        run: cargo nextest run -p tarragon-psd --test golden_fixtures --run-ignored ignored-only
+      - name: Check the golden files
+        run: python3 tests/fixtures/psd/generate_goldens.py --check
+      # The first golden set comes from the `psd-goldens` artifact of this job.
+      # Until a golden PNG is tracked, the gate has nothing to compare and is
+      # skipped. The first committed PNG turns it on for every later run.
+      - name: Fail on golden drift
+        run: |
+          tracked="$(git ls-files -- 'tests/fixtures/psd/golden/*.png')" || exit 1
+          if [ -z "$tracked" ]; then
+            echo "No tracked golden PNG; download the psd-goldens artifact and commit it."
+            exit 0
+          fi
+          status="$(git status --porcelain --untracked-files=all -- tests/fixtures/psd/golden)"
+          if [ -n "$status" ]; then
+            printf '%s\n' "$status"
+            echo "::error::The golden images on disk differ from the committed ones. Download the psd-goldens artifact and commit it."
+            exit 1
+          fi
+      # The artifact is the bootstrap path: the first golden set is downloaded
+      # from here and committed. It also keeps the regenerated set after a
+      # failed step.
+      - name: Upload the golden images
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: psd-goldens
+          path: tests/fixtures/psd/golden

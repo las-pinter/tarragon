@@ -46,6 +46,152 @@ pub fn fixture(name: &str) -> PathBuf {
         .join(name)
 }
 
+/// The per-channel tolerance for golden comparisons.
+///
+/// The value is provisional. A small per-channel band absorbs rounding through
+/// float compositing. The measured maximum replaces it once the first golden
+/// set lands.
+pub const GOLDEN_TOLERANCE: u8 = 2;
+
+/// The manifest of golden stems. The Python generator reads the same file.
+const GOLDEN_MANIFEST: &str = include_str!("../../../../tests/fixtures/psd/golden/manifest.txt");
+
+/// The golden stems from the manifest, in file order.
+pub fn golden_stems() -> Vec<&'static str> {
+    GOLDEN_MANIFEST
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && !line.starts_with('#'))
+        .collect()
+}
+
+/// The corpus file name for a golden stem. The one PSB fixture ends in `.psb`.
+///
+/// # Panics
+///
+/// Panics when neither the `.psd` nor the `.psb` candidate exists.
+pub fn fixture_for(stem: &str) -> String {
+    let psd = format!("{stem}.psd");
+    if fixture(&psd).exists() {
+        return psd;
+    }
+    let psb = format!("{stem}.psb");
+    if fixture(&psb).exists() {
+        return psb;
+    }
+    panic!(
+        "{stem}: neither {} nor {} exists",
+        fixture(&psd).display(),
+        fixture(&psb).display()
+    );
+}
+
+/// The absolute path of a committed golden image.
+pub fn golden_path(name: &str) -> PathBuf {
+    fixture("golden").join(format!("{name}.png"))
+}
+
+/// Load a committed golden image, or `None` when the file is absent.
+///
+/// # Panics
+///
+/// Panics when the file decodes to a color type other than 8-bit RGBA. A
+/// silently converted golden would hide a generator change.
+pub fn load_golden(name: &str) -> Option<image::RgbaImage> {
+    let path = golden_path(name);
+    if !path.exists() {
+        return None;
+    }
+    let image = image::open(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+    assert_eq!(
+        image.color(),
+        image::ColorType::Rgba8,
+        "{}: the golden must decode as RGBA8",
+        path.display()
+    );
+    Some(image.to_rgba8())
+}
+
+/// Compare composited RGBA8 bytes with a golden image.
+///
+/// The comparison prints the observed maximum channel delta when
+/// `TARRAGON_GOLDEN_REPORT` is set. The same value is always in the failure
+/// message.
+///
+/// # Panics
+///
+/// Panics when the sizes differ or any pixel exceeds `tolerance` on a channel.
+pub fn assert_matches_golden(
+    actual: &[u8],
+    width: u32,
+    height: u32,
+    golden: &image::RgbaImage,
+    tolerance: u8,
+    label: &str,
+) {
+    let (golden_width, golden_height) = golden.dimensions();
+    assert_eq!(
+        (width, height),
+        (golden_width, golden_height),
+        "{label}: size {width}x{height} does not match the golden size {golden_width}x{golden_height}"
+    );
+
+    let expected = golden.as_raw();
+    assert_eq!(
+        actual.len(),
+        expected.len(),
+        "{label}: composited {} bytes, golden {} bytes",
+        actual.len(),
+        expected.len()
+    );
+
+    let row_bytes = usize::try_from(width).expect("width") * 4;
+
+    let mut max_delta = 0u8;
+    let mut over = 0usize;
+    let mut first_over = None;
+
+    for (row, (got_row, want_row)) in actual
+        .chunks_exact(row_bytes)
+        .zip(expected.chunks_exact(row_bytes))
+        .enumerate()
+    {
+        for (column, (got, want)) in got_row
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .zip(want_row.as_chunks::<4>().0.iter())
+            .enumerate()
+        {
+            let mut pixel_over = false;
+            for (&got_channel, &want_channel) in got.iter().zip(want.iter()) {
+                let delta = got_channel.abs_diff(want_channel);
+                max_delta = max_delta.max(delta);
+                pixel_over = pixel_over || delta > tolerance;
+            }
+            if pixel_over {
+                over += 1;
+                if first_over.is_none() {
+                    let x = u32::try_from(column).expect("column");
+                    let y = u32::try_from(row).expect("row");
+                    first_over = Some((x, y, *got, *want));
+                }
+            }
+        }
+    }
+
+    if std::env::var_os("TARRAGON_GOLDEN_REPORT").is_some() {
+        println!("{label}: observed max channel delta {max_delta} (tolerance {tolerance})");
+    }
+
+    if over > 0 {
+        let (x, y, got_pixel, want_pixel) = first_over.expect("a failing pixel");
+        panic!(
+            "{label}: {over} pixels over tolerance {tolerance}; max delta {max_delta}; first at ({x}, {y}) is {got_pixel:?}, golden is {want_pixel:?}"
+        );
+    }
+}
+
 /// Composite a fixture over its full canvas.
 pub fn composite_fixture(name: &str) -> CompositeRegion {
     let document = PsdDocument::open(&fixture(name)).unwrap_or_else(|e| panic!("{name}: {e}"));

@@ -17,6 +17,9 @@ Python runtime dependencies are Pillow 10.2.0 (HPND) and NumPy 1.26.4
 pins the tool and its runtime dependencies: `psd-tools==1.9.30`,
 `Pillow==10.2.0`, and `numpy==1.26.4`.
 
+The golden images in `golden/` have their own source file:
+`golden/SOURCES.md`.
+
 ## Generator
 
 - **File:** `tests/fixtures/psd/generate.py` (this repository, MIT)

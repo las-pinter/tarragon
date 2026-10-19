@@ -33,6 +33,9 @@ rusqlite = { version = "0.40", features = ["bundled"] }
 # Settings values store as JSON text, and the hidden `window_state` key
 # holds a JSON blob. Only `tarragon-db` parses them.
 serde_json = "1"
+# PNG decoding for the golden image tests. One pin, shared with
+# `tarragon-cache` and `tarragon-render`. Each crate turns on only its codecs.
+image = { version = "=0.25.10", default-features = false }
 # Krita `.kra` documents are ZIP archives. Real Krita archives may compress
 # their members, so the reader enables the `flate2` deflate backend. The other
 # features stay off so the dependency tree stays small. `deflate-zopfli` stays

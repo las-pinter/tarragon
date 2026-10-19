@@ -987,6 +987,7 @@ dependencies = [
 name = "tarragon-psd"
 version = "0.1.0"
 dependencies = [
+ "image",
  "tarragon-core",
  "thiserror",
 ]

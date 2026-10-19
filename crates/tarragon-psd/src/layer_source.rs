@@ -84,6 +84,8 @@ pub(crate) fn rgb_color(region: &ImageRegion, count: usize, scale: f32) -> Vec<f
 }
 
 /// Build straight RGB from the CMYK channels.
+///
+/// PSD stores CMYK inverted: a stored sample of 255 means zero ink.
 #[must_use]
 pub(crate) fn cmyk_color(region: &ImageRegion, count: usize, scale: f32) -> Vec<f32> {
     let cyan = channel_samples(region, 0);
@@ -92,10 +94,10 @@ pub(crate) fn cmyk_color(region: &ImageRegion, count: usize, scale: f32) -> Vec<
     let black = channel_samples(region, 3);
     let mut color = vec![0.0f32; count * 3];
     for index in 0..count {
-        let c = cyan.map_or(0.0, |s| f32::from(s[index]) / scale);
-        let m = magenta.map_or(0.0, |s| f32::from(s[index]) / scale);
-        let y = yellow.map_or(0.0, |s| f32::from(s[index]) / scale);
-        let k = black.map_or(0.0, |s| f32::from(s[index]) / scale);
+        let c = cyan.map_or(0.0, |s| (scale - f32::from(s[index])) / scale);
+        let m = magenta.map_or(0.0, |s| (scale - f32::from(s[index])) / scale);
+        let y = yellow.map_or(0.0, |s| (scale - f32::from(s[index])) / scale);
+        let k = black.map_or(0.0, |s| (scale - f32::from(s[index])) / scale);
         color[index * 3] = (1.0 - c) * (1.0 - k);
         color[index * 3 + 1] = (1.0 - m) * (1.0 - k);
         color[index * 3 + 2] = (1.0 - y) * (1.0 - k);
@@ -186,4 +188,71 @@ fn inside(bounds: LayerBounds, x: u32, y: u32) -> bool {
         && x < i64::from(bounds.right)
         && y >= i64::from(bounds.top)
         && y < i64::from(bounds.bottom)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::cmyk_color;
+    use crate::decode::{ChannelRegion, ImageRegion, Viewport};
+    use crate::model::ColorMode;
+
+    /// Build a one-pixel CMYK region from the stored samples.
+    fn one_pixel(stored: [u16; 4], depth: u16) -> ImageRegion {
+        let channels = [0i16, 1, 2, 3]
+            .into_iter()
+            .zip(stored)
+            .map(|(id, sample)| ChannelRegion {
+                id,
+                samples: vec![sample],
+            })
+            .collect();
+        ImageRegion {
+            viewport: Viewport::full(1, 1),
+            depth,
+            color_mode: ColorMode::Cmyk,
+            channels,
+        }
+    }
+
+    #[test]
+    fn a_stored_255_is_zero_ink() {
+        // A stored byte of 255 is zero ink, so the pixel is white.
+        let region = one_pixel([255, 255, 255, 255], 8);
+        assert_eq!(cmyk_color(&region, 1, 255.0), vec![1.0, 1.0, 1.0]);
+    }
+
+    #[test]
+    fn a_stored_0_is_full_ink() {
+        let region = one_pixel([0, 0, 0, 0], 8);
+        assert_eq!(cmyk_color(&region, 1, 255.0), vec![0.0, 0.0, 0.0]);
+    }
+
+    #[test]
+    fn the_black_channel_inverts_like_the_others() {
+        // Zero ink in C, M, and Y, full ink in K: the pixel is black.
+        let region = one_pixel([255, 255, 255, 0], 8);
+        assert_eq!(cmyk_color(&region, 1, 255.0), vec![0.0, 0.0, 0.0]);
+    }
+
+    #[test]
+    fn each_color_channel_inverts_on_its_own() {
+        // Full ink in one color channel turns one light component off.
+        let cases = [
+            ([0, 255, 255, 255], [0.0, 1.0, 1.0]),
+            ([255, 0, 255, 255], [1.0, 0.0, 1.0]),
+            ([255, 255, 0, 255], [1.0, 1.0, 0.0]),
+            ([255, 0, 0, 255], [1.0, 0.0, 0.0]),
+        ];
+        for (stored, want) in cases {
+            let region = one_pixel(stored, 8);
+            assert_eq!(cmyk_color(&region, 1, 255.0), want, "stored {stored:?}");
+        }
+    }
+
+    #[test]
+    fn the_16bit_scale_inverts_like_the_8bit_scale() {
+        // The same ink at 16 bits: magenta only, so the pixel is magenta.
+        let region = one_pixel([65535, 0, 65535, 65535], 16);
+        assert_eq!(cmyk_color(&region, 1, 65535.0), vec![1.0, 0.0, 1.0]);
+    }
 }

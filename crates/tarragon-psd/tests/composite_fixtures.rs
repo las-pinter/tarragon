@@ -54,9 +54,10 @@ fn the_layer_mask_fixture_cuts_the_layer_alpha() {
 
 #[test]
 fn the_cmyk_fixture_decodes_to_rgb() {
-    // The layer samples are CMYK (200,40,120,20). The naive conversion is
+    // The layer stores CMYK (200,40,120,20). PSD stores the samples inverted,
+    // so the ink is (55,215,135,235). The naive conversion is
     // R = (1-C)*(1-K), G = (1-M)*(1-K), B = (1-Y)*(1-K).
     let region = composite_fixture("cmyk_8bit.psd");
-    assert_eq!(sample_rgba8(&region, 0, 0), [50, 198, 124, 255]);
-    assert_eq!(sample_rgba8(&region, 63, 63), [50, 198, 124, 255]);
+    assert_eq!(sample_rgba8(&region, 0, 0), [15, 3, 9, 255]);
+    assert_eq!(sample_rgba8(&region, 63, 63), [15, 3, 9, 255]);
 }

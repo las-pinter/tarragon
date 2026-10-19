@@ -187,7 +187,9 @@ impl PsdDocument {
     ///
     /// A flattened document falls back to the merged image. The merged data is
     /// a preview over a white background, so the RGB is
-    /// un-composited with the alpha channel.
+    /// un-composited with the alpha channel. Only an RGB preview takes that
+    /// straight-color recovery, so a flattened CMYK document with merged alpha
+    /// keeps its stored values.
     fn composite_merged_background(
         &self,
         viewport: Viewport,

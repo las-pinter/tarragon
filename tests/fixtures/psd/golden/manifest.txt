@@ -1,0 +1,11 @@
+# One golden stem per line. Both the generator and the Rust test read this
+# file. The corpus file for a stem is `<stem>.psd`, or `<stem>.psb` for the
+# one PSB fixture.
+rgb_8bit
+rgb_16bit
+cmyk_8bit
+layered_blend_modes
+layer_groups
+clipping_mask
+layer_mask
+psb_8bit

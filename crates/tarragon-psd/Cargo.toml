@@ -14,5 +14,9 @@ tarragon-core.workspace = true
 # the workspace.
 thiserror.workspace = true
 
+[dev-dependencies]
+# The golden image tests decode committed PNG files. Only the PNG codec is on.
+image = { workspace = true, features = ["png"] }
+
 [lints]
 workspace = true

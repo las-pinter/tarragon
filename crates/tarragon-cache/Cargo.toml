@@ -7,7 +7,9 @@ publish = false
 license.workspace = true
 
 [dependencies]
-image = { version = "=0.25.10", default-features = false, features = ["jpeg"] }
+# The workspace pins the version and turns off the default codecs. This crate
+# adds the JPEG codec only.
+image = { workspace = true, features = ["jpeg"] }
 tarragon-core.workspace = true
 thiserror.workspace = true
 

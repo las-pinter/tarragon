@@ -7,7 +7,8 @@
 //!
 //! The tests never touch the real user data directory.
 
-use std::path::{Path, PathBuf};
+mod common;
+
 use std::time::Duration;
 
 use tarragon_psd::PsdDocument;
@@ -15,6 +16,8 @@ use tarragon_psd::decode::Viewport;
 use tarragon_psd::error::PsdError;
 use tarragon_psd::limits::{Deadline, FULL_TIER_MAX_EDGE, ParseOptions, full_tier_size};
 use tarragon_psd::parse::{Clipping, ColorMode, Compression, PsdVersion, read_bytes, read_file};
+
+use common::fixture;
 
 /// The expected shape of one valid fixture.
 struct Expected {
@@ -149,13 +152,6 @@ const VALID: [Expected; 8] = [
         layer_channels: 3,
     },
 ];
-
-/// The absolute path of a committed fixture.
-fn fixture(name: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../tests/fixtures/psd")
-        .join(name)
-}
 
 /// Read a fixture's bytes and parsed structure.
 fn read_fixture(name: &str) -> (Vec<u8>, tarragon_psd::PsdFile) {

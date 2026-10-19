@@ -7,10 +7,12 @@
 //! applied. The UI converts it to RGBA8 with `to_rgba8()` at texture upload.
 //! The crate never depends on egui.
 //!
-//! The `color` module owns the color-tag computation.
+//! The `color` module owns the color-tag computation. The `color_classify`
+//! module owns the bucket rules that the computation calls.
 
 pub mod clip;
 pub mod color;
+mod color_classify;
 pub mod krita;
 pub mod plain;
 pub mod registry;

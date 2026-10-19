@@ -1,17 +1,17 @@
 //! Tier directory layout, cache keys, atomic writes, and format markers.
 //!
 //! The path is `<root>/<tier>/<folder>_<uuid>/<source_name>.jpg`, with the
-//! lowercase tiers `256`, `1024`, and `full`. Each tier is scaled to its own
-//! longest edge and is never upscaled. The `full` tier uses the source size up
-//! to the 8192 px cap.
+//! lowercase tiers `256`, `1024`, and `full`. The `full` tier uses the source
+//! size up to the 8192 px cap.
+//!
+//! Image scaling and JPEG encoding live in the private `codec` module.
 //!
 //! The cache file name is the source base name plus the `.jpg` payload
 //! extension. The store never trusts the source extension, which can lie about
 //! the payload, so `photo.png` becomes `photo.png.jpg`.
 //!
-//! Every tier file is written as JPEG q90 through a temp file and an atomic
-//! rename. Alpha flattens onto white `(255, 255, 255)`. Each tier directory
-//! holds one `format=1` marker.
+//! Every tier file is written through a temp file and an atomic rename. Each
+//! tier directory holds one `format=1` marker.
 //!
 //! Staleness uses the source mtime in whole seconds and the source size. A
 //! cache hit needs a matching source stamp and all three tier files.
@@ -19,15 +19,13 @@
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use image::codecs::jpeg::JpegEncoder;
-use image::imageops::FilterType;
-use image::{DynamicImage, Rgb, RgbImage};
+use image::{DynamicImage, RgbImage};
 use tarragon_core::tier::Tier;
 
 use crate::CacheError;
+use crate::codec::{encode_jpeg, fit_to_edge, flatten_onto_white};
 
-/// The JPEG quality. Fixed.
-pub const JPEG_QUALITY: u8 = 90;
+pub use crate::codec::JPEG_QUALITY;
 
 /// The 8192 px render cap for the `full` tier.
 pub const FULL_EDGE_CAP: u32 = 8192;
@@ -210,53 +208,6 @@ impl CacheStore {
 #[must_use]
 fn cache_jpg_name(source_name: &str) -> String {
     format!("{source_name}.jpg")
-}
-
-/// Scale `source` to fit within `edge` on the longest side.
-///
-/// A source that already fits is cloned unchanged, so the cache never
-/// upscales.
-fn fit_to_edge(source: &DynamicImage, edge: u32) -> DynamicImage {
-    if source.width() <= edge && source.height() <= edge {
-        source.clone()
-    } else {
-        source.resize(edge, edge, FilterType::Lanczos3)
-    }
-}
-
-/// Flatten alpha onto white.
-fn flatten_onto_white(source: &DynamicImage) -> RgbImage {
-    let rgba = source.to_rgba8();
-    let mut out = RgbImage::new(rgba.width(), rgba.height());
-    let blend = |channel: u8, alpha: u32| -> u8 {
-        let value = (u32::from(channel) * alpha + 255 * (255 - alpha) + 127) / 255;
-        u8::try_from(value).unwrap_or(u8::MAX)
-    };
-    for (x, y, pixel) in rgba.enumerate_pixels() {
-        let alpha = u32::from(pixel[3]);
-        out.put_pixel(
-            x,
-            y,
-            Rgb([
-                blend(pixel[0], alpha),
-                blend(pixel[1], alpha),
-                blend(pixel[2], alpha),
-            ]),
-        );
-    }
-    out
-}
-
-/// Encode an RGB image as JPEG at [`JPEG_QUALITY`].
-///
-/// # Errors
-///
-/// Returns [`CacheError::Encode`] when the encoder fails.
-fn encode_jpeg(image: &RgbImage) -> Result<Vec<u8>, CacheError> {
-    let mut bytes = Vec::new();
-    let mut encoder = JpegEncoder::new_with_quality(&mut bytes, JPEG_QUALITY);
-    encoder.encode_image(image).map_err(CacheError::Encode)?;
-    Ok(bytes)
 }
 
 /// Write `image` at `dest` through a temp file and an atomic rename.

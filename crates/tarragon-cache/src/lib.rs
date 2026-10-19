@@ -8,6 +8,7 @@
 
 use std::path::PathBuf;
 
+mod codec;
 pub mod eviction;
 pub mod purge;
 pub mod store;

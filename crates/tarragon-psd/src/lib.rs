@@ -11,6 +11,7 @@
 //! visibility, opacity, fill opacity, blend mode, masks, clipping masks, and
 //! groups.
 
+mod adjustment_parse;
 pub mod adjustments;
 pub mod blend;
 pub mod composite;
@@ -19,9 +20,14 @@ pub mod decode;
 mod descriptor;
 pub mod document;
 pub mod error;
+mod layer;
+mod layer_source;
+mod layer_tree;
 pub mod limits;
 pub mod merged;
+mod model;
 pub mod parse;
+mod reader;
 
 pub use adjustments::{Adjustment, Curve, CurvePoint, LevelsChannel};
 pub use blend::BlendMode;
@@ -30,8 +36,10 @@ pub use content::{GradientFill, GradientStyle, LayerContent};
 pub use decode::{ChannelRegion, ImageRegion, Viewport};
 pub use document::PsdDocument;
 pub use error::PsdError;
-pub use limits::{Deadline, FULL_TIER_MAX_EDGE, ParseOptions, full_tier_size};
-pub use parse::{
-    BlendingRanges, ChannelInfo, Clipping, ColorMode, Compression, GlobalMask, LayerBounds,
-    LayerMask, LayerRecord, LayerSection, MergedImage, PsdFile, PsdHeader, PsdVersion,
+pub use layer::{
+    BlendingRanges, ChannelInfo, Clipping, GlobalMask, LayerBounds, LayerMask, LayerRecord,
+    LayerSection,
 };
+pub use limits::{Deadline, FULL_TIER_MAX_EDGE, ParseOptions, full_tier_size};
+pub use merged::MergedImage;
+pub use model::{ColorMode, Compression, PsdFile, PsdHeader, PsdVersion};

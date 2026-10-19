@@ -3,6 +3,9 @@
 //! The crate depends on egui only. It never depends on eframe. The app crate
 //! owns the eframe window and the repaint loop.
 
+mod fonts;
 pub mod grid;
 pub mod tokens;
 pub mod widgets;
+
+pub use fonts::{definitions, install};

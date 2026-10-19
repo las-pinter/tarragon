@@ -42,6 +42,18 @@ Windows and macOS run `cargo build --release` and `cargo test`. No release
 job builds the Linux portable zip yet. The only workflow,
 `.github/workflows/rust.yml`, has one job that builds the large PSB fixture.
 
+## Vendored font
+
+`tarragon-ui` embeds the Roboto family. The files are in
+`crates/tarragon-ui/assets/fonts/`. The family is Roboto Regular, Medium, and
+Bold in unhinted TrueType form. The license is Apache-2.0 and the full text is
+`LICENSE-Apache-2.0.txt` in the same directory. The source package, the
+version, the copyright, and the file checksums are in `SOURCES.md` there. No
+Roboto Mono file exists, so Regular serves the `Monospace` family.
+
+The app crate wires `install` when it takes the `tarragon-ui` dependency, so no
+window renders Roboto yet.
+
 ## Quality gates
 
 ```sh
@@ -95,8 +107,12 @@ The two heavy crates are measured through their examples. Run
 
 | Example | Crates | Bytes | MiB |
 |---------|--------|-------|-----|
-| `grid_bench` | egui 0.36.2, rayon | 5,112,632 | 4.88 |
-| `jpeg_q90_check` | image 0.25.10 | 1,991,648 | 1.90 |
+| `grid_bench` | egui 0.36.2, rayon | 5,114,248 | 4.88 |
+| `jpeg_q90_check` | image 0.25.10 | 2,041,520 | 1.95 |
+
+The two example rows were re-measured on this working tree, which is commit
+`41ae1b8` plus the uncommitted font work. Neither example calls the font
+module, so the font bytes stay out of these sizes.
 
 The final size of the wired binary is not measured yet.
 
@@ -107,10 +123,10 @@ The limit is 60 MB. Take 60 MB as 62,914,560 bytes.
 | Binary | Bytes | Result |
 |--------|-------|--------|
 | `tarragon-app` (glibc, release) | 444,704 | pass |
-| `grid_bench` (example) | 5,112,632 | pass |
-| `jpeg_q90_check` (example) | 1,991,648 | pass |
+| `grid_bench` (example) | 5,114,248 | pass |
+| `jpeg_q90_check` (example) | 2,041,520 | pass |
 
-The highest measured size is 5,112,632 bytes. That is 8.1% of the 60 MB budget.
+The highest measured size is 5,114,248 bytes. That is 8.1% of the 60 MB budget.
 Every measured binary is under the limit.
 
 ## Reproduce

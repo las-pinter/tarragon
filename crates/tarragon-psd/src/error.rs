@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 use tarragon_core::error::RenderError;
 
-use crate::parse::ColorMode;
+use crate::model::ColorMode;
 
 /// A PSD or PSB parse failed.
 #[derive(Debug, thiserror::Error)]

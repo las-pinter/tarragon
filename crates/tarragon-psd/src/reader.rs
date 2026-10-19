@@ -1,6 +1,7 @@
 //! Checked big-endian cursor over a byte slice.
 
 use crate::error::PsdError;
+use crate::model::PsdVersion;
 
 /// A checked big-endian reader over a byte slice.
 pub(crate) struct Reader<'a> {
@@ -108,6 +109,14 @@ impl<'a> Reader<'a> {
         ]))
     }
 
+    /// Read a length field. PSD uses four bytes; PSB uses eight.
+    pub(crate) fn read_length(&mut self, version: PsdVersion) -> Result<u64, PsdError> {
+        match version {
+            PsdVersion::Psd => Ok(u64::from(self.read_u32()?)),
+            PsdVersion::Psb => self.read_u64(),
+        }
+    }
+
     /// Read a fixed-size byte array.
     pub(crate) fn read_array<const N: usize>(&mut self) -> Result<[u8; N], PsdError> {
         let bytes = self.take(N)?;
@@ -115,4 +124,9 @@ impl<'a> Reader<'a> {
         out.copy_from_slice(bytes);
         Ok(out)
     }
+}
+
+/// Convert a declared length to a `usize`.
+pub(crate) fn to_usize(value: u64) -> Result<usize, PsdError> {
+    usize::try_from(value).map_err(|_| PsdError::LengthTooLarge { length: value })
 }

@@ -23,7 +23,7 @@ use crate::error::PsdError;
 use crate::layer_source::{channel_samples, cmyk_color, read_layer, rgb_color, solid_color};
 use crate::layer_tree::{LayerNode, build_tree};
 use crate::limits::ParseOptions;
-use crate::parse::ColorMode;
+use crate::model::ColorMode;
 
 /// The composited pixels of one viewport.
 ///

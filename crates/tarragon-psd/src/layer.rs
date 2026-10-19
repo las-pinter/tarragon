@@ -3,10 +3,9 @@
 use crate::adjustments::{parse_adjustment, parse_brightness_contrast};
 use crate::content::{LayerContent, parse_gradient_fill, parse_solid_color};
 use crate::error::PsdError;
-use crate::limits::ParseOptions;
-use crate::model::{Compression, PsdHeader, PsdVersion};
-use crate::parse::{read_length, sample_levels, to_usize, validate_layer_bounds};
-use crate::reader::Reader;
+use crate::limits::{MAX_DIMENSION, ParseOptions};
+use crate::model::{Compression, PsdHeader, PsdVersion, sample_levels};
+use crate::reader::{Reader, to_usize};
 
 /// The blend mode signature in a layer record.
 const BLEND_SIGNATURE: &[u8; 4] = b"8BIM";
@@ -103,6 +102,22 @@ impl LayerBounds {
     pub const fn height(self) -> i64 {
         self.bottom as i64 - self.top as i64
     }
+}
+
+/// Validate a layer rectangle against the Adobe limit.
+///
+/// The row buffer of a tile decode is sized from the layer width, so a huge
+/// file-controlled rectangle must be refused before any allocation.
+pub(crate) fn validate_layer_bounds(bounds: LayerBounds) -> Result<(), PsdError> {
+    let limit = i64::from(MAX_DIMENSION);
+    if bounds.width() > limit || bounds.height() > limit {
+        return Err(PsdError::BadDimensions {
+            width: u32::try_from(bounds.width()).unwrap_or(u32::MAX),
+            height: u32::try_from(bounds.height()).unwrap_or(u32::MAX),
+            limit: MAX_DIMENSION,
+        });
+    }
+    Ok(())
 }
 
 /// One channel of a layer record or of the merged image.
@@ -202,7 +217,7 @@ pub(crate) fn parse_layer_section(
     header: &PsdHeader,
     options: &ParseOptions,
 ) -> Result<(usize, Vec<LayerRecord>, Option<GlobalMask>), PsdError> {
-    let layer_info_length = to_usize(read_length(section, header.version)?)?;
+    let layer_info_length = to_usize(section.read_length(header.version)?)?;
     let (layer_count, layers) = if layer_info_length == 0 {
         (0, Vec::new())
     } else {
@@ -327,7 +342,7 @@ fn read_layer_record(
     let mut channels = Vec::new();
     for _ in 0..channel_count {
         let id = reader.read_i16()?;
-        let length = read_length(reader, version)?;
+        let length = reader.read_length(version)?;
         channels.push(ChannelInfo {
             id,
             length,

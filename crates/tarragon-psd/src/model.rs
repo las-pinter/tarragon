@@ -5,7 +5,6 @@ use crate::error::PsdError;
 use crate::layer::{ChannelInfo, GlobalMask, LayerRecord};
 use crate::limits::ParseOptions;
 use crate::merged::MergedImage;
-use crate::parse::sample_bytes;
 
 /// The PSD or PSB file version.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -79,6 +78,21 @@ impl ColorMode {
             _ => None,
         }
     }
+}
+
+/// The bytes per sample for the supported color modes.
+pub(crate) fn sample_bytes(mode: ColorMode, depth: u16) -> Result<usize, PsdError> {
+    match (mode, depth) {
+        (ColorMode::Rgb | ColorMode::Cmyk, 8) => Ok(1),
+        (ColorMode::Rgb, 16) => Ok(2),
+        _ => Err(PsdError::UnsupportedColorMode { mode, depth }),
+    }
+}
+
+/// The sample count of a document depth, used by adjustment lookup tables.
+#[must_use]
+pub(crate) const fn sample_levels(depth: u16) -> u32 {
+    if depth >= 16 { 65_536 } else { 256 }
 }
 
 /// The channel compression code.

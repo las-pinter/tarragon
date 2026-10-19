@@ -13,7 +13,7 @@ use crate::error::PsdError;
 use crate::layer::parse_layer_section;
 use crate::limits::{MAX_DIMENSION, ParseOptions, full_tier_size};
 use crate::merged::read_merged_image;
-use crate::reader::Reader;
+use crate::reader::{Reader, to_usize};
 
 pub use crate::layer::{
     BlendingRanges, ChannelInfo, Clipping, GlobalMask, LayerBounds, LayerMask, LayerRecord,
@@ -87,7 +87,7 @@ fn parse(data: &[u8], options: &ParseOptions) -> Result<PsdFile, PsdError> {
 
     // Layer and mask information. The section length bounds every layer read.
     // The length field is four bytes in PSD and eight bytes in PSB.
-    let section_length = to_usize(read_length(&mut reader, header.version)?)?;
+    let section_length = to_usize(reader.read_length(header.version)?)?;
     let (layer_count, layers, global_mask) = if section_length == 0 {
         (0, Vec::new(), None)
     } else {
@@ -123,22 +123,6 @@ fn validate_dimensions(header: &PsdHeader) -> Result<(), PsdError> {
     Ok(())
 }
 
-/// Validate a layer rectangle against the Adobe limit.
-///
-/// The row buffer of a tile decode is sized from the layer width, so a huge
-/// file-controlled rectangle must be refused before any allocation.
-pub(crate) fn validate_layer_bounds(bounds: LayerBounds) -> Result<(), PsdError> {
-    let limit = i64::from(MAX_DIMENSION);
-    if bounds.width() > limit || bounds.height() > limit {
-        return Err(PsdError::BadDimensions {
-            width: u32::try_from(bounds.width()).unwrap_or(u32::MAX),
-            height: u32::try_from(bounds.height()).unwrap_or(u32::MAX),
-            limit: MAX_DIMENSION,
-        });
-    }
-    Ok(())
-}
-
 /// Read the 26-byte file header.
 fn read_header(reader: &mut Reader) -> Result<PsdHeader, PsdError> {
     let signature = reader.read_array::<4>()?;
@@ -166,34 +150,6 @@ fn read_header(reader: &mut Reader) -> Result<PsdHeader, PsdError> {
         depth,
         color_mode,
     })
-}
-
-/// Read a length field. PSD uses four bytes; PSB uses eight.
-pub(crate) fn read_length(reader: &mut Reader, version: PsdVersion) -> Result<u64, PsdError> {
-    match version {
-        PsdVersion::Psd => Ok(u64::from(reader.read_u32()?)),
-        PsdVersion::Psb => reader.read_u64(),
-    }
-}
-
-/// The sample count of a document depth, used by adjustment lookup tables.
-#[must_use]
-pub(crate) const fn sample_levels(depth: u16) -> u32 {
-    if depth >= 16 { 65_536 } else { 256 }
-}
-
-/// The bytes per sample for the supported color modes.
-pub(crate) fn sample_bytes(mode: ColorMode, depth: u16) -> Result<usize, PsdError> {
-    match (mode, depth) {
-        (ColorMode::Rgb | ColorMode::Cmyk, 8) => Ok(1),
-        (ColorMode::Rgb, 16) => Ok(2),
-        _ => Err(PsdError::UnsupportedColorMode { mode, depth }),
-    }
-}
-
-/// Convert a declared length to a `usize`.
-pub(crate) fn to_usize(value: u64) -> Result<usize, PsdError> {
-    usize::try_from(value).map_err(|_| PsdError::LengthTooLarge { length: value })
 }
 
 /// The uncapped and capped sizes of a file, for the full tier.

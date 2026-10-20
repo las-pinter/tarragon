@@ -17,6 +17,12 @@ pub const MEDIUM: &[u8] = include_bytes!("../assets/fonts/Roboto-Medium.ttf");
 /// The Roboto Bold font file.
 pub const BOLD: &[u8] = include_bytes!("../assets/fonts/Roboto-Bold.ttf");
 
+/// The named egui family that holds the Medium weight.
+pub const MEDIUM_FAMILY: &str = "Roboto Medium";
+
+/// The named egui family that holds the Bold weight.
+pub const BOLD_FAMILY: &str = "Roboto Bold";
+
 /// Build the font definitions for the interface.
 ///
 /// Proportional lists Regular, Medium, then Bold. Monospace holds Regular only.
@@ -49,20 +55,33 @@ pub fn definitions() -> FontDefinitions {
         .families
         .insert(FontFamily::Monospace, vec!["roboto-regular".to_owned()]);
     fonts.families.insert(
-        FontFamily::Name("Roboto Medium".into()),
+        FontFamily::Name(MEDIUM_FAMILY.into()),
         vec!["roboto-medium".to_owned()],
     );
     fonts.families.insert(
-        FontFamily::Name("Roboto Bold".into()),
+        FontFamily::Name(BOLD_FAMILY.into()),
         vec!["roboto-bold".to_owned()],
     );
 
     fonts
 }
 
+/// The context flag that records a completed font install.
+fn guard_id() -> egui::Id {
+    egui::Id::new("tarragon-ui/fonts-installed")
+}
+
 /// Install the Roboto fonts on the given context.
+///
+/// Only the first call installs. A later call returns at the guard, so a
+/// direct call and the theme path cannot install the fonts twice.
 pub fn install(ctx: &egui::Context) {
+    let id = guard_id();
+    if ctx.data(|data| data.get_temp::<bool>(id).unwrap_or(false)) {
+        return;
+    }
     ctx.set_fonts(definitions());
+    ctx.data_mut(|data| data.insert_temp(id, true));
 }
 
 #[cfg(test)]
@@ -115,5 +134,34 @@ mod tests {
         let list = &fonts.families[&FontFamily::Monospace];
 
         assert_eq!(list.first().map(String::as_str), Some("roboto-regular"));
+    }
+
+    #[test]
+    fn the_fonts_still_shape_after_a_direct_install_and_the_theme() {
+        let ctx = egui::Context::default();
+        install(&ctx);
+        assert!(
+            ctx.data(|data| data.get_temp::<bool>(guard_id()).unwrap_or(false)),
+            "the direct install sets the guard"
+        );
+
+        crate::shell::apply_theme(&ctx);
+        assert!(
+            ctx.data(|data| data.get_temp::<bool>(guard_id()).unwrap_or(false)),
+            "the theme leaves the guard set"
+        );
+
+        ctx.run_ui(RawInput::default(), |_| {})
+            .drop_without_applying_deltas();
+
+        let galley = ctx.fonts_mut(|fonts| {
+            fonts.layout_no_wrap(
+                "Tarragon".to_owned(),
+                FontId::proportional(12.0),
+                Color32::WHITE,
+            )
+        });
+        let glyphs: usize = galley.rows.iter().map(|row| row.row.glyphs.len()).sum();
+        assert_eq!(glyphs, 8, "the fonts still shape text after two calls");
     }
 }

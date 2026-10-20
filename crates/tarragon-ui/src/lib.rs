@@ -5,7 +5,9 @@
 
 mod fonts;
 pub mod grid;
+pub mod shell;
 pub mod tokens;
 pub mod widgets;
 
 pub use fonts::{definitions, install};
+pub use shell::{Shell, apply_theme};

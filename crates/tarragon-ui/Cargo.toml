@@ -7,10 +7,12 @@ publish = false
 license.workspace = true
 
 [dependencies]
+tarragon-core.workspace = true
 egui.workspace = true
 
 [dev-dependencies]
 rayon.workspace = true
+tarragon-db.workspace = true
 
 [lints]
 workspace = true

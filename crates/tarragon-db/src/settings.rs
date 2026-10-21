@@ -8,8 +8,9 @@ use serde_json::Value;
 
 use crate::{Database, DbError};
 
-/// The storage key for the hidden window state JSON blob.
-pub const WINDOW_STATE_KEY: &str = "window_state";
+mod window_state;
+
+pub use window_state::{WINDOW_STATE_KEY, WindowState};
 
 /// The number of typed settings.
 pub const TYPED_SETTING_COUNT: usize = 13;
@@ -354,6 +355,36 @@ impl<'a> Settings<'a> {
             });
         }
         self.db.set_setting(WINDOW_STATE_KEY, value)?;
+        Ok(())
+    }
+
+    /// Read the hidden `window_state` value as a typed [`WindowState`].
+    ///
+    /// An unset key gives `None`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DbError::WindowState`] when the stored text is not a window
+    /// state. Returns [`DbError`] when the read fails.
+    pub fn window_state_value(&self) -> Result<Option<WindowState>, DbError> {
+        let Some(text) = self.db.setting(WINDOW_STATE_KEY)? else {
+            return Ok(None);
+        };
+        let state = serde_json::from_str::<WindowState>(&text)?;
+        Ok(Some(state))
+    }
+
+    /// Write a typed [`WindowState`] to the hidden `window_state` key.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SettingsError::InvalidWindowState`] when the value cannot
+    /// encode. Returns [`SettingsError::Db`] when the write fails.
+    pub fn set_window_state_value(&self, value: &WindowState) -> Result<(), SettingsError> {
+        let text = serde_json::to_string(value).map_err(|_| SettingsError::InvalidWindowState {
+            key: WINDOW_STATE_KEY,
+        })?;
+        self.db.set_setting(WINDOW_STATE_KEY, &text)?;
         Ok(())
     }
 }

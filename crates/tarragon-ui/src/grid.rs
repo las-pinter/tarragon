@@ -3,11 +3,31 @@
 //! The grid owns a fixed cell size. It builds a cell only when the cell is
 //! inside the scroll viewport. An off-screen item costs no work.
 //!
-//! The widget is not the full grid yet.
+//! [`VirtualGrid::show_items`] paints a full tile and lets the scroll area
+//! keep its own offset. [`VirtualGrid::show_at`] pins the offset for a
+//! measurement. [`VirtualGrid::show`] reports the visible cells only, so a
+//! caller can paint its own.
 
 use std::ops::Range;
 
-use egui::{Rect, ScrollArea, Ui, Vec2, pos2, vec2};
+use egui::{Modifiers, Rect, ScrollArea, Ui, Vec2, pos2, vec2};
+
+use crate::tokens;
+
+mod cell;
+mod items;
+mod selection;
+
+#[cfg(test)]
+mod tests;
+
+pub use items::{GridItem, items_in_order};
+pub use selection::Selection;
+
+/// Width of one grid track, in points. The stylesheet track is 196 px.
+const TRACK_WIDTH: f32 = 196.0;
+/// Height of one grid cell, in points. The stylesheet cell is about 208 px.
+const CELL_HEIGHT: f32 = 208.0;
 
 /// Fixed geometry of one grid. All values are in points.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -38,7 +58,10 @@ impl GridMetrics {
 
     /// Full size of the grid content, including the scroll extent.
     #[must_use]
-    #[allow(clippy::cast_precision_loss)]
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "a column count well below 2^23 stays exact in f32"
+    )]
     pub fn content_size(&self, item_count: usize) -> Vec2 {
         let rows = self.row_count(item_count);
         if rows == 0 {
@@ -70,7 +93,10 @@ impl GridMetrics {
 
     /// Rectangle of one cell, relative to the top left of the content.
     #[must_use]
-    #[allow(clippy::cast_precision_loss)]
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "a row or column count well below 2^23 stays exact in f32"
+    )]
     pub fn cell_rect(&self, row: usize, col: usize) -> Rect {
         let stride = self.stride();
         Rect::from_min_size(
@@ -78,6 +104,71 @@ impl GridMetrics {
             self.cell,
         )
     }
+
+    /// Stretch the cell width so `columns` tracks fill `width`.
+    ///
+    /// The cell height stays fixed. The column count is the smallest track
+    /// count that fits, so a narrow grid keeps one column. This matches the
+    /// stylesheet `minmax(196px, 1fr)` track.
+    #[must_use]
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        clippy::cast_precision_loss,
+        reason = "the column count is a small positive number"
+    )]
+    pub fn stretched(self, width: f32) -> Self {
+        let columns = ((width + self.spacing) / (TRACK_WIDTH + self.spacing))
+            .floor()
+            .max(1.0) as usize;
+        let gaps = self.spacing * (columns.saturating_sub(1)) as f32;
+        let cell_width = ((width - gaps) / columns as f32).max(TRACK_WIDTH);
+        Self {
+            columns,
+            cell: vec2(cell_width, self.cell.y),
+            spacing: self.spacing,
+        }
+    }
+}
+
+/// The size of one grid cell.
+#[must_use]
+pub fn cell_size() -> Vec2 {
+    vec2(TRACK_WIDTH, CELL_HEIGHT)
+}
+
+/// The grid geometry for an available `width`, in points.
+///
+/// The grid holds at least one column, however narrow the window is. The cell
+/// width stretches so the last column fills the row.
+#[must_use]
+pub fn metrics_for(width: f32) -> GridMetrics {
+    GridMetrics {
+        columns: 1,
+        cell: cell_size(),
+        spacing: tokens::GRID_GAP,
+    }
+    .stretched(width)
+}
+
+/// One cell click, with the modifier keys that were held.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CellClick {
+    /// Index into the item slice.
+    pub index: usize,
+    /// Display position of the cell in the order slice.
+    pub position: usize,
+    /// The modifier keys held when the click arrived.
+    pub modifiers: Modifiers,
+}
+
+/// The outcome of one painted frame.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct GridResponse {
+    /// Number of cells built this frame.
+    pub painted: usize,
+    /// The cell clicked this frame, if any.
+    pub click: Option<CellClick>,
 }
 
 /// A grid over `item_count` items with a fixed cell geometry.
@@ -90,124 +181,162 @@ pub struct VirtualGrid {
 }
 
 impl VirtualGrid {
-    /// Show the grid and paint only the visible cells.
+    /// Show the grid at a pinned scroll offset and paint only the visible cells.
     ///
-    /// `scroll_y` is the vertical scroll position in points. The function calls
-    /// `cell_ui` once for each visible cell. It returns the number of cells it
-    /// built. That count proves the grid virtualizes.
+    /// `scroll_y` is the vertical scroll position in points. A pinned offset
+    /// ignores the scroll state of the area, so the grid cannot move by input.
+    /// Use [`Self::show_interactive`] for a grid the user can scroll.
     pub fn show(
         self,
         ui: &mut Ui,
         scroll_y: f32,
+        cell_ui: impl FnMut(&mut Ui, Rect, usize),
+    ) -> usize {
+        self.show_at(ui, scroll_y, cell_ui)
+    }
+
+    /// Paint only the visible cells at a pinned `scroll_y` in points.
+    ///
+    /// The function calls `cell_ui` once for each visible cell. It returns the
+    /// number of cells it built. That count proves the grid virtualizes.
+    pub fn show_at(
+        self,
+        ui: &mut Ui,
+        scroll_y: f32,
+        cell_ui: impl FnMut(&mut Ui, Rect, usize),
+    ) -> usize {
+        self.paint(ui, Some(scroll_y), cell_ui)
+    }
+
+    /// Paint only the visible cells and let the scroll area keep the offset.
+    ///
+    /// The scroll position lives in egui state across frames, so a wheel turn or
+    /// a scrollbar drag moves the grid. Use [`Self::show_at`] to pin the offset.
+    pub fn show_interactive(self, ui: &mut Ui, cell_ui: impl FnMut(&mut Ui, Rect, usize)) -> usize {
+        self.paint(ui, None, cell_ui)
+    }
+
+    /// Paint the visible cells. A `Some` offset pins the scroll position.
+    fn paint(
+        self,
+        ui: &mut Ui,
+        scroll_y: Option<f32>,
         mut cell_ui: impl FnMut(&mut Ui, Rect, usize),
     ) -> usize {
-        let content = self.metrics.content_size(self.item_count);
-        let row_count = self.metrics.row_count(self.item_count);
         let mut painted = 0usize;
 
-        ScrollArea::vertical()
-            .scroll_offset(vec2(0.0, scroll_y))
-            .auto_shrink([false, false])
-            .show_viewport(ui, |ui, viewport| {
-                ui.set_min_size(content);
-                let origin = ui.max_rect().min;
-                let cols = self.metrics.visible_cols(viewport);
-                for row in self.metrics.visible_rows(viewport) {
-                    if row >= row_count {
+        let area = ScrollArea::vertical().auto_shrink([false, false]);
+        let area = match scroll_y {
+            Some(scroll_y) => area.scroll_offset(vec2(0.0, scroll_y)),
+            None => area,
+        };
+        area.show_viewport(ui, |ui, viewport| {
+            // The inner width excludes the scrollbar, so the columns fit.
+            let metrics = self.metrics.stretched(ui.available_width());
+            let content = metrics.content_size(self.item_count);
+            let row_count = metrics.row_count(self.item_count);
+            ui.set_min_size(content);
+            let origin = ui.max_rect().min;
+            let cols = metrics.visible_cols(viewport);
+            for row in metrics.visible_rows(viewport) {
+                if row >= row_count {
+                    break;
+                }
+                for col in cols.clone() {
+                    let index = row * metrics.columns + col;
+                    if index >= self.item_count {
                         break;
                     }
-                    for col in cols.clone() {
-                        let index = row * self.metrics.columns + col;
-                        if index >= self.item_count {
-                            break;
-                        }
-                        let rect = self.metrics.cell_rect(row, col).translate(origin.to_vec2());
-                        cell_ui(ui, rect, index);
-                        painted += 1;
-                    }
+                    let rect = metrics.cell_rect(row, col).translate(origin.to_vec2());
+                    cell_ui(ui, rect, index);
+                    painted += 1;
                 }
-            });
+            }
+        });
 
         painted
+    }
+
+    /// Show the grid over `items` in display `order` and paint each tile.
+    ///
+    /// `order` holds item indices in display order, as [`items_in_order`]
+    /// returns them. The scroll area keeps its own offset, so the user can
+    /// scroll the grid. The function reports the clicked item, if a click landed
+    /// on a tile.
+    pub fn show_items(
+        self,
+        ui: &mut Ui,
+        items: &[GridItem],
+        order: &[usize],
+        selection: &Selection,
+    ) -> GridResponse {
+        self.items_at(ui, None, items, order, selection)
+    }
+
+    /// Show the grid over `items` at a pinned `scroll_y` in points.
+    ///
+    /// Use this when the caller owns the scroll position, as a benchmark does.
+    pub fn show_items_at(
+        self,
+        ui: &mut Ui,
+        scroll_y: f32,
+        items: &[GridItem],
+        order: &[usize],
+        selection: &Selection,
+    ) -> GridResponse {
+        self.items_at(ui, Some(scroll_y), items, order, selection)
+    }
+
+    /// Paint the tiles. A `Some` offset pins the scroll position.
+    fn items_at(
+        self,
+        ui: &mut Ui,
+        scroll_y: Option<f32>,
+        items: &[GridItem],
+        order: &[usize],
+        selection: &Selection,
+    ) -> GridResponse {
+        let mut click = None;
+        let grid = Self {
+            metrics: self.metrics,
+            item_count: order.len(),
+        };
+        let painted = grid.paint(ui, scroll_y, |ui, rect, position| {
+            let Some(&index) = order.get(position) else {
+                return;
+            };
+            let Some(item) = items.get(index) else {
+                return;
+            };
+            let response = cell::show_cell(ui, rect, item, index, selection);
+            if response.clicked() {
+                click = Some(CellClick {
+                    index,
+                    position,
+                    modifiers: ui.input(|input| input.modifiers),
+                });
+            }
+        });
+        GridResponse { painted, click }
     }
 }
 
 /// Index of the first cell row or column that touches a coordinate.
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "a non-negative coordinate gives a non-negative index"
+)]
 fn index_floor(coord: f32, stride: f32) -> usize {
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    let index = (coord / stride).floor() as usize;
-    index
+    (coord / stride).floor() as usize
 }
 
 /// One past the last cell row or column that touches a coordinate.
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "a non-negative coordinate gives a non-negative index"
+)]
 fn index_ceil(coord: f32, stride: f32) -> usize {
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    let index = (coord / stride).ceil() as usize;
-    index
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn metrics() -> GridMetrics {
-        GridMetrics {
-            columns: 6,
-            cell: vec2(240.0, 180.0),
-            spacing: 8.0,
-        }
-    }
-
-    #[test]
-    fn row_count_rounds_up() {
-        assert_eq!(metrics().row_count(0), 0);
-        assert_eq!(metrics().row_count(1), 1);
-        assert_eq!(metrics().row_count(6), 1);
-        assert_eq!(metrics().row_count(7), 2);
-        assert_eq!(metrics().row_count(10_000), 1667);
-    }
-
-    #[test]
-    fn content_size_holds_all_rows() {
-        let size = metrics().content_size(10_000);
-        assert_eq!(size.x, 6.0 * 248.0 - 8.0);
-        assert_eq!(size.y, 1667.0 * 188.0 - 8.0);
-        assert_eq!(metrics().content_size(0), Vec2::ZERO);
-    }
-
-    #[test]
-    fn visible_rows_cover_the_viewport() {
-        let metrics = metrics();
-        let viewport = Rect::from_min_size(pos2(0.0, 0.0), vec2(1480.0, 900.0));
-        assert_eq!(metrics.visible_rows(viewport), 0..5);
-
-        let scrolled = Rect::from_min_size(pos2(0.0, 188.0), vec2(1480.0, 900.0));
-        assert_eq!(metrics.visible_rows(scrolled), 1..6);
-    }
-
-    #[test]
-    fn visible_cols_stay_inside_the_column_count() {
-        let metrics = metrics();
-        let wide = Rect::from_min_size(pos2(0.0, 0.0), vec2(5000.0, 900.0));
-        assert_eq!(metrics.visible_cols(wide), 0..6);
-        let narrow = Rect::from_min_size(pos2(0.0, 0.0), vec2(500.0, 900.0));
-        assert_eq!(metrics.visible_cols(narrow), 0..3);
-    }
-
-    #[test]
-    fn cell_rect_uses_the_stride() {
-        let rect = metrics().cell_rect(2, 3);
-        assert_eq!(rect.min, pos2(3.0 * 248.0, 2.0 * 188.0));
-        assert_eq!(rect.size(), vec2(240.0, 180.0));
-    }
-
-    #[test]
-    fn zero_columns_show_nothing() {
-        let metrics = GridMetrics {
-            columns: 0,
-            ..metrics()
-        };
-        assert_eq!(metrics.row_count(10), 0);
-        assert_eq!(metrics.content_size(10), Vec2::ZERO);
-    }
+    (coord / stride).ceil() as usize
 }

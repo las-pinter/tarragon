@@ -6,5 +6,10 @@ edition.workspace = true
 publish = false
 license.workspace = true
 
+[dependencies]
+tarragon-core = { workspace = true }
+tarragon-db = { workspace = true }
+tarragon-ui = { workspace = true }
+
 [lints]
 workspace = true

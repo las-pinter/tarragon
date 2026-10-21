@@ -460,39 +460,6 @@ fn set_rejects_a_non_finite_float_and_does_not_persist() {
 }
 
 #[test]
-fn window_state_defaults_to_unset() {
-    let temp = TempDb::new();
-    let settings = Settings::new(&temp.db);
-    assert_eq!(settings.window_state().expect("read"), None);
-}
-
-#[test]
-fn window_state_round_trips_json_text() {
-    let temp = TempDb::new();
-    let settings = Settings::new(&temp.db);
-    let state = r#"{"layout":"library","geometry":[0,0,1200,800],"sort_mode":"date"}"#;
-    settings.set_window_state(state).expect("write the state");
-    assert_eq!(
-        settings.window_state().expect("read").as_deref(),
-        Some(state)
-    );
-}
-
-#[test]
-fn window_state_rejects_malformed_json_and_does_not_persist() {
-    let temp = TempDb::new();
-    let settings = Settings::new(&temp.db);
-    let error = settings
-        .set_window_state("{not-json")
-        .expect_err("malformed JSON is refused");
-    assert!(
-        matches!(error, SettingsError::InvalidWindowState { .. }),
-        "{error}"
-    );
-    assert_eq!(settings.window_state().expect("read"), None);
-}
-
-#[test]
 fn window_state_is_not_a_typed_setting() {
     let names: BTreeSet<&str> = SettingKey::ALL.iter().map(|key| key.as_str()).collect();
     assert!(!names.contains(WINDOW_STATE_KEY));

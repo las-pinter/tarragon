@@ -104,3 +104,61 @@ window and menu margins, and the window corner radius. There is no second
 metric layer.
 
 Reason: one value set for the stylesheet and the code keeps the two in step.
+
+## Grid hover scale
+
+Before: `design/mockups/theme.css` line 765 scales a hovered cell by 1.02 over
+150 ms, so the hovered cell lifts above its neighbours.
+
+After: the tile keeps its size. The hover fade changes the fill, the border,
+and the shadow only.
+
+Reason: a scaled tile overlaps its neighbours, and the grid does not reflow
+its clip rect for the larger cell. The difference is visual only.
+
+## New row fade
+
+Before: `design/mockups/grid-hover.html` line 54 fades a new row in over
+200 ms, with a stagger between rows.
+
+After: new rows draw at full opacity on their first frame.
+
+Reason: the virtual grid builds a cell when it enters the viewport, at any
+scroll position, so a row has no start time to stagger. The difference is
+visual only.
+
+## Active tab underline
+
+Before: the design marks the active tab with the secondary fill and the amber
+text only. It draws no underline.
+
+After: the active tab also draws a one pixel amber line along its bottom edge.
+
+Reason: the secondary fill sits next to the tertiary fill of the inactive tab,
+so the line makes the active tab easier to find. The difference is visual
+only.
+
+## Sort pill styling
+
+Before: `design/mockups/theme.css` lines 523-529 give a pill 2 px by 8 px of
+padding, the amber dark fill, and the amber text. The design has one pill look
+and no inactive state.
+
+After: the active pill takes 10 pt by 3 pt of padding on the tertiary fill with
+the amber text and a one point amber border. The inactive pill takes the same
+padding on the secondary fill with the secondary text and no border.
+
+Reason: the gallery has two sort modes, so the design needs one pill to read as
+active and one as inactive. The larger padding keeps the two pills apart at the
+caption size.
+
+## Selection check glyph
+
+Before: the multi-select badge is an 18 pt coral circle with an 11 pt bold `v`
+glyph, as `design/mockups/theme.css` line 810 shows.
+
+After: the badge paints the same circle and draws the check with two line
+segments.
+
+Reason: the vendored Roboto family has no check glyph, and a text `v` reads as
+a letter at the caption size. The difference is visual only.

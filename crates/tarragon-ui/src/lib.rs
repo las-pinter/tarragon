@@ -4,10 +4,13 @@
 //! owns the eframe window and the repaint loop.
 
 mod fonts;
+pub mod gallery;
 pub mod grid;
 pub mod shell;
+pub mod theme;
 pub mod tokens;
 pub mod widgets;
 
 pub use fonts::{definitions, install};
-pub use shell::{Shell, apply_theme};
+pub use shell::Shell;
+pub use theme::apply_theme;

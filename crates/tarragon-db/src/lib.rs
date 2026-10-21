@@ -45,6 +45,9 @@ pub enum DbError {
     /// A shared domain value is invalid.
     #[error(transparent)]
     Core(#[from] tarragon_core::error::CoreError),
+    /// The stored window state text is not valid window state.
+    #[error("invalid window state: {0}")]
+    WindowState(#[from] serde_json::Error),
 }
 
 /// One SQLite connection with the fixed connection settings.

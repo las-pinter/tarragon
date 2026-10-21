@@ -7,3 +7,4 @@ mod filter;
 mod repository;
 mod settings;
 mod support;
+mod window_state;

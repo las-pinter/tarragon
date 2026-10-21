@@ -3,12 +3,12 @@
 //! The frame uses plain egui panels with fixed sizes. A docking layout lands
 //! later, so the panels cannot move or resize yet.
 
-use egui::{
-    Button, CentralPanel, Color32, Context, CornerRadius, FontFamily, FontId, Frame, Margin,
-    MenuBar, Panel, RichText, TextStyle, Ui, ViewportCommand, Visuals, vec2,
-};
+use egui::{Button, CentralPanel, Context, Margin, MenuBar, Panel, RichText, Ui, ViewportCommand};
+use tarragon_core::sorting::SortMode;
 
-use crate::fonts;
+use crate::gallery::Gallery;
+use crate::grid::GridItem;
+use crate::theme::{panel_frame, panel_title};
 use crate::tokens;
 
 /// The product name shown in the title bar.
@@ -50,6 +50,8 @@ pub struct Shell {
     sidebar_width: f32,
     /// Preview dock width, in points.
     preview_width: f32,
+    /// The gallery strip and grid in the centre panel.
+    gallery: Gallery,
 }
 
 impl Shell {
@@ -64,6 +66,7 @@ impl Shell {
             log_visible: false,
             sidebar_width: tokens::SIDEBAR_WIDTH,
             preview_width: tokens::PREVIEW_WIDTH,
+            gallery: Gallery::new(SortMode::Natural),
         }
     }
 
@@ -103,6 +106,30 @@ impl Shell {
         self.log_visible
     }
 
+    /// Replace the items that the gallery shows.
+    pub fn set_items(&mut self, items: Vec<GridItem>) {
+        self.gallery.set_items(items);
+    }
+
+    /// Set the folder for the gallery folder scope and forward it.
+    ///
+    /// The folder tab draws this folder once a scan supplies one.
+    pub fn set_folder(&mut self, folder: Option<std::path::PathBuf>) {
+        self.gallery.set_folder(folder);
+    }
+
+    /// Set the gallery sort mode and return the frame.
+    #[must_use]
+    pub fn with_sort_mode(mut self, mode: SortMode) -> Self {
+        self.gallery.set_sort_mode(mode);
+        self
+    }
+
+    /// Return the sort mode once after a sort change, and clear the flag.
+    pub fn take_sort_changed(&mut self) -> Option<SortMode> {
+        self.gallery.take_sort_changed()
+    }
+
     /// Show or hide the Log panel. Returns the new state.
     pub fn toggle_log(&mut self) -> bool {
         self.log_visible = !self.log_visible;
@@ -110,8 +137,15 @@ impl Shell {
     }
 
     /// Restore the mockup defaults for the dock sizes and panel visibility.
+    ///
+    /// The gallery items and the sort mode stay as they are.
     pub fn reset_layout(&mut self) {
-        *self = Self::new();
+        self.library_visible = true;
+        self.gallery_visible = true;
+        self.preview_visible = true;
+        self.log_visible = false;
+        self.sidebar_width = tokens::SIDEBAR_WIDTH;
+        self.preview_width = tokens::PREVIEW_WIDTH;
     }
 
     /// Draw one frame of the shell into the given ui.
@@ -127,7 +161,7 @@ impl Shell {
                     ui.label(
                         RichText::new(PRODUCT_NAME)
                             .size(tokens::SIZE_HEADING)
-                            .family(FontFamily::Name(fonts::BOLD_FAMILY.into())),
+                            .family(egui::FontFamily::Name(crate::fonts::BOLD_FAMILY.into())),
                     );
                 });
             });
@@ -176,7 +210,7 @@ impl Shell {
             // The gallery draws no title strip: its top strip holds the tabs.
             CentralPanel::default()
                 .frame(panel_frame(tokens::BG_PRIMARY, Margin::same(8)))
-                .show(ui, |_| {});
+                .show(ui, |ui| self.gallery.show(ui));
         }
     }
 
@@ -214,66 +248,6 @@ impl Default for Shell {
     }
 }
 
-/// Apply the theme tokens to the given context, and install the fonts.
-pub fn apply_theme(ctx: &Context) {
-    // Pin the dark theme, because `set_visuals` writes only the active slot.
-    ctx.set_theme(egui::Theme::Dark);
-    fonts::install(ctx);
-
-    let mut visuals = Visuals::dark();
-    visuals.window_fill = tokens::BG_SECONDARY;
-    visuals.panel_fill = tokens::BG_PRIMARY;
-    visuals.override_text_color = Some(tokens::TEXT_PRIMARY);
-    visuals.weak_text_color = Some(tokens::TEXT_SECONDARY);
-    visuals.window_corner_radius = CornerRadius::same(tokens::RADIUS_M);
-    ctx.set_visuals(visuals);
-
-    ctx.all_styles_mut(|style| {
-        style.spacing.item_spacing = vec2(tokens::SPACING_S, tokens::SPACING_S);
-        style.spacing.button_padding = vec2(tokens::SPACING_S, tokens::SPACING_XS);
-        style.spacing.window_margin = Margin::same(points(tokens::SPACING_S));
-        style.spacing.menu_margin = Margin::same(points(tokens::SPACING_XS));
-        style.spacing.indent = tokens::SPACING_L;
-
-        style.text_styles = [
-            (TextStyle::Body, FontId::proportional(tokens::SIZE_BODY)),
-            (TextStyle::Button, FontId::proportional(tokens::SIZE_BODY)),
-            (
-                TextStyle::Heading,
-                FontId::proportional(tokens::SIZE_HEADING),
-            ),
-            (TextStyle::Small, FontId::proportional(tokens::SIZE_SMALL)),
-            (TextStyle::Monospace, FontId::monospace(tokens::SIZE_LOG)),
-        ]
-        .into();
-
-        let widgets = &mut style.visuals.widgets;
-        widgets.noninteractive.bg_stroke.color = tokens::SEPARATOR;
-        for (widget, fill, border) in [
-            (
-                &mut widgets.inactive,
-                tokens::BG_TERTIARY,
-                tokens::BORDER_SUBTLE,
-            ),
-            (
-                &mut widgets.hovered,
-                tokens::SURFACE_HOVER,
-                tokens::BORDER_CARD,
-            ),
-            (
-                &mut widgets.active,
-                tokens::SURFACE_HIGHLIGHT,
-                tokens::BORDER_INTERACTIVE,
-            ),
-        ] {
-            widget.weak_bg_fill = fill;
-            widget.bg_stroke.color = border;
-            widget.fg_stroke.color = tokens::CORAL_STRONG;
-            widget.corner_radius = CornerRadius::same(tokens::RADIUS_XS);
-        }
-    });
-}
-
 /// Draw one menu toggle row and flip the flag when the row is clicked.
 fn toggle_row(ui: &mut Ui, label: &str, visible: &mut bool) {
     if ui.add(Button::new(label).selected(*visible)).clicked() {
@@ -281,214 +255,5 @@ fn toggle_row(ui: &mut Ui, label: &str, visible: &mut bool) {
     }
 }
 
-/// Draw one panel title strip: body size amber text on the tertiary fill.
-fn panel_title(ui: &mut Ui, text: &str) {
-    Frame::new()
-        .fill(tokens::BG_TERTIARY)
-        .inner_margin(Margin::symmetric(
-            points(tokens::SPACING_S),
-            points(tokens::SPACING_XS),
-        ))
-        .show(ui, |ui| {
-            ui.set_width(ui.available_width());
-            ui.label(
-                RichText::new(text)
-                    .size(tokens::SIZE_BODY)
-                    .color(tokens::AMBER_ACCENT)
-                    .family(FontFamily::Name(fonts::MEDIUM_FAMILY.into())),
-            );
-        });
-}
-
-/// The frame for one panel: a fill colour and a small inset.
-fn panel_frame(fill: Color32, margin: Margin) -> Frame {
-    Frame::new().fill(fill).inner_margin(margin)
-}
-
-/// Convert a spacing token to an integer margin, in points.
-#[expect(
-    clippy::cast_possible_truncation,
-    reason = "Rust has no `TryFrom<f32>`, so the cast goes through a saturating `i32`"
-)]
-fn points(value: f32) -> i8 {
-    // Saturate, so a token outside the i8 range cannot wrap to a wrong margin.
-    i8::try_from(value as i32).unwrap_or(if value < 0.0 { i8::MIN } else { i8::MAX })
-}
-
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use egui::{FontId, Id, PanelState, Pos2, RawInput, Rect};
-
-    /// The headless screen, wide and tall enough for both docks.
-    fn input() -> RawInput {
-        RawInput {
-            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1400.0, 900.0))),
-            ..Default::default()
-        }
-    }
-
-    /// Draw one headless frame.
-    fn draw(ctx: &Context, shell: &mut Shell) {
-        ctx.run_ui(input(), |ui| shell.show(ui))
-            .drop_without_applying_deltas();
-    }
-
-    /// The stored state of one panel from the last frame.
-    fn panel(ctx: &Context, id: &str) -> Option<PanelState> {
-        PanelState::load(ctx, Id::new(id))
-    }
-
-    #[test]
-    fn the_shell_draws_two_frames_after_the_theme_applies() {
-        let ctx = Context::default();
-        apply_theme(&ctx);
-
-        ctx.run_ui(RawInput::default(), |_| {})
-            .drop_without_applying_deltas();
-
-        let mut shell = Shell::new();
-        let mut drawn = 0;
-        for _ in 0..2 {
-            let output = ctx.run_ui(RawInput::default(), |ui| shell.show(ui));
-            drawn = output.shapes.len();
-            output.drop_without_applying_deltas();
-        }
-
-        assert!(drawn > 0, "the shell drew nothing");
-
-        // The theme installs the Roboto fonts, so plain text shapes one glyph
-        // per letter.
-        let galley = ctx.fonts_mut(|fonts| {
-            fonts.layout_no_wrap(
-                "Tarragon".to_owned(),
-                FontId::proportional(tokens::SIZE_BODY),
-                tokens::TEXT_PRIMARY,
-            )
-        });
-        let glyphs: usize = galley.rows.iter().map(|row| row.row.glyphs.len()).sum();
-        assert_eq!(glyphs, 8, "the theme must install Roboto");
-    }
-
-    #[test]
-    fn the_theme_sets_the_type_scale() {
-        let ctx = Context::default();
-        apply_theme(&ctx);
-
-        let style = ctx.style_of(egui::Theme::Dark);
-        let size = |text: TextStyle| style.text_styles[&text].size;
-        assert!((size(TextStyle::Body) - tokens::SIZE_BODY).abs() < f32::EPSILON);
-        assert!((size(TextStyle::Button) - tokens::SIZE_BODY).abs() < f32::EPSILON);
-        assert!((size(TextStyle::Heading) - tokens::SIZE_HEADING).abs() < f32::EPSILON);
-        assert!((size(TextStyle::Small) - tokens::SIZE_SMALL).abs() < f32::EPSILON);
-        assert!((size(TextStyle::Monospace) - tokens::SIZE_LOG).abs() < f32::EPSILON);
-    }
-
-    #[test]
-    fn the_theme_sets_the_widget_tokens() {
-        let ctx = Context::default();
-        apply_theme(&ctx);
-
-        let style = ctx.style_of(egui::Theme::Dark);
-        let widgets = &style.visuals.widgets;
-        assert_eq!(widgets.noninteractive.bg_stroke.color, tokens::SEPARATOR);
-        for (widget, fill, border) in [
-            (
-                &widgets.inactive,
-                tokens::BG_TERTIARY,
-                tokens::BORDER_SUBTLE,
-            ),
-            (&widgets.hovered, tokens::SURFACE_HOVER, tokens::BORDER_CARD),
-            (
-                &widgets.active,
-                tokens::SURFACE_HIGHLIGHT,
-                tokens::BORDER_INTERACTIVE,
-            ),
-        ] {
-            assert_eq!(widget.weak_bg_fill, fill);
-            assert_eq!(widget.bg_stroke.color, border);
-            assert_eq!(widget.fg_stroke.color, tokens::CORAL_STRONG);
-            assert_eq!(widget.corner_radius, CornerRadius::same(tokens::RADIUS_XS));
-        }
-    }
-
-    #[test]
-    fn the_docks_draw_at_the_token_widths() {
-        let ctx = Context::default();
-        apply_theme(&ctx);
-
-        let mut shell = Shell::new();
-        draw(&ctx, &mut shell);
-
-        let library = panel(&ctx, "tarragon-Library").expect("the library dock is drawn");
-        let preview = panel(&ctx, "tarragon-Preview").expect("the preview dock is drawn");
-        assert!(
-            (library.size().x - tokens::SIDEBAR_WIDTH).abs() < 0.5,
-            "library is {} points wide",
-            library.size().x
-        );
-        assert!(
-            (preview.size().x - tokens::PREVIEW_WIDTH).abs() < 0.5,
-            "preview is {} points wide",
-            preview.size().x
-        );
-    }
-
-    #[test]
-    fn the_log_toggle_changes_whether_the_panel_is_drawn() {
-        let ctx = Context::default();
-        apply_theme(&ctx);
-        let mut shell = Shell::new();
-
-        // Clear the stored state, so a hidden panel cannot leave a trace.
-        let drawn = |ctx: &Context, shell: &mut Shell| {
-            ctx.data_mut(|data| data.remove::<PanelState>(Id::new("tarragon-Log")));
-            draw(ctx, shell);
-            panel(ctx, "tarragon-Log").is_some()
-        };
-
-        assert!(!drawn(&ctx, &mut shell), "the log panel starts hidden");
-
-        assert!(shell.toggle_log(), "the first toggle shows the log");
-        assert!(drawn(&ctx, &mut shell), "the log panel is drawn");
-
-        assert!(!shell.toggle_log(), "the second toggle hides the log");
-        assert!(!drawn(&ctx, &mut shell), "the log panel is hidden again");
-    }
-
-    #[test]
-    fn the_log_panel_starts_hidden_and_the_view_toggle_flips_it() {
-        let mut shell = Shell::new();
-        assert!(!shell.log_visible(), "the log panel starts hidden");
-
-        assert!(shell.toggle_log(), "the first toggle shows the log");
-        assert!(shell.log_visible(), "the log panel stays visible");
-
-        assert!(!shell.toggle_log(), "the second toggle hides the log");
-        assert!(!shell.log_visible(), "the log panel is hidden again");
-    }
-
-    #[test]
-    fn the_dock_widths_start_at_the_token_values() {
-        let shell = Shell::new();
-
-        assert!((shell.sidebar_width() - tokens::SIDEBAR_WIDTH).abs() < f32::EPSILON);
-        assert!((shell.preview_width() - tokens::PREVIEW_WIDTH).abs() < f32::EPSILON);
-    }
-
-    #[test]
-    fn reset_layout_restores_the_defaults() {
-        let mut shell = Shell::new();
-        shell.toggle_log();
-        shell.library_visible = false;
-        shell.gallery_visible = false;
-        shell.preview_visible = false;
-
-        shell.reset_layout();
-
-        assert!(shell.library_visible(), "library returns");
-        assert!(shell.gallery_visible(), "gallery returns");
-        assert!(shell.preview_visible(), "preview returns");
-        assert!(!shell.log_visible(), "log hides again");
-    }
-}
+mod tests;

@@ -13,13 +13,17 @@ license = "MIT"
 # path dependency as a wildcard. `tarragon-db` depends on `tarragon-core`
 # only.
 tarragon-core = { path = "crates/tarragon-core", version = "0.1.0" }
+# The interface reads the stored window state in its tests today. The app
+# crate owns the production wiring.
+tarragon-db = { path = "crates/tarragon-db", version = "0.1.0" }
+tarragon-ui = { path = "crates/tarragon-ui", version = "0.1.0" }
 # egui/eframe 0.36.2. One pin, shared by every crate. tarragon-ui uses
 # egui only and never eframe.
 #
 # Default fonts are off. The `epaint_default_fonts` crate carries the
 # `OFL-1.1` and `Ubuntu-font-1.0` licenses, which are off the allowlist.
-# The app must ship a font that passes the allowlist. The example loads a
-# system font at run time (see `examples/grid_bench.rs`).
+# The app must ship a font that passes the allowlist. `tarragon-ui` vendors
+# the Roboto family and installs it in every target, examples included.
 egui = { version = "=0.36.2", default-features = false }
 # rayon handles CPU-bound work. The grid example caps its pool at four threads.
 rayon = "1.11"
@@ -32,6 +36,7 @@ thiserror = "2"
 rusqlite = { version = "0.40", features = ["bundled"] }
 # Settings values store as JSON text, and the hidden `window_state` key
 # holds a JSON blob. Only `tarragon-db` parses them.
+serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # PNG decoding for the golden image tests. One pin, shared with
 # `tarragon-cache` and `tarragon-render`. Each crate turns on only its codecs.

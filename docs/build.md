@@ -52,7 +52,8 @@ version, the copyright, and the file checksums are in `SOURCES.md` there. No
 Roboto Mono file exists, so Regular serves the `Monospace` family.
 
 The app crate wires `install` when it takes the `tarragon-ui` dependency, so no
-window renders Roboto yet.
+window renders Roboto yet. The `grid_bench` example calls `tarragon_ui::install`
+and measures that shipped text path.
 
 ## Quality gates
 
@@ -107,14 +108,82 @@ The two heavy crates are measured through their examples. Run
 
 | Example | Crates | Bytes | MiB |
 |---------|--------|-------|-----|
-| `grid_bench` | egui 0.36.2, rayon | 5,114,248 | 4.88 |
+| `grid_bench` | egui 0.36.2, rayon, the vendored Roboto fonts | 6,552,192 | 6.25 |
 | `jpeg_q90_check` | image 0.25.10 | 2,041,520 | 1.95 |
 
-The two example rows were re-measured on this working tree, which is commit
-`41ae1b8` plus the uncommitted font work. Neither example calls the font
-module, so the font bytes stay out of these sizes.
+The two example rows were re-measured on this working tree. The `grid_bench`
+example carries the three Roboto files (305,608, 306,536, and 306,940 bytes),
+because it installs the shipped fonts. `jpeg_q90_check` calls no font module.
 
 The final size of the wired binary is not measured yet.
+
+### Grid benchmark
+
+The grid benchmark measures the CPU cost of one frame at the target geometry:
+196 pt minimum tracks, 208 pt cell height, and a 14 pt gap. The run covers two
+widths: 874 by 900 pt for the shell grid width, and 1600 by 900 pt for a wide
+viewport. It runs headless. It measures egui layout, the paint list build, and
+tessellation. It measures no GPU work.
+
+Two passes run at each width. The first pass paints the grid container only and
+sweeps the whole 10,000 item list. The second pass paints the whole gallery
+(`Gallery::show`: the tabs, the search field, the info bar, the sort pills, and
+the grid) and sends no input, so it measures one quiet frame that reads the
+cached visible order.
+
+Warning: the run covers the simplified data set. A tile carries a file name, a
+badge derived from the path, and no texture. A real frame adds the uploaded
+thumbnails and the decoded images behind them to these numbers.
+
+The text path is the vendored Roboto family, installed through
+`tarragon_ui::install`, so the numbers include the shipped text layout.
+
+Machine: Intel Core i7-12700K, 10 logical CPUs available, 3.6 GHz, Ubuntu
+24.04.4 LTS, kernel 6.17.0-35-generic, Rust 1.99.0. The run uses a release
+build and a measurement pool capped at four threads.
+
+```sh
+cargo run --release --example grid_bench -p tarragon-ui
+```
+
+Grid container pass:
+
+| Metric | 874 pt grid | 1600 pt grid |
+|--------|-------------|--------------|
+| Items | 10,000 | 10,000 |
+| Grid (at the requested width) | 4 columns, 208 pt cells, 14 pt gap | 7 columns, 216.6 pt cells, 14 pt gap |
+| Cells built per frame | min 20, max 24, avg 20 | min 35, max 42, avg 35 |
+| Minimum frame time | 0.146 ms | 0.198 ms |
+| Average frame time | 0.172 ms | 0.240 ms |
+| Median frame time | 0.154 ms | 0.227 ms |
+| p95 frame time | 0.275 ms | 0.313 ms |
+| Max frame time | 0.580 ms | 0.657 ms |
+
+Gallery pass, 10,000 items in scope:
+
+| Metric | 874 pt grid | 1600 pt grid |
+|--------|-------------|--------------|
+| Visible items | 10,000 | 10,000 |
+| Tiles painted per frame | 16 | 28 |
+| Minimum frame time | 0.060 ms | 0.085 ms |
+| Average frame time | 0.072 ms | 0.093 ms |
+| Median frame time | 0.062 ms | 0.088 ms |
+| p95 frame time | 0.120 ms | 0.111 ms |
+| Max frame time | 0.144 ms | 0.273 ms |
+
+The frame count is 400 after 40 warmup frames. The painter stretches the cell
+width to the inner width after the scrollbar, so the painted cells are at most
+the stated width.
+
+The gallery keeps the display order in a cache, so a quiet frame rebuilds no
+list of 10,000 items. A scope, folder, sort, or applied-search change rebuilds
+that cache once. The quiet frame then costs 0.062 ms at 874 pt and 0.088 ms at
+1600 pt.
+
+Two frame limits apply. The interface targets 60 frames per second, so one frame
+has 16.7 ms. The hard gate for one frame is 100 ms. The slowest measured frame
+is 0.657 ms for the grid container and 0.273 ms for the whole gallery. The
+grid cost is 3.9% of the 16.7 ms budget and the gallery cost is 1.6% of it.
 
 ## 60 MB check
 
@@ -123,11 +192,11 @@ The limit is 60 MB. Take 60 MB as 62,914,560 bytes.
 | Binary | Bytes | Result |
 |--------|-------|--------|
 | `tarragon-app` (glibc, release) | 444,704 | pass |
-| `grid_bench` (example) | 5,114,248 | pass |
+| `grid_bench` (example) | 6,552,192 | pass |
 | `jpeg_q90_check` (example) | 2,041,520 | pass |
 
-The highest measured size is 5,114,248 bytes. That is 8.1% of the 60 MB budget.
-Every measured binary is under the limit.
+The highest measured size is 6,552,192 bytes. That is 10.4% of the 60 MB
+budget. Every measured binary is under the limit.
 
 ## Reproduce
 

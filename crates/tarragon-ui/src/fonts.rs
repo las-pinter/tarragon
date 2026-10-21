@@ -145,7 +145,7 @@ mod tests {
             "the direct install sets the guard"
         );
 
-        crate::shell::apply_theme(&ctx);
+        crate::apply_theme(&ctx);
         assert!(
             ctx.data(|data| data.get_temp::<bool>(guard_id()).unwrap_or(false)),
             "the theme leaves the guard set"

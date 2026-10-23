@@ -89,6 +89,11 @@ pub struct Gallery {
     scope: Scope,
     /// The folder that the folder scope shows, or none.
     folder: Option<PathBuf>,
+    /// The folder path as the caller gave it, or none.
+    ///
+    /// A scanner reports items under the path it was given, so an item parent
+    /// may match this path and not the canonical one.
+    raw_folder: Option<PathBuf>,
     /// The text the user typed.
     search: String,
     /// The filter text that is visible now.
@@ -115,6 +120,7 @@ impl Gallery {
             items: Vec::new(),
             scope: Scope::Folder,
             folder: None,
+            raw_folder: None,
             search: String::new(),
             applied_search: String::new(),
             debouncer: Debouncer::default(),
@@ -126,14 +132,15 @@ impl Gallery {
         }
     }
 
-    /// Replace the items, cache their names, sort them, and drop stale
-    /// selection indices.
+    /// Replace the items, cache their names, sort them, and clear the selection.
+    ///
+    /// The selection holds item indices, so it cannot outlive the old list.
     pub fn set_items(&mut self, mut items: Vec<GridItem>) {
         for item in &mut items {
             item.refresh_name();
         }
         self.items = items;
-        self.selection.retain_valid(self.items.len());
+        self.selection.clear();
         self.resort();
     }
 
@@ -143,7 +150,10 @@ impl Gallery {
     /// caller's path cannot empty the gallery. A path that does not exist keeps
     /// its text, because canonicalization needs a real file system entry.
     pub fn set_folder(&mut self, folder: Option<PathBuf>) {
-        self.folder = folder.map(|path| path.canonicalize().unwrap_or(path));
+        self.folder = folder
+            .as_ref()
+            .map(|path| path.canonicalize().unwrap_or_else(|_| path.clone()));
+        self.raw_folder = folder;
         self.refresh_view();
     }
 
@@ -275,6 +285,10 @@ impl Gallery {
     }
 
     /// Return whether the item belongs to the active scope.
+    ///
+    /// The item parent may equal the canonical folder or the folder as given,
+    /// and the item path is compared as given. So the check does no file I/O,
+    /// and a symlinked image stays in the folder that holds the link.
     fn in_scope(&self, index: usize) -> bool {
         if self.scope == Scope::All {
             return true;
@@ -284,16 +298,8 @@ impl Gallery {
         };
         self.items
             .get(index)
-            .and_then(|item| {
-                let base = item
-                    .path
-                    .canonicalize()
-                    .unwrap_or_else(|_| item.path.clone());
-                base.parent().map(Path::to_path_buf)
-            })
-            .is_some_and(|parent| {
-                parent.canonicalize().unwrap_or_else(|_| parent.clone()) == folder
-            })
+            .and_then(|item| item.path.parent())
+            .is_some_and(|parent| parent == folder || self.raw_folder.as_deref() == Some(parent))
     }
 
     /// Return whether the applied search matches the cached lower-case name.

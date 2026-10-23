@@ -61,9 +61,9 @@ fn lower_name(path: &std::path::Path) -> String {
 /// them.
 #[must_use]
 pub fn items_in_order(items: &[GridItem], mode: SortMode) -> Vec<usize> {
+    let keys: Vec<FileInfo> = items.iter().map(file_info).collect();
     let mut order: Vec<usize> = (0..items.len()).collect();
-    order
-        .sort_by(|&left, &right| mode.compare(&file_info(&items[left]), &file_info(&items[right])));
+    order.sort_by(|&left, &right| mode.compare(&keys[left], &keys[right]));
     order
 }
 

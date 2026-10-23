@@ -113,7 +113,7 @@ fn typed_window_state_names_three_keys_and_keeps_the_extras() {
 }
 
 #[test]
-fn typed_window_state_reports_a_malformed_stored_value() {
+fn strict_window_state_reports_a_malformed_stored_value() {
     let temp = TempDb::new();
     let settings = Settings::new(&temp.db);
     temp.db
@@ -121,9 +121,68 @@ fn typed_window_state_reports_a_malformed_stored_value() {
         .expect("write raw text");
 
     let error = settings
-        .window_state_value()
+        .window_state_strict()
         .expect_err("an array is not a window state");
-    assert!(matches!(error, DbError::WindowState(_)), "{error}");
+    assert!(
+        matches!(error, SettingsError::Db(DbError::WindowState(_))),
+        "{error}"
+    );
+}
+
+#[test]
+fn a_malformed_window_state_opens_with_the_default() {
+    let temp = TempDb::new();
+    let settings = Settings::new(&temp.db);
+    temp.db
+        .set_setting(WINDOW_STATE_KEY, "[1, 2, 3]")
+        .expect("write raw text");
+
+    assert_eq!(
+        settings.window_state_value().expect("read"),
+        Some(WindowState::default())
+    );
+    let (_, repaired) = settings
+        .window_state_repaired()
+        .expect("read")
+        .expect("stored");
+    assert!(repaired);
+}
+
+#[test]
+fn a_wrong_typed_field_keeps_the_valid_keys_and_the_extras() {
+    let temp = TempDb::new();
+    let settings = Settings::new(&temp.db);
+    temp.db
+        .set_setting(
+            WINDOW_STATE_KEY,
+            r#"{"layout":7,"geometry":[1,2,3,4],"sort_mode":"date","scroll_y":9}"#,
+        )
+        .expect("write raw text");
+
+    let (state, repaired) = settings
+        .window_state_repaired()
+        .expect("read")
+        .expect("stored");
+    assert!(repaired);
+    assert_eq!(state.layout, None);
+    assert_eq!(state.geometry, Some([1, 2, 3, 4]));
+    assert_eq!(state.sort_mode(), SortMode::Date);
+    assert_eq!(state.extra.get("scroll_y"), Some(&Value::from(9)));
+}
+
+#[test]
+fn a_valid_window_state_reports_no_repair() {
+    let temp = TempDb::new();
+    let settings = Settings::new(&temp.db);
+    settings
+        .set_window_state_value(&window_state_sample())
+        .expect("write the state");
+
+    let (_, repaired) = settings
+        .window_state_repaired()
+        .expect("read")
+        .expect("stored");
+    assert!(!repaired);
 }
 
 #[test]

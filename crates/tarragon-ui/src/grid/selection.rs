@@ -6,8 +6,8 @@ use egui::Modifiers;
 
 /// The set of selected cell indices, plus the anchor of the last plain click.
 ///
-/// A plain click sets the anchor. A shift click extends from it. A shrink of
-/// the item list drops stale indices at [`Selection::retain_valid`].
+/// A plain click sets the anchor. A shift click extends from it. A change of
+/// the view drops hidden indices at [`Selection::retain_from`].
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Selection {
     indices: BTreeSet<usize>,
@@ -84,16 +84,6 @@ impl Selection {
         self.indices.iter().copied()
     }
 
-    /// Drop every index at or above `item_count`.
-    ///
-    /// The anchor is dropped when it points outside the list.
-    pub fn retain_valid(&mut self, item_count: usize) {
-        self.indices.retain(|&index| index < item_count);
-        if self.anchor.is_some_and(|anchor| anchor >= item_count) {
-            self.anchor = None;
-        }
-    }
-
     /// Keep only the selected indices that `order` holds.
     ///
     /// `order` holds the visible item indices. The anchor is dropped when it
@@ -124,7 +114,9 @@ impl Selection {
             self.extend_positions(anchor, position, order);
         } else if modifiers.command || modifiers.ctrl {
             self.toggle(index);
-            self.anchor = Some(index);
+            if self.indices.contains(&index) {
+                self.anchor = Some(index);
+            }
         } else {
             self.select_only(index);
         }
@@ -195,16 +187,6 @@ mod tests {
             selection.toggle(index);
         }
         assert_eq!(selection.iter().collect::<Vec<_>>(), [1, 4, 9]);
-    }
-
-    #[test]
-    fn retain_valid_drops_stale_indices() {
-        let mut selection = Selection::default();
-        selection.extend_range(1, 5);
-        selection.retain_valid(3);
-        assert_eq!(selection.iter().collect::<Vec<_>>(), [1, 2]);
-        selection.retain_valid(0);
-        assert!(selection.is_empty());
     }
 
     #[test]
@@ -284,6 +266,19 @@ mod tests {
             "positions 0, 1, and 2 map to indices 3, 1, and 0"
         );
         assert_eq!(selection.len(), 3, "only the three tiles in the range");
+    }
+
+    #[test]
+    fn a_ctrl_click_that_deselects_keeps_the_anchor() {
+        let mut selection = Selection::default();
+        selection.apply_click(2, &IDENTITY_ORDER, Modifiers::NONE);
+        selection.apply_click(5, &IDENTITY_ORDER, Modifiers::CTRL);
+        selection.apply_click(2, &IDENTITY_ORDER, Modifiers::CTRL);
+        assert!(!selection.contains(2));
+
+        selection.apply_click(7, &IDENTITY_ORDER, Modifiers::SHIFT);
+
+        assert_eq!(selection.iter().collect::<Vec<_>>(), [5, 6, 7]);
     }
 
     #[test]

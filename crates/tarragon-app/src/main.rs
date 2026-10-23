@@ -23,11 +23,15 @@ impl App {
     /// # Errors
     ///
     /// Returns the database error when the file cannot open or initialize.
-    fn open(path: &PathBuf) -> Result<Self, tarragon_db::DbError> {
+    /// Returns the settings error when the window state cannot be read.
+    fn open(path: &PathBuf) -> Result<Self, Box<dyn std::error::Error>> {
         let db = Database::open(path)?;
         db.initialize()?;
         let settings = Settings::new(&db);
-        let window_state = settings.window_state_value()?.unwrap_or_default();
+        let (window_state, repaired) = settings.window_state_repaired()?.unwrap_or_default();
+        if repaired {
+            eprintln!("tarragon: the stored window state was invalid and was repaired");
+        }
         let shell = Shell::new().with_sort_mode(window_state.sort_mode());
         Ok(Self {
             db,
@@ -57,8 +61,11 @@ fn main() {
 
     match App::open(&db_path) {
         Ok(mut app) => {
-            // The event loop calls `persist_sort_if_changed` after each frame.
-            let _ = app.persist_sort_if_changed();
+            // No event loop runs yet, so this one call stands in for the
+            // per-frame persist.
+            if let Err(error) = app.persist_sort_if_changed() {
+                eprintln!("tarragon: cannot save the window state: {error}");
+            }
             println!("tarragon {}", env!("CARGO_PKG_VERSION"));
         }
         Err(error) => {

@@ -25,7 +25,6 @@ The check mode is the default and it is strict:
 - A missing golden file is an error.
 - A pixel difference is an error. Both PNG files decode and compare as RGBA8
   pixels, so a Pillow or zlib change that keeps the pixels passes this check.
-  The CI drift gate is stricter: it requires byte-identical PNG files.
 
 The generator uses deterministic inputs and fixed PNG settings. A second run
 writes byte-identical files.
@@ -57,26 +56,26 @@ the current expectation comes from the same formula the code uses.
 - `layer_effects.psd` — psd-tools renders the layer effects only in part. The
   known deltas do not give a useful golden image.
 
-## Bootstrap
-
-The first golden set is committed separately. It comes from the `psd-goldens`
-artifact of the `PSD golden images` CI job. Download the artifact, copy its
-files into `tests/fixtures/psd/golden/`, and commit them.
-
-The CI drift gate stays off while no golden PNG is tracked. The first committed
-PNG turns it on.
-
 ## Local run
 
-Every golden test is ignored by default, because Python execution is denied in
-the agent environment. Generate the files, then run the ignored tests:
+The golden tests run in a plain test run:
+
+```sh
+cargo nextest run -p tarragon-psd
+```
+
+To regenerate the PNG files, write them with the generator:
 
 ```sh
 python3 tests/fixtures/psd/generate_goldens.py --write
-cargo nextest run -p tarragon-psd --test golden_fixtures --run-ignored ignored-only
 ```
 
-A default `cargo nextest run` shows the nine golden tests as skipped.
+To verify the committed files, run the check. It renders each fixture in
+memory, compares pixels, and writes nothing:
+
+```sh
+python3 tests/fixtures/psd/generate_goldens.py --check
+```
 
 ## Known deltas
 

@@ -10,5 +10,9 @@ license.workspace = true
 tarragon-db = { workspace = true }
 tarragon-ui = { workspace = true }
 
+[dev-dependencies]
+eframe.workspace = true
+egui_dock.workspace = true
+
 [lints]
 workspace = true

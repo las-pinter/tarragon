@@ -198,6 +198,194 @@ The limit is 60 MB. Take 60 MB as 62,914,560 bytes.
 The highest measured size is 6,552,192 bytes. That is 10.4% of the 60 MB
 budget. Every measured binary is under the limit.
 
+## GUI stack spike
+
+The spike checks the window stack before the app shell exists. The code is the
+example `crates/tarragon-app/examples/stack_spike/`. Its crates are
+dev-dependencies of `tarragon-app`, so the shipped app binary does not link
+them.
+
+The workspace pins `eframe =0.36.2` with default features off. The features
+are `glow`, `wgpu`, `x11`, and `wayland`. `default_fonts` stays off, and the
+example installs the vendored Roboto fonts. It adds `egui_dock 0.21.1`. The
+example picks the renderer at run time through `NativeOptions`.
+
+### Renderer
+
+The renderer is not final. The final choice waits for the frame-time run
+below. This section gives the working default and the rule to change it.
+
+Working default: `wgpu`. Keep `glow` as the fallback that the user can select.
+
+Rule: `wgpu` stays the default unless one of these is true on the owner run:
+
+- `wgpu` fails a limit (p99 of 33 ms or more, or a frame over 100 ms) and
+  `glow` passes.
+- `glow` is clearly better: its p99 is more than 20 percent lower than the
+  `wgpu` p99 on the same machine and in the same session type.
+
+Reasons for `wgpu`:
+
+- It uses Metal on macOS. Apple deprecated OpenGL on macOS in macOS 10.14.
+- It uses Vulkan or DX12 on Linux and Windows.
+- eframe 0.36.2 picks `wgpu` when both renderers are compiled in. Its default
+  features also list `wgpu` and not `glow`.
+- It reports the adapter. The log shows a software device such as `llvmpipe`.
+
+Reasons to keep `glow`:
+
+- The binary is about 5.7 MB smaller after strip and thin LTO.
+- The dependency tree is smaller.
+- It works on old GL drivers and in virtual machines that have no Vulkan.
+
+Both fit the size limit by a wide margin. Cost of keeping both: the combined
+build is about 0.7 MB larger than the `wgpu` build.
+
+The `accesskit` feature of eframe is off in the spike. The real app must
+decide on it, because it adds screen reader support. This is an open item.
+
+### Dependency check
+
+`cargo deny check` on the full tree, with the eframe and `egui_dock` crates:
+
+| Check | Result |
+|-------|--------|
+| advisories | ok |
+| bans | ok, with six duplicate-version warnings (`getrandom`, `hashbrown`, `miniz_oxide`, `r-efi`, `syn`, `windows-sys`) |
+| licenses | ok, with one warning: the `BSL-1.0` allowance matches no crate |
+| sources | ok |
+
+No new license was needed. `deny.toml` did not change. Crates with other
+licenses in the tree (`0BSD`, `BSD-2-Clause`, `Apache-2.0 WITH LLVM-exception`,
+`Unlicense`) are dual-licensed with an allowed option, so the check passes.
+The tree has only one `egui` (0.36.2).
+
+### Binary size
+
+The example, built with `cargo build --release --example stack_spike -p
+tarragon-app`. The limit is 60 MB (62,914,560 bytes). The strip and thin LTO
+column uses `CARGO_PROFILE_RELEASE_STRIP=true` and
+`CARGO_PROFILE_RELEASE_LTO=thin`. No release profile is set in the repository.
+
+| Build | Default release (bytes) | Strip and thin LTO (bytes) | Share of 60 MB |
+|-------|-------------------------|----------------------------|----------------|
+| glow only | 13,334,176 | 9,747,672 | 15.5% |
+| wgpu only | 20,536,744 | 15,431,152 | 24.5% |
+| both renderers | 21,297,320 | 16,079,680 | 25.6% |
+
+The share is the strip and thin LTO size over 60 MB. Every build is under the
+limit. The "both renderers" row is from the final example. The single-renderer
+rows come from a copy of the repository with one renderer only, and from an
+earlier example that was a few kilobytes smaller. The repository builds both
+renderers.
+
+### glibc floor
+
+The example was built in release mode in containers. The repository was
+mounted read-only. The toolchain came from `rust-toolchain.toml` through
+rustup. The highest `GLIBC_` symbol version comes from `objdump -T`.
+
+| Build image | glibc of the image | Highest symbol | Symbols at the top |
+|-------------|--------------------|----------------|--------------------|
+| `ubuntu:22.04` | 2.35 | `GLIBC_2.35` | `hypot`, `hypotf` |
+| `ubuntu:20.04` | 2.31 | `GLIBC_2.30` | `gettid` |
+| host, Ubuntu 24.04 | 2.39 | `GLIBC_2.35` | `hypot`, `hypotf` |
+
+The floor is glibc 2.30 when the build runs on `ubuntu:20.04`. A build on a
+newer image raises the floor to the glibc of that image, at most. Use an old
+image for the release build. `debian:bullseye` could not install packages: its
+security archive is gone. The system libraries that the binary loads at run
+time (X11, Wayland, EGL, Vulkan) are not in this number.
+
+Packages that the container build needed (Debian and Ubuntu names):
+`build-essential`, `ca-certificates`, `curl`, and `binutils`. No `-dev`
+package was needed. The window and graphics libraries load at run time.
+
+Packages for a run in a container (not tested as a minimal set):
+`libx11-6`, `libxcursor1`, `libxrandr2`, `libxi6`, `libxkbcommon0`,
+`libxkbcommon-x11-0`, `libwayland-client0`, `libegl1`, `libgl1`,
+`libgl1-mesa-dri`, `libvulkan1`, and `mesa-vulkan-drivers`.
+
+The CI `gates` job needs no new `apt` step. The example built on a plain
+`ubuntu:22.04` image with `build-essential` only. The `release-build` jobs
+for Windows and macOS run `cargo build --release --workspace`. That command
+builds no example and no dev-dependency, so the new crates do not enter it.
+
+### egui_dock
+
+Verdict: `egui_dock 0.21.1` works with `egui =0.36.2`. Version 0.21 requires
+`egui ^0.36`, and the lock file has one `egui`. The example shows one tab
+("Stats") in a `DockArea`. A run under Xvfb drew the tab, the tab text in
+Roboto, and the grid, with both renderers and without a panic. Version 0.20
+needs `egui ^0.35` (crates.io data) and does not fit. The workspace pins
+`egui_dock =0.21.1`.
+
+### Frame time
+
+Status: pending. The owner runs the measurement on a desktop with a GPU. This
+machine has no usable display.
+
+The example uploads 1000 textures of 256 by 256 pixels. All 1000 stay alive
+for the whole run. It scrolls the grid by itself, and only the visible rows
+draw. At 1280x800 about 70 tiles (7 percent) draw in each frame. A Xvfb run
+counted a mean of 67.5 and a maximum of 72. The log header records the mean
+and the maximum for each run.
+
+It records the time between frames for 30 s after a 5 s warm-up. It writes a
+log file and prints p50, p95, p99, max, the frame count, the renderer, and the
+session type. The log header shows the real measured span (the sum of the
+frame times), not only the configured duration. The exit code is 0 on a pass,
+1 on a fail, and 2 when the window does not open, the run is not valid, or the
+log cannot be written. The limits are a p99 under 33 ms and no frame over
+100 ms (hard fail).
+
+Vsync is on. At 60 Hz one dropped frame takes 33.3 ms. So more than 1 percent
+dropped frames puts the p99 at 33 ms or more, and the run fails.
+
+Keep the window visible and not covered during each run. Do not minimize it
+and do not put another window over it. A minimized or covered window stops
+frame callbacks, mostly on Wayland. The example then marks the run not valid
+(exit code 2) and keeps the log with the frames collected so far. A lost focus
+does not stop the frames. The log records it as `focus_lost_frames` and the
+summary prints a warning. A wall-clock watchdog ends a run that gets no
+frames, and the script stops a run after the warm-up, the duration, and 60 s.
+The log is written for every run, valid or not, also when the window cannot
+open. If the watchdog finds that the window does not close after a normal end,
+it writes the report with the real result and exits. The summary and the log
+show p99 and max cut to two decimals, never rounded up.
+
+Run both renderers in the current session:
+
+```sh
+crates/tarragon-app/examples/spike-frame-time.sh spike-frame-time-wayland
+```
+
+Run again under X11. On a Wayland desktop, force XWayland, or log in to an X11
+session. The `env -u WAYLAND_DISPLAY` form needs `DISPLAY` to be set, which is
+true under XWayland. The log header line `# session: x11` proves that the run
+used X11:
+
+```sh
+env -u WAYLAND_DISPLAY crates/tarragon-app/examples/spike-frame-time.sh spike-frame-time-x11
+```
+
+Run one renderer by hand:
+
+```sh
+cargo run --release --example stack_spike -p tarragon-app -- \
+    --renderer wgpu --duration 30 --out frame-time-wgpu.log
+```
+
+A smoke run under Xvfb with software rendering (`llvmpipe`) passed the code
+path. Those times are not GPU times. They are not the measurement.
+
+Results (to fill in after the owner run):
+
+| Renderer | Session | p50 | p95 | p99 | max | Result |
+|----------|---------|-----|-----|-----|-----|--------|
+| glow | | | | | | |
+| wgpu | | | | | | |
+
 ## Reproduce
 
 ```sh
@@ -205,5 +393,5 @@ rustup target list --installed
 cargo build --release
 stat -c '%s' target/release/tarragon-app
 cargo build --release --examples
-stat -c '%s' target/release/examples/grid_bench target/release/examples/jpeg_q90_check
+stat -c '%s' target/release/examples/grid_bench target/release/examples/jpeg_q90_check target/release/examples/stack_spike
 ```

@@ -20,7 +20,11 @@ pub(crate) fn escape_like(value: &str) -> String {
         .replace('_', "\\_")
 }
 
-/// Return the LIKE pattern that matches a folder and its direct children.
+/// Return the LIKE pattern that matches every descendant of a folder.
+///
+/// SQLite `%` also matches `/`, so this includes nested paths. The filter
+/// engine uses it alone. The folder listing pairs it with [`folder_deep_like`]
+/// in a `NOT LIKE` to keep direct children only.
 pub(crate) fn folder_like(folder: &str) -> String {
     let normalized = normalize_path(folder);
     let trimmed = normalized.trim_end_matches('/');

@@ -148,6 +148,61 @@ fn a_texture_paints_as_a_rounded_rect() {
 }
 
 #[test]
+fn fit_rect_keeps_the_aspect_ratio_and_centers() {
+    let bounds = Rect::from_min_size(pos2(10.0, 20.0), vec2(300.0, 160.0));
+    let wide = fit_rect(bounds, vec2(256.0, 128.0));
+    assert!((wide.width() / wide.height() - 2.0).abs() < 1e-4);
+    assert!(bounds.contains_rect(wide));
+    assert_eq!(wide.center(), bounds.center());
+    assert!((wide.height() - 150.0).abs() < 1e-3, "the width limits it");
+
+    let tall = fit_rect(bounds, vec2(100.0, 200.0));
+    assert!((tall.width() / tall.height() - 0.5).abs() < 1e-4);
+    assert!((tall.height() - 160.0).abs() < 1e-3, "the height limits it");
+    assert_eq!(tall.center(), bounds.center());
+}
+
+#[test]
+fn a_non_square_texture_paints_with_its_own_aspect_ratio() {
+    let ctx = Context::default();
+    crate::apply_theme(&ctx);
+    let texture = ctx.load_texture(
+        "wide",
+        egui::ColorImage::filled([8, 2], Color32::RED),
+        egui::TextureOptions::NEAREST,
+    );
+    let items = [GridItem::new(
+        Path::new("/images/wide.png").to_path_buf(),
+        1,
+        Some(texture),
+    )];
+    let grid = VirtualGrid {
+        metrics: metrics_for(700.0),
+        item_count: 1,
+    };
+    let order = [0];
+    let selection = Selection::default();
+    let output = ctx.run_ui(input(Vec::new()), |ui| {
+        grid.show_items_at(ui, 0.0, &items, &order, &selection);
+    });
+    let painted = output
+        .shapes
+        .iter()
+        .find_map(|clipped| match &clipped.shape {
+            epaint::Shape::Rect(rect) if rect.brush.is_some() => Some(rect.rect),
+            _ => None,
+        });
+    output.drop_without_applying_deltas();
+    let painted = painted.expect("the tile painted a texture");
+    assert!(
+        (painted.width() / painted.height() - 4.0).abs() < 1e-3,
+        "the picture is {} by {}",
+        painted.width(),
+        painted.height()
+    );
+}
+
+#[test]
 fn a_click_reports_the_index_and_the_modifiers() {
     let ctx = Context::default();
     crate::apply_theme(&ctx);

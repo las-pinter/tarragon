@@ -327,7 +327,9 @@ impl Gallery {
 
     /// The info bar text: scope name, file count, and selection count.
     fn info_text(&self) -> String {
-        let mut text = format!("{} - {} files", self.scope_name(), self.visible.len());
+        let count = self.visible.len();
+        let noun = if count == 1 { "file" } else { "files" };
+        let mut text = format!("{} - {count} {noun}", self.scope_name());
         let selected = self.selection.len();
         if selected > 0 {
             let _ = write!(text, " - {selected} selected");

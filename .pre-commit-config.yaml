@@ -16,8 +16,8 @@ repos:
         pass_filenames: false
         always_run: true
       - id: cargo-nextest
-        name: cargo nextest run (fall back to cargo test)
-        entry: sh -c 'cargo nextest run || cargo test'
+        name: cargo nextest run (cargo test when nextest is absent)
+        entry: sh -c 'if cargo nextest --version >/dev/null 2>&1; then cargo nextest run; else cargo test; fi'
         language: system
         pass_filenames: false
         always_run: true

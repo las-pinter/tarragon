@@ -958,7 +958,6 @@ dependencies = [
 name = "tarragon-app"
 version = "0.1.0"
 dependencies = [
- "tarragon-core",
  "tarragon-db",
  "tarragon-ui",
 ]

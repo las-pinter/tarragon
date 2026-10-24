@@ -1,6 +1,8 @@
 //! Favorite row reads and writes.
 
-use rusqlite::params;
+use std::collections::HashSet;
+
+use rusqlite::{TransactionBehavior, params};
 
 use crate::like::normalize_path;
 use crate::{Database, DbError};
@@ -64,23 +66,48 @@ impl Database {
 
     /// Reindex favorite sort orders to `0..n-1` in one transaction.
     ///
+    /// The listed paths come first, in the given order. A repeated path keeps
+    /// its first place, and a path that is not a favorite is skipped. The
+    /// favorites not listed follow in their old order, so no two rows tie.
+    /// The method returns the number of listed favorites it placed.
+    ///
     /// # Errors
     ///
     /// Returns [`DbError::Sqlite`] when a statement fails. Returns
     /// [`DbError::LockPoisoned`] after a panic poisoned the lock.
     pub fn reorder_favorites(&self, paths: &[String]) -> Result<usize, DbError> {
         let mut conn = self.lock()?;
-        let tx = conn.transaction()?;
-        let mut changed = 0;
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let existing: Vec<String> = {
+            let mut stmt = tx.prepare("SELECT path FROM favorites ORDER BY sort_order, path")?;
+            let rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
+            rows.collect::<rusqlite::Result<Vec<_>>>()?
+        };
+        let known: HashSet<&str> = existing.iter().map(String::as_str).collect();
+        let mut seen: HashSet<String> = HashSet::new();
+        let mut ordered: Vec<String> = Vec::new();
+        for path in paths {
+            let normalized = normalize_path(path);
+            if known.contains(normalized.as_str()) && seen.insert(normalized.clone()) {
+                ordered.push(normalized);
+            }
+        }
+        let placed = ordered.len();
+        ordered.extend(
+            existing
+                .iter()
+                .filter(|path| !seen.contains(*path))
+                .cloned(),
+        );
         {
             let mut stmt = tx.prepare("UPDATE favorites SET sort_order = ?1 WHERE path = ?2")?;
-            for (index, path) in paths.iter().enumerate() {
+            for (index, path) in ordered.iter().enumerate() {
                 let order = i64::try_from(index).unwrap_or(i64::MAX);
-                changed += stmt.execute(params![order, normalize_path(path)])?;
+                stmt.execute(params![order, path])?;
             }
         }
         tx.commit()?;
-        Ok(changed)
+        Ok(placed)
     }
 
     /// List every favorite ordered by sort order, then path.

@@ -86,6 +86,16 @@ fn the_info_bar_names_the_folder_and_the_count() {
 }
 
 #[test]
+fn the_info_bar_uses_the_singular_for_one_file() {
+    let mut gallery = Gallery::new(SortMode::Natural);
+    let mut one = items();
+    one.truncate(1);
+    gallery.set_items(one);
+    gallery.set_scope(Scope::All);
+    assert_eq!(gallery.info_text(), "All Images - 1 file");
+}
+
+#[test]
 fn the_info_bar_adds_the_selection_count() {
     let mut gallery = Gallery::new(SortMode::Natural);
     gallery.set_items(items());

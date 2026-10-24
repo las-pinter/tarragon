@@ -6,7 +6,7 @@ use std::sync::Arc;
 use egui::text::{LayoutJob, TextWrapping};
 use egui::{
     Align2, Color32, CornerRadius, FontId, Id, Painter, Rect, Response, Sense, Stroke, StrokeKind,
-    Ui, epaint, pos2, vec2,
+    Ui, Vec2, epaint, pos2, vec2,
 };
 
 use crate::grid::{GridItem, Selection};
@@ -144,6 +144,16 @@ fn thumbnail_rect(rect: Rect) -> Rect {
     )
 }
 
+/// The largest rect with the texture's aspect ratio that fits inside `bounds`,
+/// centered. The picture is letterboxed, never cropped or stretched.
+fn fit_rect(bounds: Rect, texture: Vec2) -> Rect {
+    if texture.x <= 0.0 || texture.y <= 0.0 {
+        return bounds;
+    }
+    let scale = (bounds.width() / texture.x).min(bounds.height() / texture.y);
+    Rect::from_center_size(bounds.center(), texture * scale)
+}
+
 /// Paint the uploaded texture, or the placeholder with the extension text.
 fn paint_thumbnail(painter: &Painter, rect: Rect, item: &GridItem, radius: CornerRadius) {
     let Some(texture) = &item.texture else {
@@ -165,7 +175,7 @@ fn paint_thumbnail(painter: &Painter, rect: Rect, item: &GridItem, radius: Corne
     };
 
     let shape = epaint::RectShape {
-        rect,
+        rect: fit_rect(rect, texture.size_vec2()),
         corner_radius: radius,
         fill: Color32::WHITE,
         stroke: Stroke::NONE,

@@ -39,6 +39,14 @@ pub enum DbError {
     /// WAL journal mode did not turn on.
     #[error("could not enable WAL journal mode, got {0}")]
     Wal(String),
+    /// The stored schema generation is not the one this build uses.
+    #[error("database schema generation is {found}, this build needs {expected}")]
+    SchemaVersion {
+        /// The stored generation marker.
+        found: i64,
+        /// The generation this build creates and reads.
+        expected: i64,
+    },
     /// The shared connection lock is poisoned after a panic.
     #[error("database connection lock is poisoned")]
     LockPoisoned,
@@ -80,12 +88,14 @@ impl Database {
 
     /// Set WAL, turn foreign keys on, and set the busy timeout.
     fn configure(conn: &Connection) -> Result<(), DbError> {
+        // The timeout comes first: switching to WAL needs a lock, and a second
+        // instance would otherwise fail at once with a busy error.
+        conn.busy_timeout(Duration::from_secs(5))?;
         let mode: String = conn.query_row("PRAGMA journal_mode=WAL", [], |row| row.get(0))?;
         if !mode.eq_ignore_ascii_case("wal") {
             return Err(DbError::Wal(mode));
         }
         conn.pragma_update(None, "foreign_keys", "ON")?;
-        conn.busy_timeout(Duration::from_secs(5))?;
         Ok(())
     }
 
@@ -95,7 +105,9 @@ impl Database {
     ///
     /// # Errors
     ///
-    /// Returns [`DbError::Sqlite`] when a statement fails.
+    /// Returns [`DbError::Sqlite`] when a statement fails. Returns
+    /// [`DbError::SchemaVersion`] when the stored generation is not the
+    /// current one.
     pub fn initialize(&self) -> Result<i64, DbError> {
         let mut conn = self.lock()?;
         schema::initialize(&mut conn)

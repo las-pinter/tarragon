@@ -96,6 +96,36 @@ fn filter_engine_folder_scope_returns_every_file() {
 }
 
 #[test]
+fn filter_engine_folder_matches_all_descendants() {
+    let temp = TempDb::new();
+    temp.db
+        .write_scan_group(&[
+            file("/test/top", "a.png", 1, 10),
+            file("/test/top/sub", "b.png", 2, 10),
+            file("/test/top/sub/deep", "c.png", 3, 10),
+            file("/test/top_x", "d.png", 4, 10),
+            file("/test/100%_a", "e.png", 5, 10),
+            file("/test/100%_a/sub", "f.png", 6, 10),
+            file("/test/100xya", "g.png", 7, 10),
+            file("/test/100xya/sub", "z.png", 8, 10),
+        ])
+        .expect("write the rows");
+    assert_eq!(
+        filter_paths(&temp, &scoped("/test/top")),
+        [
+            "/test/top/a.png",
+            "/test/top/sub/b.png",
+            "/test/top/sub/deep/c.png"
+        ]
+    );
+    assert_eq!(
+        filter_paths(&temp, &scoped("/test/100%_a/")),
+        ["/test/100%_a/e.png", "/test/100%_a/sub/f.png"],
+        "wildcards in the folder name must match literally"
+    );
+}
+
+#[test]
 fn filter_engine_global_scope_returns_every_file() {
     let temp = TempDb::new();
     populate_filter_fixture(&temp);

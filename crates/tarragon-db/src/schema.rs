@@ -1,11 +1,11 @@
 //! Database schema: the eight tables, the generation marker, and creation.
 //!
-//! The schema is one generation, not a migration chain. Creation is
-//! idempotent, so the marker only records which shape is present. The app
-//! uses a fresh database and never reads or migrates data from an earlier
-//! schema.
+//! The schema is one generation, not a migration chain. The marker gates
+//! creation: a new database is created and stamped, a matching one is left
+//! alone, and any other marker is refused. The app never reads or migrates
+//! data from an earlier schema.
 
-use rusqlite::{Connection, OptionalExtension};
+use rusqlite::{Connection, OptionalExtension, TransactionBehavior};
 
 use crate::DbError;
 
@@ -70,16 +70,34 @@ CREATE TABLE IF NOT EXISTS folder_cache_uuids (
 
 /// Create the eight tables and stamp the generation marker.
 ///
-/// The whole call is one transaction, so it is atomic and idempotent. It
-/// returns the stored generation.
+/// The marker is read in the same transaction as the create. A marker of `0`
+/// means a new database, so the tables are created and the marker is stamped.
+/// A marker equal to [`SCHEMA_VERSION`] changes nothing. Any other marker is
+/// refused, because `CREATE TABLE IF NOT EXISTS` would keep an old table
+/// shape and a newer build's data must not be stamped down. It returns the
+/// stored generation.
 ///
 /// # Errors
 ///
-/// Returns [`DbError::Sqlite`] when a statement fails.
+/// Returns [`DbError::Sqlite`] when a statement fails. Returns
+/// [`DbError::SchemaVersion`] when the stored marker is not `0` and not
+/// [`SCHEMA_VERSION`].
 pub fn initialize(conn: &mut Connection) -> Result<i64, DbError> {
-    let tx = conn.transaction()?;
+    // An immediate transaction takes the write lock first, so two processes
+    // cannot both read `0` and both create.
+    let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    tx.execute_batch("CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);")?;
+    let found = version(&tx)?;
+    if found == SCHEMA_VERSION {
+        return Ok(found);
+    }
+    if found != 0 {
+        return Err(DbError::SchemaVersion {
+            found,
+            expected: SCHEMA_VERSION,
+        });
+    }
     tx.execute_batch(INITIAL_SCHEMA)?;
-    tx.execute("DELETE FROM schema_version", [])?;
     tx.execute(
         "INSERT INTO schema_version (version) VALUES (?1)",
         [SCHEMA_VERSION],

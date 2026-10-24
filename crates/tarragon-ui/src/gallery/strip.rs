@@ -73,7 +73,7 @@ impl Gallery {
         let response = ui.add(
             TextEdit::singleline(&mut self.search)
                 .id(Id::new("tarragon-gallery-search"))
-                .hint_text("Search files and tags")
+                .hint_text("Search file names")
                 .text_color(tokens::TEXT_MUTED)
                 .desired_width(f32::INFINITY)
                 .frame(

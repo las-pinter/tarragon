@@ -82,15 +82,16 @@ impl Database {
     /// Returns [`DbError::Sqlite`] when a statement fails. Returns
     /// [`DbError::LockPoisoned`] after a panic poisoned the lock.
     pub fn cleanup_stale_folder_uuids(&self) -> Result<usize, DbError> {
-        let folders: Vec<String> = {
+        let rows: Vec<(String, String)> = {
             let conn = self.lock()?;
-            let mut stmt = conn.prepare("SELECT folder_path FROM folder_cache_uuids")?;
-            let rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
+            let mut stmt =
+                conn.prepare("SELECT folder_path, cache_uuid FROM folder_cache_uuids")?;
+            let rows = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?;
             rows.collect::<rusqlite::Result<Vec<_>>>()?
         };
-        let stale: Vec<String> = folders
+        let stale: Vec<(String, String)> = rows
             .into_iter()
-            .filter(|folder| !Path::new(folder).is_dir())
+            .filter(|(folder, _)| !Path::new(folder).is_dir())
             .collect();
         if stale.is_empty() {
             return Ok(0);
@@ -99,9 +100,13 @@ impl Database {
         let tx = conn.transaction()?;
         let mut removed = 0;
         {
-            let mut stmt = tx.prepare("DELETE FROM folder_cache_uuids WHERE folder_path = ?1")?;
-            for folder in &stale {
-                removed += stmt.execute([folder])?;
+            // The lock is free during the directory checks. Matching the UUID
+            // too keeps a row that another caller replaced in that gap.
+            let mut stmt = tx.prepare(
+                "DELETE FROM folder_cache_uuids WHERE folder_path = ?1 AND cache_uuid = ?2",
+            )?;
+            for (folder, uuid) in &stale {
+                removed += stmt.execute([folder, uuid])?;
             }
         }
         tx.commit()?;

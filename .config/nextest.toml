@@ -1,3 +1,7 @@
 # Test runner configuration for the tarragon workspace.
 [profile.default]
 fail-fast = true
+
+# A CI run reports every failure, not only the first.
+[profile.ci]
+fail-fast = false

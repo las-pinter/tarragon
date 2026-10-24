@@ -12,7 +12,7 @@ use super::{THUMBNAIL_COLUMNS, Thumbnail, ThumbnailWrite, row_to_thumbnail};
 /// `size` so a later render can detect a source change.
 const SCAN_STUB_SQL: &str = "\
 INSERT INTO thumbnails (path, mtime, size, width, height, cache_uuid, thumbnail_cache_path, preview_cache_path, full_cache_path, last_accessed)
-VALUES (?1, ?2, ?3, ?4, ?5, '', NULL, NULL, NULL, 0)
+VALUES (?1, ?2, ?3, ?4, ?5, NULL, NULL, NULL, NULL, 0)
 ON CONFLICT(path) DO UPDATE SET mtime = thumbnails.mtime, size = thumbnails.size";
 
 impl Database {

@@ -1,8 +1,11 @@
 //! Filter engine: compose the active filters into one thumbnail query.
 //!
 //! The semantics are tags AND, colors AND, folders OR, and a filename
-//! substring. The filename text is used as-is, so a whitespace-only text is a
-//! real filter. The result comes back in natural full-path order.
+//! substring. A folder matches all of its descendants: its direct children and
+//! the files in any subfolder. Browsing one folder is different and lists
+//! direct children only.
+//! The filename text is used as-is, so a whitespace-only text is a real
+//! filter. The result comes back in natural full-path order.
 //! The query runs on the shared connection. The caller chooses the folder
 //! scope, so a folder scope passes only the current folder in `folders`.
 
@@ -49,7 +52,8 @@ fn filter_sql(filters: &FilterState) -> (String, Vec<Value>) {
         let mut terms: Vec<String> = Vec::new();
         for folder in &filters.folders {
             terms.push("path LIKE ? ESCAPE '\\'".to_owned());
-            params.push(Value::Text(folder_like(&folder.to_string_lossy())));
+            let name = folder.to_string_lossy();
+            params.push(Value::Text(folder_like(&name)));
         }
         let mut group = String::from("(");
         group.push_str(&terms.join(" OR "));
@@ -89,9 +93,10 @@ fn filter_sql(filters: &FilterState) -> (String, Vec<Value>) {
 impl Database {
     /// Return the thumbnail rows that match every active filter.
     ///
-    /// Folders combine with OR. Tags and colors each require every selected
-    /// name. The filename text is a substring of the stored path and is used
-    /// as-is, with no trim. Rows come back in natural full-path order.
+    /// Folders combine with OR and each matches all descendants. Tags and
+    /// colors each require every selected name. The filename text is a
+    /// substring of the stored path and is used as-is, with no trim. Rows
+    /// come back in natural full-path order.
     ///
     /// # Errors
     ///

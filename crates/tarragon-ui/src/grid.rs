@@ -107,7 +107,7 @@ impl GridMetrics {
 
     /// Stretch the cell width so `columns` tracks fill `width`.
     ///
-    /// The cell height stays fixed. The column count is the smallest track
+    /// The cell height stays fixed. The column count is the largest track
     /// count that fits, so a narrow grid keeps one column. This matches the
     /// stylesheet `minmax(196px, 1fr)` track.
     #[must_use]

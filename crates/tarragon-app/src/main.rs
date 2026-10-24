@@ -1,6 +1,7 @@
 //! Binary entry point for the tarragon image browser.
 
 use std::path::PathBuf;
+use std::process::ExitCode;
 
 use tarragon_db::Database;
 use tarragon_db::settings::{Settings, WindowState};
@@ -55,7 +56,7 @@ impl App {
     }
 }
 
-fn main() {
+fn main() -> ExitCode {
     let db_path =
         std::env::var("TARRAGON_DB").map_or_else(|_| PathBuf::from("tarragon.db"), PathBuf::from);
 
@@ -67,9 +68,11 @@ fn main() {
                 eprintln!("tarragon: cannot save the window state: {error}");
             }
             println!("tarragon {}", env!("CARGO_PKG_VERSION"));
+            ExitCode::SUCCESS
         }
         Err(error) => {
             eprintln!("tarragon: {error}");
+            ExitCode::FAILURE
         }
     }
 }

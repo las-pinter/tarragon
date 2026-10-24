@@ -28,6 +28,50 @@ fn schema_creation_is_idempotent() {
     assert_eq!(marker_rows, 1, "the marker must hold one row");
 }
 
+/// Store a marker value, then run `initialize` and return its error.
+fn initialize_with_marker(marker: i64) -> (TempDb, crate::DbError) {
+    let temp = TempDb::new();
+    {
+        let conn = temp.db.lock().expect("lock");
+        conn.execute("UPDATE schema_version SET version = ?1", [marker])
+            .expect("store the marker");
+    }
+    let error = temp.db.initialize().expect_err("a mismatch must fail");
+    (temp, error)
+}
+
+#[test]
+fn initialize_refuses_an_older_marker_and_keeps_it() {
+    let (temp, error) = initialize_with_marker(1);
+    assert!(
+        matches!(
+            error,
+            crate::DbError::SchemaVersion {
+                found: 1,
+                expected: 2
+            }
+        ),
+        "got {error:?}"
+    );
+    assert_eq!(temp.db.schema_version().expect("read marker"), 1);
+}
+
+#[test]
+fn initialize_refuses_a_newer_marker_and_keeps_it() {
+    let (temp, error) = initialize_with_marker(3);
+    assert!(
+        matches!(
+            error,
+            crate::DbError::SchemaVersion {
+                found: 3,
+                expected: 2
+            }
+        ),
+        "got {error:?}"
+    );
+    assert_eq!(temp.db.schema_version().expect("read marker"), 3);
+}
+
 #[test]
 fn wal_journal_mode_is_on() {
     let temp = TempDb::new();
@@ -135,7 +179,7 @@ fn thumbnails_are_listed_in_last_accessed_order() {
 }
 
 #[test]
-fn scan_group_writes_every_row_and_commits_once() {
+fn scan_group_rows_are_visible_to_another_connection() {
     let temp = TempDb::new();
     let files = [
         file("/refs", "a.png", 1, 10),
@@ -399,4 +443,36 @@ fn remove_tags_from_files_covers_every_path_chunk() {
         .remove_tags_from_files(&paths, tag.id)
         .expect("remove the tag");
     assert_eq!(removed, paths.len());
+}
+
+#[test]
+fn scan_stub_stores_no_cache_uuid() {
+    let temp = TempDb::new();
+    temp.db
+        .write_scan_group(&[file("/refs", "a.png", 1, 10)])
+        .expect("write the stub");
+    let row = temp
+        .db
+        .thumbnail("/refs/a.png")
+        .expect("read")
+        .expect("row");
+    assert_eq!(row.cache_uuid, None);
+}
+
+#[test]
+fn reorder_favorites_places_listed_first_and_leaves_no_ties() {
+    let temp = TempDb::new();
+    for (index, path) in ["/f/a", "/f/b", "/f/c", "/f/d"].into_iter().enumerate() {
+        let order = i64::try_from(index).expect("small index");
+        temp.db.add_favorite(path, None, order).expect("add");
+    }
+    let listed = ["/f/c", "/f/a", "/f/c", "/f/missing"].map(str::to_owned);
+    let placed = temp.db.reorder_favorites(&listed).expect("reorder");
+    assert_eq!(placed, 2, "a repeat and a missing path are not placed");
+
+    let rows = temp.db.list_favorites().expect("list");
+    let paths: Vec<&str> = rows.iter().map(|row| row.path.as_str()).collect();
+    assert_eq!(paths, ["/f/c", "/f/a", "/f/b", "/f/d"]);
+    let orders: Vec<i64> = rows.iter().map(|row| row.sort_order).collect();
+    assert_eq!(orders, [0, 1, 2, 3]);
 }

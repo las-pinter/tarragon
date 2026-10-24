@@ -10,17 +10,66 @@ on:
 permissions:
   contents: read
 
+# A newer run on the same ref cancels the older run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  psd-fixtures:
-    name: Build the large PSB
-    runs-on: ubuntu-latest
+  gates:
+    name: Gates (ubuntu)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
     steps:
       - name: Check out
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
+      # Without a toolchain name, rustup installs the toolchain that rust-toolchain.toml names.
+      - name: Install the pinned toolchain
+        run: rustup toolchain install --profile minimal
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+      - name: Install cargo-nextest and cargo-deny
+        uses: taiki-e/install-action@v2
+        with:
+          tool: nextest,cargo-deny
+      - name: Check formatting
+        run: cargo fmt --check
+      - name: Lint
+        run: cargo clippy --all-targets -- -D warnings
+      - name: Test
+        run: cargo nextest run
+      - name: Check dependencies
+        run: cargo deny check
+
+  release-build:
+    name: Release build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+      - name: Install the pinned toolchain
+        run: rustup toolchain install --profile minimal
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+      - name: Build
+        run: cargo build --release --workspace
+
+  psd-fixtures:
+    name: Build the large PSB
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: Install psd-tools
@@ -44,13 +93,17 @@ jobs:
 
   psd-goldens:
     name: PSD golden images
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - name: Check out
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 1
+      - name: Install the pinned toolchain
+        run: rustup toolchain install --profile minimal
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
       - name: Install cargo-nextest
         uses: taiki-e/install-action@v2
         with:
@@ -59,7 +112,7 @@ jobs:
       - name: Run the PSD tests
         run: cargo nextest run -p tarragon-psd
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: Install psd-tools

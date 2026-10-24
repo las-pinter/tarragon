@@ -21,6 +21,11 @@ impl<'a> Reader<'a> {
         }
     }
 
+    /// Wrap a slice that starts at file offset `base`.
+    pub(crate) fn at(data: &'a [u8], base: u64) -> Self {
+        Self { data, pos: 0, base }
+    }
+
     /// The current offset as a file offset.
     pub(crate) fn offset(&self) -> u64 {
         self.base + u64::try_from(self.pos).unwrap_or(u64::MAX)

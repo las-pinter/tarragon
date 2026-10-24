@@ -105,7 +105,7 @@ impl Descriptor {
     }
 
     /// The text at `key`.
-    #[allow(dead_code, reason = "part of the reader; used by the descriptor tests")]
+    #[cfg(test)]
     #[must_use]
     pub fn text(&self, key: &[u8]) -> Option<&str> {
         match self.get(key)? {
@@ -175,13 +175,6 @@ impl<'a> Reader<'a> {
     /// Read a big-endian `u8`.
     fn u8(&mut self) -> Option<u8> {
         Some(self.take(1)?[0])
-    }
-
-    /// Read a big-endian `u16`.
-    #[allow(dead_code, reason = "part of the reader; kept for completeness")]
-    fn u16(&mut self) -> Option<u16> {
-        let bytes = self.take(2)?;
-        Some(u16::from_be_bytes([bytes[0], bytes[1]]))
     }
 
     /// Read a big-endian `u32`.

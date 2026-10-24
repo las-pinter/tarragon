@@ -16,128 +16,26 @@
 //! Vector masks parse but are not rasterized. Adjustment and fill descriptors
 //! parse and apply.
 //!
-//! This file holds the compositor state machine and the composite region type.
-//! The layer and group paint, including the effects path, lives in
-//! [`crate::composite_paint`].
+//! This file holds the compositor state machine. The layer and group paint,
+//! including the effects path, lives in [`crate::composite_paint`]. The fills,
+//! the adjustments, and the merged-preview fallback live in
+//! `composite_fill`.
 
+use std::cell::Cell;
 use std::mem;
+use std::rc::Rc;
 
-use crate::adjustments::Adjustment;
 use crate::blend::{BlendMode, safe_div, union};
 use crate::composite_paint::active_effects;
-use crate::content::{GradientFill, LayerContent};
+pub use crate::composite_region::CompositeRegion;
+use crate::content::LayerContent;
 use crate::decode::Viewport;
 use crate::document::PsdDocument;
 use crate::error::PsdError;
-use crate::layer_source::{channel_samples, cmyk_color, read_layer, rgb_color};
+use crate::layer_source::read_layer;
 use crate::layer_tree::{LayerNode, build_tree};
 use crate::limits::ParseOptions;
-use crate::model::ColorMode;
-
-/// The composited pixels of one viewport.
-///
-/// Colors are straight (not premultiplied) RGB in `0.0..=1.0`. The alpha is the
-/// composite coverage. A fully transparent pixel keeps the white backdrop, so
-/// its color is white.
-#[derive(Debug, Clone, PartialEq)]
-pub struct CompositeRegion {
-    /// The viewport this region covers.
-    viewport: Viewport,
-    /// Straight RGB, three `f32` per pixel, row-major.
-    color: Vec<f32>,
-    /// Alpha, one `f32` per pixel, row-major.
-    alpha: Vec<f32>,
-}
-
-impl CompositeRegion {
-    /// The viewport this region covers.
-    #[must_use]
-    pub const fn viewport(&self) -> Viewport {
-        self.viewport
-    }
-
-    /// The region width in pixels.
-    #[must_use]
-    pub const fn width(&self) -> u32 {
-        self.viewport.width()
-    }
-
-    /// The region height in pixels.
-    #[must_use]
-    pub const fn height(&self) -> u32 {
-        self.viewport.height()
-    }
-
-    /// The straight RGB at a region pixel.
-    ///
-    /// Returns `None` when the pixel is outside the region.
-    #[must_use]
-    pub fn color(&self, x: u32, y: u32) -> Option<[f32; 3]> {
-        let index = self.pixel_index(x, y)?;
-        Some([
-            self.color[index * 3],
-            self.color[index * 3 + 1],
-            self.color[index * 3 + 2],
-        ])
-    }
-
-    /// The alpha at a region pixel, or `None` when outside the region.
-    #[must_use]
-    pub fn alpha(&self, x: u32, y: u32) -> Option<f32> {
-        let index = self.pixel_index(x, y)?;
-        self.alpha.get(index).copied()
-    }
-
-    /// The straight RGBA at a region pixel, or `None` when outside the region.
-    #[must_use]
-    pub fn pixel(&self, x: u32, y: u32) -> Option<[f32; 4]> {
-        let index = self.pixel_index(x, y)?;
-        Some([
-            self.color[index * 3],
-            self.color[index * 3 + 1],
-            self.color[index * 3 + 2],
-            self.alpha[index],
-        ])
-    }
-
-    /// Encode the region as straight RGBA8, truncating to 8 bits.
-    #[must_use]
-    pub fn rgba8(&self) -> Vec<u8> {
-        let mut out = Vec::with_capacity(self.alpha.len() * 4);
-        for (index, alpha) in self.alpha.iter().enumerate() {
-            out.push(to_u8(self.color[index * 3]));
-            out.push(to_u8(self.color[index * 3 + 1]));
-            out.push(to_u8(self.color[index * 3 + 2]));
-            out.push(to_u8(*alpha));
-        }
-        out
-    }
-
-    /// Encode the region as straight RGBA16.
-    #[must_use]
-    pub fn rgba16(&self) -> Vec<u16> {
-        let mut out = Vec::with_capacity(self.alpha.len() * 4);
-        for (index, alpha) in self.alpha.iter().enumerate() {
-            out.push(to_u16(self.color[index * 3]));
-            out.push(to_u16(self.color[index * 3 + 1]));
-            out.push(to_u16(self.color[index * 3 + 2]));
-            out.push(to_u16(*alpha));
-        }
-        out
-    }
-
-    /// The row-major pixel index of a region pixel.
-    #[must_use]
-    fn pixel_index(&self, x: u32, y: u32) -> Option<usize> {
-        if x >= self.viewport.width() || y >= self.viewport.height() {
-            return None;
-        }
-        let x = usize::try_from(x).ok()?;
-        let y = usize::try_from(y).ok()?;
-        let stride = usize::try_from(self.viewport.width()).ok()?;
-        y.checked_mul(stride)?.checked_add(x)
-    }
-}
+use crate::model::sample_bytes;
 
 impl PsdDocument {
     /// Composite the document layers over a viewport.
@@ -145,6 +43,17 @@ impl PsdDocument {
     /// The region is viewport-sized. The full canvas is never allocated, so
     /// the caller composites one tile at a time. The 120 s deadline and
     /// the 8192 px cap are enforced by the underlying reads.
+    ///
+    /// # Tiling contract
+    ///
+    /// The memory estimate is checked against [`crate::limits::MAX_COMPOSITE_BYTES`]
+    /// before any plane is allocated, for flattened documents too. The caller
+    /// tiles the canvas so each tile fits: [`PsdDocument::max_tile_pixels`]
+    /// gives the pixel count and [`PsdDocument::suggested_tile_edge`] a square
+    /// edge. A layer, clip layer or group with effects pads the viewport by up
+    /// to `MAX_EFFECT_SIZE` on each side, and the padding counts in the
+    /// estimate. The tile edge plus the padding must also stay within
+    /// [`crate::limits::FULL_TIER_MAX_EDGE`].
     ///
     /// # Errors
     ///
@@ -160,6 +69,7 @@ impl PsdDocument {
         // A flattened document has no layer records, so the compositor falls
         // back to the merged preview image (the background).
         if self.file().layers.is_empty() {
+            self.check_tile_budget(&[], viewport)?;
             return self.composite_merged_background(viewport, options);
         }
         let width = usize::try_from(viewport.width()).unwrap_or(0);
@@ -170,100 +80,34 @@ impl PsdDocument {
             .ok_or(PsdError::LengthTooLarge {
                 length: u64::from(viewport.width()) * u64::from(viewport.height()),
             })?;
+        // The tree is built first, so a file that nests groups too deep fails
+        // before any viewport buffer exists.
+        let tree = build_tree(&self.file().layers)?;
+        self.check_tile_budget(&tree, viewport)?;
+        // The color mode is a property of the document, so an unsupported mode
+        // fails the render. Only a single unsupported layer is skipped.
+        let header = self.file().header;
+        sample_bytes(header.color_mode, header.depth)?;
         let color_0 = vec![1.0f32; count];
         let alpha_0 = vec![0.0f32; width * height];
-        let mut root = Compositor::new(width, height, color_0, alpha_0, false);
-        for node in &build_tree(&self.file().layers) {
+        let skips = Rc::new(Cell::new(0));
+        let mut root = Compositor::new(width, height, color_0, alpha_0, false, &skips);
+        for node in &tree {
             root.apply(node, self, viewport, options)?;
         }
-        Ok(CompositeRegion {
+        Ok(CompositeRegion::new(
             viewport,
-            color: root.corrected_color(),
-            alpha: root.alpha_g,
-        })
-    }
-
-    /// Composite the merged preview when the file has no layer records.
-    ///
-    /// A flattened document falls back to the merged image. The merged data is
-    /// a preview over a white background, so the RGB is
-    /// un-composited with the alpha channel. Only an RGB preview takes that
-    /// straight-color recovery, so a flattened CMYK document with merged alpha
-    /// keeps its stored values.
-    fn composite_merged_background(
-        &self,
-        viewport: Viewport,
-        options: &ParseOptions,
-    ) -> Result<CompositeRegion, PsdError> {
-        let region = self.read_merged_region(viewport, options)?;
-        let width = usize::try_from(viewport.width()).unwrap_or(0);
-        let height = usize::try_from(viewport.height()).unwrap_or(0);
-        let count = width
-            .checked_mul(height)
-            .and_then(|area| area.checked_mul(3))
-            .ok_or(PsdError::LengthTooLarge {
-                length: u64::from(viewport.width()) * u64::from(viewport.height()),
-            })?;
-        let area = count / 3;
-        let max = if region.depth >= 16 { 65535.0 } else { 255.0 };
-        let color = match region.color_mode {
-            ColorMode::Rgb => rgb_color(&region, area, max),
-            ColorMode::Cmyk => cmyk_color(&region, area, max),
-            mode => {
-                return Err(PsdError::UnsupportedColorMode {
-                    mode,
-                    depth: region.depth,
-                });
-            }
-        };
-        let alpha_channel = channel_samples(&region, -1);
-        let has_alpha = alpha_channel.is_some();
-        let alpha = match alpha_channel {
-            Some(samples) => samples
-                .iter()
-                .take(area)
-                .map(|sample| f32::from(*sample) / max)
-                .collect(),
-            None => vec![1.0f32; area],
-        };
-        let mut color = color;
-        // The compositor recovers the straight color only when a merged alpha
-        // channel exists and the preview sits on white.
-        if region.color_mode == ColorMode::Rgb && has_alpha {
-            for index in 0..area {
-                let a = alpha[index];
-                if a > 0.0 {
-                    for channel in 0..3 {
-                        let straight = (color[index * 3 + channel] + a - 1.0) / a;
-                        color[index * 3 + channel] = straight.clamp(0.0, 1.0);
-                    }
-                }
-            }
-        }
-        Ok(CompositeRegion {
-            viewport,
-            color,
-            alpha,
-        })
+            root.corrected_color(),
+            root.alpha_g,
+            skips.get(),
+        ))
     }
 }
 
-/// Truncate a normalized value to `u8`.
-#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-#[must_use]
-fn to_u8(value: f32) -> u8 {
-    (value.clamp(0.0, 1.0) * 255.0) as u8
-}
-
-/// Truncate a normalized value to `u16`.
-#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-#[must_use]
-fn to_u16(value: f32) -> u16 {
-    (value.clamp(0.0, 1.0) * 65535.0) as u16
-}
+/// The count of layers skipped for an unsupported compression.
+pub(crate) type SkipCount = Rc<Cell<usize>>;
 
 /// The result of compositing a group's children.
-#[derive(Clone)]
 struct GroupResult {
     /// The group color, three `f32` per pixel.
     color: Vec<f32>,
@@ -304,6 +148,8 @@ pub(crate) struct Compositor {
     /// The base layer index of a clipping stack, when this compositor paints
     /// the clipping layers of that base.
     pub(crate) clip_base: Option<usize>,
+    /// The shared count of skipped layers.
+    pub(crate) skips: SkipCount,
 }
 
 impl Compositor {
@@ -314,6 +160,7 @@ impl Compositor {
         color_0: Vec<f32>,
         alpha_0: Vec<f32>,
         isolated: bool,
+        skips: &SkipCount,
     ) -> Self {
         let count = width * height;
         let alpha_0 = if isolated {
@@ -332,10 +179,60 @@ impl Compositor {
             shape_g: vec![0.0f32; count],
             alpha_g: vec![0.0f32; count],
             clip_base: None,
+            skips: Rc::clone(skips),
         }
     }
 
+    /// Start a nested group by moving this state's backdrop into it.
+    ///
+    /// The group keeps the moved planes as its initial backdrop, so only the
+    /// running planes are new. [`Self::finish_nested`] moves them back. An
+    /// isolated group starts from a transparent alpha, so the parent alpha is
+    /// returned to be kept aside.
+    fn begin_nested(&mut self, isolated: bool) -> (Self, Option<Vec<f32>>) {
+        let color_0 = mem::take(&mut self.color);
+        let parent_alpha = mem::take(&mut self.alpha);
+        let (alpha_0, alpha, kept) = if isolated {
+            (
+                vec![0.0f32; self.count],
+                vec![0.0f32; self.count],
+                Some(parent_alpha),
+            )
+        } else {
+            (parent_alpha.clone(), parent_alpha, None)
+        };
+        let group = Self {
+            width: self.width,
+            height: self.height,
+            count: self.count,
+            color: color_0.clone(),
+            alpha,
+            color_0,
+            alpha_0,
+            shape_g: vec![0.0f32; self.count],
+            alpha_g: vec![0.0f32; self.count],
+            clip_base: None,
+            skips: Rc::clone(&self.skips),
+        };
+        (group, kept)
+    }
+
+    /// Give the backdrop back to the parent after a nested group.
+    ///
+    /// A pass-through group moved the parent alpha into `alpha_0`; an isolated
+    /// group has it in `kept`.
+    fn finish_nested(&mut self, group: &mut Self, kept: Option<Vec<f32>>) {
+        self.color = mem::take(&mut group.color_0);
+        self.alpha = kept.unwrap_or_else(|| mem::take(&mut group.alpha_0));
+    }
+
     /// Apply one layer node.
+    ///
+    /// A layer whose channels use an unsupported compression is skipped and
+    /// counted, so one such layer does not fail the whole render. A layer reads
+    /// its channels before it changes the state, so a skipped layer leaves no
+    /// partial paint. The color mode is checked once before the walk, so it
+    /// cannot fail here.
     pub(crate) fn apply(
         &mut self,
         node: &LayerNode,
@@ -346,10 +243,17 @@ impl Compositor {
         if !node.visible {
             return Ok(());
         }
-        if node.is_group {
+        let result = if node.is_group {
             self.apply_group(node, document, viewport, options)
         } else {
             self.apply_pixels(node, document, viewport, options)
+        };
+        match result {
+            Err(PsdError::UnsupportedCompression(_)) => {
+                self.skips.set(self.skips.get() + 1);
+                Ok(())
+            }
+            other => other,
         }
     }
 
@@ -374,83 +278,9 @@ impl Compositor {
         if let Some(effects) = active_effects(node) {
             return self.apply_pixels_with_effects(node, effects, document, viewport, options);
         }
-        let paint = Self::layer_paint(node, document, viewport, options)?;
+        let paint = Self::layer_paint(node, document, viewport, options, &self.skips)?;
         self.apply_source(&paint.color, &paint.shape, &paint.alpha, node.blend);
         Ok(())
-    }
-
-    /// Apply one adjustment layer to the running backdrop.
-    ///
-    /// The adjustment transforms the backdrop, then blends the result back by
-    /// the layer opacity times its mask. Alpha is unchanged.
-    fn apply_adjustment(
-        &mut self,
-        node: &LayerNode,
-        adjustment: &Adjustment,
-        document: &PsdDocument,
-        viewport: Viewport,
-        options: &ParseOptions,
-    ) -> Result<(), PsdError> {
-        let Some(index) = node.index else {
-            return Ok(());
-        };
-        let mask = read_layer(document, index, viewport, options)?
-            .mask
-            .unwrap_or_else(|| vec![1.0f32; self.count]);
-        let coverage = node.opacity * node.fill_opacity;
-        for (index, &mask_value) in mask.iter().enumerate() {
-            let k = coverage * mask_value;
-            if k <= 0.0 {
-                continue;
-            }
-            let backdrop = [
-                self.color[index * 3],
-                self.color[index * 3 + 1],
-                self.color[index * 3 + 2],
-            ];
-            let mut adjusted = backdrop;
-            adjustment.apply(&mut adjusted);
-            let blended = crate::blend::blend_rgb(node.blend, backdrop, adjusted);
-            for channel in 0..3 {
-                self.color[index * 3 + channel] =
-                    backdrop[channel] + (blended[channel] - backdrop[channel]) * k;
-            }
-        }
-        Ok(())
-    }
-
-    /// Render a gradient fill over the viewport.
-    ///
-    /// The frame is the whole canvas, so tiles agree on the ramp. The returned
-    /// color is straight RGB and the shape is the fill alpha.
-    #[allow(
-        clippy::cast_precision_loss,
-        reason = "canvas and viewport coordinates are small enough for f32"
-    )]
-    pub(crate) fn render_gradient(
-        fill: &GradientFill,
-        viewport: Viewport,
-        document: &PsdDocument,
-    ) -> (Vec<f32>, Vec<f32>) {
-        let width = usize::try_from(viewport.width()).unwrap_or(0);
-        let height = usize::try_from(viewport.height()).unwrap_or(0);
-        let mut color = vec![0.0f32; width * height * 3];
-        let mut shape = vec![0.0f32; width * height];
-        let header = document.file().header;
-        let frame = (0.0, 0.0, header.width as f32, header.height as f32);
-        for y in 0..height {
-            for x in 0..width {
-                let canvas_x = viewport.left as f32 + x as f32 + 0.5;
-                let canvas_y = viewport.top as f32 + y as f32 + 0.5;
-                let sample = fill.sample(fill.parameter_at(frame, canvas_x, canvas_y));
-                let index = y * width + x;
-                color[index * 3] = sample[0];
-                color[index * 3 + 1] = sample[1];
-                color[index * 3 + 2] = sample[2];
-                shape[index] = sample[3];
-            }
-        }
-        (color, shape)
     }
 
     /// Composite a group layer.
@@ -508,9 +338,11 @@ impl Compositor {
     ///
     /// A pass-through group starts from the current backdrop; an isolated group
     /// starts from a transparent buffer. The returned color, coverage, and
-    /// alpha are the group's own.
+    /// alpha are the group's own. The group borrows this state's backdrop
+    /// planes by moving them, and gives them back before it returns, so a
+    /// nesting level holds only its running planes.
     fn get_group(
-        &self,
+        &mut self,
         node: &LayerNode,
         document: &PsdDocument,
         viewport: Viewport,
@@ -518,27 +350,30 @@ impl Compositor {
     ) -> Result<GroupResult, PsdError> {
         let passthrough = node.blend == BlendMode::PassThrough;
         let isolated_adjustments = node.fill_opacity < 1.0 || !node.clips.is_empty();
-        let mut group = Self::new(
-            self.width,
-            self.height,
-            self.color.clone(),
-            self.alpha.clone(),
-            !passthrough,
-        );
+        let (mut group, kept) = self.begin_nested(!passthrough);
+        let mut failure = None;
         for child in &node.children {
-            group.apply(child, document, viewport, options)?;
+            if let Err(error) = group.apply(child, document, viewport, options) {
+                failure = Some(error);
+                break;
+            }
         }
         let color = if isolated_adjustments {
             group.corrected_color()
         } else {
-            group.color.clone()
+            mem::take(&mut group.color)
         };
-        Ok(GroupResult {
+        let result = GroupResult {
             color,
-            shape: group.shape_g.clone(),
-            alpha: group.alpha_g.clone(),
+            shape: mem::take(&mut group.shape_g),
+            alpha: mem::take(&mut group.alpha_g),
             isolated: isolated_adjustments,
-        })
+        };
+        self.finish_nested(&mut group, kept);
+        match failure {
+            Some(error) => Err(error),
+            None => Ok(result),
+        }
     }
 
     /// Composite the clipping layers of a base layer over its color.
@@ -554,6 +389,7 @@ impl Compositor {
         document: &PsdDocument,
         viewport: Viewport,
         options: &ParseOptions,
+        skips: &SkipCount,
     ) -> Result<Vec<f32>, PsdError> {
         let width = usize::try_from(viewport.width()).unwrap_or(0);
         let height = usize::try_from(viewport.height()).unwrap_or(0);
@@ -563,6 +399,7 @@ impl Compositor {
             base_color.to_vec(),
             base_shape.to_vec(),
             false,
+            skips,
         );
         clip.clip_base = node.index;
         for layer in &node.clips {
@@ -574,6 +411,8 @@ impl Compositor {
     /// Apply one source over the backdrop with a blend mode.
     ///
     /// The shape term may differ from the alpha when fill opacity is below one.
+    /// The planes update in place, because each pixel reads only its own old
+    /// values.
     pub(crate) fn apply_source(
         &mut self,
         color: &[f32],
@@ -581,31 +420,23 @@ impl Compositor {
         alpha: &[f32],
         mode: BlendMode,
     ) {
-        let backdrop_color = mem::take(&mut self.color);
-        let backdrop_alpha = mem::take(&mut self.alpha);
-        let mut new_alpha = vec![0.0f32; self.count];
         for index in 0..self.count {
             self.shape_g[index] = union(self.shape_g[index], shape[index]);
             self.alpha_g[index] = union(self.alpha_g[index], alpha[index]);
-            new_alpha[index] = union(self.alpha_0[index], self.alpha_g[index]);
-        }
-        let mut new_color = vec![0.0f32; self.count * 3];
-        for index in 0..self.count {
-            let out_alpha = new_alpha[index];
+            let out_alpha = union(self.alpha_0[index], self.alpha_g[index]);
+            let previous = self.alpha[index];
+            self.alpha[index] = out_alpha;
             if out_alpha <= 0.0 {
                 // The ratio is not finite, so use white.
-                new_color[index * 3] = 1.0;
-                new_color[index * 3 + 1] = 1.0;
-                new_color[index * 3 + 2] = 1.0;
+                self.color[index * 3..index * 3 + 3].fill(1.0);
                 continue;
             }
             let source_alpha = alpha[index];
             let coverage = shape[index];
-            let previous = backdrop_alpha[index];
             let cb = [
-                backdrop_color[index * 3],
-                backdrop_color[index * 3 + 1],
-                backdrop_color[index * 3 + 2],
+                self.color[index * 3],
+                self.color[index * 3 + 1],
+                self.color[index * 3 + 2],
             ];
             let cs = [color[index * 3], color[index * 3 + 1], color[index * 3 + 2]];
             let blended = crate::blend::blend_rgb(mode, cb, cs);
@@ -613,17 +444,16 @@ impl Compositor {
                 let blend_term = (coverage - source_alpha) * previous * cb[channel]
                     + source_alpha * ((1.0 - previous) * cs[channel] + previous * blended[channel]);
                 let numerator = (1.0 - coverage) * previous * cb[channel] + blend_term;
-                new_color[index * 3 + channel] = (numerator / out_alpha).clamp(0.0, 1.0);
+                self.color[index * 3 + channel] = (numerator / out_alpha).clamp(0.0, 1.0);
             }
         }
-        self.alpha = new_alpha;
-        self.color = new_color;
     }
 
     /// Apply a pass-through group source over the backdrop.
     ///
     /// The group color is blended with the existing backdrop instead of an
-    /// isolated buffer.
+    /// isolated buffer. The planes update in place, because each pixel reads
+    /// only its own old values.
     fn apply_passthrough_source(
         &mut self,
         color: &[f32],
@@ -631,32 +461,22 @@ impl Compositor {
         alpha: &[f32],
         mask: &[f32],
     ) {
-        let previous_shape = mem::take(&mut self.shape_g);
-        let previous_color = mem::take(&mut self.color);
-        let previous_alpha_g = mem::take(&mut self.alpha_g);
-        let mut new_shape = vec![0.0f32; self.count];
-        let mut new_alpha_g = vec![0.0f32; self.count];
-        let mut new_alpha = vec![0.0f32; self.count];
-        let mut new_color = vec![0.0f32; self.count * 3];
         for index in 0..self.count {
-            new_shape[index] = union(previous_shape[index], shape[index]);
-            new_alpha_g[index] = union(previous_alpha_g[index], alpha[index]);
-            new_alpha[index] = union(self.alpha_0[index], new_alpha_g[index]);
-            let mut support = [0.0f32; 3];
+            let previous_shape = self.shape_g[index];
+            let new_shape = union(previous_shape, shape[index]);
+            let new_alpha_g = union(self.alpha_g[index], alpha[index]);
+            self.shape_g[index] = new_shape;
+            self.alpha_g[index] = new_alpha_g;
+            self.alpha[index] = union(self.alpha_0[index], new_alpha_g);
             for channel in 0..3 {
-                let numerator =
-                    color[index * 3 + channel] * mask[index] * (1.0 - previous_shape[index])
-                        + previous_color[index * 3 + channel] * previous_shape[index];
-                support[channel] = safe_div(numerator, new_shape[index]).clamp(0.0, 1.0);
-                let value = color[index * 3 + channel] * mask[index]
-                    + (1.0 - mask[index]) * support[channel];
-                new_color[index * 3 + channel] = value.clamp(0.0, 1.0);
+                let slot = index * 3 + channel;
+                let numerator = color[slot] * mask[index] * (1.0 - previous_shape)
+                    + self.color[slot] * previous_shape;
+                let support = safe_div(numerator, new_shape).clamp(0.0, 1.0);
+                let value = color[slot] * mask[index] + (1.0 - mask[index]) * support;
+                self.color[slot] = value.clamp(0.0, 1.0);
             }
         }
-        self.shape_g = new_shape;
-        self.alpha_g = new_alpha_g;
-        self.alpha = new_alpha;
-        self.color = new_color;
     }
 
     /// The final color with the backdrop-alpha correction.
@@ -675,17 +495,5 @@ impl Compositor {
             }
         }
         out
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::to_u8;
-
-    #[test]
-    fn a_fully_transparent_value_truncates_to_zero() {
-        assert_eq!(to_u8(0.0), 0);
-        assert_eq!(to_u8(1.0), 255);
-        assert_eq!(to_u8(0.5), 127);
     }
 }

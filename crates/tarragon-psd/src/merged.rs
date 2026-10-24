@@ -24,27 +24,33 @@ impl MergedImage {
 }
 
 /// Read the merged image data section.
+///
+/// `has_alpha` is true when the layer count was negative, which makes the first
+/// channel after the color channels the merged transparency.
 pub(crate) fn read_merged_image(
     reader: &mut Reader,
     header: &PsdHeader,
+    has_alpha: bool,
     options: &ParseOptions,
 ) -> Result<MergedImage, PsdError> {
     options.check()?;
     let compression = Compression::from_code(reader.read_u16()?);
     let channels = usize::from(header.channels);
-    let channel_ids = merged_channel_ids(header);
+    let channel_ids = merged_channel_ids(header, has_alpha);
     let bounds = canvas_bounds(header)?;
     let mut infos = Vec::new();
     match compression {
         Compression::Raw => {
             let bytes_per_sample = raw_sample_bytes(header)?;
-            let row_bytes = usize::try_from(header.width)
-                .ok()
-                .and_then(|width| width.checked_mul(bytes_per_sample))
-                .ok_or(PsdError::LengthTooLarge { length: 0 })?;
+            let row_length = u64::from(header.width) * bytes_per_sample as u64;
+            let row_bytes = usize::try_from(row_length)
+                .map_err(|_| PsdError::LengthTooLarge { length: row_length })?;
+            let plane_length = row_length.saturating_mul(u64::from(header.height));
             let plane = row_bytes
                 .checked_mul(usize::try_from(header.height).unwrap_or(usize::MAX))
-                .ok_or(PsdError::LengthTooLarge { length: 0 })?;
+                .ok_or(PsdError::LengthTooLarge {
+                    length: plane_length,
+                })?;
             if reader.remaining() < channels.saturating_mul(plane) {
                 return Err(PsdError::Truncated {
                     offset: reader.offset(),
@@ -67,12 +73,14 @@ pub(crate) fn read_merged_image(
         Compression::Rle => {
             let entry = header.version.rle_entry_bytes();
             let rows = usize::try_from(header.height).unwrap_or(usize::MAX);
-            let entries = channels
-                .checked_mul(rows)
-                .ok_or(PsdError::LengthTooLarge { length: 0 })?;
-            let table_bytes = entries
-                .checked_mul(entry)
-                .ok_or(PsdError::LengthTooLarge { length: 0 })?;
+            let entries_length = (channels as u64).saturating_mul(u64::from(header.height));
+            let entries = channels.checked_mul(rows).ok_or(PsdError::LengthTooLarge {
+                length: entries_length,
+            })?;
+            let table_length = entries_length.saturating_mul(entry as u64);
+            let table_bytes = entries.checked_mul(entry).ok_or(PsdError::LengthTooLarge {
+                length: table_length,
+            })?;
             let table_offset = reader.offset();
             let table = reader.take(table_bytes)?;
             let available = reader.remaining();
@@ -82,9 +90,10 @@ pub(crate) fn read_merged_image(
                 let mut length = 0u64;
                 for row in 0..rows {
                     let offset = (index * rows + row) * entry;
+                    let row_length = read_row_length(table, offset, entry)?;
                     length = length
-                        .checked_add(read_row_length(table, offset, entry)?)
-                        .ok_or(PsdError::LengthTooLarge { length: 0 })?;
+                        .checked_add(row_length)
+                        .ok_or(PsdError::LengthTooLarge { length: row_length })?;
                 }
                 total = total
                     .checked_add(length)
@@ -122,16 +131,20 @@ pub(crate) fn read_merged_image(
     })
 }
 
-/// The merged channel IDs for the color mode, with an optional alpha.
-fn merged_channel_ids(header: &PsdHeader) -> Vec<i16> {
+/// The merged channel IDs for the color mode.
+///
+/// Only the first extra channel of a file with merged transparency is the alpha
+/// (ID -1). Any other extra channel is a saved selection or a spot color, and
+/// it keeps its position as the ID so the compositor never reads it.
+fn merged_channel_ids(header: &PsdHeader, has_alpha: bool) -> Vec<i16> {
     let count = usize::from(header.channels);
     let color = header.color_mode.color_channels().unwrap_or(0);
     (0..count)
         .map(|index| {
-            if index < color {
-                i16::try_from(index).unwrap_or(0)
-            } else {
+            if index == color && has_alpha {
                 -1
+            } else {
+                i16::try_from(index).unwrap_or(i16::MAX)
             }
         })
         .collect()

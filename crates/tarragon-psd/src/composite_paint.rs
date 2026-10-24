@@ -17,15 +17,15 @@
 //! the same stack and opacity rules.
 
 use crate::blend::union;
-use crate::composite::Compositor;
+use crate::composite::{Compositor, SkipCount};
 use crate::content::LayerContent;
 use crate::decode::Viewport;
 use crate::document::PsdDocument;
 use crate::effects::Effects;
 use crate::effects_apply::{
     Frame, PaintContext, crop_color, crop_paint, crop_plane, emboss_paints, exterior_paints,
-    paint_interior,
 };
+use crate::effects_interior::paint_interior;
 use crate::effects_map::Coverage;
 use crate::error::PsdError;
 use crate::layer::LayerBounds;
@@ -60,7 +60,7 @@ impl Compositor {
         };
         let canvas = (document.file().header.width, document.file().header.height);
         let padded = pad_viewport(viewport, effects.margin(), canvas);
-        let paint = Self::layer_paint(node, document, padded, options)?;
+        let paint = Self::layer_paint(node, document, padded, options, &self.skips)?;
         let layer = document
             .file()
             .layers
@@ -98,7 +98,7 @@ impl Compositor {
     ) -> Result<(), PsdError> {
         let canvas = (document.file().header.width, document.file().header.height);
         let padded = pad_viewport(viewport, effects.margin(), canvas);
-        let paint = Self::group_paint(node, document, padded, options)?;
+        let paint = Self::group_paint(node, document, padded, options, &self.skips)?;
         let layer_bounds = layer_frame(node.bounds);
         self.apply_paint_with_effects(
             node,
@@ -145,7 +145,7 @@ impl Compositor {
         let mut stack_shape = vec![0.0f32; self.count];
         let mut stack_alpha = vec![0.0f32; self.count];
         // Exterior effects sit behind the layer content.
-        for exterior in exterior_paints(effects, &shape, node.fill_opacity, context) {
+        for exterior in exterior_paints(effects, &shape, node.fill_opacity, context, options)? {
             apply_exterior(
                 &mut work,
                 &exterior,
@@ -157,7 +157,7 @@ impl Compositor {
         }
         // Interior effects paint over the layer content.
         let mut color = paint.color;
-        paint_interior(&mut color, effects, &shape, context);
+        paint_interior(&mut color, effects, &shape, context, options)?;
         let color = crop_color(&color, padded, viewport);
         let layer_shape = crop_plane(&paint.shape, padded, viewport);
         // Layer opacity applies at the stack blend, so the layer source uses
@@ -166,7 +166,7 @@ impl Compositor {
         union_into(&mut stack_shape, &layer_shape);
         union_into(&mut stack_alpha, &layer_shape);
         // Emboss styles shade the composited layer.
-        for emboss in emboss_paints(effects, &shape, context.global_light) {
+        for emboss in emboss_paints(effects, &shape, context.global_light, options)? {
             apply_exterior(
                 &mut work,
                 &emboss,
@@ -253,6 +253,7 @@ impl Compositor {
         document: &PsdDocument,
         viewport: Viewport,
         options: &ParseOptions,
+        skips: &SkipCount,
     ) -> Result<LayerPaint, PsdError> {
         let Some(index) = node.index else {
             let count = usize::try_from(viewport.width()).unwrap_or(0)
@@ -268,7 +269,9 @@ impl Compositor {
         let count = read.shape.len();
         let (color, mut geom) = match &node.content {
             LayerContent::SolidColor(rgba) => (solid_color(*rgba, count), vec![rgba[3]; count]),
-            LayerContent::Gradient(fill) => Self::render_gradient(fill, viewport, document),
+            LayerContent::Gradient(fill) => {
+                Self::render_gradient(fill, viewport, document, options)?
+            }
             LayerContent::Pixels | LayerContent::Unsupported | LayerContent::Adjustment(_) => {
                 (read.color.clone(), read.shape.clone())
             }
@@ -276,7 +279,7 @@ impl Compositor {
         let color = if node.clips.is_empty() {
             color
         } else {
-            Self::clip_color(node, &color, &geom, document, viewport, options)?
+            Self::clip_color(node, &color, &geom, document, viewport, options, skips)?
         };
         let mask = read.mask.unwrap_or_else(|| vec![1.0f32; count]);
         for (value, factor) in geom.iter_mut().zip(&mask) {
@@ -301,6 +304,7 @@ impl Compositor {
         document: &PsdDocument,
         viewport: Viewport,
         options: &ParseOptions,
+        skips: &SkipCount,
     ) -> Result<LayerPaint, PsdError> {
         let width = usize::try_from(viewport.width()).unwrap_or(0);
         let height = usize::try_from(viewport.height()).unwrap_or(0);
@@ -311,6 +315,7 @@ impl Compositor {
             vec![1.0f32; count * 3],
             vec![0.0f32; count],
             true,
+            skips,
         );
         for child in &node.children {
             group.apply(child, document, viewport, options)?;
@@ -374,7 +379,9 @@ fn base_geom(
     let count = read.shape.len();
     let mut geom = match &layer.content {
         LayerContent::SolidColor(rgba) => vec![rgba[3]; count],
-        LayerContent::Gradient(fill) => Compositor::render_gradient(fill, viewport, document).1,
+        LayerContent::Gradient(fill) => {
+            Compositor::render_gradient(fill, viewport, document, options)?.1
+        }
         LayerContent::Pixels | LayerContent::Unsupported | LayerContent::Adjustment(_) => {
             read.shape.clone()
         }

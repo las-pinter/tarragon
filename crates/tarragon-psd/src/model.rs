@@ -74,6 +74,7 @@ impl ColorMode {
     #[must_use]
     pub const fn color_channels(self) -> Option<usize> {
         match self {
+            Self::Grayscale => Some(1),
             Self::Rgb => Some(3),
             Self::Cmyk => Some(4),
             _ => None,
@@ -84,8 +85,8 @@ impl ColorMode {
 /// The bytes per sample for the supported color modes.
 pub(crate) fn sample_bytes(mode: ColorMode, depth: u16) -> Result<usize, PsdError> {
     match (mode, depth) {
-        (ColorMode::Rgb | ColorMode::Cmyk, 8) => Ok(1),
-        (ColorMode::Rgb, 16) => Ok(2),
+        (ColorMode::Rgb | ColorMode::Cmyk | ColorMode::Grayscale, 8) => Ok(1),
+        (ColorMode::Rgb | ColorMode::Grayscale, 16) => Ok(2),
         _ => Err(PsdError::UnsupportedColorMode { mode, depth }),
     }
 }
@@ -169,6 +170,13 @@ pub struct PsdFile {
     pub global_mask: Option<GlobalMask>,
     /// The document global light for the effects that follow it.
     pub global_light: GlobalLight,
+    /// True when the layer count is negative, which marks the first extra
+    /// merged channel as the transparency of the merged image.
+    pub merged_has_alpha: bool,
+    /// The message of the error raised while scanning the tagged blocks for
+    /// layer info, when that scan failed. The file still parses, with no layers
+    /// from those blocks.
+    pub layer_info_error: Option<String>,
     /// The merged image data description.
     pub merged: MergedImage,
 }
@@ -261,7 +269,11 @@ impl PsdFile {
         Ok(())
     }
 
-    /// Decode a list of channels over the viewport.
+    /// Decode the channels the compositor reads over the viewport.
+    ///
+    /// A channel the compositor never reads (spot, extra alpha, the real mask)
+    /// is skipped, and so is a repeated channel ID, because each decode costs a
+    /// full viewport of samples.
     fn decode_channels(
         &self,
         data: &[u8],
@@ -270,8 +282,15 @@ impl PsdFile {
         bytes_per_sample: usize,
         options: &ParseOptions,
     ) -> Result<ImageRegion, PsdError> {
-        let mut decoded: Vec<ChannelRegion> = Vec::with_capacity(channels.len());
+        let color_channels = self.header.color_mode.color_channels().unwrap_or(0);
+        let mut decoded: Vec<ChannelRegion> = Vec::new();
         for channel in channels {
+            let wanted = channel.id == -1
+                || channel.id == -2
+                || usize::try_from(channel.id).is_ok_and(|id| id < color_channels);
+            if !wanted || decoded.iter().any(|done| done.id == channel.id) {
+                continue;
+            }
             decoded.push(decode_channel(
                 data,
                 channel,

@@ -35,7 +35,8 @@ pub fn parse_adjustment(key: &[u8; 4], data: &[u8], lut_size: u32) -> Option<Adj
             level: f32::from(value) / 255.0,
         }),
         b"post" => be16(data, 0).map(|value| Adjustment::Posterize {
-            levels: u8::try_from(value).unwrap_or(255),
+            // One level or none would divide by zero in the bin math.
+            levels: u8::try_from(value.clamp(2, 255)).unwrap_or(255),
             lut_size,
         }),
         b"levl" => parse_levels(data),

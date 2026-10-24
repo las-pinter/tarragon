@@ -5,13 +5,14 @@
 //! section. The tiled read decodes only a requested viewport.
 //!
 //! Every read is checked. A bad byte offset returns [`PsdError::Truncated`].
-//! Every declared length is validated before an allocation. No input can panic.
+//! Every declared length is validated before an allocation. Malformed input
+//! returns a typed error.
 
 use std::path::Path;
 
 use crate::error::PsdError;
-use crate::layer::parse_layer_section;
-use crate::limits::{MAX_DIMENSION, ParseOptions, full_tier_size};
+use crate::layer::{LayerSectionData, parse_layer_section};
+use crate::limits::{MAX_DIMENSION, MAX_HEADER_CHANNELS, ParseOptions, full_tier_size};
 use crate::merged::read_merged_image;
 use crate::reader::{Reader, to_usize};
 use crate::resources::parse_global_light;
@@ -90,22 +91,30 @@ fn parse(data: &[u8], options: &ParseOptions) -> Result<PsdFile, PsdError> {
     // Layer and mask information. The section length bounds every layer read.
     // The length field is four bytes in PSD and eight bytes in PSB.
     let section_length = to_usize(reader.read_length(header.version)?)?;
-    let (layer_count, layers, global_mask) = if section_length == 0 {
-        (0, Vec::new(), None)
+    let section = if section_length == 0 {
+        LayerSectionData {
+            layer_count: 0,
+            layers: Vec::new(),
+            global_mask: None,
+            merged_has_alpha: false,
+            layer_info_error: None,
+        }
     } else {
         let mut section = reader.take_reader(section_length)?;
         parse_layer_section(&mut section, &header, options)?
     };
 
     // The merged image data section follows the layer section.
-    let merged = read_merged_image(&mut reader, &header, options)?;
+    let merged = read_merged_image(&mut reader, &header, section.merged_has_alpha, options)?;
 
     Ok(PsdFile {
         header,
-        layer_count,
-        layers,
-        global_mask,
+        layer_count: section.layer_count,
+        layers: section.layers,
+        global_mask: section.global_mask,
         global_light,
+        merged_has_alpha: section.merged_has_alpha,
+        layer_info_error: section.layer_info_error,
         merged,
     })
 }
@@ -140,6 +149,12 @@ fn read_header(reader: &mut Reader) -> Result<PsdHeader, PsdError> {
     // Six reserved bytes. The spec wants zero, but do not enforce it.
     reader.skip(6)?;
     let channels = reader.read_u16()?;
+    if usize::from(channels) > MAX_HEADER_CHANNELS {
+        return Err(PsdError::TooManyChannels {
+            count: usize::from(channels),
+            limit: MAX_HEADER_CHANNELS,
+        });
+    }
     let height = reader.read_u32()?;
     let width = reader.read_u32()?;
     let depth = reader.read_u16()?;

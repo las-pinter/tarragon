@@ -67,6 +67,16 @@ impl PsdDocument {
         &self.file
     }
 
+    /// The message of the error that stopped the layer info scan of the tagged
+    /// blocks, or `None` when the scan found nothing wrong.
+    ///
+    /// A bad tagged block does not fail the parse: the file keeps its merged
+    /// image and has no layers from that block. This tells a caller why.
+    #[must_use]
+    pub fn layer_info_error(&self) -> Option<&str> {
+        self.file.layer_info_error.as_deref()
+    }
+
     /// The raw file bytes.
     #[must_use]
     pub fn bytes(&self) -> &[u8] {
@@ -105,3 +115,12 @@ impl PsdDocument {
             .read_layer_region(&self.data, index, viewport, options)
     }
 }
+
+/// Compile-time guard: a caller can share a document and move a region
+/// between threads.
+const _: () = {
+    const fn assert_send_sync<T: Send + Sync>() {}
+    assert_send_sync::<PsdDocument>();
+    assert_send_sync::<PsdFile>();
+    assert_send_sync::<crate::composite::CompositeRegion>();
+};

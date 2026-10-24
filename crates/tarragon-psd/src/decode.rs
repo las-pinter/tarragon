@@ -2,7 +2,8 @@
 //!
 //! The decoder reads only the rows and columns a viewport needs. RLE rows are
 //! independent, so the row-length table gives direct access to each row group.
-//! The full canvas is never decoded into memory. No input can panic.
+//! The full canvas is never decoded into memory. Malformed rows return a typed
+//! error.
 
 use crate::error::PsdError;
 use crate::limits::ParseOptions;
@@ -58,7 +59,8 @@ impl Viewport {
 pub struct ChannelRegion {
     /// The channel ID.
     pub id: i16,
-    /// Row-major samples. An 8-bit sample sits in the low byte.
+    /// Row-major samples. An 8-bit sample sits in the low byte. An empty vector
+    /// is a channel with no data, and every sample of it reads as zero.
     pub samples: Vec<u16>,
 }
 
@@ -80,8 +82,14 @@ impl ImageRegion {
     #[must_use]
     pub fn sample(&self, id: i16, x: u32, y: u32) -> Option<u16> {
         let channel = self.channels.iter().find(|channel| channel.id == id)?;
+        if x >= self.viewport.width() || y >= self.viewport.height() {
+            return None;
+        }
         let index = usize::try_from(y).ok()? * usize::try_from(self.viewport.width()).ok()?
             + usize::try_from(x).ok()?;
+        if channel.samples.is_empty() {
+            return Some(0);
+        }
         channel.samples.get(index).copied()
     }
 }
@@ -121,25 +129,24 @@ pub(crate) fn decode_channel(
 ) -> Result<ChannelRegion, PsdError> {
     let width = viewport.width();
     let height = viewport.height();
-    let area = usize::try_from(u64::from(width) * u64::from(height)).map_err(|_| {
-        PsdError::LengthTooLarge {
-            length: u64::from(width) * u64::from(height),
-        }
-    })?;
-    let mut samples = vec![0u16; area];
+    let area_u64 = u64::from(width) * u64::from(height);
+    let area =
+        usize::try_from(area_u64).map_err(|_| PsdError::LengthTooLarge { length: area_u64 })?;
 
-    // An empty channel block carries no sample data. Return
-    // zeros before any read, so a short block cannot decode a neighbour. Check
-    // the compression code first, so an unsupported code still errors.
+    // An empty channel block carries no sample data. Return an empty channel
+    // before any read or allocation, so a short block cannot decode a neighbour
+    // and a block of empty channels costs nothing. Check the compression code
+    // first, so an unsupported code still errors.
     if channel.data_len == 0 {
         if channel.compression != 0 && channel.compression != 1 {
             return Err(PsdError::UnsupportedCompression(channel.compression));
         }
         return Ok(ChannelRegion {
             id: channel.id,
-            samples,
+            samples: Vec::new(),
         });
     }
+    let mut samples = vec![0u16; area];
 
     let bounds = channel.bounds;
     let Ok(channel_width) = usize::try_from(bounds.width()) else {
@@ -177,7 +184,9 @@ pub(crate) fn decode_channel(
         output_row: usize::try_from(y0 - i64::from(viewport.top)).unwrap_or(0),
         row_bytes: channel_width
             .checked_mul(bytes_per_sample)
-            .ok_or(PsdError::LengthTooLarge { length: 0 })?,
+            .ok_or(PsdError::LengthTooLarge {
+                length: (channel_width as u64).saturating_mul(bytes_per_sample as u64),
+            })?,
         channel_width,
         bytes_per_sample,
     };
@@ -240,7 +249,7 @@ fn decode_rle_rows(
         let length = read_row_length(data, channel.row_table_offset, row_index, entry)?;
         cursor = cursor
             .checked_add(length)
-            .ok_or(PsdError::LengthTooLarge { length: cursor })?;
+            .ok_or(PsdError::LengthTooLarge { length })?;
         if cursor > block_end {
             return Err(PsdError::Truncated {
                 offset: cursor,
@@ -269,7 +278,7 @@ fn decode_rle_rows(
         );
         cursor = cursor
             .checked_add(length)
-            .ok_or(PsdError::LengthTooLarge { length: cursor })?;
+            .ok_or(PsdError::LengthTooLarge { length })?;
     }
     Ok(())
 }

@@ -6,9 +6,8 @@
 //! math here is plain `f32`; each step is deterministic and independent of
 //! the tile order.
 
-use crate::effects::{
-    Bevel, BevelStyle, Contour, GlobalLight, Glow, GlowSource, Satin, Shadow, StrokePosition,
-};
+use crate::effects::{Contour, GlobalLight, Glow, GlowSource, Satin, Shadow, StrokePosition};
+use crate::effects_blur::blur;
 
 /// The straight-line weight of a diagonal chamfer step.
 const DIAGONAL: f32 = std::f32::consts::SQRT_2;
@@ -209,98 +208,8 @@ pub(crate) fn dilate(shape: &Coverage, radius: f32) -> Coverage {
     out
 }
 
-/// Blur a plane with two separable box passes.
-///
-/// The box supports a fractional width, so a size below two pixels still
-/// softens rather than snapping to a hard edge. A width of zero or less
-/// leaves the plane unchanged.
-pub(crate) fn blur(plane: &mut Coverage, width: f32) {
-    let width = width.clamp(0.0, 2.0 * crate::effects::MAX_EFFECT_SIZE);
-    if width <= 0.0 {
-        return;
-    }
-    let mut current = plane.values.clone();
-    let mut next = vec![0.0f32; current.len()];
-    for _ in 0..2 {
-        box_pass(&current, &mut next, plane.width, plane.height, width, true);
-        box_pass(&next, &mut current, plane.width, plane.height, width, false);
-    }
-    plane.values = current;
-}
-
-/// Run one box pass. The horizontal pass walks rows; the vertical pass walks
-/// columns.
-#[allow(
-    clippy::cast_precision_loss,
-    clippy::cast_possible_truncation,
-    reason = "the box sum is bounded by the plane area, far below the f32 exact range"
-)]
-fn box_pass(
-    input: &[f32],
-    output: &mut [f32],
-    width: usize,
-    height: usize,
-    box_width: f32,
-    horizontal: bool,
-) {
-    let (lines, line_len) = if horizontal {
-        (height, width)
-    } else {
-        (width, height)
-    };
-    let half = f64::from(box_width.max(0.0)) / 2.0;
-    let mut prefix = vec![0.0f64; line_len + 1];
-    let mut line = vec![0.0f32; line_len];
-    for line_index in 0..lines {
-        for (position, slot) in line.iter_mut().enumerate() {
-            *slot = if horizontal {
-                input[line_index * width + position]
-            } else {
-                input[position * width + line_index]
-            };
-        }
-        prefix[0] = 0.0;
-        for position in 0..line_len {
-            prefix[position + 1] = prefix[position] + f64::from(line[position]);
-        }
-        for position in 0..line_len {
-            let centre = position as f64 + 0.5;
-            let low = (centre - half).max(0.0);
-            let high = (centre + half).min(line_len as f64);
-            // Outside the plane is zero, so the divisor stays the full box
-            // width. A shorter divisor at an edge would add mass there.
-            let span = f64::from(box_width.max(1e-6));
-            let value = if span <= 1e-6 {
-                f64::from(line[position])
-            } else {
-                (fraction(&prefix, high) - fraction(&prefix, low)) / span
-            };
-            let value = value.clamp(0.0, 1.0) as f32;
-            if horizontal {
-                output[line_index * width + position] = value;
-            } else {
-                output[position * width + line_index] = value;
-            }
-        }
-    }
-}
-
-/// Linear interpolation into a prefix sum table.
-#[allow(
-    clippy::cast_precision_loss,
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    reason = "the prefix table is small and the position is clamped to its bounds"
-)]
-fn fraction(prefix: &[f64], position: f64) -> f64 {
-    let position = position.clamp(0.0, (prefix.len() - 1) as f64);
-    let low = position.floor() as usize;
-    let high = (low + 1).min(prefix.len() - 1);
-    prefix[low] + (prefix[high] - prefix[low]) * (position - low as f64)
-}
-
 /// Apply a transfer contour to every value.
-fn apply_contour(mut plane: Coverage, contour: &Contour) -> Coverage {
+pub(crate) fn apply_contour(mut plane: Coverage, contour: &Contour) -> Coverage {
     if contour.points.len() >= 2 {
         plane = plane.map(|v| contour.apply(v));
     }
@@ -399,118 +308,6 @@ pub(crate) fn satin_map(shape: &Coverage, satin: &Satin) -> Coverage {
     map
 }
 
-/// Build the highlight and shadow coverage of a bevel.
-///
-/// The `light` is the document global light. A bevel that follows it uses the
-/// document angle and altitude instead of its own values.
-#[allow(
-    clippy::cast_possible_wrap,
-    reason = "plane coordinates are far below the i64 range"
-)]
-#[must_use]
-pub(crate) fn bevel_maps(
-    shape: &Coverage,
-    bevel: &Bevel,
-    light: GlobalLight,
-) -> (Coverage, Coverage) {
-    let inside = distance_inside(shape);
-    let outside = distance_outside(shape);
-    let size = bevel.size.max(1.0);
-    let half = (size / 2.0).max(1.0);
-    let mut height = vec![0.0f32; shape.values.len()];
-    for index in 0..shape.values.len() {
-        let covered = shape.values[index] >= 0.5;
-        height[index] = match bevel.style {
-            BevelStyle::Inner | BevelStyle::StrokeEmboss => {
-                if covered {
-                    1.0 - (inside[index] / size).clamp(0.0, 1.0)
-                } else {
-                    0.0
-                }
-            }
-            BevelStyle::Outer => {
-                if covered {
-                    0.0
-                } else {
-                    1.0 - (outside[index] / size).clamp(0.0, 1.0)
-                }
-            }
-            BevelStyle::Emboss => {
-                if covered {
-                    0.5 + 0.5 * (inside[index] / half).clamp(0.0, 1.0)
-                } else {
-                    0.5 - 0.5 * (outside[index] / half).clamp(0.0, 1.0)
-                }
-            }
-            BevelStyle::PillowEmboss => {
-                if covered {
-                    0.5 - 0.5 * (inside[index] / half).clamp(0.0, 1.0)
-                } else {
-                    0.5 + 0.5 * (outside[index] / half).clamp(0.0, 1.0)
-                }
-            }
-        };
-    }
-    let mut height = Coverage {
-        width: shape.width,
-        height: shape.height,
-        values: height,
-    };
-    if bevel.soften > 0.0 {
-        blur(&mut height, bevel.soften);
-    }
-    let depth = bevel.depth.max(0.0) * size * if bevel.up { 1.0 } else { -1.0 };
-    let light = light.resolve(bevel.use_global_light, bevel.angle, bevel.altitude);
-    let (sin, cos) = light.angle.to_radians().sin_cos();
-    let altitude = light.altitude.clamp(0.0, 90.0);
-    let (se, ce) = altitude.to_radians().sin_cos();
-    let light = [cos * ce, -sin * ce, se];
-    let mut highlight = Coverage::new(shape.width, shape.height, 0.0);
-    let mut shadow = Coverage::new(shape.width, shape.height, 0.0);
-    for y in 0..shape.height {
-        for x in 0..shape.width {
-            let index = y * shape.width + x;
-            let gx = (height.get(x as i64 + 1, y as i64, 0.0)
-                - height.get(x as i64 - 1, y as i64, 0.0))
-                * 0.5
-                * depth;
-            let gy = (height.get(x as i64, y as i64 + 1, 0.0)
-                - height.get(x as i64, y as i64 - 1, 0.0))
-                * 0.5
-                * depth;
-            let normal = [-gx, -gy, 1.0];
-            let length = (normal[0] * normal[0] + normal[1] * normal[1] + 1.0).sqrt();
-            let lighting =
-                (normal[0] * light[0] + normal[1] * light[1] + normal[2] * light[2]) / length;
-            let region = match bevel.style {
-                BevelStyle::Outer => 1.0 - shape.values[index].min(1.0),
-                BevelStyle::Inner | BevelStyle::StrokeEmboss => shape.values[index].min(1.0),
-                BevelStyle::Emboss | BevelStyle::PillowEmboss => {
-                    if shape.values[index] >= 0.5 {
-                        shape.values[index].min(1.0)
-                    } else {
-                        1.0 - shape.values[index]
-                    }
-                }
-            } * if height.values[index] > 0.001 {
-                1.0
-            } else {
-                0.0
-            };
-            let k = lighting - se;
-            if k > 0.0 {
-                highlight.values[index] = (k / (1.0 - se).max(1e-3)).clamp(0.0, 1.0) * region;
-            } else {
-                shadow.values[index] = (-k / se.max(1e-3)).clamp(0.0, 1.0) * region;
-            }
-        }
-    }
-    (
-        apply_contour(highlight, &bevel.gloss),
-        apply_contour(shadow, &bevel.gloss),
-    )
-}
-
 /// The inside and outside pixel width of a stroke.
 #[must_use]
 pub(crate) fn stroke_widths(width: f32, position: StrokePosition) -> (f32, f32) {
@@ -553,10 +350,9 @@ pub(crate) fn stroke_bands(
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        Coverage, blur, distance_inside, distance_outside, offset, shadow_map, stroke_bands,
-    };
+    use super::{Coverage, distance_inside, distance_outside, offset, shadow_map, stroke_bands};
     use crate::effects::{Contour, EffectCommon, GlobalLight, Shadow, StrokePosition};
+    use crate::effects_blur::blur;
 
     /// A plane with a filled rectangle.
     fn rectangle(width: usize, height: usize, rect: (usize, usize, usize, usize)) -> Coverage {

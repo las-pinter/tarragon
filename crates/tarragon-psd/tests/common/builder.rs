@@ -12,6 +12,8 @@ pub struct MaskSpec {
     pub default_color: u8,
     /// The mask flag bits.
     pub flags: u8,
+    /// A complete mask body that replaces the generated 18-byte body.
+    pub raw_body: Option<Vec<u8>>,
 }
 
 /// One layer in a synthetic document.
@@ -38,6 +40,9 @@ pub struct LayerSpec {
     pub blocks: Vec<([u8; 4], Vec<u8>)>,
     /// The layer mask block, when present.
     pub mask: Option<MaskSpec>,
+    /// The compression code written before each channel block. The samples stay
+    /// raw, so a code other than 0 makes the layer undecodable.
+    pub compression: u16,
 }
 
 impl LayerSpec {
@@ -67,6 +72,7 @@ impl LayerSpec {
             section: None,
             blocks: Vec::new(),
             mask: None,
+            compression: 0,
         }
     }
 
@@ -98,6 +104,7 @@ impl LayerSpec {
             section: None,
             blocks: Vec::new(),
             mask: None,
+            compression: 0,
         }
     }
 
@@ -115,6 +122,7 @@ impl LayerSpec {
             section: None,
             blocks: Vec::new(),
             mask: None,
+            compression: 0,
         }
     }
 
@@ -130,8 +138,29 @@ impl LayerSpec {
             rect,
             default_color,
             flags: 0,
+            raw_body: None,
         });
         self
+    }
+
+    /// Attach a layer mask with a complete hand-built body.
+    pub fn with_raw_mask(mut self, body: Vec<u8>) -> Self {
+        self.mask = Some(MaskSpec {
+            rect: (0, 0, 0, 0),
+            default_color: 0,
+            flags: 0,
+            raw_body: Some(body),
+        });
+        self
+    }
+
+    /// A gray pixel layer: one gray channel, no alpha.
+    pub fn gray(rect: (i32, i32, i32, i32), value: u16) -> Self {
+        let width = usize::try_from(rect.3 - rect.1).expect("width");
+        let height = usize::try_from(rect.2 - rect.0).expect("height");
+        let mut layer = Self::content(rect);
+        layer.channels.push((0, vec![value; width * height]));
+        layer
     }
 
     /// An empty group marker record.
@@ -148,6 +177,7 @@ impl LayerSpec {
             section: Some(section),
             blocks: Vec::new(),
             mask: None,
+            compression: 0,
         }
     }
 }
@@ -168,6 +198,20 @@ pub struct DocumentSpec {
     pub merged: Vec<Vec<u16>>,
     /// The image resource blocks: `(id, data)` pairs.
     pub resources: Vec<(u16, Vec<u8>)>,
+    /// True to write a PSB file with eight-byte lengths.
+    pub psb: bool,
+    /// The key of a tagged block that holds the layer info after the global
+    /// mask, with an empty main layer info. `None` writes the main layer info.
+    pub layer_info_block: Option<[u8; 4]>,
+    /// True to write a negative layer count, which marks merged transparency.
+    pub merged_alpha: bool,
+    /// The merged channel count, when it differs from the color mode default.
+    pub merged_channels: Option<u16>,
+    /// The complete merged image section, with its compression field. It
+    /// replaces the generated raw planes.
+    pub merged_section: Option<Vec<u8>>,
+    /// Raw bytes written after the global mask, in place of tagged blocks.
+    pub section_tail: Vec<u8>,
 }
 
 impl DocumentSpec {
@@ -181,7 +225,37 @@ impl DocumentSpec {
             layers: Vec::new(),
             merged: Vec::new(),
             resources: Vec::new(),
+            psb: false,
+            layer_info_block: None,
+            merged_alpha: false,
+            merged_channels: None,
+            merged_section: None,
+            section_tail: Vec::new(),
         }
+    }
+
+    /// The merged channel count written to the header.
+    fn header_channels(&self) -> u16 {
+        self.merged_channels.unwrap_or(match self.color_mode {
+            4 => 4,
+            1 => 1,
+            _ => 3,
+        })
+    }
+}
+
+/// The keys that carry an eight-byte length in a PSB file.
+const PSB_LARGE_KEYS: [&[u8; 4]; 13] = [
+    b"LMsk", b"Lr16", b"Lr32", b"Layr", b"Mt16", b"Mt32", b"Mtrn", b"Alph", b"FMsk", b"lnk2",
+    b"FEid", b"FXid", b"PxSD",
+];
+
+/// Push a length field: four bytes in a PSD, eight in a PSB.
+pub fn push_length(data: &mut Vec<u8>, value: usize, psb: bool) {
+    if psb {
+        data.extend_from_slice(&u64::try_from(value).expect("length").to_be_bytes());
+    } else {
+        push_u32(data, u32::try_from(value).expect("length"));
     }
 }
 
@@ -219,10 +293,13 @@ pub fn push_samples(data: &mut Vec<u8>, samples: &[u16], depth: u16) {
 }
 
 /// Build the extra-data block of one layer record.
-pub fn layer_extra(spec: &LayerSpec, name: &str) -> Vec<u8> {
+pub fn layer_extra(spec: &LayerSpec, name: &str, psb: bool) -> Vec<u8> {
     let mut extra = Vec::new();
     // The mask data: a length then the mask body, or an empty mask.
-    if let Some(mask) = &spec.mask {
+    if let Some(body) = spec.mask.as_ref().and_then(|mask| mask.raw_body.as_ref()) {
+        push_u32(&mut extra, u32::try_from(body.len()).expect("mask length"));
+        extra.extend_from_slice(body);
+    } else if let Some(mask) = &spec.mask {
         push_u32(&mut extra, 18);
         push_i32(&mut extra, mask.rect.0);
         push_i32(&mut extra, mask.rect.1);
@@ -253,14 +330,14 @@ pub fn layer_extra(spec: &LayerSpec, name: &str) -> Vec<u8> {
     for (key, data) in &spec.blocks {
         extra.extend_from_slice(b"8BIM");
         extra.extend_from_slice(key);
-        push_u32(&mut extra, u32::try_from(data.len()).expect("block length"));
+        push_length(&mut extra, data.len(), psb && PSB_LARGE_KEYS.contains(&key));
         extra.extend_from_slice(data);
     }
     extra
 }
 
 /// Build one layer record with its section divider inside the extra data.
-pub fn layer_record(spec: &LayerSpec, depth: u16, name: &str) -> Vec<u8> {
+pub fn layer_record(spec: &LayerSpec, depth: u16, name: &str, psb: bool) -> Vec<u8> {
     let (top, left, bottom, right) = spec.rect;
     let width = usize::try_from(right - left).expect("width");
     let height = usize::try_from(bottom - top).expect("height");
@@ -277,10 +354,7 @@ pub fn layer_record(spec: &LayerSpec, depth: u16, name: &str) -> Vec<u8> {
     for (id, _) in &spec.channels {
         record.extend_from_slice(&id.to_be_bytes());
         let data_length = width * height * bytes;
-        push_u32(
-            &mut record,
-            u32::try_from(data_length + 2).expect("channel length"),
-        );
+        push_length(&mut record, data_length + 2, psb);
     }
     record.extend_from_slice(b"8BIM");
     record.extend_from_slice(&spec.blend);
@@ -288,7 +362,7 @@ pub fn layer_record(spec: &LayerSpec, depth: u16, name: &str) -> Vec<u8> {
     record.push(spec.clipping);
     record.push(spec.flags);
     record.push(0);
-    let mut extra = layer_extra(spec, name);
+    let mut extra = layer_extra(spec, name, psb);
     if let Some(section) = spec.section {
         extra.extend_from_slice(b"8BIM");
         extra.extend_from_slice(b"lsct");
@@ -303,13 +377,13 @@ pub fn layer_record(spec: &LayerSpec, depth: u16, name: &str) -> Vec<u8> {
     record
 }
 
-/// Build a complete synthetic PSD file.
+/// Build a complete synthetic PSD or PSB file.
 pub fn build_psd(spec: &DocumentSpec) -> Vec<u8> {
     let mut data = Vec::new();
     data.extend_from_slice(b"8BPS");
-    push_u16(&mut data, 1);
+    push_u16(&mut data, if spec.psb { 2 } else { 1 });
     data.extend_from_slice(&[0, 0, 0, 0, 0, 0]);
-    let merged_channels: u16 = if spec.color_mode == 4 { 4 } else { 3 };
+    let merged_channels = spec.header_channels();
     push_u16(&mut data, merged_channels);
     push_u32(&mut data, spec.height);
     push_u32(&mut data, spec.width);
@@ -339,40 +413,53 @@ pub fn build_psd(spec: &DocumentSpec) -> Vec<u8> {
     data.extend_from_slice(&resources);
 
     let mut info = Vec::new();
-    push_u16(
-        &mut info,
-        u16::try_from(spec.layers.len()).expect("layer count"),
-    );
+    let count = i16::try_from(spec.layers.len()).expect("layer count");
+    info.extend_from_slice(&(if spec.merged_alpha { -count } else { count }).to_be_bytes());
     for (index, layer) in spec.layers.iter().enumerate() {
         let name = layer
             .name
             .clone()
             .unwrap_or_else(|| format!("Layer {index}"));
-        info.extend_from_slice(&layer_record(layer, spec.depth, &name));
+        info.extend_from_slice(&layer_record(layer, spec.depth, &name, spec.psb));
     }
     // The channel data blocks follow the records, in record order.
     for layer in &spec.layers {
         for (_, samples) in &layer.channels {
-            push_u16(&mut info, 0);
+            push_u16(&mut info, layer.compression);
             push_samples(&mut info, samples, spec.depth);
         }
     }
 
-    // The layer-and-mask section.
+    // The layer-and-mask section: the layer info, the global mask, and an
+    // optional tagged block that carries the layer info instead.
     let mut section = Vec::new();
-    push_u32(
-        &mut section,
-        u32::try_from(info.len()).expect("layer info length"),
-    );
-    section.extend_from_slice(&info);
-    push_u32(&mut section, 0);
-    push_u32(
-        &mut data,
-        u32::try_from(section.len()).expect("section length"),
-    );
+    if let Some(key) = spec.layer_info_block {
+        push_length(&mut section, 0, spec.psb);
+        push_u32(&mut section, 0);
+        section.extend_from_slice(b"8BIM");
+        section.extend_from_slice(&key);
+        push_length(
+            &mut section,
+            info.len(),
+            spec.psb && PSB_LARGE_KEYS.contains(&&key),
+        );
+        section.extend_from_slice(&info);
+        let pad = (4 - info.len() % 4) % 4;
+        section.extend(std::iter::repeat_n(0u8, pad));
+    } else {
+        push_length(&mut section, info.len(), spec.psb);
+        section.extend_from_slice(&info);
+        push_u32(&mut section, 0);
+        section.extend_from_slice(&spec.section_tail);
+    }
+    push_length(&mut data, section.len(), spec.psb);
     data.extend_from_slice(&section);
 
-    // A raw merged image.
+    // A raw merged image, unless the spec carries the whole section.
+    if let Some(section) = &spec.merged_section {
+        data.extend_from_slice(section);
+        return data;
+    }
     push_u16(&mut data, 0);
     if spec.merged.is_empty() {
         let plane = usize::try_from(spec.width).expect("width")

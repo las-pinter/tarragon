@@ -58,6 +58,6 @@ fn the_cmyk_fixture_decodes_to_rgb() {
     // so the ink is (55,215,135,235). The naive conversion is
     // R = (1-C)*(1-K), G = (1-M)*(1-K), B = (1-Y)*(1-K).
     let region = composite_fixture("cmyk_8bit.psd");
-    assert_eq!(sample_rgba8(&region, 0, 0), [15, 3, 9, 255]);
-    assert_eq!(sample_rgba8(&region, 63, 63), [15, 3, 9, 255]);
+    assert_eq!(sample_rgba8(&region, 0, 0), [16, 3, 9, 255]);
+    assert_eq!(sample_rgba8(&region, 63, 63), [16, 3, 9, 255]);
 }

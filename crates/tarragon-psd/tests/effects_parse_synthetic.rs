@@ -314,9 +314,17 @@ fn a_legacy_block_on_a_group_folder_is_ignored() {
 fn every_effect_block_prefix_parses_or_is_absent_without_panic() {
     let drop = shadow_effect(false, [0.0; 3], 120.0, 8.0, 6.0, 0.0, 75.0, true);
     let full = lfx2(&[drop]);
+    let whole = effects_document(*b"lfx2", full.clone());
+    let parsed = whole.file().layers[0]
+        .effects
+        .as_ref()
+        .expect("the whole block parses");
+    assert_eq!(parsed.items.len(), 1);
     for cut in (0..full.len()).step_by(11) {
         let document = effects_document(*b"lfx2", full[..cut].to_vec());
-        // A cut block is absent or short; the point is that it never panics.
-        let _ = document.file().layers[0].effects.as_ref();
+        // A cut block is absent or short, and it never invents an effect.
+        if let Some(effects) = document.file().layers[0].effects.as_ref() {
+            assert!(effects.items.len() <= 1, "cut {cut} made extra effects");
+        }
     }
 }

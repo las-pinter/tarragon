@@ -1,8 +1,7 @@
 //! Layer-effects compositing on synthetic PSD files.
 //!
-//! The tests read exact pixels from the compositor. They do not need an
-//! external oracle; every expectation follows the effect rule that the test
-//! names.
+//! The tests read exact pixels from the compositor. Every expectation follows
+//! the effect rule that the test names.
 
 mod common;
 

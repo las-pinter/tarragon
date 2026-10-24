@@ -10,12 +10,14 @@
 mod builder;
 mod effects;
 mod encoders;
+mod raw_bytes;
+mod tiles;
 
 // Each test binary uses only part of this module, so the re-exports can look
 // unused to one binary even when another uses them.
 #[allow(unused_imports)]
 pub use builder::{
-    DocumentSpec, LayerSpec, MaskSpec, build_psd, layer_extra, layer_record, push_i32,
+    DocumentSpec, LayerSpec, MaskSpec, build_psd, layer_extra, layer_record, push_i32, push_length,
     push_samples, push_u16, push_u32, sample_bytes,
 };
 #[allow(unused_imports)]
@@ -33,6 +35,10 @@ pub use encoders::{
     push_unicode, rgbc, soco, value_boolean, value_descriptor, value_double, value_enum,
     value_integer, value_list, value_unit_float, versioned,
 };
+#[allow(unused_imports)]
+pub use raw_bytes::{layered_psd, raw_psd, read_fixture, section_offset};
+#[allow(unused_imports)]
+pub use tiles::{assert_suggested_edge_fits, crop_rgba8, peak_resident_bytes, stitched_rgba8};
 
 use std::path::{Path, PathBuf};
 
@@ -53,7 +59,7 @@ pub fn fixture(name: &str) -> PathBuf {
 /// set lands.
 pub const GOLDEN_TOLERANCE: u8 = 2;
 
-/// The manifest of golden stems. The Python generator reads the same file.
+/// The manifest of golden stems. The golden generator reads the same file.
 const GOLDEN_MANIFEST: &str = include_str!("../../../../tests/fixtures/psd/golden/manifest.txt");
 
 /// The golden stems from the manifest, in file order.

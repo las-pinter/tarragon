@@ -265,8 +265,8 @@ fn hard_light(cb: f32, cs: f32) -> f32 {
 
 /// Soft light on one channel.
 ///
-/// Photoshop's variant: the `cb.sqrt()` term only matters above 0.5, so the
-/// PDF/W3C polynomial `D(cb)` branch for `cs <= 0.25` is unreachable here.
+/// The `cs > 0.5` branch uses `sqrt(cb)` for every backdrop. The PDF/W3C form
+/// switches to a polynomial `D(cb)` when `cb <= 0.25`; this one does not.
 #[must_use]
 fn soft_light(cb: f32, cs: f32) -> f32 {
     let d = cb.sqrt();

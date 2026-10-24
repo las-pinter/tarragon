@@ -47,6 +47,7 @@ pub(crate) fn read_layer(
     let color = match region.color_mode {
         ColorMode::Rgb => rgb_color(&region, count, scale),
         ColorMode::Cmyk => cmyk_color(&region, count, scale),
+        ColorMode::Grayscale => gray_color(&region, count, scale),
         mode => {
             return Err(PsdError::UnsupportedColorMode {
                 mode,
@@ -83,6 +84,24 @@ pub(crate) fn rgb_color(region: &ImageRegion, count: usize, scale: f32) -> Vec<f
     color
 }
 
+/// Build straight RGB from the gray channel: the three components are equal.
+#[must_use]
+pub(crate) fn gray_color(region: &ImageRegion, count: usize, scale: f32) -> Vec<f32> {
+    let mut color = vec![0.0f32; count * 3];
+    if let Some(samples) = channel_samples(region, 0) {
+        for (index, sample) in samples.iter().enumerate().take(count) {
+            let value = f32::from(*sample) / scale;
+            color[index * 3..index * 3 + 3].fill(value);
+        }
+    }
+    color
+}
+
+/// The sample at `index`, or zero for a channel with no data.
+fn sample_at(samples: &[u16], index: usize) -> u16 {
+    samples.get(index).copied().unwrap_or(0)
+}
+
 /// Build straight RGB from the CMYK channels.
 ///
 /// PSD stores CMYK inverted: a stored sample of 255 means zero ink.
@@ -94,10 +113,10 @@ pub(crate) fn cmyk_color(region: &ImageRegion, count: usize, scale: f32) -> Vec<
     let black = channel_samples(region, 3);
     let mut color = vec![0.0f32; count * 3];
     for index in 0..count {
-        let c = cyan.map_or(0.0, |s| (scale - f32::from(s[index])) / scale);
-        let m = magenta.map_or(0.0, |s| (scale - f32::from(s[index])) / scale);
-        let y = yellow.map_or(0.0, |s| (scale - f32::from(s[index])) / scale);
-        let k = black.map_or(0.0, |s| (scale - f32::from(s[index])) / scale);
+        let c = cyan.map_or(0.0, |s| (scale - f32::from(sample_at(s, index))) / scale);
+        let m = magenta.map_or(0.0, |s| (scale - f32::from(sample_at(s, index))) / scale);
+        let y = yellow.map_or(0.0, |s| (scale - f32::from(sample_at(s, index))) / scale);
+        let k = black.map_or(0.0, |s| (scale - f32::from(sample_at(s, index))) / scale);
         color[index * 3] = (1.0 - c) * (1.0 - k);
         color[index * 3 + 1] = (1.0 - m) * (1.0 - k);
         color[index * 3 + 2] = (1.0 - y) * (1.0 - k);
@@ -160,7 +179,7 @@ fn mask_from(
             let canvas_y = viewport.top + u32::try_from(y).unwrap_or(0);
             if inside(mask.bounds, canvas_x, canvas_y) {
                 let index = y * width + x;
-                shape[index] = f32::from(samples[index]) / scale;
+                shape[index] = f32::from(sample_at(samples, index)) / scale;
             }
         }
     }

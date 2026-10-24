@@ -1,7 +1,7 @@
 //! Errors for the PSD and PSB parser.
 //!
-//! The parser never panics on bad input. Every failure is a [`PsdError`]. The
-//! conversion to the shared render error sits at the composite boundary.
+//! Malformed input returns a [`PsdError`] and does not panic. The conversion to
+//! the shared render error sits at the composite boundary.
 
 use std::path::{Path, PathBuf};
 
@@ -55,6 +55,37 @@ pub enum PsdError {
     /// The parse deadline expired before the work finished.
     #[error("PSD parse timed out")]
     Timeout,
+    /// The caller cancelled the work through the cancel flag.
+    #[error("PSD parse cancelled")]
+    Cancelled,
+    /// Group dividers nest deeper than the compositor accepts.
+    #[error("layer groups nest deeper than {limit} levels")]
+    GroupsTooDeep {
+        /// The deepest nesting accepted.
+        limit: usize,
+    },
+    /// The render would need more memory than the render budget.
+    #[error(
+        "the render needs about {estimated} bytes, over the {budget} byte budget \
+         ({max_tile_pixels} pixels fit)"
+    )]
+    OverBudget {
+        /// The estimated bytes.
+        estimated: u64,
+        /// The budget in bytes.
+        budget: u64,
+        /// The most working pixels the budget allows for this document. This
+        /// counts the padding when a group has effects.
+        max_tile_pixels: u64,
+    },
+    /// A header or a layer record declares more channels than the format allows.
+    #[error("{count} channels exceed the limit of {limit}")]
+    TooManyChannels {
+        /// The declared channel count.
+        count: usize,
+        /// The most channels accepted.
+        limit: usize,
+    },
     /// The color mode and depth pair has no channel reader.
     #[error("unsupported PSD color mode {mode:?} at depth {depth}")]
     UnsupportedColorMode {
@@ -111,10 +142,21 @@ pub enum PsdError {
 }
 
 impl PsdError {
+    /// True when the failure says nothing about the file.
+    ///
+    /// A timeout or a cancel depends on the caller, so a caller must not record
+    /// it as a permanent decode failure.
+    #[must_use]
+    pub const fn is_transient(&self) -> bool {
+        matches!(self, Self::Timeout | Self::Cancelled)
+    }
+
     /// Convert to the shared render error and tag the file path.
     ///
     /// The composite path returns [`RenderError`], so the parser error
-    /// crosses the crate boundary through this method.
+    /// crosses the crate boundary through this method. The shared error has no
+    /// timeout or cancel variant, so those two still map to a decode failure;
+    /// [`PsdError::is_transient`] tells them apart before the conversion.
     #[must_use]
     pub fn into_render_error(self, path: &Path) -> RenderError {
         match self {
@@ -147,5 +189,12 @@ mod tests {
             matches!(&rendered, RenderError::Decode { path, .. } if path == Path::new("deep.psb"))
         );
         assert!(rendered.to_string().contains("version"));
+    }
+
+    #[test]
+    fn a_timeout_and_a_cancel_are_transient() {
+        assert!(PsdError::Timeout.is_transient());
+        assert!(PsdError::Cancelled.is_transient());
+        assert!(!PsdError::UnsupportedVersion(9).is_transient());
     }
 }

@@ -260,7 +260,7 @@ pub fn grey(rgb: [f32; 3]) -> f32 {
 #[must_use]
 fn posterize(value: f32, levels: u32, lut_size: u32) -> f32 {
     let samples = lut_size.clamp(2, 65_536) as f32;
-    let levels = levels as f32;
+    let levels = (levels as f32).max(2.0);
     let max = samples - 1.0;
     let scaled = (value.clamp(0.0, 1.0) * max).round();
     let bin = (scaled * levels / samples).floor().min(levels - 1.0);

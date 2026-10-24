@@ -14,19 +14,20 @@
 //! One file holds every effect paint kernel, so the paint order and the
 //! coverage math stay together.
 
-use crate::blend::{BlendMode, blend_rgb};
+use crate::blend::BlendMode;
 use crate::content::GradientFill;
 use crate::decode::Viewport;
 use crate::effects::{
-    Bevel, BevelStyle, Effect, Effects, GlobalLight, Glow, GlowPaint, GradientOverlay, Stroke,
-    StrokePaint, StrokePosition,
+    Bevel, BevelStyle, Effect, Effects, GlobalLight, Glow, GlowPaint, Stroke, StrokePaint,
+    StrokePosition,
 };
-use crate::effects_map::{
-    Coverage, bevel_maps, glow_map, satin_map, shadow_map, stroke_bands, stroke_widths,
-};
+use crate::effects_bevel::bevel_maps;
+use crate::effects_map::{Coverage, glow_map, shadow_map, stroke_bands, stroke_widths};
+use crate::error::PsdError;
+use crate::limits::ParseOptions;
 
 /// The coverage above which a pixel counts as inside the layer shape.
-const INSIDE_EPS: f32 = 0.5 / 255.0;
+pub(crate) const INSIDE_EPS: f32 = 0.5 / 255.0;
 
 /// One effect ready to composite over a plane.
 #[derive(Debug, Clone)]
@@ -63,7 +64,7 @@ impl PaintContext {
         clippy::cast_precision_loss,
         reason = "canvas dimensions are far below the f32 exact range"
     )]
-    fn frame(self, fill: &GradientFill) -> Frame {
+    pub(crate) fn frame(self, fill: &GradientFill) -> Frame {
         if fill.align {
             self.layer_bounds
         } else {
@@ -76,7 +77,7 @@ impl PaintContext {
     /// stroke's own extent.
     ///
     /// The growth is the stroke's pixel extent: `out_w` rounded up, less one.
-    fn stroke_frame(self, out_w: f32) -> Frame {
+    pub(crate) fn stroke_frame(self, out_w: f32) -> Frame {
         let grow = if out_w.is_finite() {
             (out_w.min(crate::effects::MAX_EFFECT_SIZE).ceil() - 1.0).max(0.0)
         } else {
@@ -97,19 +98,24 @@ impl PaintContext {
 /// The order matches Photoshop: drop shadows first, then outer glows, then
 /// the outside part of a stroke, then an outer bevel. The caller composites
 /// them in this order before the layer content.
-#[must_use]
+///
+/// # Errors
+///
+/// Returns a typed error when the deadline passed or the work was cancelled.
 pub(crate) fn exterior_paints(
     effects: &Effects,
     shape: &Coverage,
     fill_opacity: f32,
     context: PaintContext,
-) -> Vec<EffectPaint> {
+    options: &ParseOptions,
+) -> Result<Vec<EffectPaint>, PsdError> {
     let mut paints = Vec::new();
     let see_through = 1.0 - fill_opacity.clamp(0.0, 1.0);
     for effect in effects.items.iter().rev() {
         if !effect.is_enabled() {
             continue;
         }
+        options.check()?;
         if let Effect::DropShadow(shadow) = effect {
             let mut map = shadow_map(shape, shadow, false, context.global_light);
             if shadow.knocks_out {
@@ -127,6 +133,7 @@ pub(crate) fn exterior_paints(
         if !effect.is_enabled() {
             continue;
         }
+        options.check()?;
         if let Effect::OuterGlow(glow) = effect {
             let mut map = glow_map(shape, glow, false);
             knock_out(&mut map, shape, see_through);
@@ -137,9 +144,10 @@ pub(crate) fn exterior_paints(
         if !effect.is_enabled() {
             continue;
         }
+        options.check()?;
         if let Effect::Stroke(stroke) = effect
             && stroke.position != StrokePosition::Inside
-            && let Some(paint) = stroke_paint(stroke, shape, context)
+            && let Some(paint) = stroke_paint(stroke, shape, context, options)?
         {
             paints.push(paint);
         }
@@ -148,37 +156,43 @@ pub(crate) fn exterior_paints(
         if !effect.is_enabled() {
             continue;
         }
+        options.check()?;
         if let Effect::Bevel(bevel) = effect
             && bevel.style == BevelStyle::Outer
         {
             paints.extend(bevel_paints(bevel, shape, context.global_light));
         }
     }
-    paints
+    Ok(paints)
 }
 
 /// Build the emboss paints, which shade the composited layer.
 ///
 /// The emboss maps cover the inside and the outside of the shape, so they
 /// paint after the layer content. The caller composites them last.
-#[must_use]
+///
+/// # Errors
+///
+/// Returns a typed error when the deadline passed or the work was cancelled.
 pub(crate) fn emboss_paints(
     effects: &Effects,
     shape: &Coverage,
     light: GlobalLight,
-) -> Vec<EffectPaint> {
+    options: &ParseOptions,
+) -> Result<Vec<EffectPaint>, PsdError> {
     let mut paints = Vec::new();
     for effect in effects.items.iter().rev() {
         if !effect.is_enabled() {
             continue;
         }
+        options.check()?;
         if let Effect::Bevel(bevel) = effect
             && matches!(bevel.style, BevelStyle::Emboss | BevelStyle::PillowEmboss)
         {
             paints.extend(bevel_paints(bevel, shape, light));
         }
     }
-    paints
+    Ok(paints)
 }
 
 /// Build the highlight and shadow paints of a bevel.
@@ -240,17 +254,24 @@ fn glow_paint(map: &Coverage, glow: &Glow) -> EffectPaint {
 }
 
 /// Build the outside band of a stroke as an exterior paint.
-fn stroke_paint(stroke: &Stroke, shape: &Coverage, context: PaintContext) -> Option<EffectPaint> {
+fn stroke_paint(
+    stroke: &Stroke,
+    shape: &Coverage,
+    context: PaintContext,
+    options: &ParseOptions,
+) -> Result<Option<EffectPaint>, PsdError> {
     let (_, outside_width) = stroke_widths(stroke.size, stroke.position);
     let (_, outside) = stroke_bands(shape, stroke.size, stroke.position);
     let frame = context.stroke_frame(outside_width);
-    let color = paint_plane(&outside, &stroke.paint, frame, context)?;
-    Some(EffectPaint {
+    let Some(color) = paint_plane(&outside, &stroke.paint, frame, context, options)? else {
+        return Ok(None);
+    };
+    Ok(Some(EffectPaint {
         color,
         coverage: outside.values,
         blend: stroke.common.blend,
         opacity: stroke.common.opacity,
-    })
+    }))
 }
 
 /// Sample one paint into a color plane over the whole map.
@@ -261,14 +282,19 @@ fn paint_plane(
     paint: &StrokePaint,
     frame: Frame,
     context: PaintContext,
-) -> Option<Vec<f32>> {
-    match paint {
+    options: &ParseOptions,
+) -> Result<Option<Vec<f32>>, PsdError> {
+    Ok(match paint {
         StrokePaint::Color(color) => Some(solid_color_plane(*color, map.values.len())),
-        StrokePaint::Gradient(fill) => {
-            Some(paint_gradient_plane(map, fill, frame, context.viewport))
-        }
+        StrokePaint::Gradient(fill) => Some(paint_gradient_plane(
+            map,
+            fill,
+            frame,
+            context.viewport,
+            options,
+        )?),
         StrokePaint::Unsupported => None,
-    }
+    })
 }
 
 /// A constant RGB plane.
@@ -292,9 +318,11 @@ fn paint_gradient_plane(
     fill: &GradientFill,
     frame: Frame,
     viewport: Viewport,
-) -> Vec<f32> {
+    options: &ParseOptions,
+) -> Result<Vec<f32>, PsdError> {
     let mut plane = vec![0.0f32; map.values.len() * 3];
     for y in 0..map.height {
+        options.check()?;
         for x in 0..map.width {
             let index = y * map.width + x;
             let sample = fill.sample(fill.parameter_at(
@@ -307,291 +335,7 @@ fn paint_gradient_plane(
             plane[index * 3 + 2] = sample[2];
         }
     }
-    plane
-}
-
-/// A full interior map: one inside the shape, zero outside.
-fn interior_map(shape: &Coverage) -> Coverage {
-    Coverage {
-        width: shape.width,
-        height: shape.height,
-        values: shape
-            .values
-            .iter()
-            .map(|value| if *value > INSIDE_EPS { 1.0 } else { 0.0 })
-            .collect(),
-    }
-}
-
-/// A map relative to the shape.
-///
-/// A relative map keeps the paint inside the shape, and the layer composite
-/// then applies the shape once. Painting the shape twice blends an
-/// anti-aliased edge too little.
-fn relative(map: &Coverage, shape: &Coverage) -> Coverage {
-    Coverage {
-        width: map.width,
-        height: map.height,
-        values: map
-            .values
-            .iter()
-            .zip(&shape.values)
-            .map(|(value, alpha)| {
-                if *alpha > INSIDE_EPS {
-                    (value / alpha).min(1.0)
-                } else {
-                    0.0
-                }
-            })
-            .collect(),
-    }
-}
-
-/// Paint the interior effects over the layer color plane.
-///
-/// `shape` is the padded geometric shape and `color` the padded layer color.
-/// The shape applies once, at the layer composite. The first listed instance
-/// of an effect kind is on top, so the paint order is reversed.
-#[allow(
-    clippy::too_many_lines,
-    reason = "one pass per effect kind keeps the paint order explicit"
-)]
-pub(crate) fn paint_interior(
-    color: &mut [f32],
-    effects: &Effects,
-    shape: &Coverage,
-    context: PaintContext,
-) {
-    let interior = interior_map(shape);
-    // A gradient overlay is painted before a color overlay, so the color
-    // overlay is on top.
-    for effect in effects.items.iter().rev() {
-        if !effect.is_enabled() {
-            continue;
-        }
-        if let Effect::GradientOverlay(overlay) = effect {
-            paint_gradient_overlay(color, &interior, overlay, context);
-        }
-    }
-    for effect in effects.items.iter().rev() {
-        if !effect.is_enabled() {
-            continue;
-        }
-        if let Effect::ColorOverlay(overlay) = effect {
-            paint_solid(
-                color,
-                &interior,
-                overlay.color,
-                overlay.common.blend,
-                overlay.common.opacity,
-            );
-        }
-    }
-    for effect in effects.items.iter().rev() {
-        if !effect.is_enabled() {
-            continue;
-        }
-        if let Effect::Satin(satin) = effect {
-            let map = relative(&satin_map(shape, satin), shape);
-            paint_solid(
-                color,
-                &map,
-                satin.color,
-                satin.common.blend,
-                satin.common.opacity,
-            );
-        }
-    }
-    for effect in effects.items.iter().rev() {
-        if !effect.is_enabled() {
-            continue;
-        }
-        if let Effect::InnerGlow(glow) = effect {
-            let map = relative(&glow_map(shape, glow, true), shape);
-            match &glow.paint {
-                GlowPaint::Color(rgb) => {
-                    paint_solid(color, &map, *rgb, glow.common.blend, glow.common.opacity);
-                }
-                GlowPaint::Gradient(fill) => {
-                    paint_glow_gradient(color, &map, fill, glow.common.blend, glow.common.opacity);
-                }
-            }
-        }
-    }
-    for effect in effects.items.iter().rev() {
-        if !effect.is_enabled() {
-            continue;
-        }
-        if let Effect::InnerShadow(shadow) = effect {
-            let map = relative(
-                &shadow_map(shape, shadow, true, context.global_light),
-                shape,
-            );
-            paint_solid(
-                color,
-                &map,
-                shadow.color,
-                shadow.common.blend,
-                shadow.common.opacity,
-            );
-        }
-    }
-    // An inside stroke is painted before an inner bevel, so the bevel is on
-    // top.
-    for effect in effects.items.iter().rev() {
-        if !effect.is_enabled() {
-            continue;
-        }
-        if let Effect::Stroke(stroke) = effect
-            && stroke.position != StrokePosition::Outside
-        {
-            let (inside, _) = stroke_bands(shape, stroke.size, stroke.position);
-            let map = relative(&inside, shape);
-            let (_, outside_width) = stroke_widths(stroke.size, stroke.position);
-            let frame = context.stroke_frame(outside_width);
-            match &stroke.paint {
-                StrokePaint::Color(rgb) => paint_solid(
-                    color,
-                    &map,
-                    *rgb,
-                    stroke.common.blend,
-                    stroke.common.opacity,
-                ),
-                StrokePaint::Gradient(fill) => paint_gradient(
-                    color,
-                    &map,
-                    fill,
-                    frame,
-                    context.viewport,
-                    stroke.common.blend,
-                    stroke.common.opacity,
-                ),
-                StrokePaint::Unsupported => {}
-            }
-        }
-    }
-    for effect in effects.items.iter().rev() {
-        if !effect.is_enabled() {
-            continue;
-        }
-        if let Effect::Bevel(bevel) = effect
-            && matches!(bevel.style, BevelStyle::Inner | BevelStyle::StrokeEmboss)
-        {
-            let (highlight, shadow) = bevel_maps(shape, bevel, context.global_light);
-            paint_solid(
-                color,
-                &relative(&highlight, shape),
-                bevel.highlight_color,
-                bevel.highlight.blend,
-                bevel.highlight.opacity,
-            );
-            paint_solid(
-                color,
-                &relative(&shadow, shape),
-                bevel.shadow_color,
-                bevel.shadow.blend,
-                bevel.shadow.opacity,
-            );
-        }
-    }
-}
-
-/// Paint one solid color through a coverage map.
-fn paint_solid(color: &mut [f32], map: &Coverage, rgb: [f32; 3], blend: BlendMode, opacity: f32) {
-    for index in 0..map.values.len() {
-        let coverage = map.values[index] * opacity;
-        if coverage <= 0.0 {
-            continue;
-        }
-        let backdrop = [color[index * 3], color[index * 3 + 1], color[index * 3 + 2]];
-        let blended = blend_rgb(blend, backdrop, rgb);
-        for channel in 0..3 {
-            color[index * 3 + channel] =
-                backdrop[channel] + (blended[channel] - backdrop[channel]) * coverage;
-        }
-    }
-}
-
-/// Paint a gradient through a coverage map.
-#[allow(
-    clippy::too_many_arguments,
-    clippy::cast_precision_loss,
-    reason = "the paint kernel needs the plane, the map, and the sample frame"
-)]
-fn paint_gradient(
-    color: &mut [f32],
-    map: &Coverage,
-    fill: &GradientFill,
-    frame: Frame,
-    viewport: Viewport,
-    blend: BlendMode,
-    opacity: f32,
-) {
-    let width = map.width;
-    for y in 0..map.height {
-        for x in 0..width {
-            let index = y * width + x;
-            let coverage = map.values[index] * opacity;
-            if coverage <= 0.0 {
-                continue;
-            }
-            let sample = fill.sample(fill.parameter_at(
-                frame,
-                viewport.left as f32 + x as f32 + 0.5,
-                viewport.top as f32 + y as f32 + 0.5,
-            ));
-            let rgb = [sample[0], sample[1], sample[2]];
-            let backdrop = [color[index * 3], color[index * 3 + 1], color[index * 3 + 2]];
-            let blended = blend_rgb(blend, backdrop, rgb);
-            for channel in 0..3 {
-                color[index * 3 + channel] =
-                    backdrop[channel] + (blended[channel] - backdrop[channel]) * coverage;
-            }
-        }
-    }
-}
-
-/// Paint a gradient glow: the ramp runs along the glow strength, so the
-/// first stop hugs the edge.
-fn paint_glow_gradient(
-    color: &mut [f32],
-    map: &Coverage,
-    fill: &GradientFill,
-    blend: BlendMode,
-    opacity: f32,
-) {
-    for index in 0..map.values.len() {
-        let coverage = map.values[index] * opacity;
-        if coverage <= 0.0 {
-            continue;
-        }
-        let sample = fill.sample(1.0 - map.values[index].clamp(0.0, 1.0));
-        let rgb = [sample[0], sample[1], sample[2]];
-        let backdrop = [color[index * 3], color[index * 3 + 1], color[index * 3 + 2]];
-        let blended = blend_rgb(blend, backdrop, rgb);
-        for channel in 0..3 {
-            color[index * 3 + channel] =
-                backdrop[channel] + (blended[channel] - backdrop[channel]) * coverage;
-        }
-    }
-}
-
-/// Paint a gradient overlay over the whole layer shape.
-fn paint_gradient_overlay(
-    color: &mut [f32],
-    map: &Coverage,
-    overlay: &GradientOverlay,
-    context: PaintContext,
-) {
-    paint_gradient(
-        color,
-        map,
-        &overlay.gradient,
-        context.frame(&overlay.gradient),
-        context.viewport,
-        overlay.common.blend,
-        overlay.common.opacity,
-    );
+    Ok(plane)
 }
 
 /// Crop a padded color plane to a viewport.

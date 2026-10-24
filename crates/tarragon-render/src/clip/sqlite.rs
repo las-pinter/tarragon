@@ -9,6 +9,7 @@
 //! overflow chains, and the `sqlite_master` schema. It does not write, and it
 //! does not read index pages or free pages.
 
+use std::collections::HashSet;
 use std::io::{Read, Seek, SeekFrom};
 
 use super::record::{Table, parse_record, table_from_schema};
@@ -144,11 +145,10 @@ impl<R: Read + Seek> Database<R> {
     /// Find a table in the schema b-tree.
     pub(super) fn lookup_table(&mut self, name: &str) -> Result<Option<Table>, DbError> {
         let mut stack = vec![1_u32];
-        let mut visited = 0_u32;
-        let limit = self.page_limit();
+        let mut visited = HashSet::new();
         while let Some(number) = stack.pop() {
-            visited += 1;
-            if visited > limit {
+            // A valid b-tree reaches each page once, so a repeat is a loop.
+            if !visited.insert(number) {
                 return Err(DbError::Format("the schema b-tree has a loop".to_owned()));
             }
             let page = self.read_page(number)?;
@@ -184,11 +184,9 @@ impl<R: Read + Seek> Database<R> {
     /// leaf holds the smallest rowid.
     pub(super) fn first_row(&mut self, root_page: u32) -> Result<Option<Vec<u8>>, DbError> {
         let mut number = root_page;
-        let mut depth = 0_u32;
-        let limit = self.page_limit();
+        let mut visited = HashSet::new();
         loop {
-            depth += 1;
-            if depth > limit + 1 {
+            if !visited.insert(number) {
                 return Err(DbError::Format("the table b-tree has a loop".to_owned()));
             }
             let page = self.read_page(number)?;

@@ -10,16 +10,18 @@
 use std::io::BufReader;
 use std::path::Path;
 
-use image::{DynamicImage, ImageDecoder, ImageReader};
+use image::ImageReader;
 use tarragon_core::error::RenderError;
 
+use crate::limits::{MAX_PLAIN_ALLOC_BYTES, MAX_PLAIN_EDGE, decode_with_limits};
 use crate::renderer::RenderedImage;
 
 /// Decode `path` to a `DynamicImage` with the EXIF orientation applied.
 ///
 /// The format is guessed from the file content, so a wrong extension does not
 /// hide the real format. The registry validates the extension first. The
-/// orientation step applies the EXIF orientation.
+/// orientation step applies the EXIF orientation. The decode refuses a canvas
+/// above the shared size limits instead of allocating it.
 ///
 /// # Errors
 ///
@@ -30,28 +32,11 @@ pub fn render_plain_image(path: &Path) -> Result<RenderedImage, RenderError> {
         path: path.to_path_buf(),
         source,
     })?;
-    let mut decoder = ImageReader::new(BufReader::new(file))
+    let reader = ImageReader::new(BufReader::new(file))
         .with_guessed_format()
-        .map_err(|source| RenderError::Decode {
+        .map_err(|source| RenderError::Io {
             path: path.to_path_buf(),
-            reason: source.to_string(),
-        })?
-        .into_decoder()
-        .map_err(|source| RenderError::Decode {
-            path: path.to_path_buf(),
-            reason: source.to_string(),
+            source,
         })?;
-    // `decode()` does not apply orientation, so read the tag first.
-    let orientation = decoder
-        .orientation()
-        .map_err(|source| RenderError::Decode {
-            path: path.to_path_buf(),
-            reason: source.to_string(),
-        })?;
-    let mut image = DynamicImage::from_decoder(decoder).map_err(|source| RenderError::Decode {
-        path: path.to_path_buf(),
-        reason: source.to_string(),
-    })?;
-    image.apply_orientation(orientation);
-    Ok(image)
+    decode_with_limits(path, reader, MAX_PLAIN_EDGE, MAX_PLAIN_ALLOC_BYTES)
 }

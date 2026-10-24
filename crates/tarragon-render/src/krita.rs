@@ -23,11 +23,12 @@
 use std::io::{self, BufRead, BufReader, Cursor, Read, Seek};
 use std::path::Path;
 
-use image::{DynamicImage, ImageDecoder, ImageFormat, ImageReader, Limits};
+use image::{ImageFormat, ImageReader};
 use tarragon_core::error::RenderError;
 use zip::ZipArchive;
 use zip::result::ZipError;
 
+use crate::limits::{MAX_DECODE_ALLOC_BYTES, MAX_DOCUMENT_EDGE, decode_with_limits};
 use crate::renderer::RenderedImage;
 
 /// The flattened canvas member. It wins when both members exist.
@@ -40,17 +41,6 @@ const PREVIEW_MEMBER: &str = "preview.png";
 /// PNG member is larger than that decoded buffer by one filter byte per row
 /// plus chunk framing, so the member cap sits above the decoder cap.
 const MAX_MEMBER_BYTES: u64 = 600 * 1024 * 1024;
-/// The decoder allocation cap, in bytes.
-///
-/// An 8-bit RGBA canvas at the 8192 edge needs 256 MiB. A 16-bit RGBA canvas
-/// at the same edge needs 512 MiB, which equals the cap exactly. The strict
-/// greater-than check lets that canvas pass.
-const MAX_DECODE_ALLOC_BYTES: u64 = 512 * 1024 * 1024;
-/// The largest accepted canvas edge, in pixels.
-///
-/// This is the full-tier edge. The PNG decoder checks it at the header.
-const MAX_IMAGE_EDGE: u32 = 8192;
-
 /// Render a `.kra` file to a `DynamicImage`.
 ///
 /// The renderer reads `mergedimage.png` when the archive holds it and falls
@@ -126,42 +116,8 @@ fn member_too_large(path: &Path, name: &str) -> RenderError {
 
 /// Decode the member PNG and apply the EXIF orientation.
 fn decode_png<R: BufRead + Seek>(path: &Path, reader: R) -> Result<RenderedImage, RenderError> {
-    let mut reader = ImageReader::with_format(reader, ImageFormat::Png);
-    let mut limits = Limits::default();
-    // Assigning the documented default pins it against an upstream change.
-    limits.max_alloc = Some(MAX_DECODE_ALLOC_BYTES);
-    limits.max_image_width = Some(MAX_IMAGE_EDGE);
-    limits.max_image_height = Some(MAX_IMAGE_EDGE);
-    reader.limits(limits);
-    let mut decoder = reader
-        .into_decoder()
-        .map_err(|source| RenderError::Decode {
-            path: path.to_path_buf(),
-            reason: source.to_string(),
-        })?;
-    // `from_decoder` allocates without a limit check, so check the size here.
-    let total_bytes = decoder.total_bytes();
-    if total_bytes > MAX_DECODE_ALLOC_BYTES {
-        return Err(decode_error(
-            path,
-            format!(
-                "the canvas needs {total_bytes} bytes, above the {MAX_DECODE_ALLOC_BYTES} byte cap"
-            ),
-        ));
-    }
-    // `decode()` does not apply orientation, so read the tag first.
-    let orientation = decoder
-        .orientation()
-        .map_err(|source| RenderError::Decode {
-            path: path.to_path_buf(),
-            reason: source.to_string(),
-        })?;
-    let mut image = DynamicImage::from_decoder(decoder).map_err(|source| RenderError::Decode {
-        path: path.to_path_buf(),
-        reason: source.to_string(),
-    })?;
-    image.apply_orientation(orientation);
-    Ok(image)
+    let reader = ImageReader::with_format(reader, ImageFormat::Png);
+    decode_with_limits(path, reader, MAX_DOCUMENT_EDGE, MAX_DECODE_ALLOC_BYTES)
 }
 
 /// Build a decode error with a reason.

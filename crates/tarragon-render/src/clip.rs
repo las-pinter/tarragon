@@ -12,17 +12,20 @@
 
 #![allow(clippy::module_name_repetitions)]
 
+#[cfg(test)]
+mod loop_tests;
 mod record;
 mod sqlite;
 
-use std::io::{Read, Seek, SeekFrom};
+use std::io::{Cursor, Read, Seek, SeekFrom};
 use std::path::Path;
 
-use image::{ColorType, DynamicImage, ImageFormat};
+use image::{ColorType, DynamicImage, ImageFormat, ImageReader};
 use tarragon_core::error::RenderError;
 
 use self::record::{Value, column_index, parse_record};
 use self::sqlite::{Database, DbError};
+use crate::limits::{MAX_DECODE_ALLOC_BYTES, MAX_DOCUMENT_EDGE, decode_with_limits};
 use crate::renderer::RenderedImage;
 
 /// The SQLite header magic that marks the embedded database.
@@ -33,8 +36,9 @@ const SCAN_CHUNK_SIZE: usize = 256 * 1024;
 const PNG_SIGNATURE: &[u8] = b"\x89PNG\r\n\x1a\n";
 /// The PNG end chunk marker.
 const PNG_IEND: &[u8] = b"IEND";
-/// The four CRC bytes that follow the `IEND` marker.
-const PNG_IEND_CRC_BYTES: usize = 4;
+/// The bytes around a chunk body: four for the length, four for the type, and
+/// four for the CRC.
+const PNG_CHUNK_OVERHEAD: usize = 12;
 /// The table that holds the preview row.
 const PREVIEW_TABLE: &str = "CanvasPreview";
 /// The column that holds the PNG blob.
@@ -126,21 +130,34 @@ fn preview_blob<R: Read + Seek>(database: &mut Database<R>) -> Result<Vec<u8>, D
 }
 
 /// Extract the PNG that the blob carries between its signature and its end.
+///
+/// The walk follows the chunk lengths, so the bytes `IEND` inside compressed
+/// image data do not end the PNG early.
 fn extract_png(blob: &[u8]) -> Option<&[u8]> {
     let start = find_subslice(blob, PNG_SIGNATURE)?;
-    let end =
-        find_subslice(&blob[start..], PNG_IEND)? + start + PNG_IEND.len() + PNG_IEND_CRC_BYTES;
-    blob.get(start..end)
+    let mut cursor = start + PNG_SIGNATURE.len();
+    loop {
+        let length = usize::try_from(u32::from_be_bytes(
+            blob.get(cursor..cursor + 4)?.try_into().ok()?,
+        ))
+        .ok()?;
+        let kind = blob.get(cursor + 4..cursor + 8)?;
+        cursor = cursor
+            .checked_add(PNG_CHUNK_OVERHEAD)?
+            .checked_add(length)?;
+        if kind == PNG_IEND {
+            return blob.get(start..cursor);
+        }
+        if cursor > blob.len() {
+            return None;
+        }
+    }
 }
 
 /// Decode the PNG bytes and keep an 8-bit RGB or RGBA image as it is.
 fn decode_png(path: &Path, png: &[u8]) -> Result<RenderedImage, RenderError> {
-    let image = image::load_from_memory_with_format(png, ImageFormat::Png).map_err(|source| {
-        RenderError::Decode {
-            path: path.to_path_buf(),
-            reason: source.to_string(),
-        }
-    })?;
+    let reader = ImageReader::with_format(Cursor::new(png), ImageFormat::Png);
+    let image = decode_with_limits(path, reader, MAX_DOCUMENT_EDGE, MAX_DECODE_ALLOC_BYTES)?;
     Ok(match image.color() {
         ColorType::Rgb8 | ColorType::Rgba8 => image,
         _ => DynamicImage::ImageRgba8(image.to_rgba8()),
@@ -209,14 +226,38 @@ fn map_db_error(path: &Path, error: DbError) -> RenderError {
 mod tests {
     use super::{extract_png, find_subslice};
 
+    /// Build a chunk with a dummy CRC; the walk does not check it.
+    fn chunk(kind: [u8; 4], body: &[u8]) -> Vec<u8> {
+        let mut out = u32::try_from(body.len()).unwrap().to_be_bytes().to_vec();
+        out.extend_from_slice(&kind);
+        out.extend_from_slice(body);
+        out.extend_from_slice(&[0; 4]);
+        out
+    }
+
+    fn png_with(idat: &[u8]) -> Vec<u8> {
+        let mut png = b"\x89PNG\r\n\x1a\n".to_vec();
+        png.extend(chunk(*b"IHDR", &[0; 13]));
+        png.extend(chunk(*b"IDAT", idat));
+        png.extend(chunk(*b"IEND", &[]));
+        png
+    }
+
     #[test]
     fn the_png_is_cut_at_the_end_chunk() {
+        let png = png_with(b"body");
         let mut blob = b"junk".to_vec();
-        let png = b"\x89PNG\r\n\x1a\nbodyIEND\x00\x00\x00\x00trailing";
-        blob.extend_from_slice(png);
-        blob.extend_from_slice(b"more junk");
-        let extracted = extract_png(&blob).expect("the png is found");
-        assert_eq!(extracted, &png[..png.len() - b"trailing".len()]);
+        blob.extend_from_slice(&png);
+        blob.extend_from_slice(b"trailing");
+        assert_eq!(extract_png(&blob), Some(png.as_slice()));
+    }
+
+    #[test]
+    fn iend_bytes_inside_image_data_do_not_end_the_png() {
+        let png = png_with(b"xxIENDxx");
+        let mut blob = png.clone();
+        blob.extend_from_slice(b"trailing");
+        assert_eq!(extract_png(&blob), Some(png.as_slice()));
     }
 
     #[test]
@@ -226,7 +267,17 @@ mod tests {
 
     #[test]
     fn a_blob_with_no_end_chunk_yields_nothing() {
-        assert!(extract_png(b"\x89PNG\r\n\x1a\nbody").is_none());
+        let mut blob = b"\x89PNG\r\n\x1a\n".to_vec();
+        blob.extend(chunk(*b"IDAT", b"body"));
+        assert!(extract_png(&blob).is_none());
+    }
+
+    #[test]
+    fn a_chunk_length_past_the_blob_yields_nothing() {
+        let mut blob = b"\x89PNG\r\n\x1a\n".to_vec();
+        blob.extend_from_slice(&u32::MAX.to_be_bytes());
+        blob.extend_from_slice(b"IDATbody");
+        assert!(extract_png(&blob).is_none());
     }
 
     #[test]

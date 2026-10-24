@@ -14,6 +14,7 @@ pub mod clip;
 pub mod color;
 mod color_classify;
 pub mod krita;
+mod limits;
 pub mod plain;
 pub mod registry;
 pub mod renderer;

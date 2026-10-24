@@ -12,6 +12,7 @@ mod codec;
 pub mod eviction;
 pub mod purge;
 pub mod store;
+pub mod temp;
 
 /// A cache store error.
 #[derive(Debug, thiserror::Error)]
@@ -25,6 +26,9 @@ pub enum CacheError {
         #[source]
         source: std::io::Error,
     },
+    /// A cache entry name would leave its folder.
+    #[error("cache name {0:?} holds a path separator or a dot component")]
+    InvalidName(String),
     /// The cache root is unsafe to purge.
     #[error("refusing to purge the unsafe cache root {0}")]
     UnsafeRoot(PathBuf),

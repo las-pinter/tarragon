@@ -54,7 +54,8 @@ pub fn build_pool() -> Result<rayon::ThreadPool, rayon::ThreadPoolBuildError> {
 ///
 /// A missing folder, or a path that is not a folder, gives an empty list. Any
 /// other read fault, such as a permission fault,
-/// gives [`ScanError::ReadFolder`]. A file that cannot stat is skipped. A file
+/// gives [`ScanError::ReadFolder`], as does an error while listing the entries.
+/// A file that cannot stat is skipped. A file
 /// that stats but has an unreadable mtime is kept with an mtime of zero.
 ///
 /// The `stat` calls run on the current `rayon` pool. Install a capped pool
@@ -78,13 +79,7 @@ pub fn scan_folder(folder: &Path) -> Result<Vec<FileInfo>, ScanError> {
         }
     };
 
-    let mut candidates: Vec<PathBuf> = Vec::new();
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if is_supported(&path) {
-            candidates.push(path);
-        }
-    }
+    let candidates = supported_paths(folder, entries.map(|entry| entry.map(|item| item.path())))?;
 
     let mut files: Vec<FileInfo> = candidates
         .par_iter()
@@ -92,6 +87,28 @@ pub fn scan_folder(folder: &Path) -> Result<Vec<FileInfo>, ScanError> {
         .collect();
     files.sort_by(|left, right| SortMode::Natural.compare(left, right));
     Ok(files)
+}
+
+/// Keep the supported paths from a directory listing.
+///
+/// The first entry error fails the listing. A partial list would pass for a
+/// complete one, and a caller that syncs its database to the scan would then
+/// drop rows for files that still exist.
+fn supported_paths(
+    folder: &Path,
+    entries: impl Iterator<Item = std::io::Result<PathBuf>>,
+) -> Result<Vec<PathBuf>, ScanError> {
+    let mut candidates = Vec::new();
+    for entry in entries {
+        let path = entry.map_err(|source| ScanError::ReadFolder {
+            path: folder.to_path_buf(),
+            source,
+        })?;
+        if is_supported(&path) {
+            candidates.push(path);
+        }
+    }
+    Ok(candidates)
 }
 
 /// Read the size and mtime of one candidate path.
@@ -345,6 +362,31 @@ mod tests {
             matches!(result, Err(ScanError::ReadFolder { .. })),
             "a permission fault must not look like an empty folder: {result:?}"
         );
+    }
+
+    #[test]
+    fn an_entry_error_fails_the_listing() {
+        let entries = vec![
+            Ok(PathBuf::from("/x/a.png")),
+            Err(std::io::Error::other("flaky share")),
+            Ok(PathBuf::from("/x/b.png")),
+        ];
+
+        let result = super::supported_paths(Path::new("/x"), entries.into_iter());
+
+        assert!(
+            matches!(result, Err(ScanError::ReadFolder { .. })),
+            "a dropped entry must not give a partial list: {result:?}"
+        );
+    }
+
+    #[test]
+    fn a_clean_listing_keeps_only_supported_paths() {
+        let entries = vec![Ok(PathBuf::from("/x/a.png")), Ok(PathBuf::from("/x/b.txt"))];
+
+        let result = super::supported_paths(Path::new("/x"), entries.into_iter());
+
+        assert_eq!(result.expect("list"), vec![PathBuf::from("/x/a.png")]);
     }
 
     #[cfg(unix)]

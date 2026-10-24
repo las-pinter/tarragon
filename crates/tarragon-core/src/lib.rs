@@ -1,4 +1,4 @@
-//! Shared domain types, paths, errors, filter state, and sorting rules.
+//! Shared domain types, errors, filter state, and sorting rules.
 //!
 //! This crate stays pure. It does no I/O, no database work, and no GUI work.
 //! Every other tarragon crate may depend on it. It depends on no local crate.
@@ -13,7 +13,6 @@ pub mod entity;
 pub mod error;
 pub mod filter_state;
 pub mod format;
-pub mod paths;
 pub mod sorting;
 pub mod tier;
 

@@ -29,6 +29,9 @@ pub(super) struct Table {
     pub(super) sql: String,
 }
 
+/// The most columns a record may hold. This is the SQLite default limit.
+const MAX_COLUMNS: usize = 2000;
+
 /// Parse a record payload into its column values.
 pub(super) fn parse_record(payload: &[u8]) -> Result<Vec<Value<'_>>, DbError> {
     let (header_len, mut cursor) = read_varint(payload, 0)?;
@@ -43,6 +46,11 @@ pub(super) fn parse_record(payload: &[u8]) -> Result<Vec<Value<'_>>, DbError> {
     while cursor < header_len {
         let (serial, used) = read_varint(payload, cursor)?;
         cursor += used;
+        if serials.len() == MAX_COLUMNS {
+            return Err(DbError::Format(
+                "the record holds too many columns".to_owned(),
+            ));
+        }
         serials.push(serial);
     }
     if cursor != header_len {
@@ -232,6 +240,30 @@ mod tests {
     fn a_cut_record_is_an_error() {
         // The header claims 16 text bytes, but the body holds only one.
         assert!(parse_record(&[3, 45, b'a']).is_err());
+    }
+
+    /// Build a record of `columns` NULL columns with a two-byte header length.
+    fn null_record(columns: u8, extra: u8) -> Vec<u8> {
+        // The columns are `extra * 100 + columns` one-byte serial types.
+        let count = usize::from(extra) * 100 + usize::from(columns);
+        let header_len = u8::try_from((2 + count) & 0x7f).unwrap();
+        let high = u8::try_from((2 + count) >> 7).unwrap();
+        let mut payload = vec![0x80 | high, header_len];
+        payload.extend(std::iter::repeat_n(0_u8, count));
+        payload
+    }
+
+    #[test]
+    fn a_record_over_the_column_cap_is_an_error() {
+        assert!(parse_record(&null_record(1, 20)).is_err());
+    }
+
+    #[test]
+    fn a_record_at_the_column_cap_parses() {
+        assert_eq!(
+            parse_record(&null_record(0, 20)).expect("parses").len(),
+            2000
+        );
     }
 
     #[test]

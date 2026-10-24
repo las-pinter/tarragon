@@ -103,10 +103,9 @@ fn main() {
 
     println!();
     println!("expected size range: 0.10 to 0.40 bytes per pixel at q90");
-    println!("justification: researcher points put natural-photo JPEG near");
-    println!("  0.13-0.16 bytes/px at q80-q85, so q90 sits near 0.1-0.3.");
-    println!("  The synthetic pattern is smooth; the measured band is 0.18-0.23.");
-    println!("  0.10-0.40 covers content variation and catches a wrong quality.");
+    println!("justification: the synthetic pattern is smooth and measures");
+    println!("  0.18-0.23 bytes/px. 0.10-0.40 covers content variation and");
+    println!("  catches a wrong quality or a raw store.");
 
     if !alpha_ok {
         eprintln!("FAIL: transparent pixel did not flatten to white");

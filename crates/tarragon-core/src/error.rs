@@ -23,7 +23,7 @@ pub enum CoreError {
     UnknownTagSource(String),
 }
 
-/// A folder walk or a metadata read failed.
+/// A folder walk or a filesystem watch failed.
 #[derive(Debug, thiserror::Error)]
 pub enum ScanError {
     /// A folder cannot be read.
@@ -35,18 +35,6 @@ pub enum ScanError {
         #[source]
         source: std::io::Error,
     },
-    /// File metadata cannot be read.
-    #[error("cannot read metadata for {path}: {source}")]
-    Metadata {
-        /// The file path.
-        path: PathBuf,
-        /// The cause.
-        #[source]
-        source: std::io::Error,
-    },
-    /// The scan was cancelled.
-    #[error("scan cancelled")]
-    Cancelled,
     /// A filesystem watch failed.
     #[error("cannot watch {path}: {reason}")]
     Watch {
@@ -88,9 +76,6 @@ pub enum RenderError {
         /// The allowed cap in pixels.
         cap: u32,
     },
-    /// The render was cancelled.
-    #[error("render cancelled")]
-    Cancelled,
 }
 
 /// The top-level application error.
@@ -125,8 +110,11 @@ mod tests {
 
     #[test]
     fn app_error_wraps_a_scan_error() {
-        let error = AppError::from(ScanError::Cancelled);
-        assert_eq!(error.to_string(), "scan cancelled");
+        let error = AppError::from(ScanError::Watch {
+            path: std::path::PathBuf::from("/x"),
+            reason: "gone".to_owned(),
+        });
+        assert_eq!(error.to_string(), "cannot watch /x: gone");
     }
 
     #[test]

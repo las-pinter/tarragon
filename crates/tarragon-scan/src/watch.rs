@@ -9,16 +9,23 @@
 //! Stopping the watcher drops the backend and joins the thread, so a stale
 //! rescan cannot escape after the folder closes.
 
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
 use std::thread::{self, JoinHandle};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use notify::{EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use tarragon_core::error::ScanError;
 
 /// The debounce window: one burst of events gives one rescan after 500 ms.
 pub const DEBOUNCE: Duration = Duration::from_millis(500);
+
+/// The longest a steady stream of events can delay the rescan.
+///
+/// Without it, a large copy that writes less than [`DEBOUNCE`] apart would
+/// hold the rescan back until the copy ends.
+pub const MAX_WAIT: Duration = Duration::from_secs(5);
 
 /// A running watcher for one open folder.
 ///
@@ -47,10 +54,9 @@ impl FolderWatcher {
         let (sender, receiver) = mpsc::channel::<()>();
         let mut backend =
             notify::recommended_watcher(move |event: notify::Result<notify::Event>| {
-                let Ok(event) = event else {
-                    return;
-                };
-                if is_change(event.kind) {
+                // A backend error can mean lost events, so it asks for a
+                // rescan like a change does.
+                if event.map_or(true, |event| is_change(event.kind)) {
                     // A send fault means the debounce thread already stopped.
                     let _ = sender.send(());
                 }
@@ -61,7 +67,7 @@ impl FolderWatcher {
             .map_err(|error| watch_error(folder, &error))?;
         let debounce = thread::Builder::new()
             .name("tarragon-watch".to_owned())
-            .spawn(move || debounce_loop(&receiver, on_rescan))
+            .spawn(move || debounce_loop(&receiver, on_rescan, DEBOUNCE, MAX_WAIT))
             .map_err(|error| watch_error(folder, &error))?;
         Ok(Self {
             folder: folder.to_path_buf(),
@@ -89,7 +95,8 @@ impl FolderWatcher {
     pub fn stop(&mut self) {
         self.backend = None;
         if let Some(handle) = self.debounce.take() {
-            // A panicking callback is swallowed here; the watch still stops.
+            // The loop catches a panicking callback, so the join result holds
+            // nothing the caller needs.
             let _ = handle.join();
         }
     }
@@ -119,23 +126,34 @@ fn is_change(kind: EventKind) -> bool {
 
 /// Coalesce events and call `on_rescan` once per quiet window.
 ///
+/// A burst ends after `quiet` with no event, or after `max_wait` from its
+/// first event, whichever comes first. A panic in `on_rescan` is caught, so
+/// the thread keeps serving later bursts.
+///
 /// A disconnected channel means the backend dropped, so the thread returns
 /// without calling `on_rescan`.
-fn debounce_loop<F: FnMut()>(receiver: &Receiver<()>, mut on_rescan: F) {
+fn debounce_loop<F: FnMut()>(
+    receiver: &Receiver<()>,
+    mut on_rescan: F,
+    quiet: Duration,
+    max_wait: Duration,
+) {
     loop {
         // Block for the first event of a burst.
         if receiver.recv().is_err() {
             return;
         }
-        // Wait out the quiet window. Each new event restarts the window.
-        loop {
-            match receiver.recv_timeout(DEBOUNCE) {
+        let started = Instant::now();
+        // Wait out the quiet window. Each new event restarts the window, up to
+        // the maximum wait.
+        while let Some(left) = max_wait.checked_sub(started.elapsed()) {
+            match receiver.recv_timeout(quiet.min(left)) {
                 Ok(()) => {}
                 Err(RecvTimeoutError::Timeout) => break,
                 Err(RecvTimeoutError::Disconnected) => return,
             }
         }
-        on_rescan();
+        let _ = catch_unwind(AssertUnwindSafe(&mut on_rescan));
     }
 }
 
@@ -385,5 +403,55 @@ mod tests {
         );
         assert!(is_change(EventKind::Other), "an other event must rescan");
         assert!(is_change(EventKind::Any), "an any event must rescan");
+    }
+
+    #[test]
+    fn a_steady_stream_still_fires_after_the_max_wait() {
+        let (sender, receiver) = std::sync::mpsc::channel::<()>();
+        let (count, callback) = counter();
+        let thread = std::thread::spawn(move || {
+            super::debounce_loop(
+                &receiver,
+                callback,
+                Duration::from_millis(200),
+                Duration::from_millis(300),
+            );
+        });
+        // Events arrive faster than the quiet window and never let it expire.
+        let started = Instant::now();
+        while started.elapsed() < Duration::from_millis(900) {
+            sender.send(()).expect("send");
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        let fired = count.load(Ordering::SeqCst);
+        drop(sender);
+        thread.join().expect("join");
+        assert!(fired >= 1, "the max wait must force a rescan mid-stream");
+    }
+
+    #[test]
+    fn a_panicking_callback_does_not_kill_the_thread() {
+        let (sender, receiver) = std::sync::mpsc::channel::<()>();
+        let (count, mut inner) = counter();
+        let mut first = true;
+        let callback = move || {
+            assert!(!std::mem::take(&mut first), "callback fault");
+            inner();
+        };
+        let thread = std::thread::spawn(move || {
+            super::debounce_loop(
+                &receiver,
+                callback,
+                Duration::from_millis(20),
+                Duration::from_millis(100),
+            );
+        });
+        sender.send(()).expect("send the first burst");
+        std::thread::sleep(Duration::from_millis(150));
+        sender.send(()).expect("send the second burst");
+        std::thread::sleep(Duration::from_millis(150));
+        drop(sender);
+        thread.join().expect("the thread must not have panicked");
+        assert_eq!(count.load(Ordering::SeqCst), 1);
     }
 }

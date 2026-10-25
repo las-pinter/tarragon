@@ -21,6 +21,12 @@ pub enum CoreError {
     /// A tag source name is unknown.
     #[error("unknown tag source: {0}")]
     UnknownTagSource(String),
+    /// The data directory cannot be found: no `data` folder sits beside the
+    /// binary and the platform gives none.
+    #[error(
+        "no data directory: add a data folder beside the binary or set the home directory (APPDATA on Windows)"
+    )]
+    NoDataDir,
 }
 
 /// A folder walk or a filesystem watch failed.

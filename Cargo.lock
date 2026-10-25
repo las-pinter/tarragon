@@ -2497,8 +2497,10 @@ version = "0.1.0"
 dependencies = [
  "eframe",
  "egui_dock",
+ "tarragon-core",
  "tarragon-db",
  "tarragon-ui",
+ "thiserror 2.0.21",
 ]
 
 [[package]]

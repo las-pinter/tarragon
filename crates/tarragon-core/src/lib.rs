@@ -13,6 +13,7 @@ pub mod entity;
 pub mod error;
 pub mod filter_state;
 pub mod format;
+pub mod paths;
 pub mod sorting;
 pub mod tier;
 

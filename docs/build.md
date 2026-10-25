@@ -42,6 +42,24 @@ Windows and macOS run `cargo build --release` and `cargo test`. No release
 job builds the Linux portable zip yet. The only workflow,
 `.github/workflows/rust.yml`, has one job that builds the large PSB fixture.
 
+## Portable data folder
+
+A `data/` directory beside the binary turns on portable mode. The database
+(`tarragon.db`), the cache (`cache/`), and the log (`tarragon.log`) then live
+inside it. An empty `data/` counts. A plain file named `data` does not.
+Without the directory, the app uses the platform data folder, `tarragon`
+inside it:
+
+- Linux: `~/.local/share/tarragon`
+- macOS: `~/Library/Application Support/tarragon`
+- Windows: `%APPDATA%\tarragon`
+
+The check runs in every build, debug included. The `TARRAGON_DB` variable
+overrides the database path only. An empty `TARRAGON_DB` counts as unset. The
+app creates the data root and `cache/` at start, unless `TARRAGON_DB` is set.
+Today only the database path is wired in; the cache and log paths
+are resolved for later use.
+
 ## Vendored font
 
 `tarragon-ui` embeds the Roboto family. The files are in

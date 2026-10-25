@@ -1,5 +1,7 @@
 //! Binary entry point for the tarragon image browser.
 
+mod data_dir;
+
 use std::path::PathBuf;
 use std::process::ExitCode;
 
@@ -57,8 +59,13 @@ impl App {
 }
 
 fn main() -> ExitCode {
-    let db_path =
-        std::env::var("TARRAGON_DB").map_or_else(|_| PathBuf::from("tarragon.db"), PathBuf::from);
+    let db_path = match data_dir::db_path(std::env::var_os("TARRAGON_DB")) {
+        Ok(path) => path,
+        Err(error) => {
+            eprintln!("tarragon: {error}");
+            return ExitCode::FAILURE;
+        }
+    };
 
     match App::open(&db_path) {
         Ok(mut app) => {

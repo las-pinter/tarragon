@@ -7,8 +7,10 @@ publish = false
 license.workspace = true
 
 [dependencies]
+tarragon-core = { workspace = true }
 tarragon-db = { workspace = true }
 tarragon-ui = { workspace = true }
+thiserror = { workspace = true }
 
 [dev-dependencies]
 eframe.workspace = true

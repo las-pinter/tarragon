@@ -40,6 +40,11 @@ jobs:
         run: cargo nextest run
       - name: Check dependencies
         run: cargo deny check
+      # The default fonts crate carries licenses that are off the allowlist.
+      - name: Check that the default fonts crate is absent
+        run: |
+          cargo tree --workspace --target all --prefix none > "$RUNNER_TEMP/tree.txt"
+          ! grep -q '^epaint_default_fonts ' "$RUNNER_TEMP/tree.txt"
 
   release-build:
     name: Release build (${{ matrix.os }})

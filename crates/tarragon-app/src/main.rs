@@ -1,73 +1,18 @@
 //! Binary entry point for the tarragon image browser.
 
+mod app;
 mod cli;
 mod data_dir;
 mod instance;
 mod logging;
+mod logview;
+mod run;
+mod window;
 
-use std::path::PathBuf;
 use std::process::ExitCode;
+use std::sync::Arc;
 
-use tarragon_db::Database;
-use tarragon_db::settings::{SettingKey, SettingValue, Settings, WindowState};
-use tarragon_ui::Shell;
-
-use logging::LogControl;
-
-/// The running application: one database, one window state, one shell.
-struct App {
-    /// The open database.
-    db: Database,
-    /// The retained window state, including the sort mode.
-    window_state: WindowState,
-    /// The window frame and its gallery.
-    shell: Shell,
-}
-
-impl App {
-    /// Open the database at `path`, apply the stored debug setting to the log
-    /// level, restore the window state, and build the shell with the stored
-    /// sort mode.
-    ///
-    /// # Errors
-    ///
-    /// Returns the database error when the file cannot open or initialize.
-    /// Returns the settings error when the window state cannot be read.
-    fn open(path: &PathBuf, log: &LogControl) -> Result<Self, Box<dyn std::error::Error>> {
-        let db = Database::open(path)?;
-        db.initialize()?;
-        let settings = Settings::new(&db);
-        match settings.get(SettingKey::DebugMode) {
-            Ok(SettingValue::Bool(debug)) => log.set_debug(debug),
-            Ok(_) => {}
-            Err(error) => tracing::warn!("cannot read the debug setting: {error}"),
-        }
-        let (window_state, repaired) = settings.window_state_repaired()?.unwrap_or_default();
-        if repaired {
-            tracing::warn!("the stored window state was invalid and was repaired");
-        }
-        let shell = Shell::new().with_sort_mode(window_state.sort_mode());
-        Ok(Self {
-            db,
-            window_state,
-            shell,
-        })
-    }
-
-    /// Persist a sort change to the window state, if one happened.
-    ///
-    /// # Errors
-    ///
-    /// Returns the settings error when the write fails.
-    fn persist_sort_if_changed(&mut self) -> Result<(), tarragon_db::settings::SettingsError> {
-        if let Some(mode) = self.shell.take_sort_changed() {
-            self.window_state.set_sort_mode(mode);
-            let settings = Settings::new(&self.db);
-            settings.set_window_state_value(&self.window_state)?;
-        }
-        Ok(())
-    }
-}
+use app::App;
 
 fn main() -> ExitCode {
     // Flags return before any I/O, so they never touch the data directory.
@@ -98,46 +43,79 @@ fn main() -> ExitCode {
         }
     };
 
-    // Logging is best effort: a missing location only means no file log.
+    // A second start must not roll the running instance's log, so the guard
+    // comes before the log file.
     let location = data_dir::log_location(override_db);
-    let logging = logging::init(location.as_ref().ok().map(|l| l.log_file.as_path()), offset);
-    match &location {
-        Ok(found) => logging::install_panic_hook(found.crash_dir.clone()),
-        Err(error) => tracing::warn!("no log file or crash reports: {error}"),
+    if let Ok(found) = &location {
+        logging::install_panic_hook(found.crash_dir.clone());
     }
-
-    // A second start must end here, before it opens the database.
-    let _instance = match instance::acquire(&db_path) {
-        instance::Outcome::Primary(guard) => Some(guard),
-        instance::Outcome::Forwarded => {
-            tracing::info!("another instance is running; asked it to show its window");
-            return ExitCode::SUCCESS;
+    let outcome = logging::with_stderr(offset, || {
+        let outcome = instance::acquire(&db_path);
+        match &outcome {
+            instance::Outcome::Forwarded => {
+                tracing::info!("another instance is running; asked it to show its window");
+            }
+            instance::Outcome::Unguarded(reason) => {
+                tracing::warn!("starting without a single-instance guard: {reason}");
+            }
+            instance::Outcome::Primary(_) => {}
         }
+        outcome
+    });
+    let mut unguarded = None;
+    let guard = match outcome {
+        instance::Outcome::Primary(guard) => Some(Arc::new(guard)),
+        // A second start ends here, before it touches the log or the database.
+        instance::Outcome::Forwarded => return ExitCode::SUCCESS,
         instance::Outcome::Unguarded(reason) => {
-            tracing::warn!("starting without a single-instance guard: {reason}");
+            unguarded = Some(reason);
             None
         }
     };
 
-    match App::open(&db_path, &logging.control) {
-        Ok(mut app) => {
-            // No event loop runs yet, so this one call stands in for the
-            // per-frame persist.
-            if let Err(error) = app.persist_sort_if_changed() {
-                tracing::error!("cannot save the window state: {error}");
-            }
-            tracing::info!("tarragon {} started", env!("CARGO_PKG_VERSION"));
-            ExitCode::SUCCESS
-        }
+    // Logging is best effort: a missing location only means no file log.
+    let logging = logging::init(location.as_ref().ok().map(|l| l.log_file.as_path()), offset);
+    if let Err(error) = &location {
+        tracing::warn!("no log file or crash reports: {error}");
+    }
+    // Said on stderr above; say it again where the file and the Log panel see it.
+    if let Some(reason) = unguarded {
+        tracing::warn!("starting without a single-instance guard: {reason}");
+    }
+
+    // The guard stays alive here until the window closes.
+    let open = || {
+        App::open(
+            &db_path,
+            logging.ring.clone(),
+            logging.control.clone(),
+            guard.clone(),
+        )
+    };
+    // Open once first, so a bad database ends the start before any window.
+    let first = match open() {
+        Ok(app) => app,
         Err(error) => {
-            if logging.installed {
-                tracing::error!("cannot start: {error}");
-            } else {
-                // No logger is running, so stderr is the only way to tell
-                // the user.
-                eprintln!("tarragon: {error}");
-            }
+            report(logging.installed, &format!("cannot start: {error}"));
+            return ExitCode::FAILURE;
+        }
+    };
+    tracing::info!("tarragon {} started", env!("CARGO_PKG_VERSION"));
+    match run::run(first, &open) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => {
+            report(logging.installed, &error.to_string());
             ExitCode::FAILURE
         }
+    }
+}
+
+/// Tell the user about a fatal error.
+fn report(logger_installed: bool, message: &str) {
+    if logger_installed {
+        tracing::error!("{message}");
+    } else {
+        // No logger is running, so stderr is the only way to tell the user.
+        eprintln!("tarragon: {message}");
     }
 }

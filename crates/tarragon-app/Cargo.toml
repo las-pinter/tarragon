@@ -11,6 +11,7 @@ name = "tarragon"
 path = "src/main.rs"
 
 [dependencies]
+eframe = { workspace = true }
 tarragon-core = { workspace = true }
 tarragon-db = { workspace = true }
 tarragon-ui = { workspace = true }
@@ -22,7 +23,6 @@ tracing-log = { workspace = true }
 tracing-subscriber = { workspace = true }
 
 [dev-dependencies]
-eframe.workspace = true
 egui_dock.workspace = true
 log.workspace = true
 

@@ -69,8 +69,8 @@ Bold in unhinted TrueType form. The license is Apache-2.0 and the full text is
 version, the copyright, and the file checksums are in `SOURCES.md` there. No
 Roboto Mono file exists, so Regular serves the `Monospace` family.
 
-The app crate wires `install` when it takes the `tarragon-ui` dependency, so no
-window renders Roboto yet. The `grid_bench` example calls `tarragon_ui::install`
+The app window renders Roboto: `apply_theme` installs the fonts, and the app
+calls it when the window is created. The `grid_bench` example calls `tarragon_ui::install`
 and measures that shipped text path.
 
 ## Quality gates
@@ -118,10 +118,12 @@ Musl release: not built. The target std is absent.
 ### Scope of the measurement
 
 The `tarragon-app` binary parses the `--version` and `--help` flags. Without a
-flag it resolves the data directory, sets up logging, takes the single-instance
-guard, and opens the database. It opens no window yet. The size figure above
-was measured at an earlier, smaller build, before this wiring, and is not
-re-measured here.
+flag it resolves the data directory, takes the single-instance guard, sets up
+logging, and opens the database, then opens the shell window with eframe. It
+tries the wgpu renderer first and falls back to glow. A second start ends after
+the guard, before the log file is opened or rolled. The size figure above
+was measured at an earlier, smaller build, before the window was wired in, and
+is not re-measured here.
 
 The two heavy crates are measured through their examples. Run
 `cargo build --release --examples`.
@@ -220,10 +222,10 @@ budget. Every measured binary is under the limit.
 
 ## GUI stack spike
 
-The spike checks the window stack before the app shell exists. The code is the
-example `crates/tarragon-app/examples/stack_spike/`. Its crates are
-dev-dependencies of `tarragon-app`, so the shipped app binary does not link
-them.
+The spike checked the window stack before the app shell was wired in. The code
+is the example `crates/tarragon-app/examples/stack_spike/`. `eframe` is a normal
+dependency of `tarragon-app`, because the app window uses it. Only `egui_dock`
+is a dev-dependency, so the shipped app binary does not link it.
 
 The workspace pins `eframe =0.36.2` with default features off. The features
 are `glow`, `wgpu`, `x11`, and `wayland`. `default_fonts` stays off, and the

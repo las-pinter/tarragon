@@ -55,7 +55,6 @@ impl Default for LogRing {
     }
 }
 
-#[cfg_attr(not(test), expect(dead_code, reason = "read by the log panel"))]
 impl LogRing {
     /// Make an empty ring with the standard capacity.
     #[must_use]
@@ -94,6 +93,7 @@ impl LogRing {
 
     /// All stored entries, oldest first.
     #[must_use]
+    #[cfg(test)]
     pub fn snapshot(&self) -> Vec<LogEntry> {
         self.lock().entries.iter().cloned().collect()
     }
@@ -112,18 +112,21 @@ impl LogRing {
 
     /// The number of the newest entry ever added, or 0 when none was added.
     #[must_use]
+    #[cfg(test)]
     pub fn counter(&self) -> u64 {
         self.lock().last_seq
     }
 
     /// The number of stored entries.
     #[must_use]
+    #[cfg(test)]
     pub fn len(&self) -> usize {
         self.lock().entries.len()
     }
 
     /// Whether no entry is stored.
     #[must_use]
+    #[cfg(test)]
     pub fn is_empty(&self) -> bool {
         self.lock().entries.is_empty()
     }

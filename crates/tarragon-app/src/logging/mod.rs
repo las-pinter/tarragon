@@ -70,7 +70,6 @@ impl LogControl {
 #[derive(Debug)]
 pub struct Logging {
     /// The in-memory lines.
-    #[expect(dead_code, reason = "read by the code that shows the lines")]
     pub ring: LogRing,
     /// The level switch.
     pub control: LogControl,
@@ -90,6 +89,28 @@ fn open_file_writer(path: &Path) -> Result<(RotatingWriter, Option<String>), Str
         .map_err(|error| format!("cannot open the log file {}: {error}", path.display()))?;
     let warning = writer.take_warning();
     Ok((writer, warning))
+}
+
+/// Run `body` with a logger that writes only to stderr, for the part of the
+/// start that comes before the log file is opened. The logger lives on this
+/// thread and ends with the call; the global logger is not touched. Threads
+/// that `body` starts do not use it.
+pub fn with_stderr<T>(offset: UtcOffset, body: impl FnOnce() -> T) -> T {
+    with_writer(offset, std::io::stderr, body)
+}
+
+/// [`with_stderr`] with a chosen writer.
+fn with_writer<W, T>(offset: UtcOffset, writer: W, body: impl FnOnce() -> T) -> T
+where
+    W: for<'a> tracing_subscriber::fmt::MakeWriter<'a> + Send + Sync + 'static,
+{
+    let layer = tracing_subscriber::fmt::layer()
+        .event_format(LineFormat { offset })
+        .with_writer(writer);
+    let subscriber = tracing_subscriber::registry()
+        .with(level_filter(false))
+        .with(layer);
+    tracing::subscriber::with_default(subscriber, body)
 }
 
 /// Install the global logger and the `log` bridge.
@@ -159,7 +180,7 @@ mod tests {
     use tracing_subscriber::layer::SubscriberExt;
 
     use super::ring::{LogRing, RingLayer};
-    use super::{LogControl, open_file_writer};
+    use super::{LogControl, open_file_writer, with_writer};
 
     fn texts(ring: &LogRing) -> Vec<String> {
         ring.snapshot().into_iter().map(|e| e.text).collect()
@@ -231,5 +252,41 @@ mod tests {
         let message = open_file_writer(&bad).expect_err("must fail");
         assert!(message.starts_with("cannot open the log file"), "{message}");
         assert!(message.contains("tarragon.log"), "{message}");
+    }
+
+    #[test]
+    fn with_writer_logs_to_the_writer_without_a_global_logger() {
+        use std::sync::{Arc, Mutex};
+
+        #[derive(Clone, Default)]
+        struct Sink(Arc<Mutex<Vec<u8>>>);
+        impl std::io::Write for Sink {
+            fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+                self.0.lock().expect("sink").extend_from_slice(buf);
+                Ok(buf.len())
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+
+        let sink = Sink::default();
+        let writer = sink.clone();
+        let value = with_writer(
+            UtcOffset::UTC,
+            move || writer.clone(),
+            || {
+                tracing::warn!("guard says hello");
+                7
+            },
+        );
+        assert_eq!(value, 7);
+        let text = String::from_utf8(sink.0.lock().expect("sink").clone()).expect("utf8");
+        assert!(text.contains("WARNING"), "{text}");
+        assert!(text.contains("guard says hello"), "{text}");
+        // After the call no logger is left behind.
+        tracing::warn!("not captured");
+        let text = String::from_utf8(sink.0.lock().expect("sink").clone()).expect("utf8");
+        assert!(!text.contains("not captured"), "{text}");
     }
 }

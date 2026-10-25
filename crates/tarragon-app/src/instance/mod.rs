@@ -98,7 +98,6 @@ impl Guard {
     ///
     /// Poll this each frame and raise the window. On Wayland a focus request
     /// has no effect, so also request user attention.
-    #[cfg_attr(not(test), expect(dead_code, reason = "read by the UI loop"))]
     pub fn take_activate_request(&self) -> bool {
         self.delivery.flag.swap(false, Ordering::AcqRel)
     }
@@ -109,7 +108,6 @@ impl Guard {
     ///
     /// The function must not own the guard. If the last guard dropped on the
     /// listener thread, that thread would join itself.
-    #[cfg_attr(not(test), expect(dead_code, reason = "set by the UI loop"))]
     pub fn set_waker(&self, waker: impl Fn() + Send + Sync + 'static) {
         *self
             .delivery
@@ -203,6 +201,13 @@ fn acquire_in(
         ));
     }
     prepare_and_acquire::<Platform>(&location, uid, &layout)
+}
+
+/// [`acquire`] with a private folder under `root`, for tests that must not
+/// touch the runtime folder.
+#[cfg(test)]
+pub(crate) fn acquire_under(db_path: &Path, root: &Path) -> Outcome {
+    acquire_in(db_path, None, root, current_owner)
 }
 
 /// The folder of the database file, as a canonical path when possible.

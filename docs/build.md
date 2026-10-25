@@ -30,7 +30,7 @@ Host release build, glibc:
 cargo build --release
 ```
 
-The host release binary lands at `target/release/tarragon-app`.
+The host release binary lands at `target/release/tarragon`.
 
 Musl release build:
 
@@ -111,15 +111,17 @@ Host release, glibc (`cargo build --release`):
 
 | Binary | Bytes | MiB |
 |--------|-------|-----|
-| `target/release/tarragon-app` | 444,704 | 0.42 |
+| `target/release/tarragon` | 444,704 | 0.42 |
 
 Musl release: not built. The target std is absent.
 
 ### Scope of the measurement
 
-`tarragon-app` is a scaffold. Its manifest has no workspace crate dependency
-yet, and `main.rs` prints the version only. The release binary links std only.
-The binary has no eframe window and no crate wiring yet.
+The `tarragon-app` binary parses the `--version` and `--help` flags. Without a
+flag it resolves the data directory, sets up logging, takes the single-instance
+guard, and opens the database. It opens no window yet. The size figure above
+was measured at an earlier, smaller build, before this wiring, and is not
+re-measured here.
 
 The two heavy crates are measured through their examples. Run
 `cargo build --release --examples`.
@@ -209,7 +211,7 @@ The limit is 60 MB. Take 60 MB as 62,914,560 bytes.
 
 | Binary | Bytes | Result |
 |--------|-------|--------|
-| `tarragon-app` (glibc, release) | 444,704 | pass |
+| `tarragon` (package `tarragon-app`, glibc, release) | 444,704 | pass |
 | `grid_bench` (example) | 6,552,192 | pass |
 | `jpeg_q90_check` (example) | 2,041,520 | pass |
 
@@ -434,7 +436,7 @@ more than 20 percent below `wgpu`, so `wgpu` stays the default.
 ```sh
 rustup target list --installed
 cargo build --release
-stat -c '%s' target/release/tarragon-app
+stat -c '%s' target/release/tarragon
 cargo build --release --examples
 stat -c '%s' target/release/examples/grid_bench target/release/examples/jpeg_q90_check target/release/examples/stack_spike
 ```

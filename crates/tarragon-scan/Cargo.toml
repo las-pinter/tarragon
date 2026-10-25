@@ -12,7 +12,7 @@ rayon.workspace = true
 tarragon-core.workspace = true
 
 [dev-dependencies]
-tarragon-db = { path = "../tarragon-db", version = "0.1.0" }
+tarragon-db = { path = "../tarragon-db", version = "0.2.0" }
 
 [lints]
 workspace = true

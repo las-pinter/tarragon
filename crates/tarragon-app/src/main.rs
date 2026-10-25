@@ -1,5 +1,6 @@
 //! Binary entry point for the tarragon image browser.
 
+mod cli;
 mod data_dir;
 mod instance;
 mod logging;
@@ -69,6 +70,23 @@ impl App {
 }
 
 fn main() -> ExitCode {
+    // Flags return before any I/O, so they never touch the data directory.
+    match cli::parse(std::env::args_os().skip(1)) {
+        cli::Command::Run => {}
+        cli::Command::Version => {
+            println!("{}", cli::version_text());
+            return ExitCode::SUCCESS;
+        }
+        cli::Command::Help => {
+            print!("{}", cli::help_text());
+            return ExitCode::SUCCESS;
+        }
+        cli::Command::Unknown(arg) => {
+            eprint!("{}", cli::error_text(&arg));
+            return ExitCode::from(2);
+        }
+    }
+
     // The offset lookup must run before any other thread starts.
     let offset = logging::local_offset();
     let override_db = std::env::var_os("TARRAGON_DB");
@@ -108,7 +126,7 @@ fn main() -> ExitCode {
             if let Err(error) = app.persist_sort_if_changed() {
                 tracing::error!("cannot save the window state: {error}");
             }
-            println!("tarragon {}", env!("CARGO_PKG_VERSION"));
+            tracing::info!("tarragon {} started", env!("CARGO_PKG_VERSION"));
             ExitCode::SUCCESS
         }
         Err(error) => {

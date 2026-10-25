@@ -2550,7 +2550,7 @@ dependencies = [
 
 [[package]]
 name = "tarragon-app"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "eframe",
  "egui_dock",
@@ -2568,7 +2568,7 @@ dependencies = [
 
 [[package]]
 name = "tarragon-cache"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "image",
  "tarragon-core",
@@ -2577,14 +2577,14 @@ dependencies = [
 
 [[package]]
 name = "tarragon-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "thiserror 2.0.21",
 ]
 
 [[package]]
 name = "tarragon-db"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "rusqlite",
  "serde",
@@ -2595,7 +2595,7 @@ dependencies = [
 
 [[package]]
 name = "tarragon-psd"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "image",
  "tarragon-core",
@@ -2604,7 +2604,7 @@ dependencies = [
 
 [[package]]
 name = "tarragon-render"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "image",
  "tarragon-core",
@@ -2613,7 +2613,7 @@ dependencies = [
 
 [[package]]
 name = "tarragon-scan"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "notify",
  "rayon",
@@ -2623,7 +2623,7 @@ dependencies = [
 
 [[package]]
 name = "tarragon-ui"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "egui",
  "rayon",

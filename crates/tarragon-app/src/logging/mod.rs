@@ -25,7 +25,7 @@ use rotate::RotatingWriter;
 /// Tests that panic on purpose or set the panic hook take this lock, so one
 /// does not hit the hook of the other.
 #[cfg(test)]
-static PANIC_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+pub(crate) static PANIC_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 /// Dependency targets held at WARN in every mode. A target matches by prefix,
 /// so `wgpu` also covers `wgpu_core` and `egui` also covers `egui_wgpu`. The

@@ -1,6 +1,7 @@
 //! Binary entry point for the tarragon image browser.
 
 mod data_dir;
+mod instance;
 mod logging;
 
 use std::path::PathBuf;
@@ -86,6 +87,19 @@ fn main() -> ExitCode {
         Ok(found) => logging::install_panic_hook(found.crash_dir.clone()),
         Err(error) => tracing::warn!("no log file or crash reports: {error}"),
     }
+
+    // A second start must end here, before it opens the database.
+    let _instance = match instance::acquire(&db_path) {
+        instance::Outcome::Primary(guard) => Some(guard),
+        instance::Outcome::Forwarded => {
+            tracing::info!("another instance is running; asked it to show its window");
+            return ExitCode::SUCCESS;
+        }
+        instance::Outcome::Unguarded(reason) => {
+            tracing::warn!("starting without a single-instance guard: {reason}");
+            None
+        }
+    };
 
     match App::open(&db_path, &logging.control) {
         Ok(mut app) => {

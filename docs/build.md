@@ -212,10 +212,9 @@ example picks the renderer at run time through `NativeOptions`.
 
 ### Renderer
 
-The renderer is not final. The final choice waits for the frame-time run
-below. This section gives the working default and the rule to change it.
-
-Working default: `wgpu`. Keep `glow` as the fallback that the user can select.
+Decision: `wgpu` is the default renderer. `glow` stays as the fallback that
+the user can select. The decision is final. It follows the frame-time run
+below.
 
 Rule: `wgpu` stays the default unless one of these is true on the owner run:
 
@@ -223,6 +222,12 @@ Rule: `wgpu` stays the default unless one of these is true on the owner run:
   `glow` passes.
 - `glow` is clearly better: its p99 is more than 20 percent lower than the
   `wgpu` p99 on the same machine and in the same session type.
+
+Outcome: neither condition is true in either session type. `wgpu` passes
+both. `glow` has the higher p99 in both session types: 39.91 ms against
+27.83 ms on Wayland, where `glow` also fails the limit, and 21.21 ms against
+15.74 ms on X11. See the results in "Frame
+time".
 
 Reasons for `wgpu`:
 
@@ -322,8 +327,9 @@ needs `egui ^0.35` (crates.io data) and does not fit. The workspace pins
 
 ### Frame time
 
-Status: pending. The owner runs the measurement on a desktop with a GPU. This
-machine has no usable display.
+Status: done. The owner ran the measurement on a local desktop with a GPU.
+Do not measure over an SSH X forward. It usually renders in software and has
+no DRI3 direct path.
 
 The example uploads 1000 textures of 256 by 256 pixels. All 1000 stay alive
 for the whole run. It scrolls the grid by itself, and only the visible rows
@@ -339,8 +345,9 @@ frame times), not only the configured duration. The exit code is 0 on a pass,
 log cannot be written. The limits are a p99 under 33 ms and no frame over
 100 ms (hard fail).
 
-Vsync is on. At 60 Hz one dropped frame takes 33.3 ms. So more than 1 percent
-dropped frames puts the p99 at 33 ms or more, and the run fails.
+Vsync is on. On a 60 Hz display one dropped frame takes 33.3 ms. So more than
+1 percent dropped frames puts the p99 at 33 ms or more, and the run fails. The
+logs do not record the refresh rate.
 
 Keep the window visible and not covered during each run. Do not minimize it
 and do not put another window over it. A minimized or covered window stops
@@ -379,12 +386,30 @@ cargo run --release --example stack_spike -p tarragon-app -- \
 A smoke run under Xvfb with software rendering (`llvmpipe`) passed the code
 path. Those times are not GPU times. They are not the measurement.
 
-Results (to fill in after the owner run):
+Results. Machine: NVIDIA GeForce RTX 4070 (discrete GPU), NVIDIA driver
+615.78.08, OpenGL 4.6.0, Vulkan device API 1.4.351. `glxinfo` reports direct
+rendering. Each run had 1000 textures, a 30 s span, a mean of 67.4 to 67.5 and
+a maximum of 72 tiles drawn per frame, and no lost focus. No frame was over
+100 ms.
 
-| Renderer | Session | p50 | p95 | p99 | max | Result |
-|----------|---------|-----|-----|-----|-----|--------|
-| glow | | | | | | |
-| wgpu | | | | | | |
+| Renderer | Session | Frames | p50 | p95 | p99 | max | Result |
+|----------|---------|--------|-----|-----|-----|-----|--------|
+| glow | Wayland | 1116 | 26.70 ms | 27.19 ms | 39.91 ms | 40.66 ms | FAIL |
+| wgpu | Wayland | 1703 | 13.58 ms | 27.31 ms | 27.83 ms | 28.17 ms | PASS |
+| glow | X11 | 2250 | 13.36 ms | 15.91 ms | 21.21 ms | 25.81 ms | PASS |
+| wgpu | X11 | 2250 | 13.37 ms | 14.96 ms | 15.74 ms | 18.11 ms | PASS |
+
+The `glow` log does not name the driver. It reads "OpenGL through glow".
+The `wgpu` logs name the adapter: `NVIDIA GeForce RTX 4070 (Vulkan,
+DiscreteGpu)`.
+
+On Wayland, the `glow` p50 of 26.70 ms is about two frame intervals. A few
+frames near 40 ms put its p99 over the 33 ms limit. The cause is not known.
+`wgpu` passes. Also on Wayland, `wgpu` has a p95 of 27.31 ms against a p50 of
+13.58 ms, so about a third of the frames take two intervals. The cause is not
+known. X11 shows no such effect. On X11, both pass and `wgpu` has the lower
+p99. The renderer rule compares only within one session type. `glow` is never
+more than 20 percent below `wgpu`, so `wgpu` stays the default.
 
 ## Reproduce
 

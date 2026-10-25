@@ -3,7 +3,7 @@
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
-use tarragon_core::paths::{DataPaths, PORTABLE_DIRNAME, platform_data_dir};
+use tarragon_core::paths::{DataPaths, LOG_FILENAME, PORTABLE_DIRNAME, platform_data_dir};
 
 /// Why the data directory could not be set up.
 #[derive(Debug, thiserror::Error)]
@@ -44,6 +44,50 @@ pub fn db_path(override_db: Option<OsString>) -> Result<PathBuf, DataDirError> {
     let paths = resolve()?;
     ensure_dirs(&paths)?;
     Ok(paths.db())
+}
+
+/// Where the log file and the crash files go.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LogLocation {
+    /// The log file path.
+    pub log_file: PathBuf,
+    /// The folder for crash files.
+    pub crash_dir: PathBuf,
+}
+
+/// Pick the log and crash locations.
+///
+/// A non-empty `override_db` puts both beside the database file, and no folder
+/// is created. Otherwise the log is the data root's log file and crash files
+/// go in the data root. This call creates no folder.
+///
+/// # Errors
+///
+/// Returns [`DataDirError`] when the data root cannot be found.
+pub fn log_location(override_db: Option<OsString>) -> Result<LogLocation, DataDirError> {
+    locate(override_path(override_db), resolve)
+}
+
+/// The choice behind [`log_location`], with the root lookup passed in.
+fn locate(
+    override_db: Option<PathBuf>,
+    resolve_root: impl FnOnce() -> Result<DataPaths, DataDirError>,
+) -> Result<LogLocation, DataDirError> {
+    if let Some(db) = override_db {
+        let dir = match db.parent() {
+            Some(parent) if !parent.as_os_str().is_empty() => parent.to_path_buf(),
+            _ => PathBuf::from("."),
+        };
+        return Ok(LogLocation {
+            log_file: dir.join(LOG_FILENAME),
+            crash_dir: dir,
+        });
+    }
+    let paths = resolve_root()?;
+    Ok(LogLocation {
+        log_file: paths.log(),
+        crash_dir: paths.root().to_path_buf(),
+    })
 }
 
 /// The database override from the environment. An empty value counts as unset.
@@ -104,7 +148,10 @@ mod tests {
 
     use tarragon_core::paths::DataPaths;
 
-    use super::{create, db_path, ensure_dirs, override_path, portable_dir_exists};
+    use super::{
+        DataDirError, LogLocation, create, db_path, ensure_dirs, locate, override_path,
+        portable_dir_exists,
+    };
 
     /// A temporary folder that removes itself on drop.
     struct TempDir(PathBuf);
@@ -191,5 +238,46 @@ mod tests {
         std::fs::write(&file, b"x").expect("write");
         let error = create(&file.join("sub")).expect_err("must fail");
         assert!(error.to_string().contains("file"));
+    }
+
+    #[test]
+    fn override_puts_log_and_crash_files_beside_the_db() {
+        let dir = std::env::temp_dir().join("custom");
+        let found = locate(Some(dir.join("my.db")), || {
+            Err(DataDirError::NoExeDir(PathBuf::new()))
+        })
+        .expect("locate");
+        assert_eq!(
+            found,
+            LogLocation {
+                log_file: dir.join("tarragon.log"),
+                crash_dir: dir,
+            }
+        );
+    }
+
+    #[test]
+    fn bare_override_file_name_uses_the_current_folder() {
+        let found = locate(Some(PathBuf::from("my.db")), || {
+            Err(DataDirError::NoExeDir(PathBuf::new()))
+        })
+        .expect("locate");
+        assert_eq!(found.crash_dir, PathBuf::from("."));
+        assert_eq!(found.log_file, PathBuf::from(".").join("tarragon.log"));
+    }
+
+    #[test]
+    fn without_override_the_data_root_holds_both() {
+        let root = std::env::temp_dir().join("root");
+        let paths = DataPaths::new(root.clone());
+        let found = locate(None, || Ok(paths)).expect("locate");
+        assert_eq!(found.log_file, root.join("tarragon.log"));
+        assert_eq!(found.crash_dir, root);
+    }
+
+    #[test]
+    fn without_override_a_root_failure_is_returned() {
+        let result = locate(None, || Err(DataDirError::NoExeDir(PathBuf::new())));
+        assert!(result.is_err());
     }
 }

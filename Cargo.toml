@@ -55,6 +55,20 @@ image = { version = "=0.25.10", default-features = false }
 # three advisory ignores in `deny.toml` in the same change.
 zip = { version = "=8.6.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
+# Logging. `tracing` matches the version already in the lockfile.
+# `tracing-subscriber` keeps default features off: no ANSI codes reach the
+# log file, and the level filter needs no regex. `tracing-appender` supplies
+# only the `non_blocking` writer; size rotation lives in the app crate.
+tracing = { version = "=0.1.44", default-features = false, features = ["std"] }
+tracing-subscriber = { version = "=0.3.23", default-features = false, features = ["std", "fmt", "registry"] }
+tracing-appender = { version = "=0.2.5", default-features = false }
+# The `log` bridge: wgpu, egui, winit and eframe log through the `log` crate.
+tracing-log = { version = "=0.2.0", default-features = false, features = ["std", "log-tracer"] }
+log = "=0.4.34"
+# Local time for log lines. Only the offset lookup and the date fields are
+# used; no formatting features.
+time = { version = "=0.3.55", default-features = false, features = ["std", "local-offset"] }
+
 # Dependencies build optimized in dev and test, so image decoding and egui
 # code do not run at opt-level 0. The workspace crates keep fast rebuilds.
 [profile.dev.package."*"]

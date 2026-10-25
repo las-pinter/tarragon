@@ -162,3 +162,17 @@ segments.
 
 Reason: the vendored Roboto family has no check glyph, and a text `v` reads as
 a letter at the caption size. The difference is visual only.
+
+## Log levels and toolbar
+
+Before: `design/mockups/log-panel.html` shows five levels, with a critical level
+in the coral-muted colour. The toolbar Clear button and Debug checkbox use an
+11 px font.
+
+After: the Log panel has four levels: debug, info, warn, and error. The critical
+level is not used. The Clear button and the Debug checkbox use the default egui
+sizes. A long line ends with an ellipsis, while the mockup clips it with no
+ellipsis.
+
+Reason: the log source has no critical level, because tracing stops at error.
+The default widget sizes keep the toolbar the same as the other egui controls.

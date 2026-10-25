@@ -11,6 +11,9 @@ use crate::grid::GridItem;
 use crate::theme::{panel_frame, panel_title};
 use crate::tokens;
 
+mod log_panel;
+pub use log_panel::{LogLevel, LogLine, LogPanelEvents, LogSlice, LogSource, LogView};
+
 /// The product name shown in the title bar.
 pub const PRODUCT_NAME: &str = "Tarragon";
 
@@ -148,8 +151,23 @@ impl Shell {
         self.preview_width = tokens::PREVIEW_WIDTH;
     }
 
-    /// Draw one frame of the shell into the given ui.
+    /// Draw one frame of the shell with an empty log.
     pub fn show(&mut self, ui: &mut Ui) {
+        self.show_with_log(
+            ui,
+            &LogView {
+                source: &LogSlice(&[]),
+                debug: false,
+            },
+        );
+    }
+
+    /// Draw one frame of the shell, and show `log` in the Log panel.
+    ///
+    /// The panel reads `log` only while it is visible, so a caller can skip
+    /// building the lines when `log_visible()` is false.
+    pub fn show_with_log(&mut self, ui: &mut Ui, log: &LogView<'_>) -> LogPanelEvents {
+        let mut events = LogPanelEvents::default();
         let ctx = ui.ctx().clone();
 
         Panel::top("tarragon-titlebar")
@@ -203,6 +221,7 @@ impl Shell {
                 .frame(panel_frame(tokens::BG_SECONDARY, Margin::same(8)))
                 .show(ui, |ui| {
                     panel_title(ui, DOCK_LOG);
+                    events = log_panel::show(ui, log);
                 });
         }
 
@@ -212,6 +231,7 @@ impl Shell {
                 .frame(panel_frame(tokens::BG_PRIMARY, Margin::same(8)))
                 .show(ui, |ui| self.gallery.show(ui));
         }
+        events
     }
 
     /// Draw the File, View, and Settings menus. The items are placeholders.

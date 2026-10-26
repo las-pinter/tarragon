@@ -3,24 +3,32 @@
 mod app;
 mod cli;
 mod data_dir;
+mod feed;
 mod instance;
 mod logging;
 mod logview;
-// The grid does not call the pipeline yet, so its items look unused.
-#[allow(dead_code)]
 mod pipeline;
 mod run;
+mod thumbs;
 mod window;
 
 use std::process::ExitCode;
 use std::sync::Arc;
 
-use app::App;
+use app::{App, Startup};
 
 fn main() -> ExitCode {
     // Flags return before any I/O, so they never touch the data directory.
-    match cli::parse(std::env::args_os().skip(1)) {
-        cli::Command::Run => {}
+    let folder = match cli::parse(std::env::args_os().skip(1)) {
+        cli::Command::Run(None) => None,
+        // A bad folder ends the start here, before any window or database.
+        cli::Command::Run(Some(folder)) => match cli::check_folder(&folder) {
+            Ok(folder) => Some(folder),
+            Err(text) => {
+                eprint!("{text}");
+                return ExitCode::from(2);
+            }
+        },
         cli::Command::Version => {
             println!("{}", cli::version_text());
             return ExitCode::SUCCESS;
@@ -33,7 +41,7 @@ fn main() -> ExitCode {
             eprint!("{}", cli::error_text(&arg));
             return ExitCode::from(2);
         }
-    }
+    };
 
     // The offset lookup must run before any other thread starts.
     let offset = logging::local_offset();
@@ -87,12 +95,19 @@ fn main() -> ExitCode {
     }
 
     // The guard stays alive here until the window closes.
+    let exit_wait = thumbs::ExitWait::default();
     let open = || {
         App::open(
             &db_path,
             logging.ring.clone(),
             logging.control.clone(),
             guard.clone(),
+            Startup {
+                folder: folder.clone(),
+                // A test hook: the smoke test closes the window when the grid is done.
+                close_when_loaded: std::env::var_os("TARRAGON_CLOSE_WHEN_LOADED").is_some(),
+                exit_wait: exit_wait.clone(),
+            },
         )
     };
     // Open once first, so a bad database ends the start before any window.
@@ -104,7 +119,10 @@ fn main() -> ExitCode {
         }
     };
     tracing::info!("tarragon {} started", env!("CARGO_PKG_VERSION"));
-    match run::run(first, &open) {
+    let outcome = run::run(first, &open);
+    // The window is gone; let the render threads finish and store their rows.
+    exit_wait.wait();
+    match outcome {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
             report(logging.installed, &error.to_string());

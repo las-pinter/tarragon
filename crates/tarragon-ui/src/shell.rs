@@ -121,6 +121,11 @@ impl Shell {
         self.gallery.set_folder(folder);
     }
 
+    /// The gallery, for the app to set tile textures and read the visible tiles.
+    pub fn gallery_mut(&mut self) -> &mut Gallery {
+        &mut self.gallery
+    }
+
     /// Set the gallery sort mode and return the frame.
     #[must_use]
     pub fn with_sort_mode(mut self, mode: SortMode) -> Self {

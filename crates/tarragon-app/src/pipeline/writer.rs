@@ -17,6 +17,7 @@ pub(super) enum Message {
     /// A cache hit: set `last_accessed` for this path.
     Touch(String),
     /// Reply on the sender once every earlier row is stored.
+    #[cfg_attr(not(test), expect(dead_code, reason = "only tests send it"))]
     Flush(Sender<()>),
 }
 

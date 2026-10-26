@@ -1,30 +1,46 @@
 //! The running application and its eframe frame loop.
 
 use std::error::Error;
-use std::path::Path;
-use std::sync::Arc;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
-use eframe::egui::{Context, Event, Ui};
+use eframe::egui::{Context, Event, Ui, ViewportCommand};
+use tarragon_cache::store::CacheStore;
 use tarragon_db::Database;
 use tarragon_db::settings::{SettingKey, SettingValue, Settings, SettingsError, WindowState};
 use tarragon_ui::Shell;
 use tarragon_ui::shell::{LogPanelEvents, LogView};
 
+use crate::data_dir;
 use crate::instance::Guard;
 use crate::logging::LogControl;
 use crate::logging::ring::LogRing;
 use crate::logview::LogCache;
+use crate::pipeline::{Config, Pipeline, Repaint};
+use crate::thumbs::{ExitWait, Thumbs};
 use crate::window::{self, Geometry};
 
 /// How often the open Log panel looks for new lines. The ring cannot wake the
 /// UI, and egui otherwise repaints only on input.
 const LOG_REFRESH: Duration = Duration::from_millis(250);
 
+/// What the command line asked for.
+pub struct Startup {
+    /// The folder to open, or none for an empty window.
+    pub folder: Option<PathBuf>,
+    /// Close the window once every tile has a texture or an error. `main` sets
+    /// it from the `TARRAGON_CLOSE_WHEN_LOADED` environment variable, which the
+    /// smoke test uses.
+    pub close_when_loaded: bool,
+    /// Lets `main` wait for the pipeline after the window closes.
+    pub exit_wait: ExitWait,
+}
+
 /// The running application: one database, one window state, one shell.
 pub struct App {
-    /// The open database.
-    db: Database,
+    /// The open database. The pipeline threads share it.
+    db: Arc<Database>,
     /// The retained window state, including the sort mode.
     window_state: WindowState,
     /// The window frame and its gallery.
@@ -43,6 +59,14 @@ pub struct App {
     tracker: window::Tracker,
     /// The single-instance guard. It stays alive as long as the app.
     guard: Option<Arc<Guard>>,
+    /// The folder pipeline, when a folder was given.
+    thumbs: Option<Thumbs>,
+    /// The window context for worker threads, set once the window exists.
+    repaint_ctx: Arc<OnceLock<Context>>,
+    /// Close the window when the grid is done.
+    close_when_loaded: bool,
+    /// Lets `main` wait for the pipeline after the window closes.
+    exit_wait: ExitWait,
 }
 
 impl App {
@@ -59,9 +83,11 @@ impl App {
         ring: LogRing,
         control: LogControl,
         guard: Option<Arc<Guard>>,
+        startup: Startup,
     ) -> Result<Self, Box<dyn Error>> {
         let db = Database::open(path)?;
         db.initialize()?;
+        let db = Arc::new(db);
         let settings = Settings::new(&db);
         let mut debug = false;
         match settings.get(SettingKey::DebugMode) {
@@ -75,6 +101,11 @@ impl App {
             tracing::warn!("the stored window state was invalid and was repaired");
         }
         let shell = Shell::new().with_sort_mode(window_state.sort_mode());
+        let repaint_ctx = Arc::new(OnceLock::new());
+        let thumbs = match startup.folder {
+            Some(folder) => Some(start_thumbs(path, &db, folder, &repaint_ctx)?),
+            None => None,
+        };
         Ok(Self {
             geometry: window_state.geometry,
             tracker: window::Tracker::new(window_state.geometry),
@@ -86,6 +117,10 @@ impl App {
             logs: LogCache::default(),
             debug,
             guard,
+            thumbs,
+            repaint_ctx,
+            close_when_loaded: startup.close_when_loaded,
+            exit_wait: startup.exit_wait,
         })
     }
 
@@ -99,6 +134,8 @@ impl App {
     /// The waker holds only the context, never the guard, so the guard can
     /// drop on any thread.
     pub fn install_waker(&self, ctx: &Context) {
+        // A second call keeps the first context.
+        let _ = self.repaint_ctx.set(ctx.clone());
         if let Some(guard) = &self.guard {
             let ctx = ctx.clone();
             guard.set_waker(move || ctx.request_repaint());
@@ -145,6 +182,33 @@ impl App {
     }
 }
 
+/// Build the pipeline for `folder`. The cache sits where the `cache_dir`
+/// setting says, else beside the database.
+fn start_thumbs(
+    db_path: &Path,
+    db: &Arc<Database>,
+    folder: PathBuf,
+    repaint_ctx: &Arc<OnceLock<Context>>,
+) -> Result<Thumbs, Box<dyn Error>> {
+    let setting = Settings::new(db)
+        .get(SettingKey::CacheDir)
+        .unwrap_or_else(|error| {
+            tracing::warn!("cannot read the cache folder setting: {error}");
+            SettingValue::None
+        });
+    let cache = CacheStore::new(data_dir::cache_root(db_path, &setting));
+    let ctx = Arc::clone(repaint_ctx);
+    // Before the window exists there is nothing to repaint.
+    let repaint: Repaint = Arc::new(move || {
+        if let Some(ctx) = ctx.get() {
+            ctx.request_repaint();
+        }
+    });
+    let (pipeline, results) =
+        Pipeline::new(Config::new(cache), Arc::clone(db), Arc::clone(&repaint))?;
+    Ok(Thumbs::new(pipeline, results, folder, repaint))
+}
+
 /// Raise the window when a second start asked for it.
 fn raise_if_requested(ctx: &Context, guard: Option<&Guard>) {
     let requested = guard.is_some_and(Guard::take_activate_request);
@@ -187,6 +251,9 @@ impl eframe::App for App {
             self.logs.pull(&self.ring);
             ctx.request_repaint_after(LOG_REFRESH);
         }
+        if let Some(thumbs) = &mut self.thumbs {
+            thumbs.before_draw(&ctx, self.shell.gallery_mut());
+        }
         let source = self.logs.source();
         let view = LogView {
             source: &source,
@@ -194,6 +261,15 @@ impl eframe::App for App {
         };
         let events = self.shell.show_with_log(ui, &view);
         self.apply_log_events(events);
+        if let Some(thumbs) = &mut self.thumbs {
+            thumbs.after_draw(self.shell.gallery_mut());
+            if self.close_when_loaded
+                && let Some(summary) = thumbs.loaded_once()
+            {
+                tracing::info!("{summary}");
+                ctx.send_viewport_cmd(ViewportCommand::Close);
+            }
+        }
 
         if let Err(error) = self.persist_sort_if_changed() {
             tracing::error!("cannot save the window state: {error}");
@@ -205,6 +281,9 @@ impl eframe::App for App {
         self.geometry = self.tracker.at_exit(self.geometry);
         tracing::debug!("window geometry to save: {:?}", self.geometry);
         self.save_window_state();
+        if let Some(thumbs) = &mut self.thumbs {
+            thumbs.shutdown(&self.exit_wait);
+        }
     }
 }
 
@@ -235,8 +314,18 @@ mod tests {
             Outcome::Unguarded(reason) => panic!("expected a primary guard: {reason}"),
         };
         let (_filter, control) = LogControl::new_filter();
-        let app = App::open(&db_path, LogRing::new(), control, Some(Arc::new(guard)))
-            .expect("open the app");
+        let app = App::open(
+            &db_path,
+            LogRing::new(),
+            control,
+            Some(Arc::new(guard)),
+            Startup {
+                folder: None,
+                close_when_loaded: false,
+                exit_wait: ExitWait::default(),
+            },
+        )
+        .expect("open the app");
         assert!(matches!(
             instance::acquire_under(&db_path, &dir.0),
             Outcome::Forwarded

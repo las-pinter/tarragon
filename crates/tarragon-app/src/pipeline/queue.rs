@@ -14,6 +14,8 @@ struct State {
     visible: BTreeMap<u64, Job>,
     rest: BTreeMap<u64, Job>,
     wanted: HashSet<PathBuf>,
+    /// The next free sequence number, so a late job sorts after the rest.
+    next_seq: u64,
     shutdown: bool,
 }
 
@@ -35,6 +37,7 @@ impl JobQueue {
         let mut state = self.lock();
         state.visible.clear();
         state.wanted.clear();
+        state.next_seq = jobs.len() as u64;
         state.rest = (0..).zip(jobs).collect();
         drop(state);
         self.wake.notify_all();
@@ -56,6 +59,25 @@ impl JobQueue {
             }
         }
         state.wanted.clone_from(visible);
+    }
+
+    /// Queue `jobs` for the visible set again. A path that is still queued is
+    /// not added twice.
+    pub(super) fn request(&self, jobs: Vec<Job>) {
+        let mut state = self.lock();
+        let pending: HashSet<PathBuf> = state
+            .visible
+            .values()
+            .chain(state.rest.values())
+            .map(|job| job.path.clone())
+            .collect();
+        for job in jobs.into_iter().filter(|job| !pending.contains(&job.path)) {
+            let seq = state.next_seq;
+            state.next_seq += 1;
+            state.visible.insert(seq, job);
+        }
+        drop(state);
+        self.wake.notify_all();
     }
 
     /// Wait for the next job. It returns `None` after [`Self::shutdown`].

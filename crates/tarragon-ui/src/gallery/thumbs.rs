@@ -11,6 +11,12 @@ use super::Gallery;
 use crate::grid::TileError;
 
 impl Gallery {
+    /// True when the gallery has an item at `key`.
+    #[must_use]
+    pub fn has_item(&self, key: &Path) -> bool {
+        self.index.contains_key(key)
+    }
+
     /// Show `texture` on the item at `key`. Return false for an unknown key.
     ///
     /// A new texture also clears an earlier failure.

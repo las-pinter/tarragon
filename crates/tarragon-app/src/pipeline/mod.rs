@@ -21,17 +21,18 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+#[cfg(test)]
+use std::time::Duration;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use crossbeam_channel::{Receiver, Sender};
 use image::DynamicImage;
 use tarragon_cache::store::{CacheStore, SourceStamp};
+use tarragon_core::entity::FileInfo;
 use tarragon_core::error::{RenderError, ScanError};
 use tarragon_db::{Database, DbError};
 use tarragon_scan::scan::{build_pool, scan_folder, worker_pool_size};
 
-// The grid is the only user of these names and it is not wired yet.
-#[allow(unused_imports)]
 pub use job::{ErrorKind, ThumbError, ThumbResult};
 
 use job::Job;
@@ -92,6 +93,15 @@ impl Config {
     }
 }
 
+/// What `open_folder` found.
+#[derive(Debug)]
+pub struct Opened {
+    /// The generation that tags every result of this folder.
+    pub generation: u64,
+    /// The scanned files, so the caller can show a tile for each at once.
+    pub files: Vec<FileInfo>,
+}
+
 /// The receiving end for the UI. It never returns a stale result.
 pub struct Results {
     receiver: Receiver<ThumbResult>,
@@ -111,6 +121,7 @@ impl Results {
     }
 
     /// Wait up to `timeout` for the next current result.
+    #[cfg(test)]
     #[must_use]
     pub fn recv_timeout(&self, timeout: Duration) -> Option<ThumbResult> {
         let end = std::time::Instant::now() + timeout;
@@ -143,8 +154,9 @@ pub struct Pipeline {
     db: Arc<Database>,
     queue: Arc<JobQueue>,
     generation: Arc<AtomicU64>,
-    cache: CacheStore,
     failures: Failures,
+    /// The jobs of the open folder, kept so a dropped texture can be asked for again.
+    jobs: HashMap<PathBuf, Job>,
     rows: Option<Sender<writer::Message>>,
     workers: Vec<JoinHandle<()>>,
     writer: Option<JoinHandle<()>>,
@@ -171,8 +183,8 @@ impl Pipeline {
             db: Arc::clone(&db),
             queue: Arc::clone(&queue),
             generation: Arc::clone(&generation),
-            cache: config.cache.clone(),
             failures: Arc::clone(&failures),
+            jobs: HashMap::new(),
             rows: Some(row_tx.clone()),
             workers: Vec::new(),
             writer: None,
@@ -209,7 +221,8 @@ impl Pipeline {
     }
 
     /// Scan `folder`, store the scan rows, and queue a job for each file.
-    /// It returns the new generation. Jobs of the old folder are dropped.
+    /// It returns the new generation and the files. Jobs of the old folder are
+    /// dropped.
     ///
     /// The scan and the row write run on the calling thread.
     ///
@@ -217,7 +230,7 @@ impl Pipeline {
     ///
     /// Returns an error when the scan or a database call fails. The old
     /// folder stays current in that case.
-    pub fn open_folder(&mut self, folder: &Path) -> Result<u64, PipelineError> {
+    pub fn open_folder(&mut self, folder: &Path) -> Result<Opened, PipelineError> {
         let files = build_pool()
             .map_err(|error| PipelineError::ScanPool(error.to_string()))?
             .install(|| scan_folder(folder))?;
@@ -245,7 +258,7 @@ impl Pipeline {
         // Drop failures of files that are not in this folder.
         let present: HashSet<&PathBuf> = files.iter().map(|file| &file.path).collect();
         failures.retain(|path, _| present.contains(path));
-        let jobs = files
+        let jobs: Vec<Job> = files
             .iter()
             .map(|file| {
                 let stamp = SourceStamp {
@@ -276,8 +289,29 @@ impl Pipeline {
             })
             .collect();
         drop(failures);
+        self.jobs = jobs
+            .iter()
+            .map(|job| (job.path.clone(), job.clone()))
+            .collect();
         self.queue.replace(jobs);
-        Ok(generation)
+        Ok(Opened { generation, files })
+    }
+
+    /// Queue these files again, ahead of the rest. Use it for a visible tile
+    /// whose texture was dropped. The render step reads the cache, so this is
+    /// cheap when the first render stored its files. Unknown paths are skipped.
+    pub fn request(&self, keys: &HashSet<PathBuf>) {
+        let jobs = keys
+            .iter()
+            .filter_map(|key| self.jobs.get(key))
+            .map(|job| Job {
+                // The first render stored the stamp it saw, so the cache check
+                // passes when the files exist and falls back to a render if not.
+                stored: Some(job.stamp),
+                ..job.clone()
+            })
+            .collect();
+        self.queue.request(jobs);
     }
 
     /// Queue the jobs for these visible items first. Other jobs keep their
@@ -287,6 +321,10 @@ impl Pipeline {
     }
 
     /// Wait until the writer has stored every row queued so far.
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "only tests wait for stored rows")
+    )]
     pub fn flush(&self) {
         let Some(rows) = &self.rows else { return };
         let (ack_tx, ack_rx) = crossbeam_channel::bounded(1);

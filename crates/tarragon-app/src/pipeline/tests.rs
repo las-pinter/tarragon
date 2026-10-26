@@ -165,7 +165,11 @@ fn every_format_gives_an_ok_result_and_alpha_caches_png() {
     let folder = mixed_folder(&dir);
     let calls = Arc::default();
     let mut setup = start(dir, 2, counting_render(&calls));
-    let generation = setup.pipeline.open_folder(&folder).expect("open");
+    let generation = setup
+        .pipeline
+        .open_folder(&folder)
+        .expect("open")
+        .generation;
 
     let results = collect(&setup.results, 7);
     let mut names: Vec<String> = results.iter().map(name_of).collect();
@@ -372,9 +376,17 @@ fn an_old_generation_never_reaches_the_consumer() {
         Ok(DynamicImage::ImageRgba8(RgbaImage::new(4, 4)))
     });
     let mut setup = start(dir, 1, render);
-    let old = setup.pipeline.open_folder(&first).expect("open first");
+    let old = setup
+        .pipeline
+        .open_folder(&first)
+        .expect("open first")
+        .generation;
     entered_rx.recv_timeout(WAIT).expect("a render started");
-    let new = setup.pipeline.open_folder(&second).expect("open second");
+    let new = setup
+        .pipeline
+        .open_folder(&second)
+        .expect("open second")
+        .generation;
     assert_eq!(new, old + 1);
     release_tx.send(()).expect("release");
 
@@ -557,4 +569,39 @@ fn only_permanent_failures_are_remembered() {
     ] {
         assert!(!kind.is_permanent());
     }
+}
+
+#[test]
+fn a_requested_file_comes_back_from_the_cache_without_a_render() {
+    let dir = TempDir::new();
+    let folder = dir.sub("again");
+    write_png(&folder.join("alpha.png"), 128);
+    write_png(&folder.join("plain.png"), 255);
+    let calls = Arc::default();
+    let mut setup = start(dir, 1, counting_render(&calls));
+    let generation = setup
+        .pipeline
+        .open_folder(&folder)
+        .expect("open")
+        .generation;
+    collect(&setup.results, 2);
+
+    let key = folder.join("alpha.png");
+    let unknown = folder.join("nope.png");
+    setup
+        .pipeline
+        .request(&HashSet::from([key.clone(), unknown]));
+    let again = collect(&setup.results, 1);
+
+    assert_eq!(again[0].key, key);
+    assert_eq!(again[0].generation, generation);
+    assert!(again[0].outcome.is_ok());
+    assert_eq!(calls.lock().expect("lock").len(), 2, "the cache served it");
+    assert!(
+        setup
+            .results
+            .recv_timeout(Duration::from_millis(200))
+            .is_none(),
+        "an unknown path queues nothing"
+    );
 }

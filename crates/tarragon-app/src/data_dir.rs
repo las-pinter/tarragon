@@ -4,6 +4,7 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
 use tarragon_core::paths::{DataPaths, LOG_FILENAME, PORTABLE_DIRNAME, platform_data_dir};
+use tarragon_db::settings::SettingValue;
 
 /// Why the data directory could not be set up.
 #[derive(Debug, thiserror::Error)]
@@ -44,6 +45,22 @@ pub fn db_path(override_db: Option<OsString>) -> Result<PathBuf, DataDirError> {
     let paths = resolve()?;
     ensure_dirs(&paths)?;
     Ok(paths.db())
+}
+
+/// Where the thumbnail cache lives: the `cache_dir` setting when it holds
+/// text, else the cache folder of the data root. The data root is the folder
+/// of the database file.
+pub fn cache_root(db_path: &Path, setting: &SettingValue) -> PathBuf {
+    if let SettingValue::Text(text) = setting
+        && !text.is_empty()
+    {
+        return PathBuf::from(text);
+    }
+    let root = match db_path.parent() {
+        Some(parent) if !parent.as_os_str().is_empty() => parent,
+        _ => Path::new("."),
+    };
+    DataPaths::new(root).cache()
 }
 
 /// Where the log file and the crash files go.
@@ -148,8 +165,10 @@ mod tests {
 
     use tarragon_core::paths::DataPaths;
 
+    use tarragon_db::settings::SettingValue;
+
     use super::{
-        DataDirError, LogLocation, create, db_path, ensure_dirs, locate, override_path,
+        DataDirError, LogLocation, cache_root, create, db_path, ensure_dirs, locate, override_path,
         portable_dir_exists,
     };
 
@@ -171,6 +190,21 @@ mod tests {
         fn drop(&mut self) {
             let _ = std::fs::remove_dir_all(&self.0);
         }
+    }
+
+    #[test]
+    fn the_cache_dir_setting_wins_over_the_default() {
+        let db = PathBuf::from("/data/tarragon.db");
+        let set = SettingValue::Text("/elsewhere/cache".to_owned());
+        assert_eq!(cache_root(&db, &set), PathBuf::from("/elsewhere/cache"));
+        assert_eq!(
+            cache_root(&db, &SettingValue::None),
+            PathBuf::from("/data/cache")
+        );
+        assert_eq!(
+            cache_root(&db, &SettingValue::Text(String::new())),
+            PathBuf::from("/data/cache")
+        );
     }
 
     #[test]

@@ -298,6 +298,9 @@ impl Compositor {
             LayerContent::Gradient(fill) => {
                 Self::render_gradient(fill, viewport, document, options)?
             }
+            LayerContent::Pattern(fill) => {
+                Self::render_pattern(fill, node.index, viewport, document, options)?
+            }
             LayerContent::Pixels | LayerContent::Unsupported | LayerContent::Adjustment(_) => {
                 (read.color.clone(), read.shape.clone())
             }
@@ -407,6 +410,9 @@ fn base_geom(
         LayerContent::SolidColor(rgba) => vec![rgba[3]; count],
         LayerContent::Gradient(fill) => {
             Compositor::render_gradient(fill, viewport, document, options)?.1
+        }
+        LayerContent::Pattern(fill) => {
+            Compositor::render_pattern(fill, Some(index), viewport, document, options)?.1
         }
         LayerContent::Pixels | LayerContent::Unsupported | LayerContent::Adjustment(_) => {
             read.shape.clone()

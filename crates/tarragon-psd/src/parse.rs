@@ -96,6 +96,7 @@ fn parse(data: &[u8], options: &ParseOptions) -> Result<PsdFile, PsdError> {
             layer_count: 0,
             layers: Vec::new(),
             global_mask: None,
+            patterns: Vec::new(),
             merged_has_alpha: false,
             layer_info_error: None,
         }
@@ -113,6 +114,7 @@ fn parse(data: &[u8], options: &ParseOptions) -> Result<PsdFile, PsdError> {
         layers: section.layers,
         global_mask: section.global_mask,
         global_light,
+        patterns: section.patterns,
         merged_has_alpha: section.merged_has_alpha,
         layer_info_error: section.layer_info_error,
         merged,

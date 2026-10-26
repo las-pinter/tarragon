@@ -6,6 +6,7 @@ use crate::error::PsdError;
 use crate::layer::{ChannelInfo, GlobalMask, LayerRecord};
 use crate::limits::ParseOptions;
 use crate::merged::MergedImage;
+use crate::patterns::PatternEntry;
 
 /// The PSD or PSB file version.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -170,6 +171,8 @@ pub struct PsdFile {
     pub global_mask: Option<GlobalMask>,
     /// The document global light for the effects that follow it.
     pub global_light: GlobalLight,
+    /// The document pattern table from the `Patt`, `Pat2` and `Pat3` blocks.
+    pub patterns: Vec<PatternEntry>,
     /// True when the layer count is negative, which marks the first extra
     /// merged channel as the transparency of the merged image.
     pub merged_has_alpha: bool,

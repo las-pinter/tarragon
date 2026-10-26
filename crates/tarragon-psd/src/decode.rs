@@ -308,7 +308,12 @@ fn read_samples(bytes: &[u8], bytes_per_sample: usize, row: &mut [u16]) {
 }
 
 /// Decode one `PackBits` row. A short run zero-pads to the row length.
-fn decode_packbits(input: &[u8], scratch: &mut [u8], bytes_per_sample: usize, row: &mut [u16]) {
+pub(crate) fn decode_packbits(
+    input: &[u8],
+    scratch: &mut [u8],
+    bytes_per_sample: usize,
+    row: &mut [u16],
+) {
     scratch.fill(0);
     let row_bytes = scratch.len();
     let mut source = 0usize;

@@ -105,7 +105,6 @@ impl Descriptor {
     }
 
     /// The text at `key`.
-    #[cfg(test)]
     #[must_use]
     pub fn text(&self, key: &[u8]) -> Option<&str> {
         match self.get(key)? {

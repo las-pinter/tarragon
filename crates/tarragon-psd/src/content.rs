@@ -9,6 +9,7 @@
 
 use crate::adjustments::Adjustment;
 use crate::descriptor::{Descriptor, Value, parse_versioned};
+use crate::pattern_fill::PatternFill;
 
 /// The gradient style of a `GdFl` fill layer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -63,6 +64,8 @@ pub enum LayerContent {
     SolidColor([f32; 4]),
     /// A gradient fill layer.
     Gradient(GradientFill),
+    /// A pattern fill layer.
+    Pattern(PatternFill),
     /// An adjustment layer.
     Adjustment(Adjustment),
     /// A recognized block the compositor does not apply yet.

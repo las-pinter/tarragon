@@ -3,10 +3,11 @@
 use crate::content::LayerContent;
 use crate::effects::Effects;
 use crate::error::PsdError;
-use crate::layer_blocks::read_tagged_block;
 use crate::layer_extra::read_layer_extra;
+use crate::layer_tail::{TaggedTail, drop_unmatched_pattern_fills, read_tagged_tail};
 use crate::limits::{MAX_DIMENSION, MAX_LAYER_CHANNELS, ParseOptions};
 use crate::model::{Compression, PsdHeader, PsdVersion, sample_levels};
+use crate::patterns::PatternEntry;
 use crate::reader::{Reader, to_usize};
 use crate::vector_mask::VectorMask;
 
@@ -211,6 +212,8 @@ pub(crate) struct LayerSectionData {
     pub(crate) layers: Vec<LayerRecord>,
     /// The global layer mask, when present.
     pub(crate) global_mask: Option<GlobalMask>,
+    /// The document pattern table.
+    pub(crate) patterns: Vec<PatternEntry>,
     /// True when the layer count was negative, which marks merged transparency.
     pub(crate) merged_has_alpha: bool,
     /// The message of the error that the tagged layer info scan dropped.
@@ -218,13 +221,13 @@ pub(crate) struct LayerSectionData {
 }
 
 /// The parsed layer info: the records and the sign of the layer count.
-struct LayerInfo {
+pub(crate) struct LayerInfo {
     /// The declared number of layer records.
-    layer_count: usize,
+    pub(crate) layer_count: usize,
     /// The layer records, in file order.
-    layers: Vec<LayerRecord>,
+    pub(crate) layers: Vec<LayerRecord>,
     /// True when the layer count was negative.
-    merged_has_alpha: bool,
+    pub(crate) merged_has_alpha: bool,
 }
 
 /// Parse the bounded layer-and-mask section.
@@ -246,56 +249,43 @@ pub(crate) fn parse_layer_section(
         parse_layer_info(&mut body, header, options)?
     };
     let global_mask = parse_global_mask(section)?;
-    let mut layer_info_error = None;
-    if info.layers.is_empty() {
-        // The tagged blocks are optional extras. A bad block means no layers
-        // are found there, and the merged image still renders. Only a timeout
-        // or a cancel stops the parse. The crate has no logging, so the
-        // dropped error is kept as text on the parsed file and a caller reads
-        // it through `PsdDocument::layer_info_error`.
-        match read_tagged_layer_info(section, header, options) {
-            Err(error) if error.is_transient() => return Err(error),
-            Ok(Some(found)) => info = found,
-            Ok(None) => {}
-            Err(error) => layer_info_error = Some(error.to_string()),
-        }
+    // The tagged blocks are optional extras. A bad block means no layers or
+    // patterns are found there, and the merged image still renders. Only a
+    // timeout or a cancel stops the parse. The crate has no logging, so the
+    // dropped error is kept as text on the parsed file and a caller reads it
+    // through `PsdDocument::layer_info_error`.
+    let mut tail = TaggedTail::default();
+    let want_layers = info.layers.is_empty();
+    match read_tagged_tail(section, header, options, want_layers, &mut tail) {
+        Err(error) if error.is_transient() => return Err(error),
+        Err(error) => tail.error = Some(error),
+        Ok(()) => {}
     }
+    let found_layers = tail.layer_info.is_some();
+    if let Some(found) = tail.layer_info {
+        info = found;
+    }
+    // A clean layer info block is not a dropped error, even when a later
+    // block is bad.
+    let layer_info_error = if want_layers && !found_layers {
+        tail.error.map(|error| error.to_string())
+    } else {
+        None
+    };
+    let mut layers = info.layers;
+    drop_unmatched_pattern_fills(&mut layers, &tail.patterns);
     Ok(LayerSectionData {
         layer_count: info.layer_count,
-        layers: info.layers,
+        layers,
         global_mask,
+        patterns: tail.patterns,
         merged_has_alpha: info.merged_has_alpha,
         layer_info_error,
     })
 }
 
-/// Find the layer info in a tagged block after the global mask.
-///
-/// A 16-bit or 32-bit document writes an empty main layer info and keeps the
-/// layers in an `Lr16`, `Lr32`, or `Layr` block.
-fn read_tagged_layer_info(
-    section: &mut Reader,
-    header: &PsdHeader,
-    options: &ParseOptions,
-) -> Result<Option<LayerInfo>, PsdError> {
-    while section.remaining() >= 12 {
-        options.check()?;
-        let Some(block) = read_tagged_block(section, header.version)? else {
-            break;
-        };
-        if block.is_layer_info() {
-            let mut body = Reader::at(block.data, block.offset);
-            return parse_layer_info(&mut body, header, options).map(Some);
-        }
-        // These blocks pad to a four-byte boundary.
-        let pad = (4 - block.data.len() % 4) % 4;
-        section.skip(pad.min(section.remaining()))?;
-    }
-    Ok(None)
-}
-
 /// Parse the bounded layer info body: records then channel image data.
-fn parse_layer_info(
+pub(crate) fn parse_layer_info(
     body: &mut Reader,
     header: &PsdHeader,
     options: &ParseOptions,

@@ -212,6 +212,11 @@ pub struct DocumentSpec {
     pub merged_section: Option<Vec<u8>>,
     /// Raw bytes written after the global mask, in place of tagged blocks.
     pub section_tail: Vec<u8>,
+    /// Framed tagged blocks written after the global mask and before the layer
+    /// info block. Only used with `layer_info_block`.
+    pub leading_global_blocks: Vec<u8>,
+    /// Framed tagged blocks written after the layer info, in both layouts.
+    pub extra_global_blocks: Vec<u8>,
 }
 
 impl DocumentSpec {
@@ -231,6 +236,8 @@ impl DocumentSpec {
             merged_channels: None,
             merged_section: None,
             section_tail: Vec::new(),
+            leading_global_blocks: Vec::new(),
+            extra_global_blocks: Vec::new(),
         }
     }
 
@@ -436,6 +443,7 @@ pub fn build_psd(spec: &DocumentSpec) -> Vec<u8> {
     if let Some(key) = spec.layer_info_block {
         push_length(&mut section, 0, spec.psb);
         push_u32(&mut section, 0);
+        section.extend_from_slice(&spec.leading_global_blocks);
         section.extend_from_slice(b"8BIM");
         section.extend_from_slice(&key);
         push_length(
@@ -446,11 +454,13 @@ pub fn build_psd(spec: &DocumentSpec) -> Vec<u8> {
         section.extend_from_slice(&info);
         let pad = (4 - info.len() % 4) % 4;
         section.extend(std::iter::repeat_n(0u8, pad));
+        section.extend_from_slice(&spec.extra_global_blocks);
     } else {
         push_length(&mut section, info.len(), spec.psb);
         section.extend_from_slice(&info);
         push_u32(&mut section, 0);
         section.extend_from_slice(&spec.section_tail);
+        section.extend_from_slice(&spec.extra_global_blocks);
     }
     push_length(&mut data, section.len(), spec.psb);
     data.extend_from_slice(&section);

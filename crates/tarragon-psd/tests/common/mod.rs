@@ -10,6 +10,7 @@
 mod builder;
 mod effects;
 mod encoders;
+mod patterns;
 mod raw_bytes;
 mod tiles;
 mod vector;
@@ -36,6 +37,11 @@ pub use encoders::{
     levels_record, mixr_block, phfl_block, push_id, push_unicode, rgbc, selc_block, soco,
     value_boolean, value_descriptor, value_double, value_enum, value_integer, value_list,
     value_raw, value_unit_float, versioned,
+};
+#[allow(unused_imports)]
+pub use patterns::{
+    PatternSpec, PtflSpec, packbits_row, packbits_rows, pattern_body, pattern_record, ptfl_block,
+    tagged_block,
 };
 #[allow(unused_imports)]
 pub use raw_bytes::{layered_psd, raw_psd, read_fixture, section_offset};

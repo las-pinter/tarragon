@@ -19,6 +19,9 @@ const LARGE_LENGTH_KEYS: [&[u8; 4]; 13] = [
 ];
 /// The keys that hold the layer info of a 16-bit or 32-bit document.
 const LAYER_INFO_KEYS: [&[u8; 4]; 3] = [b"Lr16", b"Lr32", b"Layr"];
+/// The aliased keys of the document pattern table. They use four-byte lengths
+/// also in a PSB file.
+const PATTERN_KEYS: [&[u8; 4]; 3] = [b"Patt", b"Pat2", b"Pat3"];
 
 /// One tagged block: its key and its data.
 pub(crate) struct TaggedBlock<'a> {
@@ -34,6 +37,11 @@ impl TaggedBlock<'_> {
     /// True when the block holds the layer info of a 16-bit or 32-bit document.
     pub(crate) fn is_layer_info(&self) -> bool {
         LAYER_INFO_KEYS.contains(&&self.key)
+    }
+
+    /// True when the block holds the document pattern table.
+    pub(crate) fn is_pattern_table(&self) -> bool {
+        PATTERN_KEYS.contains(&&self.key)
     }
 }
 

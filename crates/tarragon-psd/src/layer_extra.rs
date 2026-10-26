@@ -9,6 +9,7 @@ use crate::error::PsdError;
 use crate::layer::{BlendingRanges, LayerBounds, LayerMask, LayerSection, validate_layer_bounds};
 use crate::layer_blocks::read_tagged_block;
 use crate::model::PsdVersion;
+use crate::pattern_fill::parse_pattern_fill;
 use crate::reader::{Reader, to_usize};
 use crate::vector_mask::{VectorMask, parse_vector_mask};
 
@@ -238,8 +239,10 @@ fn read_extra_blocks(
             content = parse_gradient_fill(block)
                 .map_or(LayerContent::Unsupported, LayerContent::Gradient);
         } else if &key == b"PtFl" {
-            // A pattern fill needs the document pattern table (a documented gap).
-            content = LayerContent::Unsupported;
+            // The layer stays a pattern fill only when the document pattern
+            // table holds the pattern. The layer section parser checks that.
+            content =
+                parse_pattern_fill(block).map_or(LayerContent::Unsupported, LayerContent::Pattern);
         } else if &key == b"brit" {
             brightness_contrast = Some(block.to_vec());
         } else if &key == b"CgEd" {

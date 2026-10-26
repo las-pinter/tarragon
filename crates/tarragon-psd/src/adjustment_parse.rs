@@ -5,6 +5,7 @@
 //! that are malformed give `None`.
 
 use crate::adjustment_parse_color::parse_color_adjustment;
+use crate::adjustment_parse_desc::parse_tone_adjustment;
 use crate::adjustments::{Adjustment, Curve, CurvePoint, LevelsChannel};
 use crate::descriptor::parse_versioned;
 
@@ -68,6 +69,7 @@ pub fn parse_adjustment(key: &[u8; 4], data: &[u8], lut_size: u32) -> Option<Adj
         b"expA" | b"mixr" | b"blnc" | b"hue2" | b"selc" | b"phfl" => {
             parse_color_adjustment(*key, data)
         }
+        b"vibA" | b"blwh" | b"grdm" => parse_tone_adjustment(*key, data),
         _ => None,
     }
 }

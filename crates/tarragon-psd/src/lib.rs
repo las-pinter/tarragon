@@ -14,6 +14,8 @@
 mod adjustment_color;
 mod adjustment_parse;
 mod adjustment_parse_color;
+mod adjustment_parse_desc;
+mod adjustment_tone;
 pub mod adjustments;
 pub mod blend;
 pub mod composite;

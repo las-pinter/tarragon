@@ -129,13 +129,34 @@ fn gradient_units(angle: f32, width: f32, height: f32) -> (f32, f32) {
     (chord, length)
 }
 
+/// Sort color stops by location and re-key the midpoints to the sorted segments.
+///
+/// Each input midpoint belongs to the stop that ends its segment. The result
+/// holds one midpoint per segment between sorted neighbours. A missing
+/// midpoint reads as one half.
+#[must_use]
+pub(crate) fn sort_stops(
+    stops: &[(f32, [f32; 4])],
+    midpoints: &[f32],
+) -> (Vec<(f32, [f32; 4])>, Vec<f32>) {
+    let mut order: Vec<usize> = (0..stops.len()).collect();
+    order.sort_by(|a, b| stops[*a].0.total_cmp(&stops[*b].0));
+    let sorted = order.iter().map(|i| stops[*i]).collect();
+    let mids = order
+        .iter()
+        .skip(1)
+        .map(|i| midpoints.get(*i).copied().unwrap_or(0.5))
+        .collect();
+    (sorted, mids)
+}
+
 /// Sample color stops with their segment midpoints.
 #[allow(
     clippy::many_single_char_names,
     reason = "t is the standard gradient parameter"
 )]
 #[must_use]
-fn sample_stops(stops: &[(f32, [f32; 4])], midpoints: &[f32], t: f32) -> [f32; 4] {
+pub(crate) fn sample_stops(stops: &[(f32, [f32; 4])], midpoints: &[f32], t: f32) -> [f32; 4] {
     let (Some(first), Some(last)) = (stops.first(), stops.last()) else {
         return [0.0, 0.0, 0.0, 1.0];
     };
@@ -283,15 +304,7 @@ fn parse_gradient_stops(gradient: &Descriptor) -> GradientStops {
             midpoints.push(midpoint);
         }
     }
-    let mut order: Vec<usize> = (0..stops.len()).collect();
-    order.sort_by(|a, b| stops[*a].0.total_cmp(&stops[*b].0));
-    let sorted: Vec<(f32, [f32; 4])> = order.iter().map(|i| stops[*i]).collect();
-    // Each midpoint is stored on the stop that ends its segment.
-    let mids: Vec<f32> = order
-        .iter()
-        .skip(1)
-        .map(|i| midpoints.get(*i).copied().unwrap_or(0.5))
-        .collect();
+    let (sorted, mids) = sort_stops(&stops, &midpoints);
     let mut opacity: Vec<(f32, f32)> = Vec::new();
     if let Some(items) = gradient.list(b"Trns") {
         for item in items {

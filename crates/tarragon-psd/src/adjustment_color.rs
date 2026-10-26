@@ -35,7 +35,7 @@ fn mat3_mul(matrix: &[[f32; 3]; 3], vector: [f32; 3]) -> [f32; 3] {
 }
 
 /// The sRGB curve, encoded to linear.
-fn srgb_to_linear(value: f32) -> f32 {
+pub(crate) fn srgb_to_linear(value: f32) -> f32 {
     let value = value.max(0.0);
     if value <= 0.040_45 {
         value / 12.92
@@ -45,7 +45,7 @@ fn srgb_to_linear(value: f32) -> f32 {
 }
 
 /// The sRGB curve, linear to encoded.
-fn linear_to_srgb(value: f32) -> f32 {
+pub(crate) fn linear_to_srgb(value: f32) -> f32 {
     let value = value.max(0.0);
     if value <= 0.003_130_8 {
         value * 12.92

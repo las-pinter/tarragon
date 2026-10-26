@@ -3,14 +3,16 @@
 //! The core set covers invert, posterize, threshold, levels, curves and
 //! brightness/contrast. Exposure, Channel Mixer, Color Balance, Hue/Saturation,
 //! Selective Color and Photo Filter have their math in `crate::adjustment_color`.
+//! Vibrance, Black & White and Gradient Map have their math in
+//! `crate::adjustment_tone`.
 //! Binary block parsing lives in `crate::adjustment_parse` and is re-exported here.
 //!
-//! Values are normalized `f32` in `0.0..=1.0`. Gradient Map, Black & White,
-//! Vibrance and Color Lookup are documented gaps.
+//! Values are normalized `f32` in `0.0..=1.0`. Color Lookup and the Gradient
+//! Map dither are documented gaps.
 
-use crate::adjustment_color;
 pub use crate::adjustment_color::{HueMaster, HueRange};
 pub use crate::adjustment_parse::{parse_adjustment, parse_brightness_contrast};
+use crate::{adjustment_color, adjustment_tone};
 
 /// The number of samples in a tone lookup table.
 const LUT_SIZE: usize = 256;
@@ -225,6 +227,32 @@ pub enum Adjustment {
         /// True to keep the luminosity of the pixel.
         preserve_luminosity: bool,
     },
+    /// Vibrance and Saturation.
+    Vibrance {
+        /// The vibrance slider in `-100.0..=100.0`.
+        vibrance: f32,
+        /// The saturation slider in `-100.0..=100.0`.
+        saturation: f32,
+    },
+    /// Black & White, with an optional tint.
+    BlackWhite {
+        /// Reds, yellows, greens, cyans, blues, magentas, in percent.
+        weights: [f32; 6],
+        /// The tint color, or `None` for plain grey.
+        tint: Option<[f32; 3]>,
+    },
+    /// Map the grey value of a pixel to a color on a gradient.
+    ///
+    /// The map is opaque, so the stop alpha is ignored. The dither flag and
+    /// the smoothness of the block are not applied.
+    GradientMap {
+        /// The color stops, sorted by location.
+        stops: Vec<(f32, [f32; 4])>,
+        /// One midpoint per segment between the stops.
+        midpoints: Vec<f32>,
+        /// True to run the ramp from white to black.
+        reverse: bool,
+    },
 }
 
 impl Adjustment {
@@ -315,6 +343,18 @@ impl Adjustment {
                     *preserve_luminosity,
                 );
             }
+            Self::Vibrance {
+                vibrance,
+                saturation,
+            } => *rgb = adjustment_tone::vibrance(*rgb, vibrance / 100.0, saturation / 100.0),
+            Self::BlackWhite { weights, tint } => {
+                *rgb = adjustment_tone::black_white(*rgb, weights, *tint);
+            }
+            Self::GradientMap {
+                stops,
+                midpoints,
+                reverse,
+            } => *rgb = adjustment_tone::gradient_map(*rgb, stops, midpoints, *reverse),
         }
     }
 }

@@ -82,6 +82,26 @@ pub enum RenderError {
         /// The allowed cap in pixels.
         cap: u32,
     },
+    /// A renderer panicked. The render guard caught the panic.
+    #[error("the renderer crashed on {path}: {message}")]
+    Panicked {
+        /// The file path.
+        path: PathBuf,
+        /// The panic message.
+        message: String,
+    },
+    /// The render took longer than the time limit.
+    #[error("rendering {path} took too long")]
+    Timeout {
+        /// The file path.
+        path: PathBuf,
+    },
+    /// The caller stopped the render before it finished.
+    #[error("rendering {path} was cancelled")]
+    Cancelled {
+        /// The file path.
+        path: PathBuf,
+    },
 }
 
 /// The top-level application error.
@@ -121,6 +141,20 @@ mod tests {
             reason: "gone".to_owned(),
         });
         assert_eq!(error.to_string(), "cannot watch /x: gone");
+    }
+
+    #[test]
+    fn the_new_render_errors_say_what_happened() {
+        let path = std::path::PathBuf::from("/a.psd");
+        let panicked = RenderError::Panicked {
+            path: path.clone(),
+            message: "boom".to_owned(),
+        };
+        assert_eq!(panicked.to_string(), "the renderer crashed on /a.psd: boom");
+        let timeout = RenderError::Timeout { path: path.clone() };
+        assert_eq!(timeout.to_string(), "rendering /a.psd took too long");
+        let cancelled = RenderError::Cancelled { path };
+        assert_eq!(cancelled.to_string(), "rendering /a.psd was cancelled");
     }
 
     #[test]

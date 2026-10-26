@@ -154,9 +154,9 @@ impl PsdError {
     /// Convert to the shared render error and tag the file path.
     ///
     /// The composite path returns [`RenderError`], so the parser error
-    /// crosses the crate boundary through this method. The shared error has no
-    /// timeout or cancel variant, so those two still map to a decode failure;
-    /// [`PsdError::is_transient`] tells them apart before the conversion.
+    /// crosses the crate boundary through this method. A timeout and a cancel
+    /// keep their own variants, so a caller can tell them from a decode
+    /// failure and does not record them as a permanent fault.
     #[must_use]
     pub fn into_render_error(self, path: &Path) -> RenderError {
         match self {
@@ -165,6 +165,12 @@ impl PsdError {
                 source,
             },
             PsdError::CapExceeded { edge, cap } => RenderError::TooLarge { edge, cap },
+            PsdError::Timeout => RenderError::Timeout {
+                path: path.to_path_buf(),
+            },
+            PsdError::Cancelled => RenderError::Cancelled {
+                path: path.to_path_buf(),
+            },
             other => RenderError::Decode {
                 path: path.to_path_buf(),
                 reason: other.to_string(),
@@ -189,6 +195,22 @@ mod tests {
             matches!(&rendered, RenderError::Decode { path, .. } if path == Path::new("deep.psb"))
         );
         assert!(rendered.to_string().contains("version"));
+    }
+
+    #[test]
+    fn a_timeout_maps_to_the_timeout_variant() {
+        let rendered = PsdError::Timeout.into_render_error(Path::new("slow.psd"));
+        assert!(
+            matches!(&rendered, RenderError::Timeout { path } if path == Path::new("slow.psd"))
+        );
+    }
+
+    #[test]
+    fn a_cancel_maps_to_the_cancelled_variant() {
+        let rendered = PsdError::Cancelled.into_render_error(Path::new("stop.psd"));
+        assert!(
+            matches!(&rendered, RenderError::Cancelled { path } if path == Path::new("stop.psd"))
+        );
     }
 
     #[test]

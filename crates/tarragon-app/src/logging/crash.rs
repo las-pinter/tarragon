@@ -5,6 +5,7 @@ use std::io::{self, Write as _};
 use std::panic::{AssertUnwindSafe, PanicHookInfo};
 use std::path::{Path, PathBuf};
 
+use tarragon_core::render_scope::inside_render_guard;
 use time::{OffsetDateTime, UtcOffset};
 
 use super::stamp;
@@ -95,17 +96,31 @@ pub(super) fn write_crash_report(dir: &Path, info: &CrashInfo) -> io::Result<Pat
 /// Log panics and write a crash file into `crash_dir`, then run the hook that
 /// was set before.
 ///
+/// A panic inside the render guard is only logged: it gets no crash file and
+/// the previous hook does not run.
 /// The hook ignores its own I/O errors. It prints the crash file path to
 /// stderr.
 pub fn install_panic_hook(crash_dir: PathBuf) {
     let previous = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         report(&crash_dir, info);
-        previous(info);
+        // A caught render panic is only logged, so the default panic text
+        // stays off the terminal.
+        if !inside_render_guard() {
+            previous(info);
+        }
     }));
 }
 
-/// Log one panic and write its crash file.
+/// True when a panic must leave a crash file.
+///
+/// The render guard catches a render panic and turns it into an error, so the
+/// app goes on. That panic is only logged.
+const fn writes_crash_file(inside_render_guard: bool) -> bool {
+    !inside_render_guard
+}
+
+/// Log one panic and write its crash file, unless the render guard catches it.
 fn report(dir: &Path, info: &PanicHookInfo<'_>) {
     let thread = std::thread::current();
     let crash = CrashInfo {
@@ -123,7 +138,9 @@ fn report(dir: &Path, info: &PanicHookInfo<'_>) {
         backtrace: std::backtrace::Backtrace::force_capture().to_string(),
     };
     // The file comes first: the log call is the part most likely to fail.
-    if let Ok(path) = write_crash_report(dir, &crash) {
+    if writes_crash_file(inside_render_guard())
+        && let Ok(path) = write_crash_report(dir, &crash)
+    {
         // `eprintln!` would panic on a closed stderr.
         let _ = writeln!(io::stderr(), "tarragon: crash report: {}", path.display());
     }
@@ -343,6 +360,12 @@ mod tests {
     }
 
     #[test]
+    fn a_panic_inside_the_render_guard_writes_no_crash_file() {
+        assert!(!super::writes_crash_file(true));
+        assert!(super::writes_crash_file(false));
+    }
+
+    #[test]
     fn hook_writes_a_crash_file_for_a_caught_panic() {
         let _serial = super::super::PANIC_TEST_LOCK
             .lock()
@@ -362,6 +385,31 @@ mod tests {
         let text = std::fs::read_to_string(&files[0]).expect("read");
         assert!(text.contains("Message: hook test panic"));
         assert!(text.contains("Backtrace:"));
+    }
+
+    #[test]
+    fn hook_writes_no_crash_file_inside_the_render_guard() {
+        let _serial = super::super::PANIC_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let temp = TempDir::new();
+        let _restore = HookGuard(Some(std::panic::take_hook()));
+        let previous_ran = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let flag = std::sync::Arc::clone(&previous_ran);
+        std::panic::set_hook(Box::new(move |_| {
+            flag.store(true, std::sync::atomic::Ordering::SeqCst);
+        }));
+        install_panic_hook(temp.0.clone());
+        let result = std::panic::catch_unwind(|| {
+            let _scope = tarragon_core::render_scope::RenderGuardScope::enter();
+            panic!("guarded hook test panic");
+        });
+        assert!(result.is_err());
+        assert_eq!(pending_crash_reports(&temp.0).len(), 0);
+        assert!(
+            !previous_ran.load(std::sync::atomic::Ordering::SeqCst),
+            "the previous hook ran inside the guard"
+        );
     }
 
     #[test]

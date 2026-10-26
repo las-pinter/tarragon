@@ -14,6 +14,7 @@ pub mod error;
 pub mod filter_state;
 pub mod format;
 pub mod paths;
+pub mod render_scope;
 pub mod sorting;
 pub mod tier;
 

@@ -16,6 +16,7 @@ pub use tarragon_core::format::SUPPORTED_EXTENSIONS;
 use tarragon_core::format::is_supported_extension;
 
 use crate::clip::render_clip_image;
+use crate::guard::run_guarded;
 use crate::krita::render_kra_image;
 use crate::plain::render_plain_image;
 use crate::renderer::{RenderedImage, Renderer};
@@ -56,7 +57,9 @@ pub fn renderer_for(extension: &str) -> Renderer {
 /// payload is the lower-case dotted extension. When the path has no extension,
 /// the payload is the file name instead, so the card shows a clear token.
 /// Returns [`RenderError::Io`] when the file cannot be read. Returns
-/// [`RenderError::Decode`] when the file cannot be decoded.
+/// [`RenderError::Decode`] when the file cannot be decoded. Returns
+/// [`RenderError::Panicked`] when the renderer panics; every format passes the
+/// same panic guard here.
 pub fn render(path: &Path) -> Result<RenderedImage, RenderError> {
     let Some(extension) = path.extension().and_then(OsStr::to_str) else {
         // No extension means no dotted key. Report the file name, not a bare
@@ -72,7 +75,8 @@ pub fn render(path: &Path) -> Result<RenderedImage, RenderError> {
     if !is_supported_extension(&extension) {
         return Err(RenderError::UnsupportedFormat(format!(".{extension}")));
     }
-    renderer_for(&format!(".{extension}"))(path)
+    let renderer = renderer_for(&format!(".{extension}"));
+    run_guarded(path, || renderer(path))
 }
 
 #[cfg(test)]

@@ -13,6 +13,7 @@
 pub mod clip;
 pub mod color;
 mod color_classify;
+pub mod guard;
 pub mod krita;
 mod limits;
 pub mod plain;

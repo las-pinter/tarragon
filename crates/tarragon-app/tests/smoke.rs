@@ -95,6 +95,8 @@ fn every_tile_settles_and_the_alpha_source_caches_png_tiers() {
         .arg(&folder)
         .env("TARRAGON_DB", data.join("tarragon.db"))
         .env("TARRAGON_CLOSE_WHEN_LOADED", "1")
+        .env_remove("WAYLAND_DISPLAY")
+        .env_remove("WAYLAND_SOCKET")
         .stdin(Stdio::null())
         .spawn()
         .expect("start xvfb-run");

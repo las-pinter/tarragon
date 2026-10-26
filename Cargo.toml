@@ -37,6 +37,9 @@ egui = { version = "=0.36.2", default-features = false }
 # `default_fonts` would bring the OFL-1.1 and Ubuntu-font-1.0 fonts.
 eframe = { version = "=0.36.2", default-features = false, features = ["glow", "wgpu", "x11", "wayland"] }
 egui_dock = "=0.21.1"
+# The app matches the winit errors that eframe returns. This is the version
+# eframe already uses; no features are added.
+winit = { version = "=0.30.13", default-features = false }
 # rayon handles CPU-bound work. The grid example caps its pool at four threads.
 rayon = "1.11"
 # The render pipeline sends results from worker threads to the UI over a

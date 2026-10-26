@@ -267,6 +267,7 @@ mod tests {
             section,
             content: crate::content::LayerContent::Pixels,
             has_vector_mask: false,
+            vector_mask: None,
             effects: None,
         }
     }

@@ -8,6 +8,7 @@ use crate::layer_extra::read_layer_extra;
 use crate::limits::{MAX_DIMENSION, MAX_LAYER_CHANNELS, ParseOptions};
 use crate::model::{Compression, PsdHeader, PsdVersion, sample_levels};
 use crate::reader::{Reader, to_usize};
+use crate::vector_mask::VectorMask;
 
 /// The blend mode signature in a layer record.
 const BLEND_SIGNATURE: &[u8; 4] = b"8BIM";
@@ -196,6 +197,8 @@ pub struct LayerRecord {
     pub content: LayerContent,
     /// True when the record carries a vector mask path block.
     pub has_vector_mask: bool,
+    /// The parsed vector mask path, when the block is present and valid.
+    pub vector_mask: Option<VectorMask>,
     /// The parsed layer effects, when the record carries an effects block.
     pub effects: Option<Effects>,
 }
@@ -475,6 +478,7 @@ fn read_layer_record(
         section: parsed.section,
         content: parsed.content,
         has_vector_mask: parsed.has_vector_mask,
+        vector_mask: parsed.vector_mask,
         effects: parsed.effects,
     })
 }

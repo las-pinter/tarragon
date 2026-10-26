@@ -320,9 +320,10 @@ fn hard_mix_keeps_its_photoshop_corner_cases() {
 }
 
 #[test]
-fn a_vector_mask_block_is_detected_but_not_applied() {
-    // The parser records the block; rasterizing the path is a documented gap.
-    // Both the `vmsk` and `vsms` keys mark a vector mask.
+fn a_vector_mask_block_is_detected_even_when_its_path_is_bad() {
+    // Both the `vmsk` and `vsms` keys mark a vector mask. This body has the
+    // wrong version, so it gives no path. The rasterizer tests are in
+    // `composite_vector_mask.rs`.
     for key in [b"vmsk", b"vsms"] {
         let mut spec = DocumentSpec::new(1, 1, 8, 3);
         spec.layers

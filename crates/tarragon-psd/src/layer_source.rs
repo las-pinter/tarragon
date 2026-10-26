@@ -10,6 +10,7 @@ use crate::error::PsdError;
 use crate::layer::{LayerBounds, LayerRecord};
 use crate::limits::ParseOptions;
 use crate::model::ColorMode;
+use crate::vector_raster::rasterize;
 
 /// The decoded color, coverage, and mask of one layer over a viewport.
 pub(crate) struct LayerRead {
@@ -57,6 +58,7 @@ pub(crate) fn read_layer(
     };
     let shape = shape_from(&region, layer.bounds, viewport, count, scale);
     let mask = mask_from(&region, layer, viewport, count, scale);
+    let mask = with_vector_mask(mask, layer, document, viewport);
     Ok(LayerRead { color, shape, mask })
 }
 
@@ -184,6 +186,31 @@ fn mask_from(
         }
     }
     Some(shape)
+}
+
+/// Fold the vector mask coverage into the raster mask.
+///
+/// The two multiply. A disabled or missing vector mask leaves the mask as is.
+fn with_vector_mask(
+    mask: Option<Vec<f32>>,
+    layer: &LayerRecord,
+    document: &PsdDocument,
+    viewport: Viewport,
+) -> Option<Vec<f32>> {
+    let Some(vector) = layer.vector_mask.as_ref().filter(|v| !v.disabled) else {
+        return mask;
+    };
+    let header = &document.file().header;
+    let coverage = rasterize(vector, header.width, header.height, viewport);
+    match mask {
+        Some(mut raster) => {
+            for (value, factor) in raster.iter_mut().zip(&coverage) {
+                *value *= *factor;
+            }
+            Some(raster)
+        }
+        None => Some(coverage),
+    }
 }
 
 /// Build a constant RGB plane from a straight RGBA color.

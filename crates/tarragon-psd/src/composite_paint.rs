@@ -39,7 +39,7 @@ use crate::effects_apply::{
 use crate::effects_interior::paint_interior;
 use crate::effects_map::Coverage;
 use crate::error::PsdError;
-use crate::layer::LayerBounds;
+use crate::layer::{LayerBounds, LayerRecord};
 use crate::layer_source::{read_layer, solid_color};
 use crate::layer_tree::LayerNode;
 use crate::limits::{FULL_TIER_MAX_EDGE, ParseOptions};
@@ -354,7 +354,7 @@ impl Compositor {
                     .file()
                     .layers
                     .get(index)
-                    .is_some_and(|layer| layer.mask.is_some()) =>
+                    .is_some_and(LayerRecord::has_mask) =>
             {
                 read_layer(document, index, viewport, options)?.mask
             }

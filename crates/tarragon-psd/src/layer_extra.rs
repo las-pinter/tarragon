@@ -10,6 +10,7 @@ use crate::layer::{BlendingRanges, LayerBounds, LayerMask, LayerSection, validat
 use crate::layer_blocks::read_tagged_block;
 use crate::model::PsdVersion;
 use crate::reader::{Reader, to_usize};
+use crate::vector_mask::{VectorMask, parse_vector_mask};
 
 /// The mask flag bit that says mask parameters follow the flags byte.
 const MASK_HAS_PARAMETERS: u8 = 0x10;
@@ -50,6 +51,8 @@ pub(crate) struct LayerExtra {
     pub(crate) content: LayerContent,
     /// True when a vector mask block is present.
     pub(crate) has_vector_mask: bool,
+    /// The parsed vector mask path, when the block is present and valid.
+    pub(crate) vector_mask: Option<VectorMask>,
     /// The parsed layer effects.
     pub(crate) effects: Option<Effects>,
 }
@@ -77,6 +80,7 @@ pub(crate) fn read_layer_extra(
         fill_opacity: blocks.fill_opacity,
         content: blocks.content,
         has_vector_mask: blocks.has_vector_mask,
+        vector_mask: blocks.vector_mask,
         effects: blocks.effects,
     })
 }
@@ -182,6 +186,8 @@ struct ExtraBlocks {
     content: LayerContent,
     /// True when a vector mask block is present.
     has_vector_mask: bool,
+    /// The parsed vector mask path, when the block is valid.
+    vector_mask: Option<VectorMask>,
     /// The parsed layer effects.
     effects: Option<Effects>,
 }
@@ -197,6 +203,7 @@ fn read_extra_blocks(
     let mut fill_opacity = 255;
     let mut content = LayerContent::Pixels;
     let mut has_vector_mask = false;
+    let mut vector_mask = None;
     let mut brightness_contrast: Option<Vec<u8>> = None;
     let mut cged: Option<Vec<u8>> = None;
     let mut object_effects: Option<Vec<u8>> = None;
@@ -220,6 +227,10 @@ fn read_extra_blocks(
             ])));
         } else if VECTOR_MASK_KEYS.contains(&&key) {
             has_vector_mask = true;
+            // The first valid block wins when both keys are present.
+            if vector_mask.is_none() {
+                vector_mask = parse_vector_mask(block);
+            }
         } else if &key == b"SoCo" {
             content = parse_solid_color(block)
                 .map_or(LayerContent::Unsupported, LayerContent::SolidColor);
@@ -270,6 +281,7 @@ fn read_extra_blocks(
         fill_opacity,
         content,
         has_vector_mask,
+        vector_mask,
         effects,
     })
 }

@@ -45,6 +45,9 @@ mod model;
 pub mod parse;
 mod reader;
 mod resources;
+mod vector_flatten;
+mod vector_mask;
+mod vector_raster;
 
 pub use adjustments::{Adjustment, Curve, CurvePoint, LevelsChannel};
 pub use blend::BlendMode;
@@ -64,3 +67,4 @@ pub use layer::{
 pub use limits::{Deadline, FULL_TIER_MAX_EDGE, ParseOptions, full_tier_size};
 pub use merged::MergedImage;
 pub use model::{ColorMode, Compression, PsdFile, PsdHeader, PsdVersion};
+pub use vector_mask::{Knot, PathOp, Subpath, VectorMask};

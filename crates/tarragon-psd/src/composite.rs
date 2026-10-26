@@ -13,8 +13,8 @@
 //! A layer effect paints behind the layer or over it, depending on the effect
 //! kind. A tile with an effect pads the read by the effect reach before the
 //! coverage is built, so no tile boundary cuts a shadow, a glow, or a stroke.
-//! Vector masks parse but are not rasterized. Adjustment and fill descriptors
-//! parse and apply.
+//! A vector mask is rasterized with exact-area anti-aliasing and multiplies
+//! with the raster mask. Adjustment and fill descriptors parse and apply.
 //!
 //! This file holds the compositor state machine. The layer and group paint,
 //! including the effects path, lives in [`crate::composite_paint`]. The fills,
@@ -32,6 +32,7 @@ use crate::content::LayerContent;
 use crate::decode::Viewport;
 use crate::document::PsdDocument;
 use crate::error::PsdError;
+use crate::layer::LayerRecord;
 use crate::layer_source::read_layer;
 use crate::layer_tree::{LayerNode, build_tree};
 use crate::limits::ParseOptions;
@@ -318,7 +319,7 @@ impl Compositor {
                     .file()
                     .layers
                     .get(index)
-                    .is_some_and(|l| l.mask.is_some()) =>
+                    .is_some_and(LayerRecord::has_mask) =>
             {
                 read_layer(document, index, viewport, options)?.mask
             }

@@ -12,6 +12,7 @@ mod effects;
 mod encoders;
 mod raw_bytes;
 mod tiles;
+mod vector;
 
 // Each test binary uses only part of this module, so the re-exports can look
 // unused to one binary even when another uses them.
@@ -39,6 +40,12 @@ pub use encoders::{
 pub use raw_bytes::{layered_psd, raw_psd, read_fixture, section_offset};
 #[allow(unused_imports)]
 pub use tiles::{assert_suggested_edge_fits, crop_rgba8, peak_resident_bytes, stitched_rgba8};
+
+#[allow(unused_imports)]
+pub use vector::{
+    VMSK_DISABLED, VMSK_INVERT, ellipse_path, fixed, initial_fill_record, knot_record,
+    length_record, rect_path, vmsk_block,
+};
 
 use std::path::{Path, PathBuf};
 

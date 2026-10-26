@@ -6,6 +6,7 @@
 
 use crate::adjustment_parse_color::parse_color_adjustment;
 use crate::adjustment_parse_desc::parse_tone_adjustment;
+use crate::adjustment_parse_lut::parse_color_lookup;
 use crate::adjustments::{Adjustment, Curve, CurvePoint, LevelsChannel};
 use crate::descriptor::parse_versioned;
 
@@ -70,6 +71,7 @@ pub fn parse_adjustment(key: &[u8; 4], data: &[u8], lut_size: u32) -> Option<Adj
             parse_color_adjustment(*key, data)
         }
         b"vibA" | b"blwh" | b"grdm" => parse_tone_adjustment(*key, data),
+        b"clrL" => parse_color_lookup(data),
         _ => None,
     }
 }

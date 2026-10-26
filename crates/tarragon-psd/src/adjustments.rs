@@ -12,6 +12,7 @@
 
 pub use crate::adjustment_color::{HueMaster, HueRange};
 pub use crate::adjustment_parse::{parse_adjustment, parse_brightness_contrast};
+use crate::lut3d::Lut3d;
 use crate::{adjustment_color, adjustment_tone};
 
 /// The number of samples in a tone lookup table.
@@ -253,6 +254,11 @@ pub enum Adjustment {
         /// True to run the ramp from white to black.
         reverse: bool,
     },
+    /// Look the color up in a 3D table. The dither flag is not applied.
+    ColorLookup {
+        /// The table.
+        lut: std::sync::Arc<Lut3d>,
+    },
 }
 
 impl Adjustment {
@@ -355,6 +361,7 @@ impl Adjustment {
                 midpoints,
                 reverse,
             } => *rgb = adjustment_tone::gradient_map(*rgb, stops, midpoints, *reverse),
+            Self::ColorLookup { lut } => *rgb = lut.sample(*rgb),
         }
     }
 }

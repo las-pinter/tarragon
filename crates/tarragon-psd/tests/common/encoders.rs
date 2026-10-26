@@ -324,3 +324,32 @@ pub fn phfl_block(rgb: [u8; 3], density_percent: u32, preserve_luminosity: bool)
     data.extend_from_slice(&[0; 3]);
     data
 }
+
+/// Encode a raw-bytes value (`tdta`): a length, then the bytes.
+pub fn value_raw(kind: [u8; 4], bytes: &[u8]) -> Vec<u8> {
+    let mut data = kind.to_vec();
+    push_u32(&mut data, u32::try_from(bytes.len()).expect("raw length"));
+    data.extend_from_slice(bytes);
+    data
+}
+
+/// Build a `clrL` block. `format` is the `LUTFormat` id; `file` is the `LUT3DFileData` value.
+pub fn clrl_block(lookup_type: &[u8], format: &[u8], file: Option<&[u8]>, dither: bool) -> Vec<u8> {
+    let mut items = vec![
+        descriptor_item(b"lookupType", &value_enum(b"colorLookupType", lookup_type)),
+        descriptor_item(b"Dthr", &value_boolean(dither)),
+        descriptor_item(b"LUTFormat", &value_enum(b"LUTFormatType", format)),
+        descriptor_item(b"dataOrder", &value_enum(b"colorLookupOrder", b"rgbOrder")),
+        descriptor_item(b"tableOrder", &value_enum(b"colorLookupOrder", b"bgrOrder")),
+    ];
+    if let Some(bytes) = file {
+        items.push(descriptor_item(
+            b"LUT3DFileData",
+            &value_raw(*b"tdta", bytes),
+        ));
+    }
+    let mut data = Vec::new();
+    push_u16(&mut data, 1);
+    data.extend_from_slice(&versioned(&descriptor_body(b"null", &items)));
+    data
+}

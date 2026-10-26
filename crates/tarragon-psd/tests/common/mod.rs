@@ -31,11 +31,11 @@ pub use effects::{
 };
 #[allow(unused_imports)]
 pub use encoders::{
-    blnc_block, brit_block, curves_block, descriptor_body, descriptor_item, expa_block,
+    blnc_block, brit_block, clrl_block, curves_block, descriptor_body, descriptor_item, expa_block,
     gdfl_black_to_white, gdfl_black_to_white_midpoint, hue2_block, identity_levels, levels_block,
     levels_record, mixr_block, phfl_block, push_id, push_unicode, rgbc, selc_block, soco,
     value_boolean, value_descriptor, value_double, value_enum, value_integer, value_list,
-    value_unit_float, versioned,
+    value_raw, value_unit_float, versioned,
 };
 #[allow(unused_imports)]
 pub use raw_bytes::{layered_psd, raw_psd, read_fixture, section_offset};

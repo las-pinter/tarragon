@@ -6,7 +6,7 @@ use crate::adjustments::Adjustment;
 use crate::composite::Compositor;
 use crate::composite_region::CompositeRegion;
 use crate::content::GradientFill;
-use crate::decode::Viewport;
+use crate::decode::{ImageRegion, Viewport};
 use crate::document::PsdDocument;
 use crate::error::PsdError;
 use crate::layer_source::{channel_samples, cmyk_color, gray_color, read_layer, rgb_color};
@@ -29,58 +29,89 @@ impl PsdDocument {
         options: &ParseOptions,
     ) -> Result<CompositeRegion, PsdError> {
         let region = self.read_merged_region(viewport, options)?;
-        let width = usize::try_from(viewport.width()).unwrap_or(0);
-        let height = usize::try_from(viewport.height()).unwrap_or(0);
-        let count = width
-            .checked_mul(height)
-            .and_then(|area| area.checked_mul(3))
-            .ok_or(PsdError::LengthTooLarge {
-                length: u64::from(viewport.width()) * u64::from(viewport.height()),
-            })?;
-        let area = count / 3;
-        let max = if region.depth >= 16 { 65535.0 } else { 255.0 };
-        let color = match region.color_mode {
-            ColorMode::Rgb => rgb_color(&region, area, max),
-            ColorMode::Cmyk => cmyk_color(&region, area, max),
-            ColorMode::Grayscale => gray_color(&region, area, max),
-            mode => {
-                return Err(PsdError::UnsupportedColorMode {
-                    mode,
-                    depth: region.depth,
-                });
-            }
-        };
-        let alpha_channel = channel_samples(&region, -1);
-        let has_alpha = alpha_channel.is_some();
-        let alpha = match alpha_channel {
-            Some(samples) => {
-                let mut alpha: Vec<f32> = samples
-                    .iter()
-                    .take(area)
-                    .map(|sample| f32::from(*sample) / max)
-                    .collect();
-                // A channel with no data reads as transparent.
-                alpha.resize(area, 0.0);
-                alpha
-            }
-            None => vec![1.0f32; area],
-        };
-        let mut color = color;
-        // The compositor recovers the straight color only when a merged alpha
-        // channel exists and the preview sits on white.
-        if matches!(region.color_mode, ColorMode::Rgb | ColorMode::Grayscale) && has_alpha {
-            for index in 0..area {
-                let a = alpha[index];
-                if a > 0.0 {
-                    for channel in 0..3 {
-                        let straight = (color[index * 3 + channel] + a - 1.0) / a;
-                        color[index * 3 + channel] = straight.clamp(0.0, 1.0);
-                    }
+        merged_to_composite(&region)
+    }
+
+    /// Read the merged image over `viewport`, keeping every `step`th pixel, and
+    /// convert it to straight RGBA.
+    ///
+    /// The merged image is the flattened picture the authoring program saved.
+    /// The color conversion is the one the compositor uses for a flattened
+    /// document. The returned region is `ceil(width / step)` by
+    /// `ceil(height / step)`, and its viewport starts at the origin. The 8192
+    /// px cap applies to that output, so a canvas over the cap reads through a
+    /// step. The memory is the output plus one source row.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed error when the viewport is invalid, the output exceeds
+    /// the cap, the color mode is unsupported, the deadline passed, the cancel
+    /// flag is set, or the bytes are truncated.
+    pub fn read_merged_pixels(
+        &self,
+        viewport: Viewport,
+        step: u32,
+        options: &ParseOptions,
+    ) -> Result<CompositeRegion, PsdError> {
+        let region = self.read_merged_strided(viewport, step, options)?;
+        merged_to_composite(&region)
+    }
+}
+
+/// Convert a decoded merged region to straight color and alpha planes.
+fn merged_to_composite(region: &ImageRegion) -> Result<CompositeRegion, PsdError> {
+    let viewport = region.viewport;
+    let width = usize::try_from(viewport.width()).unwrap_or(0);
+    let height = usize::try_from(viewport.height()).unwrap_or(0);
+    let count = width
+        .checked_mul(height)
+        .and_then(|area| area.checked_mul(3))
+        .ok_or(PsdError::LengthTooLarge {
+            length: u64::from(viewport.width()) * u64::from(viewport.height()),
+        })?;
+    let area = count / 3;
+    let max = if region.depth >= 16 { 65535.0 } else { 255.0 };
+    let color = match region.color_mode {
+        ColorMode::Rgb => rgb_color(region, area, max),
+        ColorMode::Cmyk => cmyk_color(region, area, max),
+        ColorMode::Grayscale => gray_color(region, area, max),
+        mode => {
+            return Err(PsdError::UnsupportedColorMode {
+                mode,
+                depth: region.depth,
+            });
+        }
+    };
+    let alpha_channel = channel_samples(region, -1);
+    let has_alpha = alpha_channel.is_some();
+    let alpha = match alpha_channel {
+        Some(samples) => {
+            let mut alpha: Vec<f32> = samples
+                .iter()
+                .take(area)
+                .map(|sample| f32::from(*sample) / max)
+                .collect();
+            // A channel with no data reads as transparent.
+            alpha.resize(area, 0.0);
+            alpha
+        }
+        None => vec![1.0f32; area],
+    };
+    let mut color = color;
+    // The compositor recovers the straight color only when a merged alpha
+    // channel exists and the preview sits on white.
+    if matches!(region.color_mode, ColorMode::Rgb | ColorMode::Grayscale) && has_alpha {
+        for index in 0..area {
+            let a = alpha[index];
+            if a > 0.0 {
+                for channel in 0..3 {
+                    let straight = (color[index * 3 + channel] + a - 1.0) / a;
+                    color[index * 3 + channel] = straight.clamp(0.0, 1.0);
                 }
             }
         }
-        Ok(CompositeRegion::new(viewport, color, alpha, 0))
     }
+    Ok(CompositeRegion::new(viewport, color, alpha, 0))
 }
 
 impl Compositor {

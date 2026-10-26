@@ -1,6 +1,6 @@
 [package]
 name = "tarragon-render"
-description = "Renderers for plain images, CLIP files, and Krita documents."
+description = "Renderers for plain images, CLIP files, Krita documents, and PSD files."
 version.workspace = true
 edition.workspace = true
 publish = false
@@ -11,6 +11,7 @@ license.workspace = true
 # adds the codecs its renderers decode.
 image = { workspace = true, features = ["jpeg", "png", "tiff", "webp"] }
 tarragon-core.workspace = true
+tarragon-psd.workspace = true
 zip.workspace = true
 
 [lints]

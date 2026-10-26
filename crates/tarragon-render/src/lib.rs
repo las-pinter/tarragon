@@ -1,4 +1,4 @@
-//! Renderers for tarragon: plain images, CLIP files, and Krita documents.
+//! Renderers for tarragon: plain images, CLIP files, Krita documents, and PSD files.
 //!
 //! This crate is pure CPU work. It does not depend on the GUI or the database.
 //!
@@ -17,5 +17,12 @@ pub mod guard;
 pub mod krita;
 mod limits;
 pub mod plain;
+pub mod psd;
+mod psd_tiles;
 pub mod registry;
 pub mod renderer;
+
+/// The PSD file builder of the parser crate, shared with the unit tests here.
+#[cfg(test)]
+#[path = "../../tarragon-psd/tests/common/mod.rs"]
+mod psd_builder;

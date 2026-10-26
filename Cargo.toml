@@ -13,6 +13,8 @@ license = "MIT"
 # path dependency as a wildcard. `tarragon-db` depends on `tarragon-core`
 # only.
 tarragon-core = { path = "crates/tarragon-core", version = "0.2.0" }
+# The render crate reads PSD and PSB files through the parser crate.
+tarragon-psd = { path = "crates/tarragon-psd", version = "0.2.0" }
 # The interface reads the stored window state in its tests today. The app
 # crate owns the production wiring.
 tarragon-db = { path = "crates/tarragon-db", version = "0.2.0" }

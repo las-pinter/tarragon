@@ -44,7 +44,7 @@ pub use patterns::{
     tagged_block,
 };
 #[allow(unused_imports)]
-pub use raw_bytes::{layered_psd, raw_psd, read_fixture, section_offset};
+pub use raw_bytes::{layered_psd, raw_psd, read_fixture, rle_merged_section, section_offset};
 #[allow(unused_imports)]
 pub use tiles::{assert_suggested_edge_fits, crop_rgba8, peak_resident_bytes, stitched_rgba8};
 

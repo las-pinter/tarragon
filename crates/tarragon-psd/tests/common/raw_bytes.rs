@@ -136,3 +136,33 @@ pub fn layered_psd(width: u32, height: u32, channels: &[(i16, u32, Vec<u8>)]) ->
     ));
     data
 }
+
+/// An RLE merged image section: the compression code, the row length table of
+/// every channel, then the packed rows of every channel.
+///
+/// Each plane holds one 8-bit channel, `width` bytes per row. A PSB writes
+/// four-byte row lengths.
+#[must_use]
+pub fn rle_merged_section(width: usize, planes: &[Vec<u8>], psb: bool) -> Vec<u8> {
+    let packed: Vec<Vec<Vec<u8>>> = planes
+        .iter()
+        .map(|plane| plane.chunks(width).map(super::packbits_row).collect())
+        .collect();
+    let mut section = Vec::new();
+    super::push_u16(&mut section, 1);
+    for rows in &packed {
+        for row in rows {
+            if psb {
+                super::push_u32(&mut section, u32::try_from(row.len()).expect("row length"));
+            } else {
+                super::push_u16(&mut section, u16::try_from(row.len()).expect("row length"));
+            }
+        }
+    }
+    for rows in &packed {
+        for row in rows {
+            section.extend_from_slice(row);
+        }
+    }
+    section
+}

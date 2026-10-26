@@ -96,8 +96,10 @@ impl ImageRegion {
 
 /// The row geometry of one channel decode.
 struct RegionGeometry {
-    /// The viewport width, the output row stride.
+    /// The output width in samples, which is the output row stride.
     viewport_width: usize,
+    /// Keep every `step`th row and every `step`th column. One keeps all.
+    step: usize,
     /// The first channel row to decode.
     first_row: usize,
     /// The channel row one past the last to decode.
@@ -119,16 +121,24 @@ struct RegionGeometry {
 }
 
 /// Decode one channel over the viewport. Pixels outside the channel are zero.
+///
+/// With `step` above one, the output keeps the source pixels whose offset from
+/// the viewport origin is a multiple of `step`, so the output is
+/// `ceil(width / step)` by `ceil(height / step)`. A skipped row is never
+/// decoded and the memory is the output plus one source row.
 pub(crate) fn decode_channel(
     data: &[u8],
     channel: &ChannelInfo,
     bytes_per_sample: usize,
     version: PsdVersion,
     viewport: Viewport,
+    step: usize,
     options: &ParseOptions,
 ) -> Result<ChannelRegion, PsdError> {
-    let width = viewport.width();
-    let height = viewport.height();
+    let step = step.max(1);
+    let step32 = u32::try_from(step).unwrap_or(u32::MAX);
+    let width = viewport.width().div_ceil(step32);
+    let height = viewport.height().div_ceil(step32);
     let area_u64 = u64::from(width) * u64::from(height);
     let area =
         usize::try_from(area_u64).map_err(|_| PsdError::LengthTooLarge { length: area_u64 })?;
@@ -174,14 +184,30 @@ pub(crate) fn decode_channel(
         });
     }
 
+    // The first kept pixel on each axis is the first one at or after the clip
+    // edge whose offset from the viewport origin is a multiple of the step.
+    let step_wide = i64::from(step32);
+    let align = |start: i64, origin: i64| {
+        start + (step_wide - (start - origin).rem_euclid(step_wide)) % step_wide
+    };
+    let x_first = align(x0, i64::from(viewport.left));
+    let y_first = align(y0, i64::from(viewport.top));
+    if x_first >= x1 || y_first >= y1 {
+        return Ok(ChannelRegion {
+            id: channel.id,
+            samples,
+        });
+    }
+
     let geometry = RegionGeometry {
         viewport_width: usize::try_from(width).unwrap_or(0),
-        first_row: usize::try_from(y0 - i64::from(bounds.top)).unwrap_or(0),
+        step,
+        first_row: usize::try_from(y_first - i64::from(bounds.top)).unwrap_or(0),
         last_row: usize::try_from(y1 - i64::from(bounds.top)).unwrap_or(0),
-        source_col: usize::try_from(x0 - i64::from(bounds.left)).unwrap_or(0),
-        columns: usize::try_from(x1 - x0).unwrap_or(0),
-        output_col: usize::try_from(x0 - i64::from(viewport.left)).unwrap_or(0),
-        output_row: usize::try_from(y0 - i64::from(viewport.top)).unwrap_or(0),
+        source_col: usize::try_from(x_first - i64::from(bounds.left)).unwrap_or(0),
+        columns: usize::try_from((x1 - x_first + step_wide - 1) / step_wide).unwrap_or(0),
+        output_col: usize::try_from((x_first - i64::from(viewport.left)) / step_wide).unwrap_or(0),
+        output_row: usize::try_from((y_first - i64::from(viewport.top)) / step_wide).unwrap_or(0),
         row_bytes: channel_width
             .checked_mul(bytes_per_sample)
             .ok_or(PsdError::LengthTooLarge {
@@ -214,19 +240,17 @@ fn decode_raw_rows(
     samples: &mut [u16],
 ) -> Result<(), PsdError> {
     let mut row = vec![0u16; geometry.channel_width];
-    for row_index in geometry.first_row..geometry.last_row {
+    for (kept, row_index) in (geometry.first_row..geometry.last_row)
+        .step_by(geometry.step)
+        .enumerate()
+    {
         options.check()?;
         let offset = channel
             .data_start
             .saturating_add((row_index as u64).saturating_mul(geometry.row_bytes as u64));
         let bytes = block_slice(data, channel, offset, geometry.row_bytes)?;
         read_samples(bytes, geometry.bytes_per_sample, &mut row);
-        copy_row(
-            &row,
-            geometry,
-            samples,
-            geometry.output_row + (row_index - geometry.first_row),
-        );
+        copy_row(&row, geometry, samples, geometry.output_row + kept);
     }
     Ok(())
 }
@@ -263,19 +287,24 @@ fn decode_rle_rows(
     for row_index in geometry.first_row..geometry.last_row {
         options.check()?;
         let length = read_row_length(data, channel.row_table_offset, row_index, entry)?;
-        let compressed = block_slice(data, channel, cursor, usize::try_from(length).unwrap_or(0))?;
-        decode_packbits(
-            compressed,
-            &mut scratch,
-            geometry.bytes_per_sample,
-            &mut row,
-        );
-        copy_row(
-            &row,
-            geometry,
-            samples,
-            geometry.output_row + (row_index - geometry.first_row),
-        );
+        let offset_rows = row_index - geometry.first_row;
+        // A skipped row only moves the cursor past its bytes.
+        if offset_rows.is_multiple_of(geometry.step) {
+            let compressed =
+                block_slice(data, channel, cursor, usize::try_from(length).unwrap_or(0))?;
+            decode_packbits(
+                compressed,
+                &mut scratch,
+                geometry.bytes_per_sample,
+                &mut row,
+            );
+            copy_row(
+                &row,
+                geometry,
+                samples,
+                geometry.output_row + offset_rows / geometry.step,
+            );
+        }
         cursor = cursor
             .checked_add(length)
             .ok_or(PsdError::LengthTooLarge { length })?;
@@ -285,12 +314,21 @@ fn decode_rle_rows(
 
 /// Copy the needed columns of one decoded row into the output.
 fn copy_row(row: &[u16], geometry: &RegionGeometry, samples: &mut [u16], output_row: usize) {
-    let Some(source) = row.get(geometry.source_col..geometry.source_col + geometry.columns) else {
+    let Some(source) = row.get(geometry.source_col..) else {
         return;
     };
     let base = output_row * geometry.viewport_width + geometry.output_col;
-    if let Some(target) = samples.get_mut(base..base + geometry.columns) {
-        target.copy_from_slice(source);
+    let Some(target) = samples.get_mut(base..base + geometry.columns) else {
+        return;
+    };
+    if geometry.step == 1 {
+        if let Some(whole) = source.get(..geometry.columns) {
+            target.copy_from_slice(whole);
+        }
+    } else {
+        for (slot, value) in target.iter_mut().zip(source.iter().step_by(geometry.step)) {
+            *slot = *value;
+        }
     }
 }
 

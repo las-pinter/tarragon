@@ -73,8 +73,30 @@ pub fn read_bytes_with_options(data: &[u8], options: &ParseOptions) -> Result<Ps
     parse(data, options)
 }
 
+/// Read from a byte slice and keep the layers when only the merged image is bad.
+///
+/// A bad merged image section (truncated, or compressed in a way the parser
+/// does not decode) does not fail the parse when the file has layers. The file
+/// keeps an empty merged description and [`PsdFile::merged_error`] holds the
+/// reason, so a caller can composite the layers instead.
+///
+/// # Errors
+///
+/// Returns a parse error when the bytes are malformed or truncated before the
+/// merged image, when the merged image is bad and the file has no layers, or
+/// when the work timed out or was cancelled.
+pub fn read_bytes_lenient(data: &[u8], options: &ParseOptions) -> Result<PsdFile, PsdError> {
+    parse_with(data, options, true)
+}
+
 /// Walk every file section.
 fn parse(data: &[u8], options: &ParseOptions) -> Result<PsdFile, PsdError> {
+    parse_with(data, options, false)
+}
+
+/// Walk every file section. `lenient` keeps a layered file whose merged image
+/// section is bad.
+fn parse_with(data: &[u8], options: &ParseOptions, lenient: bool) -> Result<PsdFile, PsdError> {
     options.check()?;
     let mut reader = Reader::new(data);
     let header = read_header(&mut reader)?;
@@ -106,7 +128,20 @@ fn parse(data: &[u8], options: &ParseOptions) -> Result<PsdFile, PsdError> {
     };
 
     // The merged image data section follows the layer section.
-    let merged = read_merged_image(&mut reader, &header, section.merged_has_alpha, options)?;
+    let mut merged_error = None;
+    let merged = match read_merged_image(&mut reader, &header, section.merged_has_alpha, options) {
+        Ok(merged) => merged,
+        // A timeout or a cancel always stops the parse. Any other merged
+        // failure is kept aside when the layers can still be drawn.
+        Err(error) if lenient && !error.is_transient() && !section.layers.is_empty() => {
+            merged_error = Some(error.to_string());
+            MergedImage {
+                compression: Compression::Raw,
+                channels: Vec::new(),
+            }
+        }
+        Err(error) => return Err(error),
+    };
 
     Ok(PsdFile {
         header,
@@ -117,6 +152,7 @@ fn parse(data: &[u8], options: &ParseOptions) -> Result<PsdFile, PsdError> {
         patterns: section.patterns,
         merged_has_alpha: section.merged_has_alpha,
         layer_info_error: section.layer_info_error,
+        merged_error,
         merged,
     })
 }
@@ -182,7 +218,9 @@ pub fn capped_dimensions(header: &PsdHeader) -> (u32, u32) {
 mod tests {
     use crate::error::PsdError;
     use crate::limits::ParseOptions;
-    use crate::parse::{ColorMode, Compression, PsdVersion, read_bytes, read_bytes_with_options};
+    use crate::parse::{
+        ColorMode, Compression, PsdVersion, read_bytes, read_bytes_lenient, read_bytes_with_options,
+    };
 
     /// A minimal valid PSD header with no color data or resources.
     fn header_bytes(version: u16) -> Vec<u8> {
@@ -288,8 +326,16 @@ mod tests {
         // The rest of the prefixes must return, never panic.
         for length in 26..=full.len() {
             let _ = read_bytes(&full[..length]);
+            let _ = read_bytes_lenient(&full[..length], &ParseOptions::none());
+        }
+        for length in 0..26 {
+            assert!(
+                read_bytes_lenient(&full[..length], &ParseOptions::none()).is_err(),
+                "lenient length {length}"
+            );
         }
         // The complete file is valid.
         assert!(read_bytes(&full).is_ok());
+        assert!(read_bytes_lenient(&full, &ParseOptions::none()).is_ok());
     }
 }

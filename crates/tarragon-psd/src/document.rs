@@ -10,7 +10,7 @@ use std::sync::Arc;
 use crate::decode::{ImageRegion, Viewport};
 use crate::error::PsdError;
 use crate::limits::ParseOptions;
-use crate::parse::{PsdFile, read_bytes_with_options};
+use crate::parse::{PsdFile, read_bytes_lenient, read_bytes_with_options};
 
 /// A parsed PSD or PSB file that owns its bytes.
 ///
@@ -48,6 +48,30 @@ impl PsdDocument {
             source,
         })?;
         Self::from_bytes(data, options)
+    }
+
+    /// Open a file and keep its layers when only the merged image is bad.
+    ///
+    /// A layered file whose merged image section is truncated or uses a
+    /// compression the parser does not decode still opens. [`PsdFile::merged_error`]
+    /// then holds the reason and the merged description is empty, so the caller
+    /// can composite the layers. Use [`PsdDocument::open_with_options`] when a
+    /// bad merged image must fail the open.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PsdError::Io`] when the file cannot be read. Returns a parse
+    /// error when the bytes are malformed or truncated before the merged
+    /// image, when the merged image is bad and the file has no layers, or
+    /// when the deadline passed or the work was cancelled.
+    pub fn open_lenient(path: &Path, options: &ParseOptions) -> Result<Self, PsdError> {
+        let data = std::fs::read(path).map_err(|source| PsdError::Io {
+            path: path.to_path_buf(),
+            source,
+        })?;
+        let data: Arc<[u8]> = Arc::from(data);
+        let file = read_bytes_lenient(&data, options)?;
+        Ok(Self { file, data })
     }
 
     /// Parse a document from owned bytes.
@@ -96,6 +120,23 @@ impl PsdDocument {
         options: &ParseOptions,
     ) -> Result<ImageRegion, PsdError> {
         self.file.read_merged_region(&self.data, viewport, options)
+    }
+
+    /// Decode the merged image over a viewport, keeping every `step`th pixel.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed error when the viewport is invalid, the output exceeds
+    /// the cap, the color mode is unsupported, the deadline passed, or the
+    /// bytes are truncated.
+    pub fn read_merged_strided(
+        &self,
+        viewport: Viewport,
+        step: u32,
+        options: &ParseOptions,
+    ) -> Result<ImageRegion, PsdError> {
+        self.file
+            .read_merged_strided(&self.data, viewport, step, options)
     }
 
     /// Decode one layer's channels over a viewport.

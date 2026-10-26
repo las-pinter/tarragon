@@ -19,14 +19,19 @@ use crate::clip::render_clip_image;
 use crate::guard::run_guarded;
 use crate::krita::render_kra_image;
 use crate::plain::render_plain_image;
+use crate::psd::render_psd_image;
 use crate::renderer::{RenderedImage, Renderer};
 
 /// The specialized format dispatch. Keys are lower case with a leading dot.
 ///
 /// The table holds the formats that decode their own container. Every other
 /// supported format uses the plain renderer.
-pub const FORMAT_DISPATCH: &[(&str, Renderer)] =
-    &[(".clip", render_clip_image), (".kra", render_kra_image)];
+pub const FORMAT_DISPATCH: &[(&str, Renderer)] = &[
+    (".clip", render_clip_image),
+    (".kra", render_kra_image),
+    (".psd", render_psd_image),
+    (".psb", render_psd_image),
+];
 
 /// The renderer for a format with no specialized entry: the plain renderer.
 ///
@@ -86,6 +91,7 @@ mod tests {
     use crate::clip::render_clip_image;
     use crate::krita::render_kra_image;
     use crate::plain::render_plain_image;
+    use crate::psd::render_psd_image;
     use crate::registry::{
         DEFAULT_RENDERER, FORMAT_DISPATCH, SUPPORTED_EXTENSIONS, render, renderer_for,
     };
@@ -146,12 +152,11 @@ mod tests {
     }
 
     #[test]
-    fn the_remaining_specialized_formats_use_the_fallback_for_now() {
-        for key in [".psd", ".psb"] {
-            assert!(SUPPORTED_EXTENSIONS.contains(&key), "missing key: {key}");
+    fn the_photoshop_formats_use_the_psd_renderer() {
+        for key in [".psd", ".psb", ".PSD", ".Psb"] {
             assert!(
-                std::ptr::fn_addr_eq(renderer_for(key), DEFAULT_RENDERER),
-                "specialized format already has a renderer: {key}"
+                std::ptr::fn_addr_eq(renderer_for(key), render_psd_image as Renderer),
+                "wrong renderer: {key}"
             );
         }
     }

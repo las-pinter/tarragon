@@ -180,6 +180,10 @@ pub struct PsdFile {
     /// layer info, when that scan failed. The file still parses, with no layers
     /// from those blocks.
     pub layer_info_error: Option<String>,
+    /// The message of the error raised while reading the merged image section,
+    /// when a lenient parse kept the layers anyway. A strict parse never sets
+    /// it: the strict parse fails instead. The merged description is then empty.
+    pub merged_error: Option<String>,
     /// The merged image data description.
     pub merged: MergedImage,
 }
@@ -214,9 +218,53 @@ impl PsdFile {
             data,
             &self.merged.channels,
             viewport,
+            1,
             bytes_per_sample,
             options,
         )
+    }
+
+    /// Decode the merged image over `viewport`, keeping every `step`th pixel.
+    ///
+    /// The output is `ceil(width / step)` by `ceil(height / step)` and its
+    /// viewport is `0..width`, `0..height` of that size. The 8192 px cap
+    /// applies to the output, not to the source, so a canvas wider than the cap
+    /// reads through a step. The decoder keeps the output plus one source row
+    /// and never decodes a skipped row.
+    ///
+    /// # Errors
+    ///
+    /// A step of zero is treated as one. Returns a typed error when the
+    /// viewport is invalid, the output exceeds the cap, the color mode is unsupported, the deadline
+    /// passed, or the bytes are truncated.
+    pub fn read_merged_strided(
+        &self,
+        data: &[u8],
+        viewport: Viewport,
+        step: u32,
+        options: &ParseOptions,
+    ) -> Result<ImageRegion, PsdError> {
+        let step = step.max(1);
+        let out = Viewport::full(
+            viewport.width().div_ceil(step),
+            viewport.height().div_ceil(step),
+        );
+        // The cap guard runs on the output, then the source rectangle is
+        // checked against the canvas.
+        Self::check_cap(out.width().max(out.height()))?;
+        self.check_bounds(viewport)?;
+        let bytes_per_sample = sample_bytes(self.header.color_mode, self.header.depth)?;
+        options.check()?;
+        let mut region = self.decode_channels(
+            data,
+            &self.merged.channels,
+            viewport,
+            usize::try_from(step).unwrap_or(usize::MAX),
+            bytes_per_sample,
+            options,
+        )?;
+        region.viewport = out;
+        Ok(region)
     }
 
     /// Decode one layer's channels over `viewport`.
@@ -240,19 +288,36 @@ impl PsdFile {
         self.check_region(viewport)?;
         let bytes_per_sample = sample_bytes(self.header.color_mode, self.header.depth)?;
         options.check()?;
-        self.decode_channels(data, &layer.channels, viewport, bytes_per_sample, options)
+        self.decode_channels(
+            data,
+            &layer.channels,
+            viewport,
+            1,
+            bytes_per_sample,
+            options,
+        )
     }
 
     /// Validate a viewport against the canvas and the full-tier cap.
     pub(crate) fn check_region(&self, viewport: Viewport) -> Result<(), PsdError> {
         // The cap guard runs first so a huge request never reaches an alloc.
-        let edge = viewport.width().max(viewport.height());
+        Self::check_cap(viewport.width().max(viewport.height()))?;
+        self.check_bounds(viewport)
+    }
+
+    /// Refuse an output edge over the full-tier cap.
+    fn check_cap(edge: u32) -> Result<(), PsdError> {
         if edge > crate::limits::FULL_TIER_MAX_EDGE {
             return Err(PsdError::CapExceeded {
                 edge,
                 cap: crate::limits::FULL_TIER_MAX_EDGE,
             });
         }
+        Ok(())
+    }
+
+    /// Refuse an empty or inverted viewport, or one outside the canvas.
+    fn check_bounds(&self, viewport: Viewport) -> Result<(), PsdError> {
         if viewport.left > viewport.right
             || viewport.top > viewport.bottom
             || viewport.width() == 0
@@ -282,6 +347,7 @@ impl PsdFile {
         data: &[u8],
         channels: &[ChannelInfo],
         viewport: Viewport,
+        step: usize,
         bytes_per_sample: usize,
         options: &ParseOptions,
     ) -> Result<ImageRegion, PsdError> {
@@ -300,6 +366,7 @@ impl PsdFile {
                 bytes_per_sample,
                 self.header.version,
                 viewport,
+                step,
                 options,
             )?);
         }

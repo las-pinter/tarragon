@@ -8,9 +8,12 @@ mod common;
 use tarragon_psd::decode::Viewport;
 use tarragon_psd::error::PsdError;
 use tarragon_psd::limits::ParseOptions;
-use tarragon_psd::parse::{read_bytes, read_file};
+use tarragon_psd::parse::{read_bytes, read_bytes_lenient, read_file};
 
-use common::{fixture, layered_psd, read_fixture, section_offset};
+use common::{
+    DocumentSpec, LayerSpec, build_psd, fixture, layered_psd, read_fixture, rle_merged_section,
+    section_offset,
+};
 
 #[test]
 fn the_truncated_fixture_takes_the_typed_error_path() {
@@ -198,4 +201,53 @@ fn an_empty_slice_is_a_typed_error() {
         matches!(result, Err(PsdError::Truncated { .. })),
         "unexpected result: {result:?}"
     );
+}
+
+/// A layered RGB file with an RLE merged section, and where that section starts.
+fn layered_with_rle_merged() -> (Vec<u8>, usize) {
+    let build = |section: Vec<u8>| {
+        let mut spec = DocumentSpec::new(8, 8, 8, 3);
+        spec.layers
+            .push(LayerSpec::opaque((0, 0, 8, 8), [10, 20, 30]));
+        spec.merged_section = Some(section);
+        build_psd(&spec)
+    };
+    let planes: Vec<Vec<u8>> = (0..3u8)
+        .map(|seed| {
+            (0..64u8)
+                .map(|i| i.wrapping_mul(3).wrapping_add(seed))
+                .collect()
+        })
+        .collect();
+    let start = build(Vec::new()).len();
+    (build(rle_merged_section(8, &planes, false)), start)
+}
+
+#[test]
+fn the_lenient_read_never_panics_on_truncated_prefixes() {
+    let bytes = std::fs::read(fixture("layered_blend_modes.psd")).expect("read the fixture");
+    for length in (0..bytes.len()).step_by(41) {
+        let _ = read_bytes_lenient(&bytes[..length], &ParseOptions::none());
+    }
+    assert!(read_bytes_lenient(&bytes, &ParseOptions::none()).is_ok());
+}
+
+#[test]
+fn a_cut_in_the_layer_section_fails_and_a_cut_in_the_merged_section_opens() {
+    let (bytes, merged_start) = layered_with_rle_merged();
+    let options = ParseOptions::none();
+    for length in 0..bytes.len() {
+        let result = read_bytes_lenient(&bytes[..length], &options);
+        if length < merged_start {
+            assert!(result.is_err(), "prefix {length} inside the layers parsed");
+        } else {
+            let file = result.unwrap_or_else(|e| panic!("prefix {length}: {e}"));
+            assert!(file.merged_error.is_some(), "prefix {length}");
+            assert!(file.merged.channels.is_empty(), "prefix {length}");
+            assert_eq!(file.layers.len(), 1, "prefix {length}");
+        }
+    }
+    let whole = read_bytes_lenient(&bytes, &options).expect("the whole file parses");
+    assert!(whole.merged_error.is_none());
+    assert_eq!(whole.merged.channels.len(), 3);
 }

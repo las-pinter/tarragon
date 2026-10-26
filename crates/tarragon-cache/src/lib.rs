@@ -2,7 +2,8 @@
 //! format markers.
 //!
 //! This crate performs I/O. It does not depend on the GUI or the database. The
-//! three tiers are written as JPEG q90. Every tier file is written through a
+//! three tiers are written as PNG when the source has visible alpha, else as
+//! JPEG q90. Every tier file is written through a
 //! temp file and an atomic rename. The size cap and the LRU eviction live in
 //! [`eviction`]. The purge and the full-tier clear live in [`purge`].
 
@@ -32,7 +33,7 @@ pub enum CacheError {
     /// The cache root is unsafe to purge.
     #[error("refusing to purge the unsafe cache root {0}")]
     UnsafeRoot(PathBuf),
-    /// The JPEG encoder refused the image.
-    #[error("cannot encode JPEG: {0}")]
+    /// An image encoder refused the image.
+    #[error("cannot encode image: {0}")]
     Encode(#[from] image::ImageError),
 }

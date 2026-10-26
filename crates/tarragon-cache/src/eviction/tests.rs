@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use tarragon_core::tier::Tier;
 
-use crate::store::{CacheEntry, CacheStore};
+use crate::store::{CacheEntry, CacheStore, TierFormat};
 
 /// A temporary cache root that removes itself on drop.
 struct TempDir {
@@ -55,13 +55,13 @@ fn seed(entry: &CacheEntry, bytes: usize) {
 /// differs from the LRU order.
 fn three_sources(store: &CacheStore, bytes: usize) -> [CacheEntry; 3] {
     let old = store
-        .entry("gallery", "old", "zeta.jpg")
+        .entry("gallery", "old", "zeta.jpg", TierFormat::Jpeg)
         .expect("valid names");
     let mid = store
-        .entry("gallery", "mid", "beta.jpg")
+        .entry("gallery", "mid", "beta.jpg", TierFormat::Jpeg)
         .expect("valid names");
     let new = store
-        .entry("gallery", "new", "alpha.jpg")
+        .entry("gallery", "new", "alpha.jpg", TierFormat::Jpeg)
         .expect("valid names");
     for entry in [&old, &mid, &new] {
         seed(entry, bytes);
@@ -141,6 +141,31 @@ fn eviction_removes_all_three_tier_files_of_a_source() {
 }
 
 #[test]
+fn eviction_removes_png_files_and_a_leftover_jpeg_of_the_same_source() {
+    let temp = TempDir::new("both-formats");
+    let store = CacheStore::new(temp.path());
+    let png = store
+        .entry("gallery", "alpha", "art.png", TierFormat::Png)
+        .expect("valid names");
+    seed(&png, 100);
+    // A leftover from an earlier opaque write of the same source.
+    seed(&png.sibling(), 100);
+    let keep = store
+        .entry("gallery", "keep", "other.jpg", TierFormat::Jpeg)
+        .expect("valid names");
+    seed(&keep, 100);
+
+    let outcome = store
+        .evict_to_cap(300, &[png.clone(), keep.clone()])
+        .expect("evict");
+
+    assert_eq!(outcome.evicted, vec![png.clone()]);
+    assert!(!any_file_exists(&png));
+    assert!(!any_file_exists(&png.sibling()));
+    assert!(keep.all_files_exist());
+}
+
+#[test]
 fn a_zero_cap_disables_eviction() {
     let temp = TempDir::new("zero-cap");
     let store = CacheStore::new(temp.path());
@@ -185,10 +210,10 @@ fn total_size_counts_a_partial_tier_set() {
     let temp = TempDir::new("partial");
     let store = CacheStore::new(temp.path());
     let full = store
-        .entry("gallery", "full", "one.jpg")
+        .entry("gallery", "full", "one.jpg", TierFormat::Jpeg)
         .expect("valid names");
     let partial = store
-        .entry("gallery", "part", "two.jpg")
+        .entry("gallery", "part", "two.jpg", TierFormat::Jpeg)
         .expect("valid names");
     seed(&full, 100);
     seed_tier(&partial, Tier::Thumb256, 50);
@@ -206,13 +231,13 @@ fn eviction_removes_a_partial_tier_set_and_skips_an_empty_source() {
     let temp = TempDir::new("partial-evict");
     let store = CacheStore::new(temp.path());
     let empty = store
-        .entry("gallery", "empty", "none.jpg")
+        .entry("gallery", "empty", "none.jpg", TierFormat::Jpeg)
         .expect("valid names");
     let partial = store
-        .entry("gallery", "part", "two.jpg")
+        .entry("gallery", "part", "two.jpg", TierFormat::Jpeg)
         .expect("valid names");
     let full = store
-        .entry("gallery", "full", "one.jpg")
+        .entry("gallery", "full", "one.jpg", TierFormat::Jpeg)
         .expect("valid names");
     seed_tier(&partial, Tier::Preview1024, 100);
     seed(&full, 100);
@@ -240,7 +265,7 @@ fn remove_entry_files_reports_the_bytes_it_removed() {
     let temp = TempDir::new("removed-bytes");
     let store = CacheStore::new(temp.path());
     let entry = store
-        .entry("gallery", "one", "one.jpg")
+        .entry("gallery", "one", "one.jpg", TierFormat::Jpeg)
         .expect("valid names");
     seed(&entry, 100);
     let before = store.total_size().expect("total");
@@ -294,6 +319,7 @@ fn remove_entry_files_skips_a_path_outside_the_root() {
     let victim = outside.path().join("victim.jpg");
     std::fs::write(&victim, b"do not delete").expect("write the outside file");
     let entry = CacheEntry {
+        format: TierFormat::Jpeg,
         thumb256: victim.clone(),
         preview1024: victim.clone(),
         full: victim.clone(),
@@ -324,7 +350,7 @@ fn total_size_does_not_count_a_symlink() {
     let temp = TempDir::new("symlink");
     let store = CacheStore::new(temp.path());
     let entry = store
-        .entry("gallery", "one", "one.jpg")
+        .entry("gallery", "one", "one.jpg", TierFormat::Jpeg)
         .expect("valid names");
     seed(&entry, 100);
     let link = temp.path().join("link.jpg");

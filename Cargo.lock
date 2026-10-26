@@ -2572,6 +2572,7 @@ version = "0.2.0"
 dependencies = [
  "image",
  "tarragon-core",
+ "tarragon-render",
  "thiserror 2.0.21",
 ]
 

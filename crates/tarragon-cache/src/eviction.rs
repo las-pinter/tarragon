@@ -122,7 +122,7 @@ struct Removed {
     any: bool,
 }
 
-/// Remove the three tier files of `entry` under `root`.
+/// Remove the three tier files of `entry` under `root`, in both formats.
 ///
 /// A missing tier file is skipped, so a partial tier set is handled. A path
 /// that is not under `root` is skipped as defense in depth. A directory or a
@@ -141,38 +141,41 @@ fn remove_entry_files(entry: &CacheEntry, root: &Path) -> Result<Removed, CacheE
     let canonical_root = std::fs::canonicalize(root).ok();
     let mut result = Removed::default();
     let mut first_error: Option<CacheError> = None;
+    let sibling = entry.sibling();
     for tier in Tier::ALL {
-        let path = entry.path(tier);
-        if !is_within_root(canonical_root.as_deref(), path) {
-            continue;
-        }
-        let size = match std::fs::symlink_metadata(path) {
-            Ok(metadata) => {
-                if !metadata.is_file() {
-                    continue;
-                }
-                metadata.len()
-            }
-            Err(source) if source.kind() == std::io::ErrorKind::NotFound => continue,
-            Err(source) => {
-                first_error.get_or_insert_with(|| CacheError::Io {
-                    path: path.to_path_buf(),
-                    source,
-                });
+        // An earlier write may have used the other format. Both names go.
+        for path in [entry.path(tier), sibling.path(tier)] {
+            if !is_within_root(canonical_root.as_deref(), path) {
                 continue;
             }
-        };
-        match std::fs::remove_file(path) {
-            Ok(()) => {
-                result.any = true;
-                result.bytes = result.bytes.saturating_add(size);
-            }
-            Err(source) if source.kind() == std::io::ErrorKind::NotFound => {}
-            Err(source) => {
-                first_error.get_or_insert_with(|| CacheError::Io {
-                    path: path.to_path_buf(),
-                    source,
-                });
+            let size = match std::fs::symlink_metadata(path) {
+                Ok(metadata) => {
+                    if !metadata.is_file() {
+                        continue;
+                    }
+                    metadata.len()
+                }
+                Err(source) if source.kind() == std::io::ErrorKind::NotFound => continue,
+                Err(source) => {
+                    first_error.get_or_insert_with(|| CacheError::Io {
+                        path: path.to_path_buf(),
+                        source,
+                    });
+                    continue;
+                }
+            };
+            match std::fs::remove_file(path) {
+                Ok(()) => {
+                    result.any = true;
+                    result.bytes = result.bytes.saturating_add(size);
+                }
+                Err(source) if source.kind() == std::io::ErrorKind::NotFound => {}
+                Err(source) => {
+                    first_error.get_or_insert_with(|| CacheError::Io {
+                        path: path.to_path_buf(),
+                        source,
+                    });
+                }
             }
         }
     }

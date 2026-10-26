@@ -81,6 +81,25 @@ fn purge_removes_every_tier_file_and_marker() {
 }
 
 #[test]
+fn purge_removes_png_entries() {
+    let temp = TempDir::new("png-entries");
+    let store = CacheStore::new(temp.path());
+    let transparent = DynamicImage::ImageRgba8(RgbaImage::from_pixel(40, 30, Rgba([1, 2, 3, 0])));
+    let entry = store
+        .write_all(&transparent, "gallery", "abcd1234", "art.png")
+        .expect("write the tiers");
+    assert_eq!(entry.format, crate::store::TierFormat::Png);
+
+    let outcome = store.purge(None).expect("purge");
+
+    assert_eq!(outcome.files_removed, 6);
+    assert_eq!(store.total_size().expect("total"), 0);
+    for tier in Tier::ALL {
+        assert!(!entry.path(tier).exists());
+    }
+}
+
+#[test]
 fn purge_of_a_missing_root_removes_nothing() {
     let temp = TempDir::new("missing");
     let store = CacheStore::new(temp.path().join("does-not-exist"));

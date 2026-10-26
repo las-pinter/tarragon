@@ -130,8 +130,8 @@ The two heavy crates are measured through their examples. Run
 
 | Example | Crates | Bytes | MiB |
 |---------|--------|-------|-----|
-| `grid_bench` | egui 0.36.2, rayon, the vendored Roboto fonts | 6,552,192 | 6.25 |
-| `jpeg_q90_check` | image 0.25.10 | 2,041,520 | 1.95 |
+| `grid_bench` | egui 0.36.2, rayon, the vendored Roboto fonts | 6,559,464 | 6.26 |
+| `jpeg_q90_check` | image 0.25.10 | 1,971,456 | 1.88 |
 
 The two example rows were re-measured on this working tree. The `grid_bench`
 example carries the three Roboto files (305,608, 306,536, and 306,940 bytes),
@@ -214,10 +214,10 @@ The limit is 60 MB. Take 60 MB as 62,914,560 bytes.
 | Binary | Bytes | Result |
 |--------|-------|--------|
 | `tarragon` (package `tarragon-app`, glibc, release) | 444,704 | pass |
-| `grid_bench` (example) | 6,552,192 | pass |
-| `jpeg_q90_check` (example) | 2,041,520 | pass |
+| `grid_bench` (example) | 6,559,464 | pass |
+| `jpeg_q90_check` (example) | 1,971,456 | pass |
 
-The highest measured size is 6,552,192 bytes. That is 10.4% of the 60 MB
+The highest measured size is 6,559,464 bytes. That is 10.4% of the 60 MB
 budget. Every measured binary is under the limit.
 
 ## GUI stack spike

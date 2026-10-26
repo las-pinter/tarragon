@@ -1,14 +1,15 @@
-//! Image scaling and JPEG encoding for the tier files.
+//! Image scaling and encoding for the tier files.
 //!
-//! Each tier is scaled to its own longest edge and is never upscaled. Alpha
-//! flattens onto white `(255, 255, 255)`. Every tier file is written as JPEG
-//! q90.
+//! Each tier is scaled to its own longest edge and is never upscaled. A
+//! source with visible alpha is written as PNG so the alpha survives. Any
+//! other source is written as JPEG q90.
 
 use std::borrow::Cow;
+use std::io::Cursor;
 
 use image::codecs::jpeg::JpegEncoder;
 use image::imageops::FilterType;
-use image::{DynamicImage, Rgb, RgbImage};
+use image::{DynamicImage, ImageFormat, RgbImage};
 
 use crate::CacheError;
 
@@ -27,33 +28,96 @@ pub(crate) fn fit_to_edge(source: &DynamicImage, edge: u32) -> Cow<'_, DynamicIm
     }
 }
 
-/// Flatten alpha onto white.
+/// The file format of the tier files of one source.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TierFormat {
+    /// JPEG q90, for a source with no visible alpha.
+    Jpeg,
+    /// PNG, for a source with at least one pixel that is not fully opaque.
+    Png,
+}
+
+impl TierFormat {
+    /// Both formats, in the order a lookup probes them.
+    pub const PROBE_ORDER: [Self; 2] = [Self::Png, Self::Jpeg];
+
+    /// Return the file extension without the dot.
+    #[must_use]
+    pub fn extension(self) -> &'static str {
+        match self {
+            Self::Jpeg => "jpg",
+            Self::Png => "png",
+        }
+    }
+
+    /// Return the other format.
+    #[must_use]
+    pub fn other(self) -> Self {
+        match self {
+            Self::Jpeg => Self::Png,
+            Self::Png => Self::Jpeg,
+        }
+    }
+
+    /// Pick the format for `source`: PNG when any pixel is not fully opaque,
+    /// else JPEG.
+    #[must_use]
+    pub fn for_source(source: &DynamicImage) -> Self {
+        if has_visible_alpha(source) {
+            Self::Png
+        } else {
+            Self::Jpeg
+        }
+    }
+}
+
+/// Return true when `source` has an alpha channel and at least one pixel with
+/// alpha below the maximum.
 ///
-/// An image with no alpha converts straight to RGB, so the large RGBA copy is
-/// never built.
-pub(crate) fn flatten_onto_white(source: &DynamicImage) -> RgbImage {
-    if !source.color().has_alpha() {
-        return source.to_rgb8();
+/// An opaque RGBA image returns false, so it stays JPEG. The scan borrows the
+/// pixels and builds no copy.
+#[must_use]
+pub(crate) fn has_visible_alpha(source: &DynamicImage) -> bool {
+    match source {
+        DynamicImage::ImageLumaA8(img) => img.pixels().any(|p| p.0[1] < u8::MAX),
+        DynamicImage::ImageRgba8(img) => img.pixels().any(|p| p.0[3] < u8::MAX),
+        DynamicImage::ImageLumaA16(img) => img.pixels().any(|p| p.0[1] < u16::MAX),
+        DynamicImage::ImageRgba16(img) => img.pixels().any(|p| p.0[3] < u16::MAX),
+        DynamicImage::ImageRgba32F(img) => img.pixels().any(|p| p.0[3] < 1.0),
+        // An alpha layout added later still gets a correct answer, at the
+        // price of one 8-bit copy.
+        other if other.color().has_alpha() => other.to_rgba8().pixels().any(|p| p.0[3] < u8::MAX),
+        _ => false,
     }
-    let rgba = source.to_rgba8();
-    let mut out = RgbImage::new(rgba.width(), rgba.height());
-    let blend = |channel: u8, alpha: u32| -> u8 {
-        let value = (u32::from(channel) * alpha + 255 * (255 - alpha) + 127) / 255;
-        u8::try_from(value).unwrap_or(u8::MAX)
-    };
-    for (x, y, pixel) in rgba.enumerate_pixels() {
-        let alpha = u32::from(pixel[3]);
-        out.put_pixel(
-            x,
-            y,
-            Rgb([
-                blend(pixel[0], alpha),
-                blend(pixel[1], alpha),
-                blend(pixel[2], alpha),
-            ]),
-        );
+}
+
+/// Encode `image` as a tier payload of the given format.
+///
+/// # Errors
+///
+/// Returns [`CacheError::Encode`] when the encoder fails.
+pub(crate) fn encode_tier(image: &DynamicImage, format: TierFormat) -> Result<Vec<u8>, CacheError> {
+    match format {
+        TierFormat::Jpeg => encode_jpeg(&image.to_rgb8()),
+        TierFormat::Png => encode_png(image),
     }
-    out
+}
+
+/// Encode an image as 8-bit RGBA PNG, which keeps alpha.
+///
+/// A 16-bit or `f32` source is reduced to 8 bits per channel, which is enough
+/// for a cache tier.
+///
+/// # Errors
+///
+/// Returns [`CacheError::Encode`] when the encoder fails.
+pub(crate) fn encode_png(image: &DynamicImage) -> Result<Vec<u8>, CacheError> {
+    let mut bytes = Vec::new();
+    image
+        .to_rgba8()
+        .write_to(&mut Cursor::new(&mut bytes), ImageFormat::Png)
+        .map_err(CacheError::Encode)?;
+    Ok(bytes)
 }
 
 /// Encode an RGB image as JPEG at [`JPEG_QUALITY`].
@@ -72,16 +136,26 @@ pub(crate) fn encode_jpeg(image: &RgbImage) -> Result<Vec<u8>, CacheError> {
 mod tests {
     use std::borrow::Cow;
 
-    use image::{DynamicImage, ImageFormat, Rgb, RgbImage, Rgba, RgbaImage};
+    use image::codecs::jpeg::JpegEncoder;
+    use image::{
+        DynamicImage, GrayAlphaImage, GrayImage, ImageBuffer, ImageFormat, LumaA, RgbImage, Rgba,
+        RgbaImage,
+    };
 
-    use super::{JPEG_QUALITY, encode_jpeg, fit_to_edge, flatten_onto_white};
+    use super::{
+        JPEG_QUALITY, TierFormat, encode_jpeg, encode_png, fit_to_edge, has_visible_alpha,
+    };
+
+    type Rgba16Image = ImageBuffer<Rgba<u16>, Vec<u16>>;
 
     /// The size band in encoded bytes per pixel at quality 90.
     ///
-    /// The synthetic image below measures 0.18 to 0.23 bytes per pixel at 256
-    /// and 1024 px. The band is wider, so it covers content variation and
-    /// still catches a wrong quality or a raw store.
-    const SIZE_RANGE: (f64, f64) = (0.10, 0.40);
+    /// The opaque synthetic image below measures 0.12 bytes per pixel at 256
+    /// px and 0.07 at 1024 px. The band is wider, so it covers content
+    /// variation. A wrong quality is caught by the q75 comparison below. The
+    /// older, higher figure came from the half-alpha band blended with white,
+    /// which this opaque image no longer has.
+    const SIZE_RANGE: (f64, f64) = (0.05, 0.20);
 
     /// Build a deterministic RGBA image. The top-left quarter is fully
     /// transparent. The rest is a gradient with hard stripes and a
@@ -116,33 +190,87 @@ mod tests {
         DynamicImage::ImageRgba8(image)
     }
 
+    /// The synthetic image with every pixel made opaque.
+    fn synthetic_opaque(width: u32, height: u32) -> RgbImage {
+        let mut image = synthetic_rgba(width, height).to_rgba8();
+        for pixel in image.pixels_mut() {
+            pixel.0[3] = u8::MAX;
+        }
+        DynamicImage::ImageRgba8(image).to_rgb8()
+    }
+
     #[test]
     fn the_quality_constant_is_90() {
         assert_eq!(JPEG_QUALITY, 90);
     }
 
     #[test]
-    fn transparent_pixels_flatten_to_white_through_the_real_encoder() {
-        let flat = flatten_onto_white(&synthetic_rgba(64, 64));
-        let bytes = encode_jpeg(&flat).expect("encode");
-        let decoded = image::load_from_memory_with_format(&bytes, ImageFormat::Jpeg)
+    fn png_keeps_alpha_through_the_real_encoder() {
+        let bytes = encode_png(&synthetic_rgba(64, 64)).expect("encode");
+        assert_eq!(bytes.get(..4), Some([0x89, b'P', b'N', b'G'].as_slice()));
+        let decoded = image::load_from_memory_with_format(&bytes, ImageFormat::Png)
             .expect("decode")
-            .to_rgb8();
+            .to_rgba8();
+        assert_eq!(decoded.get_pixel(8, 8).0[3], 0);
+    }
 
-        // Pixel (8, 8) is inside the transparent block and clear of the
-        // chroma-subsampling edge.
-        let pixel = decoded.get_pixel(8, 8).0;
-        assert!(
-            pixel.iter().all(|&channel| channel >= 250),
-            "transparent pixel is not white after decode: {pixel:?}"
-        );
+    #[test]
+    fn alpha_detection_needs_a_pixel_below_the_maximum() {
+        let opaque = RgbaImage::from_pixel(4, 4, Rgba([1, 2, 3, 255]));
+        assert!(!has_visible_alpha(&DynamicImage::ImageRgba8(
+            opaque.clone()
+        )));
+        let mut one = opaque;
+        one.put_pixel(2, 3, Rgba([1, 2, 3, 254]));
+        assert!(has_visible_alpha(&DynamicImage::ImageRgba8(one)));
+        assert!(has_visible_alpha(&synthetic_rgba(8, 8)));
+    }
+
+    #[test]
+    fn alpha_detection_covers_the_other_layouts() {
+        let rgb = DynamicImage::ImageRgb8(RgbImage::new(2, 2));
+        assert!(!has_visible_alpha(&rgb));
+        let luma = DynamicImage::ImageLuma8(GrayImage::new(2, 2));
+        assert!(!has_visible_alpha(&luma));
+        let la_opaque =
+            DynamicImage::ImageLumaA8(GrayAlphaImage::from_pixel(2, 2, LumaA([9, 255])));
+        assert!(!has_visible_alpha(&la_opaque));
+        let la = DynamicImage::ImageLumaA8(GrayAlphaImage::from_pixel(2, 2, LumaA([9, 0])));
+        assert!(has_visible_alpha(&la));
+        let wide_opaque = Rgba16Image::from_pixel(2, 2, Rgba([1, 2, 3, u16::MAX]));
+        assert!(!has_visible_alpha(&DynamicImage::ImageRgba16(wide_opaque)));
+        let mut wide = Rgba16Image::from_pixel(2, 2, Rgba([1, 2, 3, u16::MAX]));
+        wide.put_pixel(1, 1, Rgba([1, 2, 3, u16::MAX - 1]));
+        assert!(has_visible_alpha(&DynamicImage::ImageRgba16(wide)));
+        let la16: ImageBuffer<LumaA<u16>, Vec<u16>> =
+            ImageBuffer::from_pixel(2, 2, LumaA([7, u16::MAX]));
+        assert!(!has_visible_alpha(&DynamicImage::ImageLumaA16(la16)));
+        let la16: ImageBuffer<LumaA<u16>, Vec<u16>> =
+            ImageBuffer::from_pixel(2, 2, LumaA([7, 100]));
+        assert!(has_visible_alpha(&DynamicImage::ImageLumaA16(la16)));
+        let float: ImageBuffer<Rgba<f32>, Vec<f32>> =
+            ImageBuffer::from_pixel(2, 2, Rgba([0.1, 0.2, 0.3, 1.0]));
+        assert!(!has_visible_alpha(&DynamicImage::ImageRgba32F(
+            float.clone()
+        )));
+        let mut float = float;
+        float.put_pixel(0, 0, Rgba([0.1, 0.2, 0.3, 0.5]));
+        assert!(has_visible_alpha(&DynamicImage::ImageRgba32F(float)));
+    }
+
+    #[test]
+    fn the_format_extension_and_other_are_consistent() {
+        assert_eq!(TierFormat::Jpeg.extension(), "jpg");
+        assert_eq!(TierFormat::Png.extension(), "png");
+        assert_eq!(TierFormat::Jpeg.other(), TierFormat::Png);
+        assert_eq!(TierFormat::Png.other(), TierFormat::Jpeg);
     }
 
     #[test]
     fn q90_sizes_fall_in_the_expected_range() {
         let (low, high) = SIZE_RANGE;
         for edge in [256_u32, 1024] {
-            let flat = flatten_onto_white(&synthetic_rgba(edge, edge));
+            let flat = synthetic_opaque(edge, edge);
             let bytes = encode_jpeg(&flat).expect("encode");
             let size = f64::from(u32::try_from(bytes.len()).expect("size"));
             let per_pixel = size / f64::from(edge * edge);
@@ -154,9 +282,18 @@ mod tests {
     }
 
     #[test]
-    fn an_image_without_alpha_converts_without_blending() {
-        let rgb = DynamicImage::ImageRgb8(RgbImage::from_pixel(4, 4, Rgb([1, 2, 3])));
-        assert_eq!(flatten_onto_white(&rgb).get_pixel(0, 0).0, [1, 2, 3]);
+    fn q90_is_larger_than_q75_for_the_same_image() {
+        let flat = synthetic_opaque(256, 256);
+        let q90 = encode_jpeg(&flat).expect("encode").len();
+        let mut q75 = Vec::new();
+        JpegEncoder::new_with_quality(&mut q75, 75)
+            .encode_image(&flat)
+            .expect("encode q75");
+        assert!(
+            q90 > q75.len(),
+            "q90 {q90} bytes is not above q75 {}",
+            q75.len()
+        );
     }
 
     #[test]

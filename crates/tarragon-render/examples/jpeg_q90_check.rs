@@ -1,15 +1,14 @@
 //! JPEG quality-90 encoder check for the thumbnail cache.
 //!
-//! The cache output is JPEG at quality 90 through the `image` crate, pinned
-//! at 0.25.10, with alpha flattened onto white `(255, 255, 255)`. This example
-//! checks three things:
+//! The cache writes JPEG at quality 90 through the `image` crate, pinned at
+//! 0.25.10, for a source with no visible alpha. A source with alpha is
+//! written as PNG and is not measured here. This example checks two things:
 //!
 //! 1. The encoded byte size at the tier sizes falls in an expected range.
-//! 2. A fully transparent pixel becomes white after the round trip.
-//! 3. The encode and decode times (min / median / p95).
+//! 2. The encode and decode times (min / median / p95).
 //!
-//! The input is a synthetic RGBA image with a known transparent corner. It is
-//! deterministic, so the run repeats.
+//! The input is a synthetic opaque RGB image. It is deterministic, so the run
+//! repeats.
 //!
 //! ```text
 //! cargo run --release --example jpeg_q90_check -p tarragon-render
@@ -26,10 +25,12 @@
 use std::time::{Duration, Instant};
 
 use image::codecs::jpeg::JpegEncoder;
-use image::{ImageFormat, Rgb, RgbImage, Rgba, RgbaImage};
+use image::{ImageFormat, Rgb, RgbImage};
 
 /// JPEG quality. Fixed.
 const QUALITY: u8 = 90;
+/// The size band in bytes per pixel. The same band as the cache unit test.
+const SIZE_RANGE: (f64, f64) = (0.05, 0.20);
 /// Measured iterations per size. The first two runs are warmup.
 const ITERATIONS: usize = 12;
 /// Warmup runs per size. The first run fills lazily allocated buffers.
@@ -57,25 +58,15 @@ fn main() {
     println!("== tarragon JPEG q90 encoder check ==");
     println!("crate:       image 0.25.10 (in-repo JPEG encoder, no jpeg-encoder)");
     println!("quality:     {QUALITY}");
-    println!("flatten:     white (255, 255, 255) onto RGB before encode");
+    println!("input:       opaque RGB, no alpha");
     println!("cpu:         {}", cpu_model());
     println!("cpu affinity: {}", cpu_affinity());
 
-    // Part 1: alpha flattens to white.
-    let alpha_ok = check_alpha_flatten();
-
-    // Part 2: sizes and times at each tier.
+    // Sizes and times at each tier.
     let mut reports = Vec::new();
     for (width, height) in TIERS {
         reports.push(measure_size(width, height));
     }
-
-    println!();
-    println!("-- alpha flatten --");
-    println!(
-        "fully transparent pixel after decode is white: {}",
-        if alpha_ok { "yes" } else { "NO" }
-    );
 
     println!();
     println!("-- sizes and times --");
@@ -102,37 +93,25 @@ fn main() {
     }
 
     println!();
-    println!("expected size range: 0.10 to 0.40 bytes per pixel at q90");
-    println!("justification: the synthetic pattern is smooth and measures");
-    println!("  0.18-0.23 bytes/px. 0.10-0.40 covers content variation and");
-    println!("  catches a wrong quality or a raw store.");
-
-    if !alpha_ok {
-        eprintln!("FAIL: transparent pixel did not flatten to white");
+    println!(
+        "expected size range: {} to {} bytes per pixel at q90, checked at 256 px and 1024 px",
+        SIZE_RANGE.0, SIZE_RANGE.1
+    );
+    println!("justification: the opaque synthetic pattern is smooth and measures");
+    println!("  0.12 bytes/px at 256 px and 0.07 at 1024 px. The band covers content");
+    println!("  variation. Larger sizes compress better and are not in the band.");
+    let in_band = reports.iter().filter(|r| r.width <= 1024).all(|r| {
+        (SIZE_RANGE.0..=SIZE_RANGE.1).contains(&(r.bytes as f64 / f64::from(r.width * r.height)))
+    });
+    if !in_band {
+        eprintln!("FAIL: a size is outside the expected band");
         std::process::exit(1);
     }
 }
 
-/// Encode a synthetic 64x64 RGBA image with a transparent block, decode it, and
-/// check that the block is white within JPEG tolerance.
-fn check_alpha_flatten() -> bool {
-    let source = synthetic_rgba(64, 64);
-    let bytes = encode_q90(&flatten_onto_white(&source));
-    let decoded = image::load_from_memory_with_format(&bytes, ImageFormat::Jpeg)
-        .expect("jpeg decode")
-        .to_rgb8();
-
-    // Sample the center of the top-left transparent block. The block is 16x16,
-    // so the center pixel is clear of the chroma-subsampling edge.
-    let pixel = decoded.get_pixel(8, 8).0;
-    pixel.iter().all(|&channel| channel >= 250)
-}
-
 /// Measure encode and decode at one size.
 fn measure_size(width: u32, height: u32) -> SizeReport {
-    let source = synthetic_rgba(width, height);
-    let rgb = flatten_onto_white(&source);
-    drop(source);
+    let rgb = synthetic_opaque(width, height);
 
     for _ in 0..WARMUP {
         let bytes = encode_q90(&rgb);
@@ -164,11 +143,10 @@ fn measure_size(width: u32, height: u32) -> SizeReport {
     }
 }
 
-/// Build a deterministic RGBA image. The top-left quarter is fully
-/// transparent. The rest is a smooth gradient with hard stripes and a
-/// half-transparent diagonal band.
-fn synthetic_rgba(width: u32, height: u32) -> RgbaImage {
-    let mut image = RgbaImage::new(width, height);
+/// Build a deterministic opaque RGB image: a smooth gradient with hard
+/// stripes.
+fn synthetic_opaque(width: u32, height: u32) -> RgbImage {
+    let mut image = RgbImage::new(width, height);
     let width_f = width as f32;
     let height_f = height as f32;
     for (x, y, pixel) in image.enumerate_pixels_mut() {
@@ -188,36 +166,9 @@ fn synthetic_rgba(width: u32, height: u32) -> RgbaImage {
             (255.0 - base_r, 255.0 - base_g, 255.0 - base_b)
         };
 
-        let transparent = x < width / 4 && y < height / 4;
-        let diagonal = (x + y) % 97 < 12;
-        let alpha = if transparent {
-            0
-        } else if diagonal {
-            128
-        } else {
-            255
-        };
-
-        *pixel = Rgba([red as u8, green as u8, blue as u8, alpha]);
+        *pixel = Rgb([red as u8, green as u8, blue as u8]);
     }
     image
-}
-
-/// Flatten RGBA onto white with the alpha as the mask.
-fn flatten_onto_white(source: &RgbaImage) -> RgbImage {
-    let mut out = RgbImage::new(source.width(), source.height());
-    for (x, y, pixel) in source.enumerate_pixels() {
-        let alpha = u32::from(pixel[3]);
-        let blend = |channel: u8| -> u8 {
-            ((u32::from(channel) * alpha + 255 * (255 - alpha) + 127) / 255) as u8
-        };
-        out.put_pixel(
-            x,
-            y,
-            Rgb([blend(pixel[0]), blend(pixel[1]), blend(pixel[2])]),
-        );
-    }
-    out
 }
 
 /// Encode an RGB image as JPEG at [`QUALITY`].

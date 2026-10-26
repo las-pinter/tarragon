@@ -8,10 +8,15 @@ license.workspace = true
 
 [dependencies]
 # The workspace pins the version and turns off the default codecs. This crate
-# adds the JPEG codec only.
-image = { workspace = true, features = ["jpeg"] }
+# adds the JPEG and PNG codecs only.
+image = { workspace = true, features = ["jpeg", "png"] }
 tarragon-core.workspace = true
 thiserror.workspace = true
+
+[dev-dependencies]
+# The fixture test renders real files. The render crate does not depend on
+# this crate, so no runtime edge and no cycle.
+tarragon-render = { path = "../tarragon-render", version = "0.2.0" }
 
 [lints]
 workspace = true

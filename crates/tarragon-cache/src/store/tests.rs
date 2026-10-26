@@ -6,7 +6,7 @@ use tarragon_core::tier::Tier;
 
 use crate::CacheError;
 
-use super::{CacheStore, FORMAT_MARKER, SourceStamp, is_stale};
+use super::{CacheStore, FORMAT_MARKER, SourceStamp, TierFormat, is_stale};
 
 /// A temporary cache root that removes itself on drop.
 struct TempDir {
@@ -65,12 +65,14 @@ fn longest(size: (u32, u32)) -> u32 {
     size.0.max(size.1)
 }
 
+mod format;
+
 #[test]
 fn cache_paths_follow_the_tier_layout() {
     let temp = TempDir::new("layout");
     let store = CacheStore::new(temp.path());
     let entry = store
-        .entry("gallery", "abcd1234", "art.jpg")
+        .entry("gallery", "abcd1234", "art.jpg", TierFormat::Jpeg)
         .expect("valid names");
 
     assert_eq!(
@@ -97,7 +99,7 @@ fn cache_paths_follow_the_tier_layout() {
 }
 
 #[test]
-fn a_png_source_is_stored_with_a_jpg_name_and_jpeg_bytes() {
+fn an_opaque_png_source_is_stored_with_a_jpg_name_and_jpeg_bytes() {
     let temp = TempDir::new("png-source");
     let store = CacheStore::new(temp.path());
     let entry = store
@@ -129,10 +131,10 @@ fn same_stem_sources_get_distinct_cache_names() {
     let temp = TempDir::new("distinct");
     let store = CacheStore::new(temp.path());
     let jpg = store
-        .entry("gallery", "abcd1234", "photo.jpg")
+        .entry("gallery", "abcd1234", "photo.jpg", TierFormat::Jpeg)
         .expect("valid names");
     let png = store
-        .entry("gallery", "abcd1234", "photo.png")
+        .entry("gallery", "abcd1234", "photo.png", TierFormat::Jpeg)
         .expect("valid names");
 
     assert_eq!(
@@ -178,8 +180,8 @@ fn a_small_source_is_not_upscaled() {
 }
 
 #[test]
-fn transparent_pixels_flatten_onto_white() {
-    let temp = TempDir::new("flatten");
+fn transparent_pixels_keep_their_alpha_in_png_tiers() {
+    let temp = TempDir::new("keep-alpha");
     let store = CacheStore::new(temp.path());
     let entry = store
         .write_all(
@@ -190,14 +192,19 @@ fn transparent_pixels_flatten_onto_white() {
         )
         .expect("write the tiers");
 
-    let decoded = image::open(&entry.thumb256).expect("decode the 256 tier");
-    for (x, y, pixel) in decoded.to_rgb8().enumerate_pixels() {
-        for (channel, value) in pixel.0.iter().enumerate() {
-            assert!(
-                *value >= 250,
-                "pixel ({x}, {y}) channel {channel} is not near white: {value}"
-            );
-        }
+    assert_eq!(entry.format, TierFormat::Png);
+    for tier in Tier::ALL {
+        let file = entry.path(tier);
+        assert_eq!(
+            file.file_name().and_then(|name| name.to_str()),
+            Some("alpha.jpg.png")
+        );
+        let decoded = image::open(file).expect("decode the tier").to_rgba8();
+        assert!(
+            decoded.pixels().all(|pixel| pixel.0[3] == 0),
+            "tier {} lost its alpha",
+            tier.as_str()
+        );
     }
 }
 
@@ -333,7 +340,7 @@ fn a_name_with_a_separator_or_dot_dot_is_refused() {
     ] {
         assert!(
             matches!(
-                store.entry(folder, uuid, name),
+                store.entry(folder, uuid, name, TierFormat::Jpeg),
                 Err(CacheError::InvalidName(_))
             ),
             "{folder} {uuid} {name} must be refused"
@@ -350,7 +357,7 @@ fn a_name_with_a_separator_or_dot_dot_is_refused() {
 fn a_backslash_is_refused_on_windows() {
     let store = CacheStore::new(std::env::temp_dir());
     assert!(matches!(
-        store.entry("gallery", "abcd", "..\\art.jpg"),
+        store.entry("gallery", "abcd", "..\\art.jpg", TierFormat::Jpeg),
         Err(CacheError::InvalidName(_))
     ));
 }

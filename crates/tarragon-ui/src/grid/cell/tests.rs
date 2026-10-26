@@ -466,3 +466,72 @@ fn a_texture_wins_over_an_error() {
     assert!(!ring, "an error ring shows over a texture");
     assert!(!coral_name, "the name is coral over a texture");
 }
+
+/// Count the rect shapes in the output that stroke with the selection colour.
+fn selection_strokes(output: &egui::FullOutput) -> usize {
+    fn count(shape: &epaint::Shape) -> usize {
+        match shape {
+            epaint::Shape::Rect(rect)
+                if rect.stroke.width > 0.0 && rect.stroke.color == tokens::CORAL_MUTED =>
+            {
+                1
+            }
+            epaint::Shape::Vec(shapes) => shapes.iter().map(count).sum(),
+            _ => 0,
+        }
+    }
+    output
+        .shapes
+        .iter()
+        .map(|clipped| count(&clipped.shape))
+        .sum()
+}
+
+/// Draw one selected tile and count its selection strokes.
+fn selected_strokes(ctx: &Context, item: GridItem) -> usize {
+    let mut selection = Selection::default();
+    selection.select_only(0);
+    let output = draw_with(ctx, input(Vec::new()), &[item], &selection);
+    let strokes = selection_strokes(&output);
+    output.drop_without_applying_deltas();
+    strokes
+}
+
+#[test]
+fn a_selected_tile_with_a_texture_paints_one_selection_stroke() {
+    let ctx = Context::default();
+    crate::apply_theme(&ctx);
+    let texture = ctx.load_texture(
+        "selected",
+        egui::ColorImage::filled([4, 4], Color32::RED),
+        egui::TextureOptions::NEAREST,
+    );
+    let item = GridItem::new(
+        Path::new("/images/shot.png").to_path_buf(),
+        1,
+        Some(texture),
+    );
+    assert_eq!(selected_strokes(&ctx, item), 1);
+}
+
+#[test]
+fn a_selected_placeholder_tile_paints_one_selection_stroke() {
+    let ctx = Context::default();
+    crate::apply_theme(&ctx);
+    assert_eq!(selected_strokes(&ctx, item("sketch.psd")), 1);
+}
+
+#[test]
+fn an_unselected_tile_paints_no_selection_stroke() {
+    let ctx = Context::default();
+    crate::apply_theme(&ctx);
+    let output = draw_with(
+        &ctx,
+        input(Vec::new()),
+        &[item("a.png")],
+        &Selection::default(),
+    );
+    let strokes = selection_strokes(&output);
+    output.drop_without_applying_deltas();
+    assert_eq!(strokes, 0);
+}

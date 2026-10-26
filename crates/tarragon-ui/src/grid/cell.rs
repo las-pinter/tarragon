@@ -96,15 +96,8 @@ fn paint(painter: &Painter, rect: Rect, item: &GridItem, state: TileState) {
     );
 
     let thumb = thumbnail_rect(rect);
+    // One selection frame only: a second one on the thumbnail looked doubled.
     paint_thumbnail(painter, thumb, item, radius);
-    if state.selected {
-        painter.rect_stroke(
-            thumb,
-            radius,
-            Stroke::new(1.0, tokens::CORAL_MUTED),
-            StrokeKind::Inside,
-        );
-    }
     paint_badge(
         painter,
         thumb,

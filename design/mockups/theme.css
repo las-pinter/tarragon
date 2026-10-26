@@ -780,11 +780,6 @@ body {
   border-radius: var(--radius-l);
 }
 
-.cell.selected .thumb {
-  outline: 1px solid var(--coral-muted);
-  outline-offset: -1px;
-}
-
 .thumb-badge {
   position: absolute;
   top: var(--space-xs);

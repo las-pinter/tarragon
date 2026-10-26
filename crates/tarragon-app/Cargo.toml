@@ -11,9 +11,15 @@ name = "tarragon"
 path = "src/main.rs"
 
 [dependencies]
+crossbeam-channel = { workspace = true }
 eframe = { workspace = true }
+# The pipeline decodes cached tier files, so it needs the cache codecs.
+image = { workspace = true, features = ["jpeg", "png"] }
+tarragon-cache = { workspace = true }
 tarragon-core = { workspace = true }
 tarragon-db = { workspace = true }
+tarragon-render = { workspace = true }
+tarragon-scan = { workspace = true }
 tarragon-ui = { workspace = true }
 thiserror = { workspace = true }
 time = { workspace = true }

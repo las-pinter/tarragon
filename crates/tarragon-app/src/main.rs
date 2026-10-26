@@ -6,6 +6,9 @@ mod data_dir;
 mod instance;
 mod logging;
 mod logview;
+// The grid does not call the pipeline yet, so its items look unused.
+#[allow(dead_code)]
+mod pipeline;
 mod run;
 mod window;
 

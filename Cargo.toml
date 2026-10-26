@@ -19,6 +19,10 @@ tarragon-psd = { path = "crates/tarragon-psd", version = "0.2.0" }
 # crate owns the production wiring.
 tarragon-db = { path = "crates/tarragon-db", version = "0.2.0" }
 tarragon-ui = { path = "crates/tarragon-ui", version = "0.2.0" }
+# The app crate runs the render pipeline: scan, cache, and render.
+tarragon-cache = { path = "crates/tarragon-cache", version = "0.2.0" }
+tarragon-render = { path = "crates/tarragon-render", version = "0.2.0" }
+tarragon-scan = { path = "crates/tarragon-scan", version = "0.2.0" }
 # egui/eframe 0.36.2. One pin, shared by every crate. tarragon-ui uses
 # egui only and never eframe.
 #
@@ -35,6 +39,9 @@ eframe = { version = "=0.36.2", default-features = false, features = ["glow", "w
 egui_dock = "=0.21.1"
 # rayon handles CPU-bound work. The grid example caps its pool at four threads.
 rayon = "1.11"
+# The render pipeline sends results from worker threads to the UI over a
+# crossbeam channel. The exact pin keeps `cargo deny` wildcards happy.
+crossbeam-channel = "=0.5.17"
 # Shared error types. `tarragon-core` owns the error enums; the other crates
 # depend on them through core.
 thiserror = "2"

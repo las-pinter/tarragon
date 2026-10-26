@@ -2552,11 +2552,16 @@ dependencies = [
 name = "tarragon-app"
 version = "0.2.0"
 dependencies = [
+ "crossbeam-channel",
  "eframe",
  "egui_dock",
+ "image",
  "log",
+ "tarragon-cache",
  "tarragon-core",
  "tarragon-db",
+ "tarragon-render",
+ "tarragon-scan",
  "tarragon-ui",
  "thiserror 2.0.21",
  "time",

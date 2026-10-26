@@ -17,6 +17,7 @@ pub mod blend;
 pub mod composite;
 mod composite_budget;
 mod composite_fill;
+mod composite_interior;
 mod composite_paint;
 mod composite_region;
 pub mod content;

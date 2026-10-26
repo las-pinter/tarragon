@@ -309,3 +309,138 @@ fn the_effects_are_attached_to_the_expected_layer() {
     assert!(matches!(effects.items[0], Effect::DropShadow(_)));
     assert!(document.file().layers[0].effects.is_none());
 }
+
+#[test]
+fn a_color_overlay_stays_visible_at_fill_zero() {
+    let overlay = solid_overlay_effect([255.0, 0.0, 0.0], 100.0);
+    let bytes =
+        square_document_with_fill_opacity(*b"lfx2", lfx2(&[overlay]), [100, 100, 100], Some(0));
+    let region = composite(bytes, Viewport::full(64, 64));
+    assert_eq!(sample_rgba8(&region, 32, 32), [255, 0, 0, 255]);
+    assert_eq!(sample_rgba8(&region, 5, 5), [200, 200, 200, 255]);
+}
+
+#[test]
+fn a_half_strength_overlay_keeps_its_own_strength_at_fill_zero() {
+    let overlay = solid_overlay_effect([255.0, 0.0, 0.0], 50.0);
+    let bytes =
+        square_document_with_fill_opacity(*b"lfx2", lfx2(&[overlay]), [100, 100, 100], Some(0));
+    let region = composite(bytes, Viewport::full(64, 64));
+    // The overlay mixes with the backdrop alone, because the layer pixels are gone.
+    let pixel = sample_rgba8(&region, 32, 32);
+    assert!((i32::from(pixel[0]) - 228).abs() <= 1, "{pixel:?}");
+    assert!((i32::from(pixel[1]) - 100).abs() <= 1, "{pixel:?}");
+}
+
+#[test]
+fn layer_opacity_still_scales_an_overlay_at_fill_zero() {
+    let overlay = solid_overlay_effect([255.0, 0.0, 0.0], 100.0);
+    let mut spec = DocumentSpec::new(64, 64, 8, 3);
+    spec.layers
+        .push(LayerSpec::opaque((0, 0, 64, 64), [200, 200, 200]));
+    let mut layer = LayerSpec::with_alpha((24, 24, 40, 40), [100, 100, 100, 255])
+        .with_block(*b"lfx2", lfx2(&[overlay]));
+    layer.opacity = 128;
+    layer.fill_opacity = Some(0);
+    spec.layers.push(layer);
+    let region = composite(build_psd(&spec), Viewport::full(64, 64));
+    let pixel = sample_rgba8(&region, 32, 32);
+    assert!((i32::from(pixel[0]) - 228).abs() <= 1, "{pixel:?}");
+    assert!((i32::from(pixel[1]) - 100).abs() <= 1, "{pixel:?}");
+}
+
+#[test]
+fn an_inner_shadow_stays_visible_at_fill_zero() {
+    let shadow = shadow_effect(true, [0.0; 3], 120.0, 6.0, 4.0, 0.0, 75.0, true);
+    let bytes =
+        square_document_with_fill_opacity(*b"lfx2", lfx2(&[shadow]), [120, 120, 120], Some(0));
+    let region = composite(bytes, Viewport::full(64, 64));
+    let edge = sample_rgba8(&region, 25, 25);
+    // The shadow darkens the backdrop under the empty layer.
+    assert!(edge[0] < 190, "inner shadow edge {edge:?} stays visible");
+    // The shadow fades toward the middle of the square, and the layer adds nothing.
+    let center = sample_rgba8(&region, 32, 32);
+    assert!(
+        edge[0] < center[0],
+        "edge {edge:?} is darker than {center:?}"
+    );
+    assert!(
+        center[0] >= 190,
+        "the layer pixels add no colour: {center:?}"
+    );
+}
+
+#[test]
+fn a_layer_with_no_effects_is_invisible_at_fill_zero() {
+    let mut spec = DocumentSpec::new(64, 64, 8, 3);
+    spec.layers
+        .push(LayerSpec::opaque((0, 0, 64, 64), [200, 200, 200]));
+    let mut layer = LayerSpec::with_alpha((24, 24, 40, 40), [100, 100, 100, 255]);
+    layer.fill_opacity = Some(0);
+    spec.layers.push(layer);
+    let region = composite(build_psd(&spec), Viewport::full(64, 64));
+    assert_eq!(sample_rgba8(&region, 32, 32), [200, 200, 200, 255]);
+}
+
+#[test]
+fn a_color_overlay_at_half_fill_covers_the_layer_pixels() {
+    let overlay = solid_overlay_effect([255.0, 0.0, 0.0], 100.0);
+    let bytes =
+        square_document_with_fill_opacity(*b"lfx2", lfx2(&[overlay]), [100, 100, 100], Some(128));
+    let region = composite(bytes, Viewport::full(64, 64));
+    assert_eq!(sample_rgba8(&region, 32, 32), [255, 0, 0, 255]);
+}
+
+#[test]
+fn a_linear_dodge_layer_keeps_its_overlay_at_fill_zero() {
+    let overlay = solid_overlay_effect([255.0, 0.0, 0.0], 100.0);
+    let mut spec = DocumentSpec::new(64, 64, 8, 3);
+    spec.layers
+        .push(LayerSpec::opaque((0, 0, 64, 64), [200, 200, 200]));
+    let mut layer = LayerSpec::with_alpha((24, 24, 40, 40), [100, 100, 100, 255])
+        .with_block(*b"lfx2", lfx2(&[overlay]));
+    layer.blend = *b"lddg";
+    layer.fill_opacity = Some(0);
+    spec.layers.push(layer);
+    let region = composite(build_psd(&spec), Viewport::full(64, 64));
+    // The red overlay adds to the backdrop; the layer pixels add nothing.
+    assert_eq!(sample_rgba8(&region, 32, 32), [255, 200, 200, 255]);
+    assert_eq!(sample_rgba8(&region, 5, 5), [200, 200, 200, 255]);
+}
+
+#[test]
+fn a_color_burn_layer_keeps_its_overlay_at_fill_zero() {
+    let overlay = solid_overlay_effect([0.0, 0.0, 255.0], 100.0);
+    let mut spec = DocumentSpec::new(64, 64, 8, 3);
+    spec.layers
+        .push(LayerSpec::opaque((0, 0, 64, 64), [200, 200, 200]));
+    let mut layer = LayerSpec::with_alpha((24, 24, 40, 40), [100, 100, 100, 255])
+        .with_block(*b"lfx2", lfx2(&[overlay]));
+    layer.blend = *b"idiv";
+    layer.fill_opacity = Some(0);
+    spec.layers.push(layer);
+    let region = composite(build_psd(&spec), Viewport::full(64, 64));
+    let pixel = sample_rgba8(&region, 32, 32);
+    // Burning with blue darkens red and green to black and keeps blue.
+    assert!(pixel[0] < 50 && pixel[1] < 50, "{pixel:?}");
+    assert!(pixel[2] > 150, "{pixel:?}");
+}
+
+#[test]
+fn a_group_in_linear_dodge_keeps_its_overlay_at_fill_zero() {
+    let overlay = solid_overlay_effect([255.0, 0.0, 0.0], 100.0);
+    let mut spec = DocumentSpec::new(64, 64, 8, 3);
+    spec.layers
+        .push(LayerSpec::opaque((0, 0, 64, 64), [200, 200, 200]));
+    spec.layers.push(LayerSpec::group_marker(3, *b"norm"));
+    spec.layers.push(LayerSpec::with_alpha(
+        (24, 24, 40, 40),
+        [100, 100, 100, 255],
+    ));
+    let mut close = LayerSpec::group_marker(1, *b"lddg").with_block(*b"lfx2", lfx2(&[overlay]));
+    close.fill_opacity = Some(0);
+    spec.layers.push(close);
+    let region = composite(build_psd(&spec), Viewport::full(64, 64));
+    assert_eq!(sample_rgba8(&region, 32, 32), [255, 200, 200, 255]);
+    assert_eq!(sample_rgba8(&region, 5, 5), [200, 200, 200, 255]);
+}

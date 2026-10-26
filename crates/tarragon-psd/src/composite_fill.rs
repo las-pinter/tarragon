@@ -87,7 +87,8 @@ impl Compositor {
     /// Apply one adjustment layer to the running backdrop.
     ///
     /// The adjustment transforms the backdrop, then blends the result back by
-    /// the layer opacity times its mask. Alpha is unchanged.
+    /// the layer opacity times its mask. Alpha is unchanged. Fill opacity is
+    /// plain coverage here, even in the blend modes where fill changes the blend.
     pub(crate) fn apply_adjustment(
         &mut self,
         node: &LayerNode,

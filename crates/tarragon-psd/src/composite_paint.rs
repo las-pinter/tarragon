@@ -6,6 +6,16 @@
 //! opacity. A group is built in isolation over the padded viewport, so an
 //! exterior effect sees the whole group edge.
 //!
+//! # Fill opacity
+//!
+//! Fill opacity scales only the pixels of the layer itself. The interior
+//! effects keep full strength inside the layer shape, scaled by their own
+//! opacity and by the layer opacity, so they stay visible at a fill of zero.
+//! This is the Photoshop default with "Blend Interior Effects as Group" off.
+//! The exterior effects do not change. A drop shadow still sees through the
+//! layer by the amount of fill. For the blend modes where fill is not plain
+//! coverage, the stack goes through the fill blend of the layer mode.
+//!
 //! # Tile size and padding
 //!
 //! The padded viewport must stay inside the full-tier cap on each axis. A tile
@@ -18,6 +28,7 @@
 
 use crate::blend::union;
 use crate::composite::{Compositor, SkipCount};
+use crate::composite_interior::LayerStage;
 use crate::content::LayerContent;
 use crate::decode::Viewport;
 use crate::document::PsdDocument;
@@ -155,14 +166,29 @@ impl Compositor {
                 &mut stack_alpha,
             );
         }
-        // Interior effects paint over the layer content.
+        // Interior effects paint over the layer content, at full strength.
         let mut color = paint.color;
-        paint_interior(&mut color, effects, &shape, context, options)?;
+        let own = (node.fill_opacity < 1.0).then(|| color.clone());
+        let mut strength = vec![0.0f32; shape.values.len()];
+        paint_interior(&mut color, &mut strength, effects, &shape, context, options)?;
         let color = crop_color(&color, padded, viewport);
-        let layer_shape = crop_plane(&paint.shape, padded, viewport);
+        let effect_alpha: Vec<f32> = strength
+            .iter()
+            .zip(&shape.values)
+            .map(|(level, inside)| level * inside)
+            .collect();
+        let stage = LayerStage {
+            color,
+            own: own.map(|own| crop_color(&own, padded, viewport)),
+            layer_alpha: crop_plane(&paint.shape, padded, viewport),
+            over: crop_plane(&paint.geom, padded, viewport),
+            effect_alpha: crop_plane(&effect_alpha, padded, viewport),
+            blend: node.blend,
+            fill: node.fill_opacity,
+        };
         // Layer opacity applies at the stack blend, so the layer source uses
         // the fill-opacity alpha.
-        work.apply_source(&color, &layer_shape, &layer_shape, node.blend);
+        let layer_shape = work.apply_layer_stage(stage);
         union_into(&mut stack_shape, &layer_shape);
         union_into(&mut stack_alpha, &layer_shape);
         // Emboss styles shade the composited layer.

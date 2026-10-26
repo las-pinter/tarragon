@@ -332,3 +332,133 @@ fn a_vector_mask_block_is_detected_but_not_applied() {
         assert!(document.file().layers[0].has_vector_mask, "{key:?}");
     }
 }
+
+// --------------------------------------------------------------------------
+// Fill opacity in the special-eight modes
+// --------------------------------------------------------------------------
+
+/// The special-eight keys with the result at fill 128 of a (100,180,220) layer
+/// over a (200,150,100) backdrop, measured on Photoshop to within one level.
+const SPECIAL_EIGHT: [([u8; 4], [u8; 3]); 8] = [
+    (*b"idiv", [176, 132, 88]),
+    (*b"lbrn", [122, 112, 82]),
+    (*b"div ", [249, 232, 176]),
+    (*b"lddg", [250, 240, 210]),
+    (*b"vLit", [193, 188, 157]),
+    (*b"lLit", [171, 202, 192]),
+    (*b"hMix", [245, 225, 165]),
+    (*b"diff", [150, 60, 10]),
+];
+
+/// A backdrop with one top layer at the given blend, opacity and fill.
+fn fill_document(blend: [u8; 4], opacity: u8, fill: u8) -> DocumentSpec {
+    let mut spec = DocumentSpec::new(2, 2, 8, 3);
+    spec.layers
+        .push(LayerSpec::opaque((0, 0, 2, 2), [200, 150, 100]));
+    let mut top = LayerSpec::opaque((0, 0, 2, 2), [100, 180, 220]);
+    top.blend = blend;
+    top.opacity = opacity;
+    top.fill_opacity = Some(fill);
+    spec.layers.push(top);
+    spec
+}
+
+/// Assert that a pixel is within a tolerance of the expected colour.
+fn assert_near(pixel: [u8; 4], want: [f32; 3], tolerance: f32, label: &str) {
+    for channel in 0..3 {
+        let got = f32::from(pixel[channel]);
+        assert!(
+            (got - want[channel]).abs() <= tolerance,
+            "{label} channel {channel}: {got} vs {}",
+            want[channel]
+        );
+    }
+}
+
+#[test]
+fn the_special_eight_use_fill_as_photoshop_does_on_an_opaque_backdrop() {
+    for (blend, want) in SPECIAL_EIGHT {
+        let region = composite_bytes(build_psd(&fill_document(blend, 255, 128)));
+        let pixel = sample_rgba8(&region, 0, 0);
+        let want = want.map(f32::from);
+        assert_near(pixel, want, 2.0, &format!("{blend:?}"));
+        assert!(pixel[3] >= 254, "opaque alpha, got {}", pixel[3]);
+    }
+}
+
+#[test]
+fn the_special_eight_at_fill_zero_leave_the_backdrop() {
+    for (blend, _) in SPECIAL_EIGHT {
+        let region = composite_bytes(build_psd(&fill_document(blend, 255, 0)));
+        assert_eq!(
+            sample_rgba8(&region, 0, 0),
+            [200, 150, 100, 255],
+            "{blend:?}"
+        );
+    }
+}
+
+#[test]
+fn the_special_eight_at_full_fill_are_the_plain_blend() {
+    for (blend, _) in SPECIAL_EIGHT {
+        let plain = composite_bytes(build_psd(&fill_document(blend, 255, 255)));
+        let mut spec = fill_document(blend, 255, 255);
+        spec.layers[1].fill_opacity = None;
+        let absent = composite_bytes(build_psd(&spec));
+        assert_eq!(plain.rgba8(), absent.rgba8(), "{blend:?}");
+    }
+}
+
+#[test]
+fn the_special_eight_keep_fill_as_coverage_over_a_transparent_backdrop() {
+    for (blend, _) in SPECIAL_EIGHT {
+        let mut spec = DocumentSpec::new(2, 2, 8, 3);
+        let mut top = LayerSpec::opaque((0, 0, 2, 2), [100, 180, 220]);
+        top.blend = blend;
+        top.fill_opacity = Some(128);
+        spec.layers.push(top);
+        let region = composite_bytes(build_psd(&spec));
+        let pixel = sample_rgba8(&region, 0, 0);
+        assert_near(pixel, [100.0, 180.0, 220.0], 1.0, &format!("{blend:?}"));
+        assert!(
+            (i32::from(pixel[3]) - 128).abs() <= 1,
+            "{blend:?} alpha {}",
+            pixel[3]
+        );
+    }
+}
+
+#[test]
+fn opacity_mixes_the_special_eight_fill_blend_in() {
+    // Linear dodge at fill f adds the source scaled by f. Opacity o then mixes
+    // that blend colour with the backdrop at weight o.
+    let (f, o) = (128.0f32 / 255.0, 128.0f32 / 255.0);
+    let backdrop = [200.0f32, 150.0, 100.0];
+    let source = [100.0f32, 180.0, 220.0];
+    let want: [f32; 3] = std::array::from_fn(|i| {
+        let blend = (backdrop[i] + source[i] * f).min(255.0);
+        backdrop[i] + (blend - backdrop[i]) * o
+    });
+    let region = composite_bytes(build_psd(&fill_document(*b"lddg", 128, 128)));
+    assert_near(sample_rgba8(&region, 0, 0), want, 1.5, "linear dodge");
+}
+
+#[test]
+fn a_group_in_a_special_eight_mode_uses_fill_as_photoshop_does() {
+    let mut spec = DocumentSpec::new(2, 2, 8, 3);
+    spec.layers
+        .push(LayerSpec::opaque((0, 0, 2, 2), [200, 150, 100]));
+    spec.layers.push(LayerSpec::group_marker(3, *b"norm"));
+    spec.layers
+        .push(LayerSpec::opaque((0, 0, 2, 2), [100, 180, 220]));
+    let mut close = LayerSpec::group_marker(1, *b"lddg");
+    close.fill_opacity = Some(128);
+    spec.layers.push(close);
+    let region = composite_bytes(build_psd(&spec));
+    assert_near(
+        sample_rgba8(&region, 0, 0),
+        [250.0, 240.0, 210.0],
+        2.0,
+        "group",
+    );
+}

@@ -25,7 +25,7 @@ use std::cell::Cell;
 use std::mem;
 use std::rc::Rc;
 
-use crate::blend::{BlendMode, safe_div, union};
+use crate::blend::{BlendMode, fill_is_special, safe_div, union};
 use crate::composite_paint::active_effects;
 pub use crate::composite_region::CompositeRegion;
 use crate::content::LayerContent;
@@ -279,7 +279,19 @@ impl Compositor {
             return self.apply_pixels_with_effects(node, effects, document, viewport, options);
         }
         let paint = Self::layer_paint(node, document, viewport, options, &self.skips)?;
-        self.apply_source(&paint.color, &paint.shape, &paint.alpha, node.blend);
+        if node.fill_opacity < 1.0 && fill_is_special(node.blend) {
+            let over: Vec<f32> = paint.geom.iter().map(|g| g * node.opacity).collect();
+            self.apply_source_fill(
+                &paint.color,
+                &paint.shape,
+                &paint.alpha,
+                &over,
+                node.blend,
+                node.fill_opacity,
+            );
+        } else {
+            self.apply_source(&paint.color, &paint.shape, &paint.alpha, node.blend);
+        }
         Ok(())
     }
 
@@ -321,6 +333,8 @@ impl Compositor {
             alpha[index] *= mask[index] * node.opacity;
             opacity_mask[index] *= node.opacity;
         }
+        // The special-eight modes weigh the backdrop by the alpha before fill.
+        let over = alpha.clone();
         for index in 0..self.count {
             shape[index] *= node.fill_opacity;
             alpha[index] *= node.fill_opacity;
@@ -328,6 +342,8 @@ impl Compositor {
         }
         if node.blend == BlendMode::PassThrough && !isolated {
             self.apply_passthrough_source(&color, &shape, &alpha, &opacity_mask);
+        } else if node.fill_opacity < 1.0 && fill_is_special(node.blend) {
+            self.apply_source_fill(&color, &shape, &alpha, &over, node.blend, node.fill_opacity);
         } else {
             self.apply_source(&color, &shape, &alpha, node.blend);
         }
@@ -420,6 +436,42 @@ impl Compositor {
         alpha: &[f32],
         mode: BlendMode,
     ) {
+        self.apply_source_with(color, shape, alpha, mode, None);
+    }
+
+    /// Apply one source whose fill opacity changes the blend itself.
+    ///
+    /// `over` is the source alpha before fill, and `alpha` is that alpha times
+    /// the fill. `shape` is the coverage for the group planes. For the special
+    /// eight modes below full fill, the backdrop sees `over` as its weight and a source pulled toward the neutral colour; the
+    /// `alpha` plane only grows the result alpha. Any other mode takes the
+    /// plain coverage path.
+    pub(crate) fn apply_source_fill(
+        &mut self,
+        color: &[f32],
+        shape: &[f32],
+        alpha: &[f32],
+        over: &[f32],
+        mode: BlendMode,
+        fill: f32,
+    ) {
+        if fill >= 1.0 || !fill_is_special(mode) {
+            self.apply_source(color, shape, alpha, mode);
+        } else {
+            self.apply_source_with(color, shape, alpha, mode, Some((over, fill)));
+        }
+    }
+
+    /// The per-pixel blend behind [`Self::apply_source`] and
+    /// [`Self::apply_source_fill`].
+    fn apply_source_with(
+        &mut self,
+        color: &[f32],
+        shape: &[f32],
+        alpha: &[f32],
+        mode: BlendMode,
+        special: Option<(&[f32], f32)>,
+    ) {
         for index in 0..self.count {
             self.shape_g[index] = union(self.shape_g[index], shape[index]);
             self.alpha_g[index] = union(self.alpha_g[index], alpha[index]);
@@ -439,6 +491,20 @@ impl Compositor {
                 self.color[index * 3 + 2],
             ];
             let cs = [color[index * 3], color[index * 3 + 1], color[index * 3 + 2]];
+            if let Some((over, fill)) = special {
+                let over = over[index];
+                if over <= 0.0 {
+                    continue;
+                }
+                let blended = crate::blend::blend_rgb_fill(mode, cb, cs, fill);
+                for channel in 0..3 {
+                    let numerator = previous * (1.0 - over) * cb[channel]
+                        + previous * over * blended[channel]
+                        + (1.0 - previous) * source_alpha * cs[channel];
+                    self.color[index * 3 + channel] = (numerator / out_alpha).clamp(0.0, 1.0);
+                }
+                continue;
+            }
             let blended = crate::blend::blend_rgb(mode, cb, cs);
             for channel in 0..3 {
                 let blend_term = (coverage - source_alpha) * previous * cb[channel]

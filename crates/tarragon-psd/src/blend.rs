@@ -398,9 +398,57 @@ pub fn blend_rgb(mode: BlendMode, backdrop: [f32; 3], source: [f32; 3]) -> [f32;
     }
 }
 
+/// Whether a layer fill below one changes the blend itself, not only the coverage.
+///
+/// For these eight modes, Photoshop blends at full strength a source pulled
+/// toward the mode's neutral colour, and opacity then mixes the result in. Every
+/// other mode takes fill as plain coverage.
+pub(crate) fn fill_is_special(mode: BlendMode) -> bool {
+    matches!(
+        mode,
+        BlendMode::ColorBurn
+            | BlendMode::LinearBurn
+            | BlendMode::ColorDodge
+            | BlendMode::LinearDodge
+            | BlendMode::VividLight
+            | BlendMode::LinearLight
+            | BlendMode::HardMix
+            | BlendMode::Difference
+    )
+}
+
+/// The blend colour of a layer at fill `fill` (zero to one).
+///
+/// A mode outside the special eight, or a fill of one, gives [`blend_rgb`].
+/// Otherwise the source moves toward the neutral colour of the mode by the
+/// fill. Hard Mix has its own formula, which is the plain mode at fill one and
+/// the backdrop at fill zero.
+pub(crate) fn blend_rgb_fill(
+    mode: BlendMode,
+    backdrop: [f32; 3],
+    source: [f32; 3],
+    fill: f32,
+) -> [f32; 3] {
+    let fill = fill.clamp(0.0, 1.0);
+    if fill >= 1.0 || !fill_is_special(mode) {
+        return blend_rgb(mode, backdrop, source);
+    }
+    let toward = |neutral: f32| -> [f32; 3] {
+        std::array::from_fn(|i| neutral + (source[i] - neutral) * fill)
+    };
+    match mode {
+        BlendMode::HardMix => std::array::from_fn(|i| {
+            ((backdrop[i] - fill * (1.0 - source[i])) / (1.0 - fill)).clamp(0.0, 1.0)
+        }),
+        BlendMode::ColorBurn | BlendMode::LinearBurn => blend_rgb(mode, backdrop, toward(1.0)),
+        BlendMode::VividLight | BlendMode::LinearLight => blend_rgb(mode, backdrop, toward(0.5)),
+        _ => blend_rgb(mode, backdrop, toward(0.0)),
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{BlendMode, blend_rgb, luminance};
+    use super::{BlendMode, blend_rgb, blend_rgb_fill, fill_is_special, luminance};
 
     #[test]
     fn every_blend_key_maps_to_its_mode() {
@@ -548,5 +596,89 @@ mod tests {
         // A grey source desaturates in Saturation mode.
         let grey = blend_rgb(BlendMode::Saturation, cb, [0.5; 3]);
         assert!((grey[0] - grey[1]).abs() < 1e-4 && (grey[1] - grey[2]).abs() < 1e-4);
+    }
+
+    /// Backdrop and source at 8 bits, as `[r, g, b]` over 255.
+    fn unit(c: [u8; 3]) -> [f32; 3] {
+        c.map(|v| f32::from(v) / 255.0)
+    }
+
+    /// The blend colour of a source at the given fill over an opaque backdrop.
+    fn fill_result(mode: BlendMode, cb: [u8; 3], cs: [u8; 3], fill: f32) -> [f32; 3] {
+        blend_rgb_fill(mode, unit(cb), unit(cs), fill)
+    }
+
+    #[test]
+    fn the_special_eight_are_exactly_the_fill_modes() {
+        let special = [
+            BlendMode::ColorBurn,
+            BlendMode::LinearBurn,
+            BlendMode::ColorDodge,
+            BlendMode::LinearDodge,
+            BlendMode::VividLight,
+            BlendMode::LinearLight,
+            BlendMode::HardMix,
+            BlendMode::Difference,
+        ];
+        for mode in special {
+            assert!(fill_is_special(mode), "{mode:?}");
+        }
+        for mode in [
+            BlendMode::Normal,
+            BlendMode::Multiply,
+            BlendMode::Screen,
+            BlendMode::Overlay,
+            BlendMode::Exclusion,
+            BlendMode::PassThrough,
+        ] {
+            assert!(!fill_is_special(mode), "{mode:?}");
+        }
+    }
+
+    #[test]
+    fn fill_blend_matches_measured_values_at_half_fill() {
+        // The blend colour at fill 128/255 on backdrop (200,150,100), source (100,180,220).
+        // With the source weight at the fill, the final colour is the mix of the
+        // backdrop and the blend colour at opacity one, so the blend colour is the result.
+        let measured: [(BlendMode, [u8; 3]); 8] = [
+            (BlendMode::ColorBurn, [176, 132, 88]),
+            (BlendMode::LinearBurn, [122, 112, 82]),
+            (BlendMode::ColorDodge, [249, 232, 176]),
+            (BlendMode::LinearDodge, [250, 240, 210]),
+            (BlendMode::VividLight, [193, 188, 157]),
+            (BlendMode::LinearLight, [171, 202, 192]),
+            (BlendMode::HardMix, [245, 225, 165]),
+            (BlendMode::Difference, [150, 60, 10]),
+        ];
+        for (mode, want) in measured {
+            let got = fill_result(mode, [200, 150, 100], [100, 180, 220], 128.0 / 255.0);
+            for i in 0..3 {
+                assert!(
+                    (got[i] * 255.0 - f32::from(want[i])).abs() <= 1.5,
+                    "{mode:?} channel {i}: {} vs {}",
+                    got[i] * 255.0,
+                    want[i]
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn fill_blend_edges_are_plain_blend_and_backdrop() {
+        let (cb, cs) = (unit([200, 150, 100]), unit([100, 180, 220]));
+        for mode in [
+            BlendMode::ColorBurn,
+            BlendMode::HardMix,
+            BlendMode::Difference,
+        ] {
+            assert_eq!(blend_rgb_fill(mode, cb, cs, 1.0), blend_rgb(mode, cb, cs));
+            let none = blend_rgb_fill(mode, cb, cs, 0.0);
+            assert!((0..3).all(|i| (none[i] - cb[i]).abs() < 1e-5), "{mode:?}");
+        }
+        // A normal-coverage mode ignores the fill in the blend colour.
+        assert_eq!(
+            blend_rgb_fill(BlendMode::Multiply, cb, cs, 0.3),
+            blend_rgb(BlendMode::Multiply, cb, cs)
+        );
     }
 }

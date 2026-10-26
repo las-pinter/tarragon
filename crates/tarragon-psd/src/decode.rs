@@ -5,9 +5,13 @@
 //! The full canvas is never decoded into memory. Malformed rows return a typed
 //! error.
 
+use crate::decode_rows::{RegionGeometry, decode_raw_rows, decode_rle_rows};
 use crate::error::PsdError;
 use crate::limits::ParseOptions;
 use crate::parse::{ChannelInfo, ColorMode, PsdVersion};
+use crate::source::Source;
+
+pub(crate) use crate::decode_rows::decode_packbits;
 
 /// A viewport rectangle in canvas pixels. The right and bottom edges are
 /// exclusive.
@@ -94,32 +98,6 @@ impl ImageRegion {
     }
 }
 
-/// The row geometry of one channel decode.
-struct RegionGeometry {
-    /// The output width in samples, which is the output row stride.
-    viewport_width: usize,
-    /// Keep every `step`th row and every `step`th column. One keeps all.
-    step: usize,
-    /// The first channel row to decode.
-    first_row: usize,
-    /// The channel row one past the last to decode.
-    last_row: usize,
-    /// The first source column inside the channel rectangle.
-    source_col: usize,
-    /// The number of source columns to copy.
-    columns: usize,
-    /// The output column of the first copied sample.
-    output_col: usize,
-    /// The output row of the first copied sample.
-    output_row: usize,
-    /// The number of bytes in a full channel row.
-    row_bytes: usize,
-    /// The channel width in pixels.
-    channel_width: usize,
-    /// The bytes per sample.
-    bytes_per_sample: usize,
-}
-
 /// Decode one channel over the viewport. Pixels outside the channel are zero.
 ///
 /// With `step` above one, the output keeps the source pixels whose offset from
@@ -127,7 +105,7 @@ struct RegionGeometry {
 /// `ceil(width / step)` by `ceil(height / step)`. A skipped row is never
 /// decoded and the memory is the output plus one source row.
 pub(crate) fn decode_channel(
-    data: &[u8],
+    source: &Source,
     channel: &ChannelInfo,
     bytes_per_sample: usize,
     version: PsdVersion,
@@ -218,8 +196,15 @@ pub(crate) fn decode_channel(
     };
 
     match channel.compression {
-        0 => decode_raw_rows(data, channel, &geometry, options, &mut samples)?,
-        1 => decode_rle_rows(data, channel, version, &geometry, options, &mut samples)?,
+        0 => decode_raw_rows(source, channel, &geometry, options, &mut samples)?,
+        1 => decode_rle_rows(
+            source,
+            channel,
+            version.rle_entry_bytes(),
+            &geometry,
+            options,
+            &mut samples,
+        )?,
         code => return Err(PsdError::UnsupportedCompression(code)),
     }
     Ok(ChannelRegion {
@@ -228,220 +213,9 @@ pub(crate) fn decode_channel(
     })
 }
 
-/// Decode the needed rows of an uncompressed channel.
-///
-/// Every row read is bounded to the channel data block, and the deadline is
-/// checked once per row.
-fn decode_raw_rows(
-    data: &[u8],
-    channel: &ChannelInfo,
-    geometry: &RegionGeometry,
-    options: &ParseOptions,
-    samples: &mut [u16],
-) -> Result<(), PsdError> {
-    let mut row = vec![0u16; geometry.channel_width];
-    for (kept, row_index) in (geometry.first_row..geometry.last_row)
-        .step_by(geometry.step)
-        .enumerate()
-    {
-        options.check()?;
-        let offset = channel
-            .data_start
-            .saturating_add((row_index as u64).saturating_mul(geometry.row_bytes as u64));
-        let bytes = block_slice(data, channel, offset, geometry.row_bytes)?;
-        read_samples(bytes, geometry.bytes_per_sample, &mut row);
-        copy_row(&row, geometry, samples, geometry.output_row + kept);
-    }
-    Ok(())
-}
-
-/// Decode the needed rows of an RLE channel. Rows are independent.
-fn decode_rle_rows(
-    data: &[u8],
-    channel: &ChannelInfo,
-    version: PsdVersion,
-    geometry: &RegionGeometry,
-    options: &ParseOptions,
-    samples: &mut [u16],
-) -> Result<(), PsdError> {
-    let entry = version.rle_entry_bytes();
-    // The data block ends at data_start + data_len. Nothing may read past it.
-    let block_end = channel.data_start.saturating_add(channel.data_len);
-    // Sum the row lengths before the first needed row to find its data.
-    let mut cursor = channel.data_start;
-    for row_index in 0..geometry.first_row {
-        let length = read_row_length(data, channel.row_table_offset, row_index, entry)?;
-        cursor = cursor
-            .checked_add(length)
-            .ok_or(PsdError::LengthTooLarge { length })?;
-        if cursor > block_end {
-            return Err(PsdError::Truncated {
-                offset: cursor,
-                wanted: usize::try_from(length).unwrap_or(usize::MAX),
-                remaining: 0,
-            });
-        }
-    }
-    let mut row = vec![0u16; geometry.channel_width];
-    let mut scratch = vec![0u8; geometry.row_bytes];
-    for row_index in geometry.first_row..geometry.last_row {
-        options.check()?;
-        let length = read_row_length(data, channel.row_table_offset, row_index, entry)?;
-        let offset_rows = row_index - geometry.first_row;
-        // A skipped row only moves the cursor past its bytes.
-        if offset_rows.is_multiple_of(geometry.step) {
-            let compressed =
-                block_slice(data, channel, cursor, usize::try_from(length).unwrap_or(0))?;
-            decode_packbits(
-                compressed,
-                &mut scratch,
-                geometry.bytes_per_sample,
-                &mut row,
-            );
-            copy_row(
-                &row,
-                geometry,
-                samples,
-                geometry.output_row + offset_rows / geometry.step,
-            );
-        }
-        cursor = cursor
-            .checked_add(length)
-            .ok_or(PsdError::LengthTooLarge { length })?;
-    }
-    Ok(())
-}
-
-/// Copy the needed columns of one decoded row into the output.
-fn copy_row(row: &[u16], geometry: &RegionGeometry, samples: &mut [u16], output_row: usize) {
-    let Some(source) = row.get(geometry.source_col..) else {
-        return;
-    };
-    let base = output_row * geometry.viewport_width + geometry.output_col;
-    let Some(target) = samples.get_mut(base..base + geometry.columns) else {
-        return;
-    };
-    if geometry.step == 1 {
-        if let Some(whole) = source.get(..geometry.columns) {
-            target.copy_from_slice(whole);
-        }
-    } else {
-        for (slot, value) in target.iter_mut().zip(source.iter().step_by(geometry.step)) {
-            *slot = *value;
-        }
-    }
-}
-
-/// Convert one raw row of bytes into samples.
-fn read_samples(bytes: &[u8], bytes_per_sample: usize, row: &mut [u16]) {
-    if bytes_per_sample == 1 {
-        for (slot, value) in row.iter_mut().zip(bytes.iter()) {
-            *slot = u16::from(*value);
-        }
-    } else {
-        for (slot, pair) in row.iter_mut().zip(bytes.as_chunks::<2>().0) {
-            *slot = u16::from_be_bytes(*pair);
-        }
-    }
-}
-
-/// Decode one `PackBits` row. A short run zero-pads to the row length.
-pub(crate) fn decode_packbits(
-    input: &[u8],
-    scratch: &mut [u8],
-    bytes_per_sample: usize,
-    row: &mut [u16],
-) {
-    scratch.fill(0);
-    let row_bytes = scratch.len();
-    let mut source = 0usize;
-    let mut target = 0usize;
-    while source < input.len() && target < row_bytes {
-        let control = input[source].cast_signed();
-        source += 1;
-        if control >= 0 {
-            let count = usize::from(control.unsigned_abs()) + 1;
-            let available = input.len() - source;
-            let actual = count.min(available).min(row_bytes - target);
-            scratch[target..target + actual].copy_from_slice(&input[source..source + actual]);
-            target += actual;
-            source += count.min(available);
-        } else if control != -128 {
-            let Some(value) = input.get(source).copied() else {
-                break;
-            };
-            source += 1;
-            let count = usize::from(control.unsigned_abs()) + 1;
-            let actual = count.min(row_bytes - target);
-            scratch[target..target + actual].fill(value);
-            target += actual;
-        }
-    }
-    read_samples(scratch, bytes_per_sample, row);
-}
-
-/// Read one row-length table entry.
-fn read_row_length(
-    data: &[u8],
-    table_offset: u64,
-    index: usize,
-    entry: usize,
-) -> Result<u64, PsdError> {
-    let offset = table_offset.saturating_add((index as u64).saturating_mul(entry as u64));
-    let bytes = slice_at(data, offset, entry)?;
-    Ok(match entry {
-        2 => u64::from(u16::from_be_bytes([bytes[0], bytes[1]])),
-        4 => u64::from(u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]])),
-        _ => 0,
-    })
-}
-
-/// Take a checked byte slice at a file offset.
-fn slice_at(data: &[u8], offset: u64, length: usize) -> Result<&[u8], PsdError> {
-    let truncated = PsdError::Truncated {
-        offset,
-        wanted: length,
-        remaining: 0,
-    };
-    let start = usize::try_from(offset).map_err(|_| truncated)?;
-    let remaining = data.len().saturating_sub(start);
-    let end = start.checked_add(length).ok_or(PsdError::Truncated {
-        offset,
-        wanted: length,
-        remaining,
-    })?;
-    data.get(start..end).ok_or(PsdError::Truncated {
-        offset,
-        wanted: length,
-        remaining,
-    })
-}
-
-/// Take a checked slice inside the channel data block.
-///
-/// The read is bounded to `[data_start, data_start + data_len)`. A short or
-/// corrupt channel block cannot read a neighbour's bytes.
-fn block_slice<'a>(
-    data: &'a [u8],
-    channel: &ChannelInfo,
-    offset: u64,
-    length: usize,
-) -> Result<&'a [u8], PsdError> {
-    let block_end = channel.data_start.saturating_add(channel.data_len);
-    let end = offset.saturating_add(u64::try_from(length).unwrap_or(u64::MAX));
-    if offset < channel.data_start || end > block_end {
-        return Err(PsdError::Truncated {
-            offset,
-            wanted: length,
-            remaining: usize::try_from(block_end.saturating_sub(offset)).unwrap_or(0),
-        });
-    }
-    slice_at(data, offset, length)
-}
-
 #[cfg(test)]
 mod tests {
-    use crate::decode::{Viewport, decode_packbits};
+    use crate::decode::Viewport;
 
     #[test]
     fn a_viewport_reports_its_size() {
@@ -449,35 +223,5 @@ mod tests {
         assert_eq!((viewport.width(), viewport.height()), (10, 10));
         let full = Viewport::full(64, 48);
         assert_eq!((full.width(), full.height()), (64, 48));
-    }
-
-    #[test]
-    fn a_literal_run_decodes() {
-        // Control 2 copies the next 3 literal bytes.
-        let input = [2u8, 10, 20, 30];
-        let mut scratch = [0u8; 3];
-        let mut row = [0u16; 3];
-        decode_packbits(&input, &mut scratch, 1, &mut row);
-        assert_eq!(row, [10, 20, 30]);
-    }
-
-    #[test]
-    fn a_repeat_run_decodes() {
-        // Control 0xFE = -2 repeats the next byte three times.
-        let input = [0xFEu8, 9];
-        let mut scratch = [0u8; 3];
-        let mut row = [0u16; 3];
-        decode_packbits(&input, &mut scratch, 1, &mut row);
-        assert_eq!(row, [9, 9, 9]);
-    }
-
-    #[test]
-    fn a_truncated_run_zero_pads_without_panicking() {
-        // A repeat header with no value must not panic.
-        let input = [0xFEu8];
-        let mut scratch = [0u8; 3];
-        let mut row = [0u16; 3];
-        decode_packbits(&input, &mut scratch, 1, &mut row);
-        assert_eq!(row, [0, 0, 0]);
     }
 }

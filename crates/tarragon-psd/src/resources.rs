@@ -9,7 +9,9 @@
 //! this reader knows.
 
 use crate::effects::GlobalLight;
+use crate::error::PsdError;
 use crate::reader::{Reader, to_usize};
+use crate::window::Window;
 
 /// The resource signature.
 const SIGNATURE: &[u8; 4] = b"8BIM";
@@ -18,50 +20,63 @@ const GLOBAL_ANGLE_ID: u16 = 1037;
 /// The global light altitude id.
 const GLOBAL_ALTITUDE_ID: u16 = 1038;
 
+/// The most a block head can take: signature, id, a 255 byte name with its
+/// length byte and pad, and the data length.
+const MAX_HEAD: usize = 4 + 2 + 1 + 255 + 1 + 4;
+
 /// Read the document global light from the image resources section.
 ///
-/// A missing id keeps the default value, so a file without the resources
-/// paints the same way Photoshop does.
-#[must_use]
-pub(crate) fn parse_global_light(data: &[u8]) -> GlobalLight {
+/// The window covers the section. Each block is walked by its head and its
+/// data is skipped by seeking, so a large block that holds no light value is
+/// never read. A missing id keeps the default value, so a file without the
+/// resources paints the same way Photoshop does.
+///
+/// # Errors
+///
+/// Only a failed read of the source is an error. A malformed block ends the
+/// walk and keeps the values read so far.
+pub(crate) fn read_global_light(window: &mut Window) -> Result<GlobalLight, PsdError> {
     let mut light = GlobalLight::default();
-    let mut reader = Reader::new(data);
-    while reader.remaining() >= 12 {
-        let Ok(signature) = reader.read_array::<4>() else {
+    while window.remaining() >= 12 {
+        let count = to_usize(window.remaining().min(MAX_HEAD as u64))?;
+        let start = window.pos();
+        let slice = window.peek(count, true)?;
+        let mut reader = Reader::at(slice, start);
+        let Ok((known, id, size)) = read_head(&mut reader) else {
             break;
         };
-        let known = &signature == SIGNATURE;
-        let Ok(id) = reader.read_u16() else {
+        let used = reader.offset() - start;
+        window.skip(used)?;
+        if window.remaining() < size {
             break;
-        };
-        let Ok(size) = read_block_head(&mut reader) else {
-            break;
-        };
-        let size = to_usize(u64::from(size)).unwrap_or(0);
-        let Ok(value) = reader.take(size) else {
-            break;
-        };
-        if known
-            && (id == GLOBAL_ANGLE_ID || id == GLOBAL_ALTITUDE_ID)
-            && let Some(raw) = value.get(..4)
-        {
-            let degrees = degrees_of(raw);
+        }
+        if known && (id == GLOBAL_ANGLE_ID || id == GLOBAL_ALTITUDE_ID) && size >= 4 {
+            let degrees = degrees_of(window.peek(4, false)?);
             if id == GLOBAL_ANGLE_ID {
                 light.angle = degrees;
             } else {
                 light.altitude = degrees;
             }
         }
+        window.skip(size)?;
         // The data block is padded to an even length.
-        if size % 2 == 1 && reader.skip(1).is_err() {
+        if size % 2 == 1 && window.skip(1).is_err() {
             break;
         }
     }
-    light
+    Ok(light)
+}
+
+/// Read a block head: whether the signature is known, the id, the data length.
+fn read_head(reader: &mut Reader<'_>) -> Result<(bool, u16, u64), PsdError> {
+    let known = &reader.read_array::<4>()? == SIGNATURE;
+    let id = reader.read_u16()?;
+    let size = read_block_head(reader)?;
+    Ok((known, id, u64::from(size)))
 }
 
 /// Read the padded Pascal name and the data length that follows it.
-fn read_block_head(reader: &mut Reader<'_>) -> Result<u32, crate::error::PsdError> {
+fn read_block_head(reader: &mut Reader<'_>) -> Result<u32, PsdError> {
     let name_length = usize::from(reader.read_u8()?);
     reader.skip(name_length)?;
     // The length byte plus the name round up to an even count.

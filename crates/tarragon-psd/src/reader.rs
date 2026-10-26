@@ -36,11 +36,6 @@ impl<'a> Reader<'a> {
         self.data.len().saturating_sub(self.pos)
     }
 
-    /// The total length of the wrapped slice.
-    pub(crate) fn data_len(&self) -> usize {
-        self.data.len()
-    }
-
     /// Take the next `count` bytes, or fail with a typed error.
     pub(crate) fn take(&mut self, count: usize) -> Result<&'a [u8], PsdError> {
         let truncated = PsdError::Truncated {
@@ -59,17 +54,6 @@ impl<'a> Reader<'a> {
         let slice = &self.data[self.pos..end];
         self.pos = end;
         Ok(slice)
-    }
-
-    /// Take a bounded sub-reader. The child inherits the file offset.
-    pub(crate) fn take_reader(&mut self, count: usize) -> Result<Reader<'a>, PsdError> {
-        let base = self.offset();
-        let slice = self.take(count)?;
-        Ok(Reader {
-            data: slice,
-            pos: 0,
-            base,
-        })
     }
 
     /// Skip `count` bytes.

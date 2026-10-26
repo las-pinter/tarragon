@@ -7,6 +7,7 @@ use crate::layer::{ChannelInfo, GlobalMask, LayerRecord};
 use crate::limits::ParseOptions;
 use crate::merged::MergedImage;
 use crate::patterns::PatternEntry;
+use crate::source::Source;
 
 /// The PSD or PSB file version.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -180,6 +181,9 @@ pub struct PsdFile {
     /// layer info, when that scan failed. The file still parses, with no layers
     /// from those blocks.
     pub layer_info_error: Option<String>,
+    /// Why the document pattern table was skipped, when it was too large to
+    /// read. Pattern fills then render as unsupported.
+    pub pattern_note: Option<String>,
     /// The message of the error raised while reading the merged image section,
     /// when a lenient parse kept the layers anyway. A strict parse never sets
     /// it: the strict parse fails instead. The merged description is then empty.
@@ -205,9 +209,9 @@ impl PsdFile {
     /// Returns a typed error when the viewport is invalid, exceeds the cap,
     /// the color mode is unsupported, the deadline passed, or the bytes are
     /// truncated.
-    pub fn read_merged_region(
+    pub(crate) fn read_merged_region_from(
         &self,
-        data: &[u8],
+        source: &Source,
         viewport: Viewport,
         options: &ParseOptions,
     ) -> Result<ImageRegion, PsdError> {
@@ -215,7 +219,7 @@ impl PsdFile {
         let bytes_per_sample = sample_bytes(self.header.color_mode, self.header.depth)?;
         options.check()?;
         self.decode_channels(
-            data,
+            source,
             &self.merged.channels,
             viewport,
             1,
@@ -237,9 +241,9 @@ impl PsdFile {
     /// A step of zero is treated as one. Returns a typed error when the
     /// viewport is invalid, the output exceeds the cap, the color mode is unsupported, the deadline
     /// passed, or the bytes are truncated.
-    pub fn read_merged_strided(
+    pub(crate) fn read_merged_strided_from(
         &self,
-        data: &[u8],
+        source: &Source,
         viewport: Viewport,
         step: u32,
         options: &ParseOptions,
@@ -256,7 +260,7 @@ impl PsdFile {
         let bytes_per_sample = sample_bytes(self.header.color_mode, self.header.depth)?;
         options.check()?;
         let mut region = self.decode_channels(
-            data,
+            source,
             &self.merged.channels,
             viewport,
             usize::try_from(step).unwrap_or(usize::MAX),
@@ -274,9 +278,9 @@ impl PsdFile {
     /// Returns a typed error when the layer index is out of range, the
     /// viewport is invalid or exceeds the cap, the color mode is unsupported,
     /// the deadline passed, or the bytes are truncated.
-    pub fn read_layer_region(
+    pub(crate) fn read_layer_region_from(
         &self,
-        data: &[u8],
+        source: &Source,
         index: usize,
         viewport: Viewport,
         options: &ParseOptions,
@@ -289,13 +293,68 @@ impl PsdFile {
         let bytes_per_sample = sample_bytes(self.header.color_mode, self.header.depth)?;
         options.check()?;
         self.decode_channels(
-            data,
+            source,
             &layer.channels,
             viewport,
             1,
             bytes_per_sample,
             options,
         )
+    }
+
+    /// Decode the merged image over `viewport` from bytes in memory.
+    ///
+    /// This copies `data` on every call. A caller that reads more than once
+    /// should open a [`crate::PsdDocument`] instead.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed error when the viewport is invalid, exceeds the cap,
+    /// the color mode is unsupported, the deadline passed, or the bytes are
+    /// truncated.
+    pub fn read_merged_region(
+        &self,
+        data: &[u8],
+        viewport: Viewport,
+        options: &ParseOptions,
+    ) -> Result<ImageRegion, PsdError> {
+        self.read_merged_region_from(&Source::memory(data.to_vec()), viewport, options)
+    }
+
+    /// Decode the merged image over `viewport`, keeping every `step`th pixel,
+    /// from bytes in memory. See [`PsdFile::read_merged_region`] for the copy.
+    ///
+    /// # Errors
+    ///
+    /// A step of zero is treated as one. Returns a typed error when the
+    /// viewport is invalid, the output exceeds the cap, the color mode is
+    /// unsupported, the deadline passed, or the bytes are truncated.
+    pub fn read_merged_strided(
+        &self,
+        data: &[u8],
+        viewport: Viewport,
+        step: u32,
+        options: &ParseOptions,
+    ) -> Result<ImageRegion, PsdError> {
+        self.read_merged_strided_from(&Source::memory(data.to_vec()), viewport, step, options)
+    }
+
+    /// Decode one layer's channels over `viewport` from bytes in memory. See
+    /// [`PsdFile::read_merged_region`] for the copy.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed error when the layer index is out of range, the
+    /// viewport is invalid or exceeds the cap, the color mode is unsupported,
+    /// the deadline passed, or the bytes are truncated.
+    pub fn read_layer_region(
+        &self,
+        data: &[u8],
+        index: usize,
+        viewport: Viewport,
+        options: &ParseOptions,
+    ) -> Result<ImageRegion, PsdError> {
+        self.read_layer_region_from(&Source::memory(data.to_vec()), index, viewport, options)
     }
 
     /// Validate a viewport against the canvas and the full-tier cap.
@@ -344,7 +403,7 @@ impl PsdFile {
     /// full viewport of samples.
     fn decode_channels(
         &self,
-        data: &[u8],
+        source: &Source,
         channels: &[ChannelInfo],
         viewport: Viewport,
         step: usize,
@@ -361,7 +420,7 @@ impl PsdFile {
                 continue;
             }
             decoded.push(decode_channel(
-                data,
+                source,
                 channel,
                 bytes_per_sample,
                 self.header.version,

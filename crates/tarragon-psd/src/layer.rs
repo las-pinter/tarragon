@@ -4,17 +4,22 @@ use crate::content::LayerContent;
 use crate::effects::Effects;
 use crate::error::PsdError;
 use crate::layer_extra::read_layer_extra;
-use crate::layer_tail::{TaggedTail, drop_unmatched_pattern_fills, read_tagged_tail};
+use crate::layer_info::parse_layer_info;
+use crate::layer_tail::{
+    MAX_PATTERN_BLOCK, TaggedTail, drop_unmatched_pattern_fills, read_tagged_tail,
+};
 use crate::limits::{MAX_DIMENSION, MAX_LAYER_CHANNELS, ParseOptions};
-use crate::model::{Compression, PsdHeader, PsdVersion, sample_levels};
+use crate::model::{PsdHeader, sample_levels};
 use crate::patterns::PatternEntry;
 use crate::reader::{Reader, to_usize};
+use crate::source::Source;
 use crate::vector_mask::VectorMask;
+use crate::window::Window;
 
 /// The blend mode signature in a layer record.
-const BLEND_SIGNATURE: &[u8; 4] = b"8BIM";
-/// The smallest possible layer record in bytes.
-const MIN_LAYER_RECORD: usize = 34;
+pub(crate) const BLEND_SIGNATURE: &[u8; 4] = b"8BIM";
+/// The bytes of the global layer mask that carry values.
+const GLOBAL_MASK_BYTES: usize = 13;
 
 /// The clipping flag of a layer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -218,6 +223,8 @@ pub(crate) struct LayerSectionData {
     pub(crate) merged_has_alpha: bool,
     /// The message of the error that the tagged layer info scan dropped.
     pub(crate) layer_info_error: Option<String>,
+    /// Why a pattern table was skipped, when it was too large.
+    pub(crate) pattern_note: Option<String>,
 }
 
 /// The parsed layer info: the records and the sign of the layer count.
@@ -230,13 +237,19 @@ pub(crate) struct LayerInfo {
     pub(crate) merged_has_alpha: bool,
 }
 
-/// Parse the bounded layer-and-mask section.
+/// Parse the layer-and-mask section, the file range `[start, end)`.
+///
+/// The records are read into memory one at a time. The channel pixels stay in
+/// the file and are found later by offset.
 pub(crate) fn parse_layer_section(
-    section: &mut Reader,
+    source: &Source,
+    start: u64,
+    end: u64,
     header: &PsdHeader,
     options: &ParseOptions,
 ) -> Result<LayerSectionData, PsdError> {
-    let layer_info_length = to_usize(section.read_length(header.version)?)?;
+    let mut section = Window::new(source, start, end);
+    let layer_info_length = section.read_length(header.version)?;
     let mut info = if layer_info_length == 0 {
         LayerInfo {
             layer_count: 0,
@@ -245,10 +258,15 @@ pub(crate) fn parse_layer_section(
         }
     } else {
         // The layer info length bounds the record and channel walk.
-        let mut body = section.take_reader(layer_info_length)?;
-        parse_layer_info(&mut body, header, options)?
+        to_usize(layer_info_length)?;
+        section.require(layer_info_length)?;
+        let body_start = section.pos();
+        let body_end = body_start + layer_info_length;
+        let info = parse_layer_info(source, body_start, body_end, header, options)?;
+        section.seek(body_end);
+        info
     };
-    let global_mask = parse_global_mask(section)?;
+    let global_mask = parse_global_mask(&mut section)?;
     // The tagged blocks are optional extras. A bad block means no layers or
     // patterns are found there, and the merged image still renders. Only a
     // timeout or a cancel stops the parse. The crate has no logging, so the
@@ -256,7 +274,14 @@ pub(crate) fn parse_layer_section(
     // through `PsdDocument::layer_info_error`.
     let mut tail = TaggedTail::default();
     let want_layers = info.layers.is_empty();
-    match read_tagged_tail(section, header, options, want_layers, &mut tail) {
+    match read_tagged_tail(
+        &mut section,
+        header,
+        options,
+        want_layers,
+        MAX_PATTERN_BLOCK,
+        &mut tail,
+    ) {
         Err(error) if error.is_transient() => return Err(error),
         Err(error) => tail.error = Some(error),
         Ok(()) => {}
@@ -281,109 +306,30 @@ pub(crate) fn parse_layer_section(
         patterns: tail.patterns,
         merged_has_alpha: info.merged_has_alpha,
         layer_info_error,
+        pattern_note: tail.pattern_note,
     })
-}
-
-/// Parse the bounded layer info body: records then channel image data.
-pub(crate) fn parse_layer_info(
-    body: &mut Reader,
-    header: &PsdHeader,
-    options: &ParseOptions,
-) -> Result<LayerInfo, PsdError> {
-    // A negative count marks merged transparency. The absolute value is the
-    // record count.
-    let declared = body.read_i16()?;
-    let layer_count = usize::from(declared.unsigned_abs());
-    // A record needs at least 34 bytes. Reject an impossible count early.
-    if layer_count.saturating_mul(MIN_LAYER_RECORD) > body.data_len() {
-        return Err(PsdError::Truncated {
-            offset: body.offset(),
-            wanted: layer_count.saturating_mul(MIN_LAYER_RECORD),
-            remaining: body.remaining(),
-        });
-    }
-
-    let mut layers = Vec::new();
-    for _ in 0..layer_count {
-        options.check()?;
-        layers.push(read_layer_record(body, header, options)?);
-    }
-    assign_channel_offsets(&mut layers, body, header.version)?;
-    Ok(LayerInfo {
-        layer_count,
-        layers,
-        merged_has_alpha: declared < 0,
-    })
-}
-
-/// Assign each layer channel its file offset inside the channel data block.
-fn assign_channel_offsets(
-    layers: &mut [LayerRecord],
-    reader: &mut Reader,
-    version: PsdVersion,
-) -> Result<(), PsdError> {
-    for layer in layers.iter_mut() {
-        for channel in &mut layer.channels {
-            let offset = reader.offset();
-            channel.data_offset = offset;
-            // A block shorter than the two-byte compression field is empty.
-            // Do not decode it as raw, or it would read the next channel.
-            if channel.length < 2 {
-                if channel.length == 1 {
-                    reader.skip(1)?;
-                }
-                channel.compression = Compression::Raw.code();
-                channel.data_start = offset;
-                channel.data_len = 0;
-                channel.row_table_offset = 0;
-                continue;
-            }
-            let compression = reader.read_u16()?;
-            channel.compression = compression;
-            let rows = u64::try_from(channel.bounds.height().max(0)).unwrap_or(0);
-            if compression == Compression::Rle.code() {
-                let table = rows.saturating_mul(version.rle_entry_bytes() as u64);
-                // The compression field and the row table must fit the block.
-                if 2 + table > channel.length {
-                    return Err(PsdError::Truncated {
-                        offset,
-                        wanted: usize::try_from(2 + table).unwrap_or(usize::MAX),
-                        remaining: usize::try_from(channel.length).unwrap_or(usize::MAX),
-                    });
-                }
-                channel.row_table_offset = offset.saturating_add(2);
-                channel.data_start = offset.saturating_add(2).saturating_add(table);
-                channel.data_len = channel.length - 2 - table;
-            } else {
-                channel.row_table_offset = 0;
-                channel.data_start = offset.saturating_add(2);
-                channel.data_len = channel.length - 2;
-            }
-            reader.skip(to_usize(channel.length - 2)?)?;
-        }
-    }
-    Ok(())
 }
 
 /// Read the global layer mask info: a length then the data.
-fn parse_global_mask(reader: &mut Reader) -> Result<Option<GlobalMask>, PsdError> {
-    if reader.remaining() < 4 {
+fn parse_global_mask(section: &mut Window) -> Result<Option<GlobalMask>, PsdError> {
+    if section.remaining() < 4 {
         return Ok(None);
     }
-    let length = to_usize(u64::from(reader.read_u32()?))?;
-    let data = reader.take(length)?;
-    if data.len() < 13 {
-        return Ok(None);
-    }
-    Ok(Some(GlobalMask {
+    let length = to_usize(u64::from(section.read_u32()?))?;
+    section.require(length as u64)?;
+    // Only the first 13 bytes carry values. The rest is skipped unread.
+    let data = section.peek(length.min(GLOBAL_MASK_BYTES), false)?;
+    let mask = (data.len() >= GLOBAL_MASK_BYTES).then(|| GlobalMask {
         overlay_color_space: u16::from_be_bytes([data[0], data[1]]),
         opacity: u16::from_be_bytes([data[10], data[11]]),
         kind: data[12],
-    }))
+    });
+    section.skip(length as u64)?;
+    Ok(mask)
 }
 
 /// Read one layer record.
-fn read_layer_record(
+pub(crate) fn read_layer_record(
     reader: &mut Reader,
     header: &PsdHeader,
     options: &ParseOptions,

@@ -1,8 +1,9 @@
 //! PSD and PSB header, layer, and image-data parsing.
 //!
-//! The reader walks the Photoshop binary format by hand. It reads the full
-//! layer-and-mask section, the global layer mask, and the merged image data
-//! section. The tiled read decodes only a requested viewport.
+//! The reader walks the Photoshop binary format by hand. It reads the layer
+//! records, the global layer mask, and the merged image description by file
+//! range, and never reads a whole file. Channel pixels stay in the file. The
+//! tiled read decodes only a requested viewport.
 //!
 //! Every read is checked. A bad byte offset returns [`PsdError::Truncated`].
 //! Every declared length is validated before an allocation. Malformed input
@@ -15,7 +16,9 @@ use crate::layer::{LayerSectionData, parse_layer_section};
 use crate::limits::{MAX_DIMENSION, MAX_HEADER_CHANNELS, ParseOptions, full_tier_size};
 use crate::merged::read_merged_image;
 use crate::reader::{Reader, to_usize};
-use crate::resources::parse_global_light;
+use crate::resources::read_global_light;
+use crate::source::Source;
+use crate::window::Window;
 
 pub use crate::layer::{
     BlendingRanges, ChannelInfo, Clipping, GlobalMask, LayerBounds, LayerMask, LayerRecord,
@@ -30,6 +33,8 @@ const SIGNATURE: &[u8; 4] = b"8BPS";
 const VERSION_PSD: u16 = 1;
 /// The PSB file version.
 const VERSION_PSB: u16 = 2;
+/// The size of the file header in bytes.
+const HEADER_BYTES: usize = 26;
 
 /// Read the header, layers, and merged image of a PSD or PSB file.
 ///
@@ -48,11 +53,7 @@ pub fn read_file(path: &Path) -> Result<PsdFile, PsdError> {
 /// Returns [`PsdError::Io`] when the file cannot be read. Returns a parse
 /// error when the bytes are malformed or truncated.
 pub fn read_file_with_options(path: &Path, options: &ParseOptions) -> Result<PsdFile, PsdError> {
-    let data = std::fs::read(path).map_err(|source| PsdError::Io {
-        path: path.to_path_buf(),
-        source,
-    })?;
-    parse(&data, options)
+    parse(&Source::open(path)?, options)
 }
 
 /// Read the header, layers, and merged image from a byte slice.
@@ -61,7 +62,7 @@ pub fn read_file_with_options(path: &Path, options: &ParseOptions) -> Result<Psd
 ///
 /// Returns a parse error when the bytes are malformed or truncated.
 pub fn read_bytes(data: &[u8]) -> Result<PsdFile, PsdError> {
-    parse(data, &ParseOptions::default())
+    parse(&Source::memory(data.to_vec()), &ParseOptions::default())
 }
 
 /// Read from a byte slice with explicit options.
@@ -70,7 +71,7 @@ pub fn read_bytes(data: &[u8]) -> Result<PsdFile, PsdError> {
 ///
 /// Returns a parse error when the bytes are malformed or truncated.
 pub fn read_bytes_with_options(data: &[u8], options: &ParseOptions) -> Result<PsdFile, PsdError> {
-    parse(data, options)
+    parse(&Source::memory(data.to_vec()), options)
 }
 
 /// Read from a byte slice and keep the layers when only the merged image is bad.
@@ -86,33 +87,44 @@ pub fn read_bytes_with_options(data: &[u8], options: &ParseOptions) -> Result<Ps
 /// merged image, when the merged image is bad and the file has no layers, or
 /// when the work timed out or was cancelled.
 pub fn read_bytes_lenient(data: &[u8], options: &ParseOptions) -> Result<PsdFile, PsdError> {
-    parse_with(data, options, true)
+    parse_with(&Source::memory(data.to_vec()), options, true)
 }
 
 /// Walk every file section.
-fn parse(data: &[u8], options: &ParseOptions) -> Result<PsdFile, PsdError> {
-    parse_with(data, options, false)
+pub(crate) fn parse(source: &Source, options: &ParseOptions) -> Result<PsdFile, PsdError> {
+    parse_with(source, options, false)
 }
 
 /// Walk every file section. `lenient` keeps a layered file whose merged image
 /// section is bad.
-fn parse_with(data: &[u8], options: &ParseOptions, lenient: bool) -> Result<PsdFile, PsdError> {
+pub(crate) fn parse_with(
+    source: &Source,
+    options: &ParseOptions,
+    lenient: bool,
+) -> Result<PsdFile, PsdError> {
     options.check()?;
-    let mut reader = Reader::new(data);
-    let header = read_header(&mut reader)?;
+    let mut window = Window::new(source, 0, source.len());
+    let header = window.with_reader(HEADER_BYTES, false, read_header)?;
     validate_dimensions(&header)?;
 
-    // Color mode data: a four-byte length then the data.
-    let color_mode_length = reader.read_u32()?;
-    reader.skip(to_usize(u64::from(color_mode_length))?)?;
+    // Color mode data: a four-byte length then the data. It is skipped.
+    let color_mode_length = window.read_u32()?;
+    window.skip(u64::from(color_mode_length))?;
     // Image resources: a four-byte length then the data.
-    let resources_length = to_usize(u64::from(reader.read_u32()?))?;
-    let resources = reader.take(resources_length)?;
-    let global_light = parse_global_light(resources);
+    let resources_length = u64::from(window.read_u32()?);
+    window.require(resources_length)?;
+    // Only the global light is read from the resources. The walk skips every
+    // other block by seeking, so a large block is never read.
+    let mut resources = Window::new(source, window.pos(), window.pos() + resources_length);
+    let global_light = read_global_light(&mut resources)?;
+    window.skip(resources_length)?;
 
     // Layer and mask information. The section length bounds every layer read.
     // The length field is four bytes in PSD and eight bytes in PSB.
-    let section_length = to_usize(reader.read_length(header.version)?)?;
+    let section_length = window.read_length(header.version)?;
+    to_usize(section_length)?;
+    window.require(section_length)?;
+    let section_start = window.pos();
     let section = if section_length == 0 {
         LayerSectionData {
             layer_count: 0,
@@ -121,15 +133,23 @@ fn parse_with(data: &[u8], options: &ParseOptions, lenient: bool) -> Result<PsdF
             patterns: Vec::new(),
             merged_has_alpha: false,
             layer_info_error: None,
+            pattern_note: None,
         }
     } else {
-        let mut section = reader.take_reader(section_length)?;
-        parse_layer_section(&mut section, &header, options)?
+        parse_layer_section(
+            source,
+            section_start,
+            section_start + section_length,
+            &header,
+            options,
+        )?
     };
+    window.seek(section_start + section_length);
+    window.release();
 
     // The merged image data section follows the layer section.
     let mut merged_error = None;
-    let merged = match read_merged_image(&mut reader, &header, section.merged_has_alpha, options) {
+    let merged = match read_merged_image(&mut window, &header, section.merged_has_alpha, options) {
         Ok(merged) => merged,
         // A timeout or a cancel always stops the parse. Any other merged
         // failure is kept aside when the layers can still be drawn.
@@ -152,6 +172,7 @@ fn parse_with(data: &[u8], options: &ParseOptions, lenient: bool) -> Result<PsdF
         patterns: section.patterns,
         merged_has_alpha: section.merged_has_alpha,
         layer_info_error: section.layer_info_error,
+        pattern_note: section.pattern_note,
         merged_error,
         merged,
     })

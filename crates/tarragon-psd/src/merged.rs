@@ -4,7 +4,7 @@ use crate::error::PsdError;
 use crate::layer::{ChannelInfo, LayerBounds};
 use crate::limits::{MAX_DIMENSION, ParseOptions};
 use crate::model::{Compression, PsdHeader};
-use crate::reader::Reader;
+use crate::window::Window;
 
 /// The merged image data section.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -28,7 +28,7 @@ impl MergedImage {
 /// `has_alpha` is true when the layer count was negative, which makes the first
 /// channel after the color channels the merged transparency.
 pub(crate) fn read_merged_image(
-    reader: &mut Reader,
+    reader: &mut Window,
     header: &PsdHeader,
     has_alpha: bool,
     options: &ParseOptions,
@@ -51,14 +51,14 @@ pub(crate) fn read_merged_image(
                 .ok_or(PsdError::LengthTooLarge {
                     length: plane_length,
                 })?;
-            if reader.remaining() < channels.saturating_mul(plane) {
+            if reader.remaining() < (channels as u64).saturating_mul(plane as u64) {
                 return Err(PsdError::Truncated {
-                    offset: reader.offset(),
+                    offset: reader.pos(),
                     wanted: channels.saturating_mul(plane),
-                    remaining: reader.remaining(),
+                    remaining: usize::try_from(reader.remaining()).unwrap_or(usize::MAX),
                 });
             }
-            let start = reader.offset();
+            let start = reader.pos();
             for (index, id) in channel_ids.iter().enumerate() {
                 let offset = start.saturating_add((index as u64).saturating_mul(plane as u64));
                 infos.push(merged_channel(
@@ -81,25 +81,29 @@ pub(crate) fn read_merged_image(
             let table_bytes = entries.checked_mul(entry).ok_or(PsdError::LengthTooLarge {
                 length: table_length,
             })?;
-            let table_offset = reader.offset();
-            let table = reader.take(table_bytes)?;
+            let table_offset = reader.pos();
+            // The table must fit the file. Each channel's rows are then read
+            // and summed one channel at a time, so the table is never held
+            // whole.
+            reader.skip(table_bytes as u64)?;
             let available = reader.remaining();
-            let mut data_start = reader.offset();
+            let mut data_start = reader.pos();
             let mut total = 0u64;
             for (index, id) in channel_ids.iter().enumerate() {
+                let row_table_offset = table_offset
+                    .saturating_add(u64::try_from(index * rows * entry).unwrap_or(u64::MAX));
+                let table = reader
+                    .source()
+                    .read_vec(row_table_offset, rows.saturating_mul(entry))?;
                 let mut length = 0u64;
                 for row in 0..rows {
-                    let offset = (index * rows + row) * entry;
-                    let row_length = read_row_length(table, offset, entry)?;
                     length = length
-                        .checked_add(row_length)
-                        .ok_or(PsdError::LengthTooLarge { length: row_length })?;
+                        .checked_add(read_row_length(&table, row * entry, entry)?)
+                        .ok_or(PsdError::LengthTooLarge { length })?;
                 }
                 total = total
                     .checked_add(length)
                     .ok_or(PsdError::LengthTooLarge { length })?;
-                let row_table_offset = table_offset
-                    .saturating_add(u64::try_from(index * rows * entry).unwrap_or(u64::MAX));
                 infos.push(ChannelInfo {
                     id: *id,
                     length,
@@ -115,11 +119,11 @@ pub(crate) fn read_merged_image(
                     .ok_or(PsdError::LengthTooLarge { length })?;
             }
             // The declared channel data must fit after the row table.
-            if total > available as u64 {
+            if total > available {
                 return Err(PsdError::Truncated {
-                    offset: reader.offset(),
+                    offset: reader.pos(),
                     wanted: usize::try_from(total).unwrap_or(usize::MAX),
-                    remaining: available,
+                    remaining: usize::try_from(available).unwrap_or(usize::MAX),
                 });
             }
         }

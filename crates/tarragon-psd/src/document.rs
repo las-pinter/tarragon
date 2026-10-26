@@ -1,8 +1,8 @@
-//! The owning PSD document: the parsed file plus its bytes.
+//! The owning PSD document: the parsed file plus its byte source.
 //!
 //! The layer compositor opens one [`PsdDocument`], reads the layer
-//! tree, and then reads one tile at a time. The document owns the file bytes so
-//! a region read does not re-read the file.
+//! tree, and then reads one tile at a time. The document keeps the open file,
+//! and a region read fetches only the rows it needs from it.
 
 use std::path::Path;
 use std::sync::Arc;
@@ -10,19 +10,21 @@ use std::sync::Arc;
 use crate::decode::{ImageRegion, Viewport};
 use crate::error::PsdError;
 use crate::limits::ParseOptions;
-use crate::parse::{PsdFile, read_bytes_lenient, read_bytes_with_options};
+use crate::parse::{PsdFile, parse, parse_with};
+use crate::source::Source;
 
-/// A parsed PSD or PSB file that owns its bytes.
+/// A parsed PSD or PSB file that keeps its source open.
 ///
-/// The file bytes are read into memory once and shared through [`Arc`], so
-/// cloning the file bytes is cheap (one `Arc` bump); the parsed layer tree is
-/// copied.
+/// A file is read by range and never whole, so memory stays bounded for a
+/// large PSB. The source is shared through [`Arc`], so a clone is cheap (one
+/// `Arc` bump); the parsed layer tree is copied. Reads are positional, so many
+/// threads can read one document at once.
 #[derive(Debug, Clone)]
 pub struct PsdDocument {
     /// The parsed structure.
     file: PsdFile,
-    /// The raw file bytes, read into memory once.
-    data: Arc<[u8]>,
+    /// The open file, or the bytes of a document built from memory.
+    source: Arc<Source>,
 }
 
 impl PsdDocument {
@@ -43,11 +45,12 @@ impl PsdDocument {
     /// Returns [`PsdError::Io`] when the file cannot be read. Returns a parse
     /// error when the bytes are malformed or truncated.
     pub fn open_with_options(path: &Path, options: &ParseOptions) -> Result<Self, PsdError> {
-        let data = std::fs::read(path).map_err(|source| PsdError::Io {
-            path: path.to_path_buf(),
-            source,
-        })?;
-        Self::from_bytes(data, options)
+        let source = Source::open(path)?;
+        let file = parse(&source, options)?;
+        Ok(Self {
+            file,
+            source: Arc::new(source),
+        })
     }
 
     /// Open a file and keep its layers when only the merged image is bad.
@@ -65,13 +68,12 @@ impl PsdDocument {
     /// image, when the merged image is bad and the file has no layers, or
     /// when the deadline passed or the work was cancelled.
     pub fn open_lenient(path: &Path, options: &ParseOptions) -> Result<Self, PsdError> {
-        let data = std::fs::read(path).map_err(|source| PsdError::Io {
-            path: path.to_path_buf(),
-            source,
-        })?;
-        let data: Arc<[u8]> = Arc::from(data);
-        let file = read_bytes_lenient(&data, options)?;
-        Ok(Self { file, data })
+        let source = Source::open(path)?;
+        let file = parse_with(&source, options, true)?;
+        Ok(Self {
+            file,
+            source: Arc::new(source),
+        })
     }
 
     /// Parse a document from owned bytes.
@@ -80,15 +82,24 @@ impl PsdDocument {
     ///
     /// Returns a parse error when the bytes are malformed or truncated.
     pub fn from_bytes(data: Vec<u8>, options: &ParseOptions) -> Result<Self, PsdError> {
-        let data: Arc<[u8]> = Arc::from(data);
-        let file = read_bytes_with_options(&data, options)?;
-        Ok(Self { file, data })
+        let source = Source::memory(data);
+        let file = parse(&source, options)?;
+        Ok(Self {
+            file,
+            source: Arc::new(source),
+        })
     }
 
     /// The parsed file structure.
     #[must_use]
     pub fn file(&self) -> &PsdFile {
         &self.file
+    }
+
+    /// The byte source, for tests that count reads.
+    #[cfg(test)]
+    pub(crate) fn source(&self) -> &Source {
+        &self.source
     }
 
     /// The message of the error that stopped the layer info scan of the tagged
@@ -101,10 +112,11 @@ impl PsdDocument {
         self.file.layer_info_error.as_deref()
     }
 
-    /// The raw file bytes.
+    /// Why the document pattern table was skipped, or `None` when it was read
+    /// or absent. A skipped table leaves pattern fill layers unsupported.
     #[must_use]
-    pub fn bytes(&self) -> &[u8] {
-        &self.data
+    pub fn pattern_note(&self) -> Option<&str> {
+        self.file.pattern_note.as_deref()
     }
 
     /// Decode the merged image over a viewport.
@@ -119,7 +131,8 @@ impl PsdDocument {
         viewport: Viewport,
         options: &ParseOptions,
     ) -> Result<ImageRegion, PsdError> {
-        self.file.read_merged_region(&self.data, viewport, options)
+        self.file
+            .read_merged_region_from(&self.source, viewport, options)
     }
 
     /// Decode the merged image over a viewport, keeping every `step`th pixel.
@@ -136,7 +149,7 @@ impl PsdDocument {
         options: &ParseOptions,
     ) -> Result<ImageRegion, PsdError> {
         self.file
-            .read_merged_strided(&self.data, viewport, step, options)
+            .read_merged_strided_from(&self.source, viewport, step, options)
     }
 
     /// Decode one layer's channels over a viewport.
@@ -153,7 +166,7 @@ impl PsdDocument {
         options: &ParseOptions,
     ) -> Result<ImageRegion, PsdError> {
         self.file
-            .read_layer_region(&self.data, index, viewport, options)
+            .read_layer_region_from(&self.source, index, viewport, options)
     }
 }
 

@@ -7,6 +7,7 @@
 use crate::error::PsdError;
 use crate::model::PsdVersion;
 use crate::reader::{Reader, to_usize};
+use crate::window::Window;
 
 /// The tagged block signature.
 const SIGNATURE: &[u8; 4] = b"8BIM";
@@ -29,20 +30,6 @@ pub(crate) struct TaggedBlock<'a> {
     pub(crate) key: [u8; 4],
     /// The block data, without the framing.
     pub(crate) data: &'a [u8],
-    /// The file offset of the first data byte.
-    pub(crate) offset: u64,
-}
-
-impl TaggedBlock<'_> {
-    /// True when the block holds the layer info of a 16-bit or 32-bit document.
-    pub(crate) fn is_layer_info(&self) -> bool {
-        LAYER_INFO_KEYS.contains(&&self.key)
-    }
-
-    /// True when the block holds the document pattern table.
-    pub(crate) fn is_pattern_table(&self) -> bool {
-        PATTERN_KEYS.contains(&&self.key)
-    }
 }
 
 /// Read one tagged block, or `None` when the signature is not a block signature.
@@ -59,14 +46,78 @@ pub(crate) fn read_tagged_block<'a>(
         return Ok(None);
     }
     let key = reader.read_array::<4>()?;
-    let length = if version == PsdVersion::Psb && LARGE_LENGTH_KEYS.contains(&&key) {
-        reader.read_u64()?
-    } else {
-        u64::from(reader.read_u32()?)
-    };
-    let offset = reader.offset();
+    let length = read_block_length(reader, key, version)?;
     let data = reader.take(to_usize(length)?)?;
-    Ok(Some(TaggedBlock { key, data, offset }))
+    Ok(Some(TaggedBlock { key, data }))
+}
+
+/// Read the length field of a block. A PSB file writes some keys with eight
+/// bytes.
+fn read_block_length(
+    reader: &mut Reader,
+    key: [u8; 4],
+    version: PsdVersion,
+) -> Result<u64, PsdError> {
+    if version == PsdVersion::Psb && LARGE_LENGTH_KEYS.contains(&&key) {
+        reader.read_u64()
+    } else {
+        Ok(u64::from(reader.read_u32()?))
+    }
+}
+
+/// The framing of a tagged block whose data is still in the file.
+pub(crate) struct TaggedHeader {
+    pub(crate) key: [u8; 4],
+    /// The file offset of the first data byte.
+    pub(crate) offset: u64,
+    /// The data length, without the pad.
+    pub(crate) length: u64,
+}
+
+impl TaggedHeader {
+    pub(crate) fn is_layer_info(&self) -> bool {
+        LAYER_INFO_KEYS.contains(&&self.key)
+    }
+
+    pub(crate) fn is_pattern_table(&self) -> bool {
+        PATTERN_KEYS.contains(&&self.key)
+    }
+}
+
+/// Read a block header from a window and move past it, not past the data.
+///
+/// Returns `None` for a foreign signature, which ends the walk. A data length
+/// that runs past the window end is [`PsdError::Truncated`], as it is for
+/// [`read_tagged_block`].
+pub(crate) fn read_tagged_header(
+    window: &mut Window,
+    version: PsdVersion,
+) -> Result<Option<TaggedHeader>, PsdError> {
+    let header = window.with_reader(16, false, |reader| {
+        let signature = reader.read_array::<4>()?;
+        if &signature != SIGNATURE && &signature != SIGNATURE_64 {
+            return Ok(None);
+        }
+        let key = reader.read_array::<4>()?;
+        let length = read_block_length(reader, key, version)?;
+        Ok(Some((key, reader.offset(), length)))
+    })?;
+    let Some((key, offset, length)) = header else {
+        return Ok(None);
+    };
+    let wanted = to_usize(length)?;
+    if length > window.remaining() {
+        return Err(PsdError::Truncated {
+            offset,
+            wanted,
+            remaining: usize::try_from(window.remaining()).unwrap_or(usize::MAX),
+        });
+    }
+    Ok(Some(TaggedHeader {
+        key,
+        offset,
+        length,
+    }))
 }
 
 #[cfg(test)]

@@ -17,9 +17,9 @@
 //! tier directory holds one `format=1` marker.
 //!
 //! Staleness uses the source mtime in whole seconds and the source size. A
-//! cache hit needs a matching source stamp and all three tier files.
+//! cache hit needs a matching source stamp and all three tier files, each
+//! present and non-empty.
 
-use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -103,16 +103,20 @@ impl CacheEntry {
         }
     }
 
-    /// Return true when all three tier files exist on disk.
+    /// Return true when all three tier files exist and none is empty.
+    ///
+    /// A power loss can leave a zero-length file, which is a miss.
     #[must_use]
     pub fn all_files_exist(&self) -> bool {
-        Tier::ALL.iter().all(|tier| self.path(*tier).is_file())
+        Tier::ALL.iter().all(|tier| {
+            std::fs::metadata(self.path(*tier)).is_ok_and(|m| m.is_file() && m.len() > 0)
+        })
     }
 
     /// Return true when the entry is a cache hit.
     ///
     /// A hit needs a matching source stamp and all three tier files in the
-    /// entry's own format. A missing tier file, or a set that mixes
+    /// entry's own format. A missing or empty tier file, or a set that mixes
     /// extensions, is a miss.
     #[must_use]
     pub fn is_fresh(&self, stored: SourceStamp, source: SourceStamp) -> bool {
@@ -233,7 +237,7 @@ impl CacheStore {
     /// JPEG q90. The choice is made once on the source, so all three tiers
     /// share one extension. The returned entry carries the chosen format, so
     /// the caller can store the real paths. The caller must store those
-    /// paths and treat a missing file as a cache miss.
+    /// paths and treat a missing or empty file as a cache miss.
     ///
     /// Each tier is scaled to its own longest edge and is never upscaled.
     /// The `full` tier is capped at [`FULL_EDGE_CAP`]. Every file is written
@@ -247,6 +251,10 @@ impl CacheStore {
     /// Returns [`CacheError::InvalidName`] for a name that [`CacheStore::entry`]
     /// refuses. Returns [`CacheError::Io`] when a directory or file operation
     /// fails. Returns [`CacheError::Encode`] when an encoder fails.
+    ///
+    /// `folder` is the source folder name and `uuid` is that folder's stable
+    /// id. Together they key the tier directory. A bad character in either
+    /// gives [`CacheError::InvalidName`].
     pub fn write_all(
         &self,
         source: &DynamicImage,
@@ -334,7 +342,16 @@ fn write_atomic(image: &DynamicImage, format: TierFormat, dest: &Path) -> Result
     // A short fixed name keeps the temp inside NAME_MAX for any final name.
     let temp = dest.with_file_name(format!("{TEMP_PREFIX}{}-{seq}", std::process::id()));
 
-    let written = encode_tier(image, format).and_then(|bytes| write_synced(&temp, &bytes));
+    // No fsync here. A power loss can leave an empty tier file, and an empty
+    // file counts as a miss, so the entry renders again. The cache can be
+    // rebuilt. A partial non-empty file is not caught here, so a reader must
+    // treat a decode failure as a miss.
+    let written = encode_tier(image, format).and_then(|bytes| {
+        std::fs::write(&temp, bytes).map_err(|source| CacheError::Io {
+            path: temp.clone(),
+            source,
+        })
+    });
     if let Err(error) = written {
         let _ = std::fs::remove_file(&temp);
         return Err(error);
@@ -348,20 +365,6 @@ fn write_atomic(image: &DynamicImage, format: TierFormat, dest: &Path) -> Result
         });
     }
     Ok(())
-}
-
-/// Write `bytes` to `path` and flush them to disk.
-///
-/// Without the sync, a power loss after the rename can leave an empty file
-/// that still counts as a cache hit.
-fn write_synced(path: &Path, bytes: &[u8]) -> Result<(), CacheError> {
-    let io_error = |source| CacheError::Io {
-        path: path.to_path_buf(),
-        source,
-    };
-    let mut file = std::fs::File::create(path).map_err(io_error)?;
-    file.write_all(bytes).map_err(io_error)?;
-    file.sync_all().map_err(io_error)
 }
 
 #[cfg(test)]

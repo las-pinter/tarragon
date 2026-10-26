@@ -10,6 +10,7 @@ use std::io::Cursor;
 use image::codecs::jpeg::JpegEncoder;
 use image::imageops::FilterType;
 use image::{DynamicImage, ImageFormat, RgbImage};
+use tarragon_core::tier::Tier;
 
 use crate::CacheError;
 
@@ -26,6 +27,16 @@ pub(crate) fn fit_to_edge(source: &DynamicImage, edge: u32) -> Cow<'_, DynamicIm
     } else {
         Cow::Owned(source.resize(edge, edge, FilterType::Lanczos3))
     }
+}
+
+/// Return `source` scaled for the 256 px tier.
+///
+/// The result is the image the thumb tier encodes. A small source is not
+/// upscaled.
+#[must_use]
+pub fn thumb_image(source: &DynamicImage) -> DynamicImage {
+    let edge = Tier::Thumb256.max_edge().unwrap_or(256);
+    fit_to_edge(source, edge).into_owned()
 }
 
 /// The file format of the tier files of one source.
@@ -142,8 +153,11 @@ mod tests {
         RgbaImage,
     };
 
+    use crate::store::CacheStore;
+
     use super::{
         JPEG_QUALITY, TierFormat, encode_jpeg, encode_png, fit_to_edge, has_visible_alpha,
+        thumb_image,
     };
 
     type Rgba16Image = ImageBuffer<Rgba<u16>, Vec<u16>>;
@@ -303,5 +317,32 @@ mod tests {
         let large = synthetic_rgba(300, 100);
         let fitted = fit_to_edge(&large, 256);
         assert_eq!((fitted.width(), fitted.height()), (256, 85));
+    }
+
+    #[test]
+    fn the_thumb_helper_matches_the_256_tier_file() {
+        let large = synthetic_rgba(600, 300);
+        let dir = std::env::temp_dir().join(format!("tarragon-thumb-{}", std::process::id()));
+        let store = CacheStore::new(&dir);
+        let entry = store
+            .write_all(&large, "gallery", "abcd1234", "art.png")
+            .expect("write the tiers");
+        assert_eq!(
+            entry.format,
+            TierFormat::Png,
+            "alpha keeps the tier lossless"
+        );
+        let decoded = image::open(&entry.thumb256).expect("decode the 256 tier");
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let thumb = thumb_image(&large);
+        assert_eq!((thumb.width(), thumb.height()), (256, 128));
+        assert_eq!(decoded.to_rgba8(), thumb.to_rgba8());
+
+        let tall = thumb_image(&synthetic_rgba(100, 900));
+        assert_eq!(tall.height(), 256);
+        assert!(tall.width() <= 256);
+        let small = synthetic_rgba(40, 30);
+        assert_eq!(thumb_image(&small), small);
     }
 }

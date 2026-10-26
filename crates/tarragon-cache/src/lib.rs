@@ -15,6 +15,8 @@ pub mod purge;
 pub mod store;
 pub mod temp;
 
+pub use codec::thumb_image;
+
 /// A cache store error.
 #[derive(Debug, thiserror::Error)]
 pub enum CacheError {

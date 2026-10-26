@@ -328,6 +328,45 @@ fn a_missing_tier_file_is_a_miss() {
 }
 
 #[test]
+fn a_zero_length_tier_file_is_a_miss_in_every_tier() {
+    let stamp = SourceStamp {
+        mtime: 1000,
+        size: 5000,
+    };
+    for tier in Tier::ALL {
+        let temp = TempDir::new("empty");
+        let store = CacheStore::new(temp.path());
+        let entry = store
+            .write_all(&source(300, 200), "gallery", "abcd1234", "art.jpg")
+            .expect("write the tiers");
+        assert!(entry.is_fresh(stamp, stamp), "a normal write is a hit");
+        assert!(
+            store
+                .find_entry("gallery", "abcd1234", "art.jpg")
+                .expect("find")
+                .is_some(),
+            "a normal write is found"
+        );
+
+        std::fs::write(entry.path(tier), b"").expect("empty the tier file");
+
+        assert!(
+            !entry.is_fresh(stamp, stamp),
+            "an empty {} file must be a miss",
+            tier.as_str()
+        );
+        assert!(
+            store
+                .find_entry("gallery", "abcd1234", "art.jpg")
+                .expect("find")
+                .is_none(),
+            "find_entry must not return an empty {} file",
+            tier.as_str()
+        );
+    }
+}
+
+#[test]
 fn a_name_with_a_separator_or_dot_dot_is_refused() {
     let temp = TempDir::new("names");
     let store = CacheStore::new(temp.path());

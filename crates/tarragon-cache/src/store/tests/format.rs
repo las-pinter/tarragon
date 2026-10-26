@@ -250,7 +250,12 @@ fn seed_set(store: &CacheStore, format: TierFormat, secs: u64) {
     for tier in Tier::ALL {
         let path = entry.path(tier);
         std::fs::create_dir_all(path.parent().expect("parent")).expect("create the dir");
-        let file = std::fs::File::create(path).expect("create the file");
+        // An empty file counts as a miss, so the seed holds one byte.
+        std::fs::write(path, b"x").expect("write the file");
+        let file = std::fs::File::options()
+            .write(true)
+            .open(path)
+            .expect("open the file");
         file.set_modified(std::time::UNIX_EPOCH + std::time::Duration::from_secs(secs))
             .expect("set the mtime");
     }

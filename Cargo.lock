@@ -2608,8 +2608,11 @@ name = "tarragon-render"
 version = "0.2.0"
 dependencies = [
  "image",
+ "rayon",
+ "tarragon-cache",
  "tarragon-core",
  "tarragon-psd",
+ "tarragon-scan",
  "zip",
 ]
 

@@ -14,5 +14,13 @@ tarragon-core.workspace = true
 tarragon-psd.workspace = true
 zip.workspace = true
 
+[dev-dependencies]
+# The memory benchmark example renders into the cache store and scans the
+# folder it builds. The cache crate has this crate as a dev-dependency too,
+# which cargo accepts because neither edge is a runtime edge.
+rayon.workspace = true
+tarragon-cache = { path = "../tarragon-cache", version = "0.2.0" }
+tarragon-scan = { path = "../tarragon-scan", version = "0.2.0" }
+
 [lints]
 workspace = true

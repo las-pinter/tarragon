@@ -132,8 +132,10 @@ The two heavy crates are measured through their examples. Run
 |---------|--------|-------|-----|
 | `grid_bench` | egui 0.36.2, rayon, the vendored Roboto fonts | 6,559,464 | 6.26 |
 | `jpeg_q90_check` | image 0.25.10 | 1,971,456 | 1.88 |
+| `psd_rss_bench` | image 0.25.10, rayon, the PSD, cache, and scan crates | 3,882,000 | 3.70 |
 
-The two example rows were re-measured on this working tree. The `grid_bench`
+The `grid_bench` and `jpeg_q90_check` rows were re-measured on this working
+tree; `psd_rss_bench` was measured on its own. The `grid_bench`
 example carries the three Roboto files (305,608, 306,536, and 306,940 bytes),
 because it installs the shipped fonts. `jpeg_q90_check` calls no font module.
 
@@ -207,6 +209,49 @@ has 16.7 ms. The hard gate for one frame is 100 ms. The slowest measured frame
 is 0.657 ms for the grid container and 0.273 ms for the whole gallery. The
 grid cost is 3.9% of the 16.7 ms budget and the gallery cost is 1.6% of it.
 
+### PSD memory benchmark
+
+The `psd_rss_bench` example measures the peak resident memory of a scan that
+includes PSD and PSB files. It builds a temp folder (10,000 files, 10 percent
+PSD or PSB by default), scans it, renders every file through the registry on a
+pool of 4 workers, and writes the three cache tiers into a temp cache. A gate
+keeps at most 3 PSD or PSB renders in flight, which models the
+`max_psd_workers` setting (default 3). It prints the file counts, the counts
+per format, the errors by kind, the times, `VmHWM` (the peak), and `VmRSS`.
+
+```sh
+cargo build --release --example psd_rss_bench -p tarragon-render
+cargo run --release --example psd_rss_bench -p tarragon-render -- \
+    [--files 10000] [--psd-percent 10] [--workers 4] [--psd-gate 3] \
+    [--source-dir DIR] [--large-psb FILE] [--work-dir DIR] [--no-write]
+```
+
+PASS means the peak is under 2 GiB (2,048 MiB) and no file gave an error. The
+exit code is 1 on FAIL. The figures come from `/proc/self/status`, so other
+systems print `n/a` and judge on errors alone. The workspace forbids unsafe
+code, so the bench cannot call a system API for the peak.
+
+The committed fixtures are small, so a default run is a floor, not the
+answer. For a large PSB, run
+`sh tests/fixtures/psd/build_large_psb.sh /tmp/large.psb` (it needs Python) and
+pass the file with `--large-psb`. `--source-dir` adds every PSD and PSB file
+directly inside a folder to the set the run cycles through.
+
+`--work-dir DIR` sets the parent of the temp folder (default: the system temp
+folder). The run prints the folder path at the start and removes it on exit. At
+the start it also removes folders of earlier runs that died, and lists them. It
+only removes directories named like its own, and only if older than one hour
+with no live process. Without `/proc` it removes none. Do not share
+`--work-dir` between hosts or containers.
+`--no-write` skips the cache writes, which splits the render cost from the
+write cost. The run prints the cache size, a warning when a hard link failed
+and the file was copied instead, and the first cache write error. `--help`
+lists the options.
+
+Not done yet: the reference-machine run with a cold file cache, and the run
+over a corpus of real PSD files. Those come with the corpus generator and the
+download script.
+
 ## 60 MB check
 
 The limit is 60 MB. Take 60 MB as 62,914,560 bytes.
@@ -216,6 +261,7 @@ The limit is 60 MB. Take 60 MB as 62,914,560 bytes.
 | `tarragon` (package `tarragon-app`, glibc, release) | 444,704 | pass |
 | `grid_bench` (example) | 6,559,464 | pass |
 | `jpeg_q90_check` (example) | 1,971,456 | pass |
+| `psd_rss_bench` (example) | 3,882,000 | pass |
 
 The highest measured size is 6,559,464 bytes. That is 10.4% of the 60 MB
 budget. Every measured binary is under the limit.
@@ -440,5 +486,5 @@ rustup target list --installed
 cargo build --release
 stat -c '%s' target/release/tarragon
 cargo build --release --examples
-stat -c '%s' target/release/examples/grid_bench target/release/examples/jpeg_q90_check target/release/examples/stack_spike
+stat -c '%s' target/release/examples/grid_bench target/release/examples/jpeg_q90_check target/release/examples/stack_spike target/release/examples/psd_rss_bench
 ```

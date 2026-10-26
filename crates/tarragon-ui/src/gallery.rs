@@ -4,6 +4,7 @@
 //! pills. The grid paints the visible items. [`Gallery::set_items`] sorts the
 //! items; the scope and name filters run when a filter input changes.
 
+use std::collections::HashMap;
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -15,6 +16,7 @@ use crate::grid::{GridItem, Selection, VirtualGrid, items_in_order, metrics_for}
 use crate::tokens;
 
 pub(crate) mod strip;
+mod thumbs;
 
 #[cfg(test)]
 mod tests;
@@ -110,6 +112,14 @@ pub struct Gallery {
     order: Vec<usize>,
     /// Item indices in display order, after the scope and name filters.
     visible: Vec<usize>,
+    /// Item index by path, so a thumbnail setter does not scan the list.
+    index: HashMap<PathBuf, usize>,
+    /// Item indices of the tiles the last frame painted.
+    painted: Vec<usize>,
+    /// Reused buffer for the tiles of the frame in progress.
+    painted_scratch: Vec<usize>,
+    /// Grows each time the painted set changes.
+    visible_revision: u64,
 }
 
 impl Gallery {
@@ -129,6 +139,10 @@ impl Gallery {
             sort_changed: false,
             order: Vec::new(),
             visible: Vec::new(),
+            index: HashMap::new(),
+            painted: Vec::new(),
+            painted_scratch: Vec::new(),
+            visible_revision: 0,
         }
     }
 
@@ -139,8 +153,15 @@ impl Gallery {
         for item in &mut items {
             item.refresh_name();
         }
+        self.index.clear();
+        for (position, item) in items.iter().enumerate() {
+            // The first item wins when a path repeats.
+            self.index.entry(item.path.clone()).or_insert(position);
+        }
         self.items = items;
         self.selection.clear();
+        self.painted.clear();
+        self.visible_revision += 1;
         self.resort();
     }
 
@@ -343,7 +364,15 @@ impl Gallery {
             metrics: metrics_for(ui.available_width()),
             item_count: self.visible.len(),
         };
-        let response = grid.show_items(ui, &self.items, &self.visible, &self.selection);
+        self.painted_scratch.clear();
+        let response = grid.show_items_collect(
+            ui,
+            &self.items,
+            &self.visible,
+            &self.selection,
+            &mut self.painted_scratch,
+        );
+        self.record_painted();
         if let Some(click) = response.click {
             self.selection
                 .apply_click(click.position, &self.visible, click.modifiers);

@@ -21,7 +21,7 @@ mod selection;
 #[cfg(test)]
 mod tests;
 
-pub use items::{GridItem, items_in_order};
+pub use items::{GridItem, TileError, items_in_order};
 pub use selection::Selection;
 
 /// Width of one grid track, in points. The stylesheet track is 196 px.
@@ -270,7 +270,20 @@ impl VirtualGrid {
         order: &[usize],
         selection: &Selection,
     ) -> GridResponse {
-        self.items_at(ui, None, items, order, selection)
+        self.items_at(ui, None, items, order, selection, None)
+    }
+
+    /// Like [`Self::show_items`], and push the item index of each painted
+    /// tile into `painted`. The caller clears the vector first.
+    pub fn show_items_collect(
+        self,
+        ui: &mut Ui,
+        items: &[GridItem],
+        order: &[usize],
+        selection: &Selection,
+        painted: &mut Vec<usize>,
+    ) -> GridResponse {
+        self.items_at(ui, None, items, order, selection, Some(painted))
     }
 
     /// Show the grid over `items` at a pinned `scroll_y` in points.
@@ -284,7 +297,7 @@ impl VirtualGrid {
         order: &[usize],
         selection: &Selection,
     ) -> GridResponse {
-        self.items_at(ui, Some(scroll_y), items, order, selection)
+        self.items_at(ui, Some(scroll_y), items, order, selection, None)
     }
 
     /// Paint the tiles. A `Some` offset pins the scroll position.
@@ -295,6 +308,7 @@ impl VirtualGrid {
         items: &[GridItem],
         order: &[usize],
         selection: &Selection,
+        mut painted_items: Option<&mut Vec<usize>>,
     ) -> GridResponse {
         let mut click = None;
         let grid = Self {
@@ -308,6 +322,9 @@ impl VirtualGrid {
             let Some(item) = items.get(index) else {
                 return;
             };
+            if let Some(painted) = painted_items.as_deref_mut() {
+                painted.push(index);
+            }
             let response = cell::show_cell(ui, rect, item, index, selection);
             if response.clicked() {
                 click = Some(CellClick {

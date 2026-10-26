@@ -5,8 +5,8 @@ use std::sync::Arc;
 
 use egui::text::{LayoutJob, TextWrapping};
 use egui::{
-    Align2, Color32, CornerRadius, FontId, Id, Painter, Rect, Response, Sense, Stroke, StrokeKind,
-    Ui, Vec2, epaint, pos2, vec2,
+    Align2, Color32, CornerRadius, FontFamily, FontId, Id, Painter, Rect, Response, Sense, Stroke,
+    StrokeKind, Ui, Vec2, epaint, pos2, vec2,
 };
 
 use crate::grid::{GridItem, Selection};
@@ -20,6 +20,10 @@ const BADGE_SIZE: f32 = 9.0;
 const BADGE_PAD_X: f32 = 5.0;
 /// Badge top and bottom padding, in points.
 const BADGE_PAD_Y: f32 = 1.0;
+/// Error mark diameter, in points. The mockup ring is 44 px.
+const ERROR_MARK_SIZE: f32 = 44.0;
+/// Error mark text size, in points.
+const ERROR_MARK_FONT: f32 = 24.0;
 /// Check badge diameter, in points.
 const CHECK_SIZE: f32 = 18.0;
 /// Check badge inset from the cell corner, in points.
@@ -155,8 +159,14 @@ fn fit_rect(bounds: Rect, texture: Vec2) -> Rect {
 }
 
 /// Paint the uploaded texture, or the placeholder with the extension text.
+///
+/// A failed item without a texture gets the error placeholder instead.
 fn paint_thumbnail(painter: &Painter, rect: Rect, item: &GridItem, radius: CornerRadius) {
     let Some(texture) = &item.texture else {
+        if item.error.is_some() {
+            paint_error(painter, rect, radius);
+            return;
+        }
         painter.rect(
             rect,
             radius,
@@ -189,6 +199,34 @@ fn paint_thumbnail(painter: &Painter, rect: Rect, item: &GridItem, radius: Corne
         angle: 0.0,
     };
     painter.add(shape);
+}
+
+/// Paint the error placeholder: a coral ring with a bang, as in the error
+/// state mockup (`design/mockups/error-state.html`, `.err-icon`).
+fn paint_error(painter: &Painter, rect: Rect, radius: CornerRadius) {
+    painter.rect(
+        rect,
+        radius,
+        tokens::BG_SECONDARY,
+        Stroke::NONE,
+        StrokeKind::Inside,
+    );
+    painter.circle_stroke(
+        rect.center(),
+        // The mockup ring is 44 px border-box, so the stroke centre sits 1 px in.
+        ERROR_MARK_SIZE / 2.0 - 1.0,
+        Stroke::new(2.0, tokens::CORAL_STRONG),
+    );
+    painter.text(
+        rect.center(),
+        Align2::CENTER_CENTER,
+        "!",
+        FontId::new(
+            ERROR_MARK_FONT,
+            FontFamily::Name(crate::fonts::BOLD_FAMILY.into()),
+        ),
+        tokens::CORAL_STRONG,
+    );
 }
 
 /// Paint the file-type badge at the thumbnail top left.
@@ -249,10 +287,16 @@ fn paint_name(painter: &Painter, rect: Rect, thumb: Rect, item: &GridItem) {
     let Some(name) = item.path.file_name().and_then(|name| name.to_str()) else {
         return;
     };
+    // A failed tile names its file in coral, as the mockup does.
+    let color = if item.error.is_some() && item.texture.is_none() {
+        tokens::CORAL_STRONG
+    } else {
+        tokens::TEXT_MUTED
+    };
     let mut job = LayoutJob::simple_singleline(
         name.to_owned(),
         FontId::proportional(tokens::SIZE_SMALL),
-        tokens::TEXT_MUTED,
+        color,
     );
     job.wrap = TextWrapping {
         max_width: (rect.width() - 2.0 * tokens::GRID_GAP).max(0.0),
@@ -262,11 +306,7 @@ fn paint_name(painter: &Painter, rect: Rect, thumb: Rect, item: &GridItem) {
     };
     let galley = painter.layout_job(job);
     let left = rect.center().x - galley.size().x / 2.0;
-    painter.galley(
-        pos2(left, thumb.max.y + NAME_GAP),
-        galley,
-        tokens::TEXT_MUTED,
-    );
+    painter.galley(pos2(left, thumb.max.y + NAME_GAP), galley, color);
 }
 
 /// Paint the coral check badge at the cell top right.

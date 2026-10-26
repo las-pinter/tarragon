@@ -5,6 +5,7 @@ mod frames;
 mod scope;
 mod search;
 mod sort;
+mod thumbs;
 
 use std::path::PathBuf;
 

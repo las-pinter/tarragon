@@ -374,3 +374,95 @@ fn a_hovered_tile_paints_the_hover_border() {
     output.drop_without_applying_deltas();
     assert!(hovered, "the hovered tile painted no card border");
 }
+
+/// Draw one tile of `item` and return the shapes.
+fn tile_output(item: GridItem) -> egui::FullOutput {
+    let ctx = Context::default();
+    crate::apply_theme(&ctx);
+    draw_with(&ctx, input(Vec::new()), &[item], &Selection::default())
+}
+
+/// Whether the output holds a circle stroked in the error colour.
+fn has_error_ring(output: &egui::FullOutput) -> bool {
+    output.shapes.iter().any(|clipped| {
+        matches!(&clipped.shape, epaint::Shape::Circle(circle)
+            if circle.stroke.color == tokens::CORAL_STRONG)
+    })
+}
+
+#[test]
+fn a_failed_tile_paints_the_error_mark() {
+    let mut failed = item("broken.psd");
+    failed.error = Some(crate::grid::TileError::Decode);
+    let output = tile_output(failed);
+    let texts = painted_texts(&output);
+    let ring = has_error_ring(&output);
+    output.drop_without_applying_deltas();
+    assert!(ring, "no error ring");
+    assert!(
+        texts
+            .iter()
+            .any(|(text, size)| text == "!" && (*size - ERROR_MARK_FONT).abs() < 0.01),
+        "no bang in {texts:?}"
+    );
+    assert!(
+        !texts
+            .iter()
+            .any(|(_, size)| (*size - tokens::SIZE_CAPTION).abs() < 0.01),
+        "the extension placeholder text still shows"
+    );
+}
+
+#[test]
+fn a_cleared_texture_paints_the_placeholder() {
+    let ctx = Context::default();
+    crate::apply_theme(&ctx);
+    let texture = ctx.load_texture(
+        "thumb",
+        egui::ColorImage::filled([4, 4], Color32::RED),
+        egui::TextureOptions::NEAREST,
+    );
+    let mut cleared = item("shot.png");
+    cleared.texture = Some(texture);
+    cleared.texture = None;
+    let output = draw_with(&ctx, input(Vec::new()), &[cleared], &Selection::default());
+    let texts = painted_texts(&output);
+    let ring = has_error_ring(&output);
+    output.drop_without_applying_deltas();
+    assert!(!ring, "a cleared tile shows an error ring");
+    assert!(
+        texts
+            .iter()
+            .any(|(text, size)| text == "PNG" && (*size - tokens::SIZE_CAPTION).abs() < 0.01),
+        "no extension placeholder in {texts:?}"
+    );
+}
+
+#[test]
+fn a_texture_wins_over_an_error() {
+    let ctx = Context::default();
+    crate::apply_theme(&ctx);
+    let texture = ctx.load_texture(
+        "thumb",
+        egui::ColorImage::filled([4, 4], Color32::RED),
+        egui::TextureOptions::NEAREST,
+    );
+    let mut both = item("both.png");
+    both.texture = Some(texture);
+    both.error = Some(crate::grid::TileError::Read);
+    let output = draw_with(&ctx, input(Vec::new()), &[both], &Selection::default());
+    let textured = output
+        .shapes
+        .iter()
+        .any(|clipped| matches!(&clipped.shape, epaint::Shape::Rect(rect) if rect.brush.is_some()));
+    let ring = has_error_ring(&output);
+    let coral_name = output.shapes.iter().any(|clipped| {
+        matches!(&clipped.shape, epaint::Shape::Text(text)
+            if text.galley.job.text == "both.png"
+                && text.galley.job.sections.iter().any(|s| s.format.color == tokens::CORAL_STRONG))
+    });
+    output.drop_without_applying_deltas();
+    assert!(textured, "the texture did not paint");
+    assert!(!ring, "an error ring shows over a texture");
+    assert!(!coral_name, "the name is coral over a texture");
+}

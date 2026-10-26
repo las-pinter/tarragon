@@ -5,6 +5,24 @@ use std::path::PathBuf;
 use tarragon_core::entity::FileInfo;
 use tarragon_core::sorting::SortMode;
 
+/// Why a thumbnail could not be made. The tile shows a mark only; the kind is
+/// for the log and the error card.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TileError {
+    /// The file could not be read.
+    Read,
+    /// The file was read but could not be decoded.
+    Decode,
+    /// The format is not supported.
+    Unsupported,
+    /// The image is too large to render.
+    TooLarge,
+    /// The render took too long.
+    Timeout,
+    /// Any other failure.
+    Other,
+}
+
 /// One tile in the gallery grid.
 ///
 /// The tile carries an uploaded texture and nothing else. The UI crate never
@@ -18,6 +36,8 @@ pub struct GridItem {
     pub mtime: i64,
     /// The uploaded thumbnail, or none while the image has no texture.
     pub texture: Option<egui::TextureHandle>,
+    /// Why the thumbnail failed, or none. A texture hides the error mark.
+    pub error: Option<TileError>,
     /// The lower-case file name, or an empty string when the name is not text.
     name_lower: String,
 }
@@ -31,6 +51,7 @@ impl GridItem {
             path,
             mtime,
             texture,
+            error: None,
             name_lower,
         }
     }

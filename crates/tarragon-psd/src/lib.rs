@@ -11,7 +11,9 @@
 //! visibility, opacity, fill opacity, blend mode, masks, clipping masks,
 //! groups, and layer effects.
 
+mod adjustment_color;
 mod adjustment_parse;
+mod adjustment_parse_color;
 pub mod adjustments;
 pub mod blend;
 pub mod composite;

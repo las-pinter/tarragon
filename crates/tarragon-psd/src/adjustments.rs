@@ -1,13 +1,15 @@
 //! Adjustment-layer math for the compositor.
 //!
 //! The core set covers invert, posterize, threshold, levels, curves and
-//! brightness/contrast. Binary block parsing lives in `crate::adjustment_parse`
-//! and is re-exported here.
+//! brightness/contrast. Exposure, Channel Mixer, Color Balance, Hue/Saturation,
+//! Selective Color and Photo Filter have their math in `crate::adjustment_color`.
+//! Binary block parsing lives in `crate::adjustment_parse` and is re-exported here.
 //!
-//! Values are normalized `f32` in `0.0..=1.0`. Hue/Saturation, Color Balance,
-//! Channel Mixer, Gradient Map, Photo Filter, Selective Color, Black & White,
-//! Exposure, Vibrance and Color Lookup are documented gaps.
+//! Values are normalized `f32` in `0.0..=1.0`. Gradient Map, Black & White,
+//! Vibrance and Color Lookup are documented gaps.
 
+use crate::adjustment_color;
+pub use crate::adjustment_color::{HueMaster, HueRange};
 pub use crate::adjustment_parse::{parse_adjustment, parse_brightness_contrast};
 
 /// The number of samples in a tone lookup table.
@@ -176,6 +178,53 @@ pub enum Adjustment {
         /// True for the pre-CS3 legacy formula.
         legacy: bool,
     },
+    /// Scale in linear light, add an offset, apply a gamma.
+    Exposure {
+        /// The exposure in stops.
+        exposure: f32,
+        /// The offset added in linear light.
+        offset: f32,
+        /// The gamma; the result is raised to its inverse.
+        gamma: f32,
+    },
+    /// Mix the channels. Each row is red, green, blue and a constant, as fractions.
+    ChannelMixer {
+        /// One row per output channel.
+        matrix: [[f32; 4]; 3],
+        /// True to write the first row to every channel.
+        monochrome: bool,
+    },
+    /// Shift the color balance of the shadows, midtones and highlights.
+    ColorBalance {
+        /// Shadows, midtones, highlights; each cyan-red, magenta-green, yellow-blue in percent.
+        tones: [[f32; 3]; 3],
+        /// True to keep the luminosity of the pixel.
+        preserve_luminosity: bool,
+    },
+    /// Hue/Saturation with the master and six range edits.
+    HueSaturation {
+        /// The master controls.
+        master: HueMaster,
+        /// Reds, yellows, greens, cyans, blues, magentas.
+        ranges: [HueRange; 6],
+    },
+    /// Selective Color.
+    SelectiveColor {
+        /// True for relative mode, false for absolute mode.
+        relative: bool,
+        /// Reds, yellows, greens, cyans, blues, magentas, whites, neutrals, blacks;
+        /// each cyan, magenta, yellow, black in percent.
+        records: [[f32; 4]; 9],
+    },
+    /// Tint the image with a filter color.
+    PhotoFilter {
+        /// The filter color in D50 XYZ.
+        filter_xyz: [f32; 3],
+        /// The density as a fraction.
+        density: f32,
+        /// True to keep the luminosity of the pixel.
+        preserve_luminosity: bool,
+    },
 }
 
 impl Adjustment {
@@ -235,6 +284,36 @@ impl Adjustment {
                             .clamp(0.0, 1.0)
                     };
                 }
+            }
+            Self::Exposure {
+                exposure,
+                offset,
+                gamma,
+            } => *rgb = adjustment_color::exposure(*rgb, *exposure, *offset, *gamma),
+            Self::ChannelMixer { matrix, monochrome } => {
+                *rgb = adjustment_color::channel_mixer(*rgb, matrix, *monochrome);
+            }
+            Self::ColorBalance {
+                tones,
+                preserve_luminosity,
+            } => *rgb = adjustment_color::color_balance(*rgb, tones, *preserve_luminosity),
+            Self::HueSaturation { master, ranges } => {
+                *rgb = adjustment_color::hue_saturation(*rgb, *master, ranges);
+            }
+            Self::SelectiveColor { relative, records } => {
+                *rgb = adjustment_color::selective_color(*rgb, *relative, records);
+            }
+            Self::PhotoFilter {
+                filter_xyz,
+                density,
+                preserve_luminosity,
+            } => {
+                *rgb = adjustment_color::photo_filter(
+                    *rgb,
+                    *filter_xyz,
+                    *density,
+                    *preserve_luminosity,
+                );
             }
         }
     }

@@ -225,3 +225,102 @@ pub fn brit_block(brightness: i16, contrast: i16) -> Vec<u8> {
     data.push(0);
     data
 }
+
+// --------------------------------------------------------------------------
+// Fixed-layout color adjustment blocks
+// --------------------------------------------------------------------------
+
+/// Push a big-endian `i16`.
+fn push_i16(data: &mut Vec<u8>, value: i16) {
+    data.extend_from_slice(&value.to_be_bytes());
+}
+
+/// Build an `expA` block.
+pub fn expa_block(exposure: f32, offset: f32, gamma: f32) -> Vec<u8> {
+    let mut data = Vec::new();
+    push_u16(&mut data, 1);
+    for value in [exposure, offset, gamma] {
+        data.extend_from_slice(&value.to_be_bytes());
+    }
+    data
+}
+
+/// Build a `mixr` block from three records of `[red, green, blue, constant]`.
+pub fn mixr_block(monochrome: bool, records: [[i16; 4]; 3]) -> Vec<u8> {
+    let mut data = Vec::new();
+    push_u16(&mut data, 1);
+    push_u16(&mut data, u16::from(monochrome));
+    for record in records.into_iter().chain([[0; 4]]) {
+        for value in &record[..3] {
+            push_i16(&mut data, *value);
+        }
+        // The fourth source, used only by CMYK, then the constant.
+        push_i16(&mut data, 0);
+        push_i16(&mut data, record[3]);
+    }
+    data
+}
+
+/// Build a `blnc` block: shadows, midtones and highlights.
+pub fn blnc_block(tones: [[i16; 3]; 3], preserve_luminosity: bool) -> Vec<u8> {
+    let mut data = Vec::new();
+    for value in tones.iter().flatten() {
+        push_i16(&mut data, *value);
+    }
+    data.push(u8::from(preserve_luminosity));
+    data.push(0);
+    data
+}
+
+/// Build a `hue2` block with the default range extents.
+///
+/// `colorize` and `master` are `[hue, saturation, lightness]`. Each range edit
+/// is `[hue, saturation, lightness]`: reds, yellows, greens, cyans, blues,
+/// magentas.
+pub fn hue2_block(colorize: Option<[i16; 3]>, master: [i16; 3], edits: [[i16; 3]; 6]) -> Vec<u8> {
+    let mut data = Vec::new();
+    push_u16(&mut data, 2);
+    data.push(u8::from(colorize.is_some()));
+    data.push(0);
+    for value in colorize.unwrap_or([0; 3]).into_iter().chain(master) {
+        push_i16(&mut data, value);
+    }
+    for (index, edit) in edits.iter().enumerate() {
+        let centre = i16::try_from(index * 60).expect("centre");
+        for offset in [-45i16, -15, 15, 45] {
+            push_i16(&mut data, (centre + offset).rem_euclid(360));
+        }
+        for value in edit {
+            push_i16(&mut data, *value);
+        }
+    }
+    data
+}
+
+/// Build a `selc` block. `records` are reds, yellows, greens, cyans, blues,
+/// magentas, whites, neutrals, blacks, each `[cyan, magenta, yellow, black]`.
+pub fn selc_block(absolute: bool, records: [[i16; 4]; 9]) -> Vec<u8> {
+    let mut data = Vec::new();
+    push_u16(&mut data, 1);
+    push_u16(&mut data, u16::from(absolute));
+    data.extend_from_slice(&[0; 8]);
+    for value in records.iter().flatten() {
+        push_i16(&mut data, *value);
+    }
+    data
+}
+
+/// Build a version 2 `phfl` block with an RGB filter color (8-bit values).
+pub fn phfl_block(rgb: [u8; 3], density_percent: u32, preserve_luminosity: bool) -> Vec<u8> {
+    let mut data = Vec::new();
+    push_u16(&mut data, 2);
+    push_u16(&mut data, 0);
+    for value in rgb {
+        push_u16(&mut data, u16::from(value) * 257);
+    }
+    push_u16(&mut data, 0);
+    push_u32(&mut data, density_percent);
+    data.push(u8::from(preserve_luminosity));
+    data.extend_from_slice(&[0; 3]);
+    data
+}

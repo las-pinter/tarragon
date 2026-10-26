@@ -4,12 +4,13 @@
 //! value types from [`crate::adjustments`]. Keys that are unknown or blocks
 //! that are malformed give `None`.
 
+use crate::adjustment_parse_color::parse_color_adjustment;
 use crate::adjustments::{Adjustment, Curve, CurvePoint, LevelsChannel};
 use crate::descriptor::parse_versioned;
 
 /// Read a big-endian `u16`.
 #[must_use]
-fn be16(data: &[u8], at: usize) -> Option<u16> {
+pub(crate) fn be16(data: &[u8], at: usize) -> Option<u16> {
     data.get(at..at + 2)
         .map(|bytes| u16::from_be_bytes([bytes[0], bytes[1]]))
 }
@@ -20,8 +21,31 @@ fn be16(data: &[u8], at: usize) -> Option<u16> {
     reason = "the two's-complement bit pattern is the signed value"
 )]
 #[must_use]
-fn bei16(data: &[u8], at: usize) -> Option<i16> {
+pub(crate) fn bei16(data: &[u8], at: usize) -> Option<i16> {
     be16(data, at).map(|value| value as i16)
+}
+
+/// Read a big-endian `u32`.
+#[must_use]
+pub(crate) fn be32(data: &[u8], at: usize) -> Option<u32> {
+    data.get(at..at.checked_add(4)?)
+        .map(|bytes| u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
+}
+
+/// Read a big-endian `i32`.
+#[allow(
+    clippy::cast_possible_wrap,
+    reason = "the two's-complement bit pattern is the signed value"
+)]
+#[must_use]
+pub(crate) fn bei32(data: &[u8], at: usize) -> Option<i32> {
+    be32(data, at).map(|value| value as i32)
+}
+
+/// Read a big-endian `f32`.
+#[must_use]
+pub(crate) fn bef32(data: &[u8], at: usize) -> Option<f32> {
+    be32(data, at).map(f32::from_bits)
 }
 
 /// Parse one adjustment block other than brightness/contrast.
@@ -41,6 +65,9 @@ pub fn parse_adjustment(key: &[u8; 4], data: &[u8], lut_size: u32) -> Option<Adj
         }),
         b"levl" => parse_levels(data),
         b"curv" => parse_curves(data),
+        b"expA" | b"mixr" | b"blnc" | b"hue2" | b"selc" | b"phfl" => {
+            parse_color_adjustment(*key, data)
+        }
         _ => None,
     }
 }

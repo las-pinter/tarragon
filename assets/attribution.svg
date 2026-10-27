@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="130" viewBox="0 0 600 130" role="img" aria-labelledby="title desc">
+<title id="title">AI and human lines</title>
+<desc id="desc">AI: 100.0% (65316 lines); Human: 0.0% (0 lines); 65316 lines in total</desc>
+<rect x="0.5" y="0.5" width="599" height="129" rx="8" fill="#ffffff" stroke="#d0d7de"/>
+<g font-family="Verdana, DejaVu Sans, sans-serif" fill="#1f2328">
+<text x="20" y="30" font-size="16" font-weight="bold">AI and human lines</text>
+<text x="580" y="30" font-size="13" text-anchor="end">65316 lines</text>
+<rect x="20" y="46" width="560" height="28" fill="#eaeef2"/>
+<rect x="20" y="46" width="560" height="28" fill="#6639ba"/>
+<rect x="20" y="95" width="14" height="14" fill="#6639ba"/>
+<text x="42" y="107" font-size="13">AI: 100.0% (65316 lines)</text>
+<rect x="300" y="95" width="14" height="14" fill="#1a7f37"/>
+<text x="322" y="107" font-size="13">Human: 0.0% (0 lines)</text>
+</g>
+</svg>

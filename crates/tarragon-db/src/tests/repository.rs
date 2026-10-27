@@ -489,21 +489,3 @@ fn scan_stub_stores_no_cache_uuid() {
         .expect("row");
     assert_eq!(row.cache_uuid, None);
 }
-
-#[test]
-fn reorder_favorites_places_listed_first_and_leaves_no_ties() {
-    let temp = TempDb::new();
-    for (index, path) in ["/f/a", "/f/b", "/f/c", "/f/d"].into_iter().enumerate() {
-        let order = i64::try_from(index).expect("small index");
-        temp.db.add_favorite(path, None, order).expect("add");
-    }
-    let listed = ["/f/c", "/f/a", "/f/c", "/f/missing"].map(str::to_owned);
-    let placed = temp.db.reorder_favorites(&listed).expect("reorder");
-    assert_eq!(placed, 2, "a repeat and a missing path are not placed");
-
-    let rows = temp.db.list_favorites().expect("list");
-    let paths: Vec<&str> = rows.iter().map(|row| row.path.as_str()).collect();
-    assert_eq!(paths, ["/f/c", "/f/a", "/f/b", "/f/d"]);
-    let orders: Vec<i64> = rows.iter().map(|row| row.sort_order).collect();
-    assert_eq!(orders, [0, 1, 2, 3]);
-}

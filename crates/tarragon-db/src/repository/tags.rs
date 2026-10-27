@@ -3,7 +3,8 @@
 use std::collections::HashMap;
 use std::str::FromStr;
 
-use rusqlite::params;
+use rusqlite::{OptionalExtension, params};
+use tarragon_core::color::TRANSPARENT_TAG;
 use tarragon_core::entity::{Tag, TagSource};
 
 use crate::like::normalize_path;
@@ -191,12 +192,23 @@ impl Database {
 
     /// Delete a tag. The `file_tags` foreign key cascades the delete.
     ///
+    /// The `transparent` tag is refused, because it is a built-in color tag.
+    ///
     /// # Errors
     ///
-    /// Returns [`DbError::Sqlite`] when the statement fails. Returns
+    /// Returns [`DbError::ProtectedTag`] for the `transparent` tag. Returns
+    /// [`DbError::Sqlite`] when the statement fails. Returns
     /// [`DbError::LockPoisoned`] after a panic poisoned the lock.
     pub fn delete_tag(&self, tag_id: i64) -> Result<usize, DbError> {
         let conn = self.lock()?;
+        let name: Option<String> = conn
+            .query_row("SELECT name FROM tags WHERE id = ?1", [tag_id], |row| {
+                row.get(0)
+            })
+            .optional()?;
+        if name.as_deref() == Some(TRANSPARENT_TAG) {
+            return Err(DbError::ProtectedTag(TRANSPARENT_TAG.to_owned()));
+        }
         let changed = conn.execute("DELETE FROM tags WHERE id = ?1", [tag_id])?;
         Ok(changed)
     }

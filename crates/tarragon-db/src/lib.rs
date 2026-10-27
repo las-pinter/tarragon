@@ -47,6 +47,9 @@ pub enum DbError {
         /// The generation this build creates and reads.
         expected: i64,
     },
+    /// The tag is built in and cannot be deleted.
+    #[error("tag {0} is protected and cannot be deleted")]
+    ProtectedTag(String),
     /// The shared connection lock is poisoned after a panic.
     #[error("database connection lock is poisoned")]
     LockPoisoned,

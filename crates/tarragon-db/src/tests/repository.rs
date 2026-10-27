@@ -1,6 +1,7 @@
+use tarragon_core::color::TRANSPARENT_TAG;
 use tarragon_core::entity::TagSource;
 
-use crate::Database;
+use crate::{Database, DbError};
 
 use super::support::{TempDb, file, sized_file};
 
@@ -114,6 +115,36 @@ fn tag_delete_cascades_to_file_tags() {
         .query_row("SELECT COUNT(*) FROM file_tags", [], |row| row.get(0))
         .expect("count file_tags");
     assert_eq!(count, 0, "the foreign key must cascade the delete");
+}
+
+#[test]
+fn deleting_the_transparent_tag_is_refused() {
+    let temp = TempDb::new();
+    let tag = temp
+        .db
+        .ensure_tag(TRANSPARENT_TAG, TagSource::AutoColor)
+        .expect("make the tag");
+    let paths = vec!["/refs/a.png".to_owned()];
+    temp.db
+        .add_tags_to_files_batch(&paths, std::slice::from_ref(&tag))
+        .expect("attach the tag");
+
+    let err = temp
+        .db
+        .delete_tag(tag.id)
+        .expect_err("the delete is refused");
+    assert!(matches!(err, DbError::ProtectedTag(_)));
+
+    let conn = temp.db.lock().expect("lock");
+    let tags: i64 = conn
+        .query_row("SELECT COUNT(*) FROM tags WHERE id = ?1", [tag.id], |row| {
+            row.get(0)
+        })
+        .expect("count tags");
+    let links: i64 = conn
+        .query_row("SELECT COUNT(*) FROM file_tags", [], |row| row.get(0))
+        .expect("count file_tags");
+    assert_eq!((tags, links), (1, 1), "the tag and its links must remain");
 }
 
 #[test]

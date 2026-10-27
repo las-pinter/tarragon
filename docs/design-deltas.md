@@ -176,3 +176,23 @@ ellipsis.
 
 Reason: the log source has no critical level, because tracing stops at error.
 The default widget sizes keep the toolbar the same as the other egui controls.
+
+## Pink bucket and transparency
+
+Before: there were ten colour buckets, and hues from 310 to 345 degrees fell to
+neutral. The frozen mockups show ten swatches in `design/mockups/theme.css`
+lines 67-77, and `design/mockups/filter-colors.html` says "Ten buckets". Colour
+extraction ignored alpha.
+
+After: there are eleven buckets. `pink` takes hues from 310 up to, but not
+including, 345, with the token `#ff80ab` (`BUCKET_PINK`, which has no
+stylesheet row). Colour extraction skips pixels with alpha below 128. An image
+with 25 percent or more of such pixels is flagged transparent. The flag becomes
+the `transparent` tag when the scan pipeline stores it, which it does not do
+yet. `transparent` is a colour-filter value beside the buckets. It follows the
+same AND rule, the tag cannot be deleted, and the filter bar will use a
+checkerboard swatch for it, which is not drawn yet. The mockups stay frozen, so
+this file records the difference.
+
+Reason: pink hues were wrongly neutral. Transparent pixels added colours that
+are not visible. Artists need to find images with transparency.

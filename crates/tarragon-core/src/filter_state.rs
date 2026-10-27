@@ -26,6 +26,8 @@ pub struct FilterState {
     pub text: String,
     /// Dominant-color buckets. The query matches all of them.
     pub colors: BTreeSet<ColorBucket>,
+    /// Require the `transparent` tag, like one more color.
+    pub transparent: bool,
     /// User tag names. The query matches all of them.
     pub tags: BTreeSet<String>,
     /// Folder paths. The query matches any of them. Global scope only.
@@ -35,9 +37,9 @@ pub struct FilterState {
 impl FilterState {
     /// Count the active filters.
     ///
-    /// The text counts once. Each color, tag, and folder counts once. Folder
-    /// chips count in global scope only. This is the single filter-count
-    /// source for the info bar. The text is used as-is, so a whitespace-only
+    /// The text counts once. Each color, the transparent flag, each tag, and
+    /// each folder counts once. Folder chips count in global scope only. This
+    /// is the single filter-count source for the info bar. The text is used as-is, so a whitespace-only
     /// text still counts once.
     #[must_use]
     pub fn active_count(&self, scope: FilterScope) -> usize {
@@ -46,7 +48,7 @@ impl FilterState {
             FilterScope::Global => self.folders.len(),
             FilterScope::Folder => 0,
         };
-        text + self.colors.len() + self.tags.len() + folders
+        text + self.colors.len() + usize::from(self.transparent) + self.tags.len() + folders
     }
 
     /// Return true when no filter is active in the scope.
@@ -68,6 +70,7 @@ mod tests {
         FilterState {
             text: "sky".to_owned(),
             colors: BTreeSet::from([ColorBucket::Blue]),
+            transparent: false,
             tags: BTreeSet::from(["night".to_owned()]),
             folders: BTreeSet::from([PathBuf::from("/refs/one"), PathBuf::from("/refs/two")]),
         }
@@ -104,6 +107,20 @@ mod tests {
         let state = tagged_state();
         // text 1 + color 1 + tag 1 + folders 2 = 5.
         assert_eq!(state.active_count(FilterScope::Global), 5);
+    }
+
+    #[test]
+    fn transparent_counts_as_one_filter() {
+        let state = FilterState {
+            transparent: true,
+            ..tagged_state()
+        };
+        assert_eq!(state.active_count(FilterScope::Folder), 4);
+        let alone = FilterState {
+            transparent: true,
+            ..FilterState::default()
+        };
+        assert!(!alone.is_empty(FilterScope::Folder));
     }
 
     #[test]

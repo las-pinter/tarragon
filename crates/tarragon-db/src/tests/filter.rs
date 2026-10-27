@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
-use tarragon_core::color::ColorBucket;
+use tarragon_core::color::{ColorBucket, TRANSPARENT_TAG};
 use tarragon_core::entity::{Tag, TagSource};
 use tarragon_core::filter_state::{FilterScope, FilterState};
 
@@ -333,6 +333,87 @@ fn filter_engine_tag_and_color_filters_combine_with_and() {
     };
     assert_eq!(
         filter_paths(&temp, &separate),
+        ["/test/photos/forest_path.jpg"]
+    );
+}
+
+/// Mark two fixture rows, one green and one blue, as transparent.
+fn tag_transparent(temp: &TempDb) {
+    let tag = temp
+        .db
+        .ensure_tag(TRANSPARENT_TAG, TagSource::AutoColor)
+        .expect("tag");
+    attach_tags(temp, "/test/photos/forest_path.jpg", &[&tag]);
+    attach_tags(temp, "/test/photos/blue_ocean.jpg", &[&tag]);
+}
+
+#[test]
+fn filter_engine_transparent_alone_matches_tagged_rows() {
+    let temp = TempDb::new();
+    populate_filter_fixture(&temp);
+    tag_transparent(&temp);
+    let filters = FilterState {
+        transparent: true,
+        ..scoped("/test/photos")
+    };
+    assert_eq!(
+        filter_paths(&temp, &filters),
+        [
+            "/test/photos/blue_ocean.jpg",
+            "/test/photos/forest_path.jpg"
+        ]
+    );
+}
+
+#[test]
+fn filter_engine_transparent_and_color_require_both() {
+    let temp = TempDb::new();
+    populate_filter_fixture(&temp);
+    tag_transparent(&temp);
+    let filters = FilterState {
+        colors: BTreeSet::from([ColorBucket::Green]),
+        transparent: true,
+        ..scoped("/test/photos")
+    };
+    assert_eq!(
+        filter_paths(&temp, &filters),
+        ["/test/photos/forest_path.jpg"]
+    );
+}
+
+#[test]
+fn filter_engine_transparent_false_leaves_results_unchanged() {
+    let temp = TempDb::new();
+    populate_filter_fixture(&temp);
+    tag_transparent(&temp);
+    let filters = FilterState {
+        colors: BTreeSet::from([ColorBucket::Green]),
+        transparent: false,
+        ..scoped("/test/photos")
+    };
+    assert_eq!(
+        filter_paths(&temp, &filters),
+        [
+            "/test/photos/forest_path.jpg",
+            "/test/photos/green_valley.png"
+        ]
+    );
+}
+
+#[test]
+fn filter_engine_transparent_and_user_tag_stay_separate_groups() {
+    let temp = TempDb::new();
+    populate_filter_fixture(&temp);
+    tag_transparent(&temp);
+    // hiking matches forest_path and mountain_top. Only forest_path is
+    // also transparent.
+    let filters = FilterState {
+        tags: BTreeSet::from(["hiking".to_owned()]),
+        transparent: true,
+        ..scoped("/test/photos")
+    };
+    assert_eq!(
+        filter_paths(&temp, &filters),
         ["/test/photos/forest_path.jpg"]
     );
 }

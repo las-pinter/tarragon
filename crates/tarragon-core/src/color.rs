@@ -5,6 +5,11 @@ use core::str::FromStr;
 
 use crate::error::CoreError;
 
+/// Tag name for images with transparent pixels.
+///
+/// It is not a bucket, but it is stored and filtered like one.
+pub const TRANSPARENT_TAG: &str = "transparent";
+
 /// A dominant-color bucket.
 ///
 /// The name is bare, for example `red`. The app never writes `color:red`.

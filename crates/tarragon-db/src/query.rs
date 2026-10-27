@@ -12,6 +12,7 @@
 use std::path::Path;
 
 use rusqlite::types::Value;
+use tarragon_core::color::TRANSPARENT_TAG;
 use tarragon_core::filter_state::FilterState;
 use tarragon_core::sorting::natural_path_cmp;
 
@@ -22,8 +23,8 @@ use crate::{Database, DbError};
 /// Push an "every one of these tag names is present" condition.
 ///
 /// The `HAVING COUNT` clause gives AND semantics: a path must carry all
-/// names, not just one. The names come from the user tags or the color
-/// buckets, which are bare color names.
+/// names, not just one. The names come from the user tags, or from the
+/// color buckets plus the `transparent` tag.
 fn push_name_group(conditions: &mut Vec<String>, params: &mut Vec<Value>, names: &[&str]) {
     let placeholders = vec!["?"; names.len()].join(", ");
     conditions.push(format!(
@@ -71,12 +72,15 @@ fn filter_sql(filters: &FilterState) -> (String, Vec<Value>) {
         push_name_group(&mut conditions, &mut params, &names);
     }
 
-    if !filters.colors.is_empty() {
+    if !filters.colors.is_empty() || filters.transparent {
         let mut names: Vec<&str> = filters
             .colors
             .iter()
             .map(|bucket| bucket.as_str())
             .collect();
+        if filters.transparent {
+            names.push(TRANSPARENT_TAG);
+        }
         names.sort_unstable();
         push_name_group(&mut conditions, &mut params, &names);
     }
@@ -94,7 +98,8 @@ impl Database {
     /// Return the thumbnail rows that match every active filter.
     ///
     /// Folders combine with OR and each matches all descendants. Tags and
-    /// colors each require every selected name. The filename text is a
+    /// colors each require every selected name. The `transparent` tag joins
+    /// the color group. The filename text is a
     /// substring of the stored path and is used as-is, with no trim. Rows
     /// come back in natural full-path order.
     ///

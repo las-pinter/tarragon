@@ -3,6 +3,7 @@
 use std::path::{Path, PathBuf};
 
 pub mod lister;
+pub mod paint;
 pub mod tree;
 
 #[cfg(test)]

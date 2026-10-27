@@ -59,6 +59,7 @@ fn state_stores_and_returns_its_data() {
         path: PathBuf::from("/a"),
         label: None,
         sort_order: 1,
+        missing: false,
     };
     state.set_favorites(vec![row.clone()]);
     state.set_roots(roots(&["/a"]));

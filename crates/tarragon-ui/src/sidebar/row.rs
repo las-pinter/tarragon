@@ -18,7 +18,7 @@ const INDENT_STEP: f32 = 14.0;
 /// Gap between the caret slot, the icon, and the name, in points.
 pub(super) const GAP: f32 = 6.0;
 /// Caret slot width, in points. It stays when a leaf draws no caret.
-const CARET_SLOT: f32 = 4.0;
+pub(super) const CARET_SLOT: f32 = 4.0;
 /// How far the caret click area reaches past its slot, in points.
 const CARET_REACH: f32 = 3.0;
 

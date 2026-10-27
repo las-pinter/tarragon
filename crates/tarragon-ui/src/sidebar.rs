@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 pub mod favorite;
 pub mod lister;
 pub mod paint;
+pub mod panel;
 pub mod row;
 pub mod tree;
 
@@ -20,6 +21,8 @@ pub struct FavoriteRow {
     pub label: Option<String>,
     /// The position in the favorites list.
     pub sort_order: i64,
+    /// Whether the folder is gone from disk; the caller refreshes it, so drawing never stats.
+    pub missing: bool,
 }
 
 /// The sidebar data: favorites, tree roots, and the selected folder.

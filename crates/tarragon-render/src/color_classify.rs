@@ -12,8 +12,8 @@ const VALUE_HIGH: f64 = 0.92;
 /// A very dark color is neutral.
 const VALUE_LOW: f64 = 0.08;
 
-/// Hue ranges for the chromatic buckets. The gap 310..345 maps to neutral.
-const HUE_BUCKETS: [(ColorBucket, &[(f64, f64)]); 9] = [
+/// Hue ranges for the chromatic buckets. Together they cover 0..360.
+const HUE_BUCKETS: [(ColorBucket, &[(f64, f64)]); 10] = [
     (ColorBucket::Red, &[(345.0, 360.0), (0.0, 15.0)]),
     (ColorBucket::Orange, &[(15.0, 33.0)]),
     (ColorBucket::Yellow, &[(33.0, 50.0)]),
@@ -23,6 +23,7 @@ const HUE_BUCKETS: [(ColorBucket, &[(f64, f64)]); 9] = [
     (ColorBucket::Blue, &[(140.0, 200.0)]),
     (ColorBucket::Purple, &[(200.0, 270.0)]),
     (ColorBucket::Magenta, &[(270.0, 310.0)]),
+    (ColorBucket::Pink, &[(310.0, 345.0)]),
 ];
 
 /// Map a palette color to its bucket, with the neutral rules.
@@ -57,7 +58,7 @@ fn rgb_to_hsv(color: Rgb<u8>) -> (f64, f64, f64) {
     (base.rem_euclid(360.0), delta / max, max)
 }
 
-/// Map a hue (0..360) to a chromatic bucket, or none in the gap.
+/// Map a hue (0..360) to a chromatic bucket, or none when no range holds it.
 fn hue_to_bucket(hue: f64) -> Option<ColorBucket> {
     for (bucket, ranges) in HUE_BUCKETS {
         for (min, max) in ranges {
@@ -67,4 +68,39 @@ fn hue_to_bucket(hue: f64) -> Option<ColorBucket> {
         }
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use tarragon_core::color::ColorBucket;
+
+    use super::hue_to_bucket;
+
+    #[test]
+    fn magenta_ends_just_below_310() {
+        assert_eq!(hue_to_bucket(309.9), Some(ColorBucket::Magenta));
+    }
+
+    #[test]
+    fn pink_starts_at_310() {
+        assert_eq!(hue_to_bucket(310.0), Some(ColorBucket::Pink));
+    }
+
+    #[test]
+    fn pink_ends_just_below_345() {
+        assert_eq!(hue_to_bucket(344.9), Some(ColorBucket::Pink));
+    }
+
+    #[test]
+    fn every_hue_from_0_to_359_9_has_a_bucket() {
+        for tenth in 0_u16..3600 {
+            let hue = f64::from(tenth) / 10.0;
+            assert!(hue_to_bucket(hue).is_some(), "no bucket for hue {hue}");
+        }
+    }
+
+    #[test]
+    fn red_starts_at_345() {
+        assert_eq!(hue_to_bucket(345.0), Some(ColorBucket::Red));
+    }
 }

@@ -370,9 +370,9 @@ mod tests {
     }
 
     #[test]
-    fn a_hue_in_the_magenta_gap_is_neutral() {
+    fn a_hue_between_magenta_and_red_is_pink() {
         let tags = extract_dominant_colors(&solid(320.0, 0.8, 0.7), ColorTagConfig::default());
-        assert_eq!(tags, BTreeSet::from([ColorBucket::Neutral]));
+        assert_eq!(tags, BTreeSet::from([ColorBucket::Pink]));
     }
 
     #[test]
@@ -455,6 +455,7 @@ mod tests {
             (170.0, ColorBucket::Blue),
             (235.0, ColorBucket::Purple),
             (290.0, ColorBucket::Magenta),
+            (328.0, ColorBucket::Pink),
         ];
         for (hue, expected) in cases {
             let tags = extract_dominant_colors(&solid(hue, 0.8, 0.7), ColorTagConfig::default());

@@ -330,3 +330,46 @@ fn a_click_on_the_date_pill_switches_the_order_in_the_same_frame() {
     );
     assert_eq!(shell.take_sort_changed(), None, "the flag reports once");
 }
+
+#[test]
+fn a_library_row_click_queues_one_navigate_and_set_folder_follows() {
+    let ctx = Context::default();
+    apply_theme(&ctx);
+    let mut shell = Shell::new();
+    shell.sidebar_mut().set_roots(vec![PathBuf::from("/r")]);
+    draw(&ctx, &mut shell);
+    let output = ctx.run_ui(input(), |ui| shell.show(ui));
+    let pos = output
+        .shapes
+        .iter()
+        .find_map(|clipped| match &clipped.shape {
+            egui::Shape::Text(text) if text.galley.job.text == "r" => Some(text.pos),
+            _ => None,
+        })
+        .expect("the root row is painted")
+        + vec2(2.0, 5.0);
+    output.drop_without_applying_deltas();
+    let press = |pressed| Event::PointerButton {
+        pos,
+        button: PointerButton::Primary,
+        pressed,
+        modifiers: Modifiers::NONE,
+    };
+    for event in [Event::PointerMoved(pos), press(true), press(false)] {
+        let raw = RawInput {
+            events: vec![event],
+            ..input()
+        };
+        ctx.run_ui(raw, |ui| shell.show(ui))
+            .drop_without_applying_deltas();
+    }
+    assert_eq!(
+        shell.take_sidebar_events(),
+        [SidebarEvent::Navigate(PathBuf::from("/r"))]
+    );
+    shell.set_folder(Some(PathBuf::from("/other")));
+    assert_eq!(
+        shell.sidebar_mut().open_folder(),
+        Some(std::path::Path::new("/other"))
+    );
+}

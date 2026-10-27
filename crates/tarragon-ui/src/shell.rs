@@ -8,6 +8,7 @@ use tarragon_core::sorting::SortMode;
 
 use crate::gallery::Gallery;
 use crate::grid::GridItem;
+use crate::sidebar::panel::{Sidebar, SidebarEvent};
 use crate::theme::{panel_frame, panel_title};
 use crate::tokens;
 
@@ -55,6 +56,8 @@ pub struct Shell {
     preview_width: f32,
     /// The gallery strip and grid in the centre panel.
     gallery: Gallery,
+    /// The Library panel in the left dock.
+    sidebar: Sidebar,
 }
 
 impl Shell {
@@ -70,6 +73,7 @@ impl Shell {
             sidebar_width: tokens::SIDEBAR_WIDTH,
             preview_width: tokens::PREVIEW_WIDTH,
             gallery: Gallery::new(SortMode::Natural),
+            sidebar: Sidebar::default(),
         }
     }
 
@@ -114,11 +118,22 @@ impl Shell {
         self.gallery.set_items(items);
     }
 
-    /// Set the folder for the gallery folder scope and forward it.
+    /// Set the open folder: the gallery folder scope and the Library highlight.
     ///
     /// The folder tab draws this folder once a scan supplies one.
     pub fn set_folder(&mut self, folder: Option<std::path::PathBuf>) {
+        self.sidebar.set_open_folder(folder.clone());
         self.gallery.set_folder(folder);
+    }
+
+    /// The Library panel, for the app to set the roots and the favorites.
+    pub fn sidebar_mut(&mut self) -> &mut Sidebar {
+        &mut self.sidebar
+    }
+
+    /// Return the Library events since the last call, and clear them.
+    pub fn take_sidebar_events(&mut self) -> Vec<SidebarEvent> {
+        self.sidebar.take_events()
     }
 
     /// The gallery, for the app to set tile textures and read the visible tiles.
@@ -204,6 +219,7 @@ impl Shell {
                 .frame(panel_frame(tokens::BG_SECONDARY, Margin::same(8)))
                 .show(ui, |ui| {
                     panel_title(ui, DOCK_LIBRARY);
+                    self.sidebar.show(ui);
                 });
         }
 

@@ -189,3 +189,8 @@ fn every_stylesheet_token_is_ported_with_its_value() {
         }
     }
 }
+
+#[test]
+fn the_pink_bucket_token_is_ff80ab() {
+    assert_eq!(BUCKET_PINK, Color32::from_rgb(0xff, 0x80, 0xab));
+}

@@ -1,13 +1,14 @@
 //! Theme tokens: palette, spacing, radii, type scale, and motion values.
 //!
 //! The values come from the `:root` block of `design/mockups/theme.css`. Each
-//! doc comment names its stylesheet token, so the two stay traceable. Colours
-//! convert to `egui::Color32` at compile time.
+//! doc comment names its stylesheet token, so the two stay traceable. The one
+//! exception is `BUCKET_PINK`, which has no stylesheet row. Colours convert to
+//! `egui::Color32` at compile time.
 
 use egui::Color32;
 
-// The whole `:root` block of `theme.css` is ported on purpose. Some values
-// have no consumer yet.
+// The whole `:root` block of `theme.css` is ported on purpose, plus
+// `BUCKET_PINK`. Some values have no consumer yet.
 
 /// `--bg-primary`: window and gallery background.
 pub const BG_PRIMARY: Color32 = Color32::from_rgb(0x16, 0x15, 0x1a);
@@ -119,6 +120,8 @@ pub const BUCKET_BLUE: Color32 = Color32::from_rgb(0x34, 0x98, 0xdb);
 pub const BUCKET_PURPLE: Color32 = Color32::from_rgb(0x9b, 0x59, 0xb6);
 /// `--bucket-magenta`: magenta colour bucket.
 pub const BUCKET_MAGENTA: Color32 = Color32::from_rgb(0xe9, 0x1e, 0x63);
+/// `--bucket-pink`: pink colour bucket. The stylesheet has no pink row.
+pub const BUCKET_PINK: Color32 = Color32::from_rgb(0xff, 0x80, 0xab);
 /// `--bucket-neutral`: neutral colour bucket.
 pub const BUCKET_NEUTRAL: Color32 = Color32::from_rgb(0x7f, 0x8c, 0x8d);
 

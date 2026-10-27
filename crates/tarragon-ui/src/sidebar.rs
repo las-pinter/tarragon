@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 
 pub mod lister;
 pub mod paint;
+pub mod row;
 pub mod tree;
 
 #[cfg(test)]

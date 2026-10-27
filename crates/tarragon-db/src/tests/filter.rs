@@ -417,8 +417,8 @@ fn filter_engine_folder_normalizes_backslash_separators() {
 }
 
 #[test]
-fn filter_engine_has_ten_color_buckets() {
-    assert_eq!(ColorBucket::ALL.len(), 10);
+fn filter_engine_has_eleven_color_buckets() {
+    assert_eq!(ColorBucket::ALL.len(), 11);
     let temp = TempDb::new();
     for bucket in ColorBucket::ALL {
         let name = bucket.as_str();

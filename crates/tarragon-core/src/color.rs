@@ -9,7 +9,7 @@ use crate::error::CoreError;
 ///
 /// The name is bare, for example `red`. The app never writes `color:red`.
 /// The set is red, orange, yellow, green, teal, cyan, blue, purple, magenta,
-/// and neutral.
+/// pink, and neutral.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ColorBucket {
     /// Red hues.
@@ -30,13 +30,15 @@ pub enum ColorBucket {
     Purple,
     /// Magenta hues.
     Magenta,
+    /// Pink hues.
+    Pink,
     /// Low-saturation colors.
     Neutral,
 }
 
 impl ColorBucket {
     /// Every bucket, in the canonical order.
-    pub const ALL: [Self; 10] = [
+    pub const ALL: [Self; 11] = [
         Self::Red,
         Self::Orange,
         Self::Yellow,
@@ -46,6 +48,7 @@ impl ColorBucket {
         Self::Blue,
         Self::Purple,
         Self::Magenta,
+        Self::Pink,
         Self::Neutral,
     ];
 
@@ -62,6 +65,7 @@ impl ColorBucket {
             Self::Blue => "blue",
             Self::Purple => "purple",
             Self::Magenta => "magenta",
+            Self::Pink => "pink",
             Self::Neutral => "neutral",
         }
     }
@@ -81,7 +85,7 @@ impl FromStr for ColorBucket {
     /// # Errors
     ///
     /// Returns [`CoreError::UnknownColorBucket`] when the name is not one of
-    /// the ten buckets.
+    /// the eleven buckets.
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         match value.trim().to_ascii_lowercase().as_str() {
             "red" => Ok(Self::Red),
@@ -93,6 +97,7 @@ impl FromStr for ColorBucket {
             "blue" => Ok(Self::Blue),
             "purple" => Ok(Self::Purple),
             "magenta" => Ok(Self::Magenta),
+            "pink" => Ok(Self::Pink),
             "neutral" => Ok(Self::Neutral),
             other => Err(CoreError::UnknownColorBucket(other.to_owned())),
         }
@@ -113,6 +118,14 @@ mod tests {
             let parsed = ColorBucket::from_str(&text).expect("bare name parses");
             assert_eq!(parsed, bucket);
         }
+    }
+
+    #[test]
+    fn pink_parses_and_prints_as_pink() {
+        assert_eq!(ColorBucket::Pink.as_str(), "pink");
+        let parsed = ColorBucket::from_str("pink").expect("pink parses");
+        assert_eq!(parsed, ColorBucket::Pink);
+        assert_eq!(ColorBucket::ALL.len(), 11);
     }
 
     #[test]

@@ -2,6 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
+pub mod favorite;
 pub mod lister;
 pub mod paint;
 pub mod row;

@@ -2,6 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
+pub mod lister;
 pub mod tree;
 
 #[cfg(test)]

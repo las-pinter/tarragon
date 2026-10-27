@@ -26,6 +26,9 @@ const PALETTE_EDGE: u32 = 64;
 /// Resized pixels below this alpha are mostly see-through and do not count.
 const MIN_ALPHA: u8 = 128;
 
+/// A share of clear pixels at or above this marks the image as transparent.
+const TRANSPARENT_SHARE: f64 = 0.25;
+
 /// The three color-tag settings, passed in as parameters.
 ///
 /// The caller reads these from the typed settings registry and builds this
@@ -50,20 +53,27 @@ impl Default for ColorTagConfig {
     }
 }
 
-/// Return the dominant-color tags for `image`.
+/// The color tags of one image.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ColorTags {
+    /// The dominant color buckets.
+    pub buckets: BTreeSet<ColorBucket>,
+    /// True when a quarter or more of the image is clear.
+    pub transparent: bool,
+}
+
+/// Return the dominant-color tags for `image` as `ColorTags`.
 ///
 /// The algorithm downsamples the image to a 64x64 square, median-cut
 /// quantizes to `config.palette_size` colors, maps each palette color to a
 /// bucket, and keeps buckets at or above `config.min_share`. An empty image
 /// has no tags. Pixels below half alpha are skipped. Pass a thumbnail-sized
-/// image: the alpha path copies the whole input.
+/// image: the alpha path copies the whole input. An all-clear image gives
+/// empty buckets with `transparent` true.
 #[must_use]
-pub fn extract_dominant_colors(
-    image: &DynamicImage,
-    config: ColorTagConfig,
-) -> BTreeSet<ColorBucket> {
+pub fn extract_dominant_colors(image: &DynamicImage, config: ColorTagConfig) -> ColorTags {
     if image.width() == 0 || image.height() == 0 {
-        return BTreeSet::new();
+        return ColorTags::default();
     }
 
     // The resize does not premultiply, so do it first or clear pixels bleed
@@ -82,10 +92,15 @@ pub fn extract_dominant_colors(
             .resize_exact(PALETTE_EDGE, PALETTE_EDGE, FilterType::Lanczos3)
             .to_rgba8()
     };
-    let histogram = histogram(&small);
+    let (histogram, clear) = histogram(&small);
+    let transparent =
+        f64::from(clear) / f64::from(PALETTE_EDGE * PALETTE_EDGE) >= TRANSPARENT_SHARE;
     let total: u32 = histogram.iter().map(|color| color.count).sum();
     if total == 0 {
-        return BTreeSet::new();
+        return ColorTags {
+            transparent,
+            ..ColorTags::default()
+        };
     }
 
     let palette = median_cut(&histogram, config.palette_size);
@@ -97,11 +112,15 @@ pub fn extract_dominant_colors(
 
     // Sum integer counts and divide once; this is more exact at the min-share
     // boundary than a float share sum.
-    bucket_counts
+    let buckets = bucket_counts
         .into_iter()
         .filter(|(_, count)| f64::from(*count) / f64::from(total) >= config.min_share)
         .map(|(bucket, _)| bucket)
-        .collect()
+        .collect();
+    ColorTags {
+        buckets,
+        transparent,
+    }
 }
 
 /// One distinct RGB color and how many pixels it covers.
@@ -231,19 +250,21 @@ fn unpremultiply(channel: u8, alpha: u8) -> u8 {
     u8::try_from((u32::from(channel) * 255 + alpha / 2) / alpha).unwrap_or(u8::MAX)
 }
 
-/// Count the distinct colors of an RGBA image, skipping clear pixels.
-fn histogram(image: &RgbaImage) -> Vec<ColorCount> {
+/// Count the distinct colors of an RGBA image, and the clear pixels it skips.
+fn histogram(image: &RgbaImage) -> (Vec<ColorCount>, u32) {
     let mut counts: BTreeMap<[u8; 3], u32> = BTreeMap::new();
+    let mut clear = 0;
     for pixel in image.pixels() {
         let alpha = pixel[3];
         if alpha < MIN_ALPHA {
+            clear += 1;
             continue;
         }
         // Undo the premultiply so a faint red still reads as red.
         let key = [0, 1, 2].map(|i| unpremultiply(pixel[i], alpha));
         *counts.entry(key).or_insert(0) += 1;
     }
-    counts
+    let colors = counts
         .into_iter()
         .map(|([red, green, blue], count)| ColorCount {
             red,
@@ -251,7 +272,8 @@ fn histogram(image: &RgbaImage) -> Vec<ColorCount> {
             blue,
             count,
         })
-        .collect()
+        .collect();
+    (colors, clear)
 }
 
 /// Reduce the histogram to at most `palette_size` boxes by median cut.
@@ -296,7 +318,26 @@ mod tests {
     use image::{DynamicImage, Rgb, RgbImage, Rgba, RgbaImage};
     use tarragon_core::color::ColorBucket;
 
-    use super::{ColorTagConfig, extract_dominant_colors};
+    use super::{ColorTagConfig, ColorTags, extract_dominant_colors};
+
+    /// The buckets of `image`.
+    fn buckets_of(image: &DynamicImage, config: ColorTagConfig) -> BTreeSet<ColorBucket> {
+        extract_dominant_colors(image, config).buckets
+    }
+
+    /// Build a 64x64 image with `clear` clear pixels first, then opaque red. The
+    /// size matches the resize target, so the clear count stays exact.
+    fn with_clear(clear: u32) -> ColorTags {
+        let red = Rgba([200, 30, 30, 255]);
+        let image = RgbaImage::from_fn(64, 64, |x, y| {
+            if y * 64 + x < clear {
+                Rgba([30, 200, 30, 0])
+            } else {
+                red
+            }
+        });
+        extract_dominant_colors(&DynamicImage::ImageRgba8(image), ColorTagConfig::default())
+    }
 
     /// Round a 0..1 channel to 8 bits.
     fn channel(value: f64) -> u8 {
@@ -376,43 +417,43 @@ mod tests {
 
     #[test]
     fn a_solid_red_image_yields_red() {
-        let tags = extract_dominant_colors(&solid(10.0, 0.8, 0.7), ColorTagConfig::default());
+        let tags = buckets_of(&solid(10.0, 0.8, 0.7), ColorTagConfig::default());
         assert_eq!(tags, BTreeSet::from([ColorBucket::Red]));
     }
 
     #[test]
     fn a_solid_blue_image_yields_blue() {
-        let tags = extract_dominant_colors(&solid(170.0, 0.8, 0.7), ColorTagConfig::default());
+        let tags = buckets_of(&solid(170.0, 0.8, 0.7), ColorTagConfig::default());
         assert_eq!(tags, BTreeSet::from([ColorBucket::Blue]));
     }
 
     #[test]
     fn a_gray_image_is_neutral() {
-        let tags = extract_dominant_colors(&solid_rgb([128, 128, 128]), ColorTagConfig::default());
+        let tags = buckets_of(&solid_rgb([128, 128, 128]), ColorTagConfig::default());
         assert_eq!(tags, BTreeSet::from([ColorBucket::Neutral]));
     }
 
     #[test]
     fn a_low_saturation_color_is_neutral() {
-        let tags = extract_dominant_colors(&solid(30.0, 0.1, 0.7), ColorTagConfig::default());
+        let tags = buckets_of(&solid(30.0, 0.1, 0.7), ColorTagConfig::default());
         assert_eq!(tags, BTreeSet::from([ColorBucket::Neutral]));
     }
 
     #[test]
     fn a_very_bright_color_is_neutral() {
-        let tags = extract_dominant_colors(&solid(10.0, 0.8, 0.95), ColorTagConfig::default());
+        let tags = buckets_of(&solid(10.0, 0.8, 0.95), ColorTagConfig::default());
         assert_eq!(tags, BTreeSet::from([ColorBucket::Neutral]));
     }
 
     #[test]
     fn a_very_dark_color_is_neutral() {
-        let tags = extract_dominant_colors(&solid(10.0, 0.8, 0.05), ColorTagConfig::default());
+        let tags = buckets_of(&solid(10.0, 0.8, 0.05), ColorTagConfig::default());
         assert_eq!(tags, BTreeSet::from([ColorBucket::Neutral]));
     }
 
     #[test]
     fn a_hue_between_magenta_and_red_is_pink() {
-        let tags = extract_dominant_colors(&solid(320.0, 0.8, 0.7), ColorTagConfig::default());
+        let tags = buckets_of(&solid(320.0, 0.8, 0.7), ColorTagConfig::default());
         assert_eq!(tags, BTreeSet::from([ColorBucket::Pink]));
     }
 
@@ -428,11 +469,11 @@ mod tests {
             ..ColorTagConfig::default()
         };
         assert_eq!(
-            extract_dominant_colors(&image, loose),
+            buckets_of(&image, loose),
             BTreeSet::from([ColorBucket::Neutral])
         );
         assert_eq!(
-            extract_dominant_colors(&image, strict),
+            buckets_of(&image, strict),
             BTreeSet::from([ColorBucket::Orange])
         );
     }
@@ -440,7 +481,7 @@ mod tests {
     #[test]
     fn a_green_and_blue_split_yields_two_tags() {
         let image = split(hsv_to_rgb(70.0, 0.8, 0.7), hsv_to_rgb(170.0, 0.8, 0.7), 0.6);
-        let tags = extract_dominant_colors(&image, ColorTagConfig::default());
+        let tags = buckets_of(&image, ColorTagConfig::default());
         assert!(
             tags.contains(&ColorBucket::Green),
             "green is missing: {tags:?}"
@@ -455,7 +496,7 @@ mod tests {
     #[test]
     fn a_tiny_accent_below_the_min_share_is_dropped() {
         let image = split(hsv_to_rgb(0.0, 0.0, 0.5), hsv_to_rgb(10.0, 0.8, 0.7), 0.95);
-        let tags = extract_dominant_colors(&image, ColorTagConfig::default());
+        let tags = buckets_of(&image, ColorTagConfig::default());
         assert!(
             !tags.contains(&ColorBucket::Red),
             "red slipped in: {tags:?}"
@@ -471,7 +512,7 @@ mod tests {
     #[test]
     fn a_split_near_the_min_share_keeps_both_buckets() {
         let image = split(hsv_to_rgb(10.0, 0.8, 0.7), hsv_to_rgb(0.0, 0.0, 0.5), 0.12);
-        let tags = extract_dominant_colors(&image, ColorTagConfig::default());
+        let tags = buckets_of(&image, ColorTagConfig::default());
         assert_eq!(
             tags,
             BTreeSet::from([ColorBucket::Red, ColorBucket::Neutral])
@@ -481,27 +522,27 @@ mod tests {
     #[test]
     fn an_empty_image_returns_no_tags() {
         let image = DynamicImage::ImageRgb8(RgbImage::new(0, 0));
-        assert!(extract_dominant_colors(&image, ColorTagConfig::default()).is_empty());
+        assert!(buckets_of(&image, ColorTagConfig::default()).is_empty());
     }
 
     #[test]
     fn transparent_pixels_do_not_count() {
         let image = split_rgba(Rgba([200, 30, 30, 255]), Rgba([30, 200, 30, 0]));
-        let tags = extract_dominant_colors(&image, ColorTagConfig::default());
+        let tags = buckets_of(&image, ColorTagConfig::default());
         assert_eq!(tags, BTreeSet::from([ColorBucket::Red]));
     }
 
     #[test]
     fn a_fully_transparent_image_has_no_tags() {
         let clear = Rgba([200, 30, 30, 0]);
-        let tags = extract_dominant_colors(&split_rgba(clear, clear), ColorTagConfig::default());
+        let tags = buckets_of(&split_rgba(clear, clear), ColorTagConfig::default());
         assert!(tags.is_empty(), "unexpected tags: {tags:?}");
     }
 
     #[test]
     fn a_half_transparent_red_still_reads_as_red() {
         let faint = Rgba([200, 30, 30, 200]);
-        let tags = extract_dominant_colors(&split_rgba(faint, faint), ColorTagConfig::default());
+        let tags = buckets_of(&split_rgba(faint, faint), ColorTagConfig::default());
         assert_eq!(tags, BTreeSet::from([ColorBucket::Red]));
     }
 
@@ -510,8 +551,7 @@ mod tests {
         let red = Rgba([200, 30, 30, 255]);
         let clear = Rgba([30, 200, 30, 0]);
         let image = RgbaImage::from_fn(100, 100, |x, y| if (x + y) % 2 == 0 { red } else { clear });
-        let tags =
-            extract_dominant_colors(&DynamicImage::ImageRgba8(image), ColorTagConfig::default());
+        let tags = buckets_of(&DynamicImage::ImageRgba8(image), ColorTagConfig::default());
         assert_eq!(tags, BTreeSet::from([ColorBucket::Red]));
     }
 
@@ -519,16 +559,43 @@ mod tests {
     fn alpha_127_is_skipped_and_alpha_128_is_kept() {
         let at = |alpha| {
             let color = Rgba([200, 30, 30, alpha]);
-            extract_dominant_colors(&split_rgba(color, color), ColorTagConfig::default())
+            buckets_of(&split_rgba(color, color), ColorTagConfig::default())
         };
         assert!(at(127).is_empty(), "alpha 127 was kept");
         assert_eq!(at(128), BTreeSet::from([ColorBucket::Red]));
     }
 
     #[test]
+    fn a_quarter_clear_is_transparent() {
+        assert!(with_clear(1024).transparent);
+    }
+
+    #[test]
+    fn just_under_a_quarter_clear_is_not_transparent() {
+        assert!(!with_clear(1023).transparent);
+    }
+
+    #[test]
+    fn an_all_clear_image_is_transparent_with_no_buckets() {
+        let tags = with_clear(64 * 64);
+        assert!(tags.transparent);
+        assert!(tags.buckets.is_empty());
+    }
+
+    #[test]
+    fn opaque_images_are_not_transparent() {
+        assert!(!with_clear(0).transparent);
+        let rgb = extract_dominant_colors(&solid_rgb([200, 30, 30]), ColorTagConfig::default());
+        assert!(!rgb.transparent);
+        let empty = DynamicImage::ImageRgb8(RgbImage::new(0, 0));
+        let none = extract_dominant_colors(&empty, ColorTagConfig::default());
+        assert_eq!(none, ColorTags::default());
+    }
+
+    #[test]
     fn a_dark_faint_red_is_not_darkened_to_neutral() {
         let faint = Rgba([40, 13, 5, 128]);
-        let tags = extract_dominant_colors(&split_rgba(faint, faint), ColorTagConfig::default());
+        let tags = buckets_of(&split_rgba(faint, faint), ColorTagConfig::default());
         assert_eq!(tags, BTreeSet::from([ColorBucket::Red]));
     }
 
@@ -547,7 +614,7 @@ mod tests {
             (328.0, ColorBucket::Pink),
         ];
         for (hue, expected) in cases {
-            let tags = extract_dominant_colors(&solid(hue, 0.8, 0.7), ColorTagConfig::default());
+            let tags = buckets_of(&solid(hue, 0.8, 0.7), ColorTagConfig::default());
             assert_eq!(tags, BTreeSet::from([expected]), "hue {hue}");
         }
     }
@@ -560,14 +627,14 @@ mod tests {
             hsv_to_rgb(170.0, 0.8, 0.7),
             hsv_to_rgb(290.0, 0.8, 0.7),
         ]);
-        let few = extract_dominant_colors(
+        let few = buckets_of(
             &image,
             ColorTagConfig {
                 palette_size: 2,
                 ..ColorTagConfig::default()
             },
         );
-        let many = extract_dominant_colors(
+        let many = buckets_of(
             &image,
             ColorTagConfig {
                 palette_size: 8,
@@ -582,7 +649,7 @@ mod tests {
     #[test]
     fn min_share_filters_smaller_buckets() {
         let image = split(hsv_to_rgb(70.0, 0.8, 0.7), hsv_to_rgb(170.0, 0.8, 0.7), 0.7);
-        let low = extract_dominant_colors(
+        let low = buckets_of(
             &image,
             ColorTagConfig {
                 min_share: 0.10,
@@ -592,7 +659,7 @@ mod tests {
         assert!(low.contains(&ColorBucket::Green), "green missing: {low:?}");
         assert!(low.contains(&ColorBucket::Blue), "blue missing: {low:?}");
 
-        let mid = extract_dominant_colors(
+        let mid = buckets_of(
             &image,
             ColorTagConfig {
                 min_share: 0.50,
@@ -605,7 +672,7 @@ mod tests {
             "blue slipped in: {mid:?}"
         );
 
-        let high = extract_dominant_colors(
+        let high = buckets_of(
             &image,
             ColorTagConfig {
                 min_share: 0.80,
@@ -617,7 +684,7 @@ mod tests {
 
     #[test]
     fn tags_are_bare_names_without_a_prefix() {
-        let tags = extract_dominant_colors(&solid(10.0, 0.8, 0.7), ColorTagConfig::default());
+        let tags = buckets_of(&solid(10.0, 0.8, 0.7), ColorTagConfig::default());
         assert!(tags.contains(&ColorBucket::Red));
         for tag in &tags {
             assert!(

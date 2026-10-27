@@ -14,14 +14,17 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use image::imageops::FilterType;
-use image::{DynamicImage, Rgb, RgbImage};
+use image::imageops::{self, FilterType};
+use image::{DynamicImage, Rgb, RgbaImage};
 use tarragon_core::color::ColorBucket;
 
 use crate::color_classify::classify;
 
 /// The forced-square edge for the palette downsample.
 const PALETTE_EDGE: u32 = 64;
+
+/// Resized pixels below this alpha are mostly see-through and do not count.
+const MIN_ALPHA: u8 = 128;
 
 /// The three color-tag settings, passed in as parameters.
 ///
@@ -52,7 +55,8 @@ impl Default for ColorTagConfig {
 /// The algorithm downsamples the image to a 64x64 square, median-cut
 /// quantizes to `config.palette_size` colors, maps each palette color to a
 /// bucket, and keeps buckets at or above `config.min_share`. An empty image
-/// has no tags.
+/// has no tags. Pixels below half alpha are skipped. Pass a thumbnail-sized
+/// image: the alpha path copies the whole input.
 #[must_use]
 pub fn extract_dominant_colors(
     image: &DynamicImage,
@@ -62,9 +66,23 @@ pub fn extract_dominant_colors(
         return BTreeSet::new();
     }
 
-    let small = image.resize_exact(PALETTE_EDGE, PALETTE_EDGE, FilterType::Lanczos3);
-    let rgb = small.to_rgb8();
-    let histogram = histogram(&rgb);
+    // The resize does not premultiply, so do it first or clear pixels bleed
+    // colour. Opaque images keep the plain resize to stay bit-for-bit equal.
+    let small = if image.color().has_alpha() {
+        let mut rgba = image.to_rgba8();
+        for pixel in rgba.pixels_mut() {
+            let alpha = pixel[3];
+            for i in 0..3 {
+                pixel[i] = premultiply(pixel[i], alpha);
+            }
+        }
+        imageops::resize(&rgba, PALETTE_EDGE, PALETTE_EDGE, FilterType::Lanczos3)
+    } else {
+        image
+            .resize_exact(PALETTE_EDGE, PALETTE_EDGE, FilterType::Lanczos3)
+            .to_rgba8()
+    };
+    let histogram = histogram(&small);
     let total: u32 = histogram.iter().map(|color| color.count).sum();
     if total == 0 {
         return BTreeSet::new();
@@ -202,15 +220,32 @@ fn channel_value(color: ColorCount, channel: usize) -> u8 {
     }
 }
 
-/// Count the distinct colors of a decoded RGB image.
-fn histogram(image: &RgbImage) -> Vec<ColorCount> {
-    let mut counts: BTreeMap<(u8, u8, u8), u32> = BTreeMap::new();
+/// Scale a color channel by alpha, rounded.
+fn premultiply(channel: u8, alpha: u8) -> u8 {
+    u8::try_from((u32::from(channel) * u32::from(alpha) + 127) / 255).unwrap_or(u8::MAX)
+}
+
+/// Undo `premultiply`. Resize overshoot can push the result past 255, so clamp.
+fn unpremultiply(channel: u8, alpha: u8) -> u8 {
+    let alpha = u32::from(alpha);
+    u8::try_from((u32::from(channel) * 255 + alpha / 2) / alpha).unwrap_or(u8::MAX)
+}
+
+/// Count the distinct colors of an RGBA image, skipping clear pixels.
+fn histogram(image: &RgbaImage) -> Vec<ColorCount> {
+    let mut counts: BTreeMap<[u8; 3], u32> = BTreeMap::new();
     for pixel in image.pixels() {
-        *counts.entry((pixel[0], pixel[1], pixel[2])).or_insert(0) += 1;
+        let alpha = pixel[3];
+        if alpha < MIN_ALPHA {
+            continue;
+        }
+        // Undo the premultiply so a faint red still reads as red.
+        let key = [0, 1, 2].map(|i| unpremultiply(pixel[i], alpha));
+        *counts.entry(key).or_insert(0) += 1;
     }
     counts
         .into_iter()
-        .map(|((red, green, blue), count)| ColorCount {
+        .map(|([red, green, blue], count)| ColorCount {
             red,
             green,
             blue,
@@ -258,7 +293,7 @@ mod tests {
 
     use std::collections::BTreeSet;
 
-    use image::{DynamicImage, Rgb, RgbImage};
+    use image::{DynamicImage, Rgb, RgbImage, Rgba, RgbaImage};
     use tarragon_core::color::ColorBucket;
 
     use super::{ColorTagConfig, extract_dominant_colors};
@@ -301,6 +336,12 @@ mod tests {
     /// Build a solid 100x100 image from an 8-bit RGB color.
     fn solid_rgb(color: [u8; 3]) -> DynamicImage {
         DynamicImage::ImageRgb8(RgbImage::from_pixel(100, 100, Rgb(color)))
+    }
+
+    /// Build a left/right split of two RGBA colors.
+    fn split_rgba(left: Rgba<u8>, right: Rgba<u8>) -> DynamicImage {
+        let image = RgbaImage::from_fn(100, 100, |x, _| if x < 50 { left } else { right });
+        DynamicImage::ImageRgba8(image)
     }
 
     /// Build a horizontal split: the top `ratio` is `top`, the rest is `bottom`.
@@ -441,6 +482,54 @@ mod tests {
     fn an_empty_image_returns_no_tags() {
         let image = DynamicImage::ImageRgb8(RgbImage::new(0, 0));
         assert!(extract_dominant_colors(&image, ColorTagConfig::default()).is_empty());
+    }
+
+    #[test]
+    fn transparent_pixels_do_not_count() {
+        let image = split_rgba(Rgba([200, 30, 30, 255]), Rgba([30, 200, 30, 0]));
+        let tags = extract_dominant_colors(&image, ColorTagConfig::default());
+        assert_eq!(tags, BTreeSet::from([ColorBucket::Red]));
+    }
+
+    #[test]
+    fn a_fully_transparent_image_has_no_tags() {
+        let clear = Rgba([200, 30, 30, 0]);
+        let tags = extract_dominant_colors(&split_rgba(clear, clear), ColorTagConfig::default());
+        assert!(tags.is_empty(), "unexpected tags: {tags:?}");
+    }
+
+    #[test]
+    fn a_half_transparent_red_still_reads_as_red() {
+        let faint = Rgba([200, 30, 30, 200]);
+        let tags = extract_dominant_colors(&split_rgba(faint, faint), ColorTagConfig::default());
+        assert_eq!(tags, BTreeSet::from([ColorBucket::Red]));
+    }
+
+    #[test]
+    fn clear_pixels_do_not_tint_their_visible_neighbours() {
+        let red = Rgba([200, 30, 30, 255]);
+        let clear = Rgba([30, 200, 30, 0]);
+        let image = RgbaImage::from_fn(100, 100, |x, y| if (x + y) % 2 == 0 { red } else { clear });
+        let tags =
+            extract_dominant_colors(&DynamicImage::ImageRgba8(image), ColorTagConfig::default());
+        assert_eq!(tags, BTreeSet::from([ColorBucket::Red]));
+    }
+
+    #[test]
+    fn alpha_127_is_skipped_and_alpha_128_is_kept() {
+        let at = |alpha| {
+            let color = Rgba([200, 30, 30, alpha]);
+            extract_dominant_colors(&split_rgba(color, color), ColorTagConfig::default())
+        };
+        assert!(at(127).is_empty(), "alpha 127 was kept");
+        assert_eq!(at(128), BTreeSet::from([ColorBucket::Red]));
+    }
+
+    #[test]
+    fn a_dark_faint_red_is_not_darkened_to_neutral() {
+        let faint = Rgba([40, 13, 5, 128]);
+        let tags = extract_dominant_colors(&split_rgba(faint, faint), ColorTagConfig::default());
+        assert_eq!(tags, BTreeSet::from([ColorBucket::Red]));
     }
 
     #[test]

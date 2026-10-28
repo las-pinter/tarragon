@@ -2662,6 +2662,7 @@ dependencies = [
  "egui",
  "egui_dock",
  "rayon",
+ "serde",
  "tarragon-core",
  "tarragon-db",
 ]

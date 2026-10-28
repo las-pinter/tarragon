@@ -10,6 +10,7 @@ license.workspace = true
 tarragon-core.workspace = true
 egui.workspace = true
 egui_dock = { workspace = true, features = ["serde"] }
+serde.workspace = true
 
 [dev-dependencies]
 rayon.workspace = true

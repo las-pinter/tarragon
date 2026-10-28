@@ -35,7 +35,8 @@ pub enum FavoriteAction {
 /// row never starts a drag. The focus outline is not drawn yet, and the grip
 /// letter spacing of the mockup is not applied.
 ///
-/// With `dragging` set, the row draws the lifted look of a dragged row.
+/// With `dragging` set, the row draws the lifted fill and dim. The caller draws
+/// the border with `paint_lifted_border` after the list.
 ///
 /// The row rect comes back so the caller can find the drop slot.
 ///
@@ -82,25 +83,10 @@ pub fn show_favorite_row(
     };
     let mut painter = ui.painter().clone();
     if dragging {
-        // The mockup dims the dragged row to 0.75 and dashes an amber border.
+        // The mockup dims the dragged row to 0.75; the caller dashes the border.
         painter.set_opacity(0.75);
     }
     painter.rect_filled(rect, CornerRadius::same(tokens::RADIUS_M), fill);
-    if dragging {
-        let corners = [
-            rect.left_top(),
-            rect.right_top(),
-            rect.right_bottom(),
-            rect.left_bottom(),
-            rect.left_top(),
-        ];
-        painter.extend(Shape::dashed_line(
-            &corners,
-            Stroke::new(1.0, tokens::AMBER_ACCENT),
-            3.0,
-            3.0,
-        ));
-    }
     painter.galley(
         pos2(grip_x, rect.center().y - grip.size().y / 2.0),
         grip.clone(),
@@ -120,6 +106,28 @@ pub fn show_favorite_row(
         FavoriteAction::None
     };
     (action, rect)
+}
+
+/// Draw the dashed amber border of the lifted row.
+///
+/// The panel calls it after the whole list. The stroke sits on the row edge,
+/// so a later neighbour's fill would cover half of it if it were drawn in the row.
+pub fn paint_lifted_border(ui: &Ui, rect: Rect) {
+    let mut painter = ui.painter().clone();
+    painter.set_opacity(0.75);
+    let corners = [
+        rect.left_top(),
+        rect.right_top(),
+        rect.right_bottom(),
+        rect.left_bottom(),
+        rect.left_top(),
+    ];
+    painter.extend(Shape::dashed_line(
+        &corners,
+        Stroke::new(1.0, tokens::AMBER_ACCENT),
+        3.0,
+        3.0,
+    ));
 }
 
 /// Draw the muted text that shows when the user has no favorites.

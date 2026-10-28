@@ -251,3 +251,52 @@ fn an_empty_list_has_no_drop_line() {
 fn a_slot_past_the_end_has_no_drop_line() {
     assert_eq!(drop_line_rect(&stack(), 4), None);
 }
+
+/// Run one frame and return the painted shapes in paint order.
+fn shapes_in_order(ctx: &Context, sidebar: &mut Sidebar) -> Vec<Shape> {
+    let raw = RawInput {
+        screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(400.0, 300.0))),
+        ..Default::default()
+    };
+    let output = ctx.run_ui(raw, |ui| sidebar.show(ui));
+    let shapes = output.shapes.iter().map(|c| c.shape.clone()).collect();
+    output.drop_without_applying_deltas();
+    shapes
+}
+
+#[test]
+fn the_lifted_border_is_painted_after_the_selected_row_fill() {
+    for lifted in [0, 2] {
+        let (ctx, mut sidebar) = (ready(), three());
+        sidebar.set_open_folder(Some(PathBuf::from("/f/b")));
+        let top = label_y(&ctx, &mut sidebar, "fa");
+        drag_to(&ctx, &mut sidebar, lifted, top - 3.0);
+        let shapes = shapes_in_order(&ctx, &mut sidebar);
+        let dash = tokens::AMBER_ACCENT.gamma_multiply(0.75);
+        let dashes: Vec<(usize, Rect)> = shapes
+            .iter()
+            .enumerate()
+            .filter_map(|(at, shape)| match shape {
+                Shape::LineSegment { points, stroke } if stroke.color == dash => {
+                    Some((at, Rect::from_two_pos(points[0], points[1])))
+                }
+                _ => None,
+            })
+            .collect();
+        assert!(!dashes.is_empty(), "no dashed border for row {lifted}");
+        for (at, shape) in shapes.iter().enumerate() {
+            let Shape::Rect(fill) = shape else { continue };
+            if fill.fill != tokens::BG_TERTIARY {
+                continue;
+            }
+            for (dash_at, dash_rect) in &dashes {
+                if fill.rect.intersects(dash_rect.expand(0.5)) {
+                    assert!(
+                        *dash_at > at,
+                        "dash {dash_at} is under the selected fill {at} (lifted row {lifted})"
+                    );
+                }
+            }
+        }
+    }
+}

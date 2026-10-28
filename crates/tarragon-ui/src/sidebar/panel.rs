@@ -10,7 +10,9 @@ use egui::{
     Button, CornerRadius, Frame, Key, Margin, Panel, Rect, RichText, ScrollArea, Ui, pos2, vec2,
 };
 
-use super::favorite::{FavoriteAction, show_empty_favorites, show_favorite_row};
+use super::favorite::{
+    FavoriteAction, paint_lifted_border, show_empty_favorites, show_favorite_row,
+};
 use super::reorder::{drop_slot, reordered};
 use super::row::{RowAction, show_tree_row};
 use super::tree::{TreeModel, TreeRow};
@@ -289,6 +291,9 @@ impl Sidebar {
         if let Some(path) = opened {
             self.open(path.clone());
             self.events.push(SidebarEvent::Navigate(path));
+        }
+        if let Some(rect) = self.dragging.and_then(|from| rects.get(from)) {
+            paint_lifted_border(ui, *rect);
         }
         self.finish_drag(ui, &rects, dropped);
     }

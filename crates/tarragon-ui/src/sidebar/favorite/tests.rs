@@ -203,18 +203,35 @@ fn two_rows(lift: bool) -> Vec<Shape> {
 }
 
 #[test]
-fn a_lifted_row_paints_the_highlight_and_a_dashed_amber_border() {
+fn a_lifted_row_paints_the_dimmed_highlight_and_no_border() {
     let dimmed = |color: Color32| color.gamma_multiply(0.75);
     let shapes = two_rows(true);
     assert!(has_fill(&shapes, dimmed(tokens::SURFACE_HIGHLIGHT)));
-    let dashes = shapes.iter().any(|shape| {
-        matches!(shape, Shape::LineSegment { stroke, .. } if stroke.color == dimmed(tokens::AMBER_ACCENT))
-    });
-    assert!(dashes);
+    assert!(
+        !shapes
+            .iter()
+            .any(|s| matches!(s, Shape::LineSegment { .. }))
+    );
     assert!(!has_fill(
         &two_rows(false),
         dimmed(tokens::SURFACE_HIGHLIGHT)
     ));
+}
+
+#[test]
+fn the_lifted_border_is_dashed_dimmed_amber() {
+    let ctx = Context::default();
+    crate::apply_theme(&ctx);
+    let output = ctx.run_ui(input(Vec::new()), |ui| {
+        paint_lifted_border(ui, Rect::from_min_size(pos2(6.0, 10.0), vec2(100.0, 27.0)));
+    });
+    let dash = tokens::AMBER_ACCENT.gamma_multiply(0.75);
+    let found = output
+        .shapes
+        .iter()
+        .any(|c| matches!(&c.shape, Shape::LineSegment { stroke, .. } if stroke.color == dash));
+    output.drop_without_applying_deltas();
+    assert!(found);
 }
 
 #[test]

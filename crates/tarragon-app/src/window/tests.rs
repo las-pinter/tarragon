@@ -256,6 +256,91 @@ fn no_asked_position_gives_no_offset_and_no_settling() {
     assert_eq!(tracker.at_exit(geometry), geometry);
 }
 
+/// Run a clamped start: the window stays where it was asked, so the measured
+/// shift is zero. Then the user moves it after the settle time.
+fn clamped_start_then_move(saved: Option<[i64; 2]>) -> Option<Geometry> {
+    let stored = Some([100, 0, 800, 600]);
+    let view = viewport_for("T", stored);
+    let mut tracker = Tracker::new(stored).with_saved_shift(saved);
+    let mut geometry = stored;
+    for time in (0..=10).map(|i| i * 200) {
+        geometry = tracker.track(&reported(&view, 0.0), geometry, ms(time), false);
+    }
+    assert!(!tracker.settling());
+    let moved = rect(300.0, 400.0, 800.0, 600.0);
+    let info = ViewportInfo {
+        outer_rect: Some(moved),
+        inner_rect: Some(moved),
+        ..Default::default()
+    };
+    let geometry = tracker.track(&info, geometry, ms(3000), false);
+    tracker.at_exit(geometry)
+}
+
+#[test]
+fn a_saved_shift_is_applied_when_the_measurement_is_zero() {
+    assert_eq!(
+        clamped_start_then_move(Some([0, 28])),
+        Some([300, 372, 800, 600])
+    );
+}
+
+#[test]
+fn a_missing_saved_shift_changes_nothing() {
+    assert_eq!(clamped_start_then_move(None), Some([300, 400, 800, 600]));
+}
+
+#[test]
+fn a_far_saved_shift_is_ignored() {
+    assert_eq!(
+        clamped_start_then_move(Some([0, 5000])),
+        Some([300, 400, 800, 600])
+    );
+}
+
+#[test]
+fn a_measured_shift_wins_over_the_saved_one() {
+    let stored = Some([100, 100, 800, 600]);
+    let view = viewport_for("T", stored);
+    let mut tracker = Tracker::new(stored).with_saved_shift(Some([0, 50]));
+    let mut geometry = stored;
+    for time in (0..=10).map(|i| i * 200) {
+        geometry = tracker.track(&reported(&view, 28.0), geometry, ms(time), false);
+    }
+    assert_eq!(tracker.measured_shift(), Some([0, 28]));
+    let moved = rect(300.0, 400.0, 800.0, 600.0);
+    let info = ViewportInfo {
+        outer_rect: Some(moved),
+        inner_rect: Some(moved),
+        ..Default::default()
+    };
+    let geometry = tracker.track(&info, geometry, ms(3000), false);
+    assert_eq!(geometry, Some([300, 372, 800, 600]));
+}
+
+#[test]
+fn no_shift_is_reported_while_settling_or_when_zero() {
+    let stored = Some([100, 100, 800, 600]);
+    let view = viewport_for("T", stored);
+    let mut tracker = Tracker::new(stored);
+    tracker.track(&reported(&view, 28.0), stored, ms(0), false);
+    assert_eq!(tracker.measured_shift(), None);
+    let mut tracker = Tracker::new(stored);
+    for time in (0..=10).map(|i| i * 200) {
+        tracker.track(&reported(&view, 0.0), stored, ms(time), false);
+    }
+    assert_eq!(tracker.measured_shift(), None);
+    assert!(tracker.measured_no_shift());
+}
+
+#[test]
+fn a_run_without_an_asked_position_measured_nothing() {
+    let mut tracker = Tracker::new(None).with_saved_shift(Some([0, 28]));
+    tracker.track(&ViewportInfo::default(), None, ms(0), false);
+    assert!(!tracker.measured_no_shift());
+    assert_eq!(tracker.measured_shift(), None);
+}
+
 #[test]
 fn no_request_gives_no_commands() {
     assert_eq!(activate_commands(false), Vec::<ViewportCommand>::new());

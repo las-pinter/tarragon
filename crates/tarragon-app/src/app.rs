@@ -119,7 +119,8 @@ impl App {
         let thumbs = start_thumbs(path, &db, folder, &repaint_ctx)?;
         Ok(Self {
             geometry: window_state.geometry,
-            tracker: window::Tracker::new(window_state.geometry),
+            tracker: window::Tracker::new(window_state.geometry)
+                .with_saved_shift(window_state.frame_shift()),
             db,
             window_state,
             shell,
@@ -193,6 +194,12 @@ impl App {
     fn save_window_state(&mut self) {
         self.window_state.geometry = self.geometry;
         self.window_state.layout = Some(self.shell.layout_json());
+        // A run still settling at exit measured nothing, so it keeps the value.
+        if let Some(shift) = self.tracker.measured_shift() {
+            self.window_state.set_frame_shift(Some(shift));
+        } else if self.tracker.measured_no_shift() {
+            self.window_state.set_frame_shift(None);
+        }
         let settings = Settings::new(&self.db);
         if let Err(error) = settings.set_window_state_value(&self.window_state) {
             tracing::warn!("cannot save the window state: {error}");

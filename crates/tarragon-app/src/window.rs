@@ -93,6 +93,8 @@ pub struct Tracker {
     asked: Option<[i64; 2]>,
     /// The offset, measured while settling.
     shift: [i64; 2],
+    /// The offset saved by an earlier run, used once, when none is measured.
+    saved: [i64; 2],
     /// The time spent in a normal state so far.
     normal: Duration,
     /// The time of the previous frame, when it was in a normal state.
@@ -112,6 +114,31 @@ impl Tracker {
             asked: stored.map(|[x, y, ..]| [x, y]),
             ..Self::default()
         }
+    }
+
+    /// Use the offset an earlier run saved while none is measured. A saved
+    /// offset that is too large is ignored.
+    #[must_use]
+    pub fn with_saved_shift(mut self, saved: Option<[i64; 2]>) -> Self {
+        let fits = |part: &[i64; 2]| part.iter().all(|v| v.abs() <= MAX_SHIFT);
+        self.saved = saved.filter(fits).unwrap_or_default();
+        self
+    }
+
+    /// The offset to keep for the next start, once it is frozen and not zero.
+    /// A user input can freeze it in the middle of a step, so it may be a
+    /// partial value. The next run that measures a shift overwrites it.
+    pub fn measured_shift(&self) -> Option<[i64; 2]> {
+        (!self.settling() && self.shift != [0, 0]).then_some(self.shift)
+    }
+
+    /// Whether the offset is frozen and this run measured none. Then a saved
+    /// offset has been used once and must not be used again, or it would move
+    /// the window further at every start on a setup that has no frame offset.
+    /// So a second clamped start in a row measures zero with no saved value;
+    /// that is accepted. A run with no asked position measured nothing.
+    pub fn measured_no_shift(&self) -> bool {
+        self.asked.is_some() && !self.settling() && self.shift == [0, 0]
     }
 
     /// Whether the window may still be moved by the window manager.
@@ -174,7 +201,14 @@ impl Tracker {
                 }
             }
         }
-        geometry_from(info, old, self.shift)
+        // A measured offset is trusted whole: a window manager that reported
+        // one axis reported the frame, so a saved axis must not be mixed in.
+        let shift = if self.shift == [0, 0] {
+            self.saved
+        } else {
+            self.shift
+        };
+        geometry_from(info, old, shift)
     }
 
     /// The geometry to save at exit. Before the offset is frozen the user

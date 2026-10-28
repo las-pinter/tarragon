@@ -175,6 +175,12 @@ impl Sidebar {
         &mut self.tree
     }
 
+    /// Queue an event as if the panel had produced it. The app tests use it,
+    /// because a test cannot click a row.
+    pub fn push_event(&mut self, event: SidebarEvent) {
+        self.events.push(event);
+    }
+
     /// Return the queued events and empty the queue.
     pub fn take_events(&mut self) -> Vec<SidebarEvent> {
         std::mem::take(&mut self.events)

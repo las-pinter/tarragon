@@ -81,13 +81,17 @@ impl ExitWait {
     }
 }
 
-/// The thumbnail side of the app: one pipeline, one folder.
+/// The thumbnail side of the app: one pipeline, retargeted to one folder at a time.
 pub struct Thumbs {
     slot: Slot,
     results: Results,
     feed: Feed,
-    /// The folder to open on the first frame.
+    /// The folder to open when the pipeline is idle. A newer request replaces it.
     pending: Option<PathBuf>,
+    /// The folder the gallery shows. A failed open leaves it as it was.
+    current: Option<PathBuf>,
+    /// True when an open ended and the shell must learn `current`.
+    changed: bool,
     /// The visible revision last sent to the pipeline.
     synced: Option<u64>,
     /// True once the open is over, whether it worked or not.
@@ -114,6 +118,8 @@ impl Thumbs {
             results,
             feed: Feed::new(GRID_BUDGET_BYTES),
             pending: folder,
+            current: None,
+            changed: false,
             synced: None,
             opened: false,
             announced: false,
@@ -125,10 +131,12 @@ impl Thumbs {
     /// Run before the gallery draws: start or finish the open, then apply a
     /// bounded batch of results.
     pub fn before_draw(&mut self, ctx: &Context, gallery: &mut Gallery) {
-        if let Some(folder) = self.pending.take() {
+        self.finish_open(gallery);
+        if matches!(self.slot, Slot::Idle(_))
+            && let Some(folder) = self.pending.take()
+        {
             self.start_open(folder);
         }
-        self.finish_open(gallery);
         if matches!(self.slot, Slot::Opening { .. }) {
             ctx.request_repaint_after(OPEN_POLL);
             return;
@@ -147,6 +155,49 @@ impl Thumbs {
         if full {
             ctx.request_repaint();
         }
+    }
+
+    /// Ask for another folder. The newest request wins: it waits until the
+    /// running open is over, then opens. A request for the folder that is
+    /// opening, or for the shown folder while nothing opens, cancels any
+    /// waiting request and does nothing else. A request equal to the waiting
+    /// one does nothing. The caller passes a normalized path.
+    pub fn navigate(&mut self, folder: PathBuf) {
+        if matches!(self.slot, Slot::Gone) {
+            tracing::warn!("the pipeline is gone; {} cannot open", folder.display());
+        }
+        let settled = match &self.slot {
+            Slot::Opening {
+                folder: opening, ..
+            } => opening == &folder,
+            _ => self.current.as_ref() == Some(&folder),
+        };
+        if settled {
+            self.pending = None;
+            return;
+        }
+        if self.pending.as_ref() == Some(&folder) {
+            return;
+        }
+        self.pending = Some(folder);
+        (self.repaint)();
+    }
+
+    /// True when no open runs and none waits.
+    #[cfg(test)]
+    #[must_use]
+    pub(crate) fn is_idle(&self) -> bool {
+        self.pending.is_none() && !matches!(self.slot, Slot::Opening { .. })
+    }
+
+    /// After an open ended, return the folder the gallery shows, once, so the
+    /// caller can set the scope and the sidebar highlight. A failed open
+    /// returns the old folder, which puts the highlight back.
+    pub fn take_folder_change(&mut self) -> Option<PathBuf> {
+        if !std::mem::take(&mut self.changed) {
+            return None;
+        }
+        self.current.clone()
     }
 
     /// Run after the gallery draws: when the painted tiles changed, tell the
@@ -214,13 +265,21 @@ impl Thumbs {
             tracing::warn!("an open is already running; ignoring {}", folder.display());
             return;
         };
+        self.announced = false;
+        self.opened = false;
+        self.started = Instant::now();
         let (sender, done) = crossbeam_channel::bounded(1);
         let repaint = Arc::clone(&self.repaint);
         let target = folder.clone();
         let spawned = std::thread::Builder::new()
             .name("tarragon-open".to_owned())
             .spawn(move || {
-                let result = pipeline.open_folder(&target);
+                // This stat runs here, not on the UI thread: a dead mount can stall it.
+                let result = if target.is_dir() {
+                    pipeline.open_folder(&target)
+                } else {
+                    Err(PipelineError::NotAFolder)
+                };
                 // A closed window drops the answer, and the pipeline with it.
                 let _ = sender.send(Done { pipeline, result });
                 repaint();
@@ -230,6 +289,7 @@ impl Thumbs {
             Err(error) => {
                 tracing::error!("cannot start the open thread: {error}");
                 self.opened = true;
+                self.changed = true;
             }
         }
     }
@@ -254,6 +314,9 @@ impl Thumbs {
             return;
         };
         self.slot = Slot::Idle(answer.pipeline);
+        // A newer request waits: the highlight already shows it, so do not
+        // snap it back to this folder.
+        let report = self.pending.is_none();
         match answer.result {
             Ok(opened) => {
                 let keys = opened.files.iter().map(|file| file.path.clone());
@@ -263,14 +326,17 @@ impl Thumbs {
                     .into_iter()
                     .map(|file| GridItem::new(file.path, file.mtime, None))
                     .collect();
-                gallery.set_folder(Some(folder));
+                gallery.set_folder(Some(folder.clone()));
                 gallery.set_items(items);
+                self.current = Some(folder);
                 self.synced = None;
                 self.opened = true;
+                self.changed |= report;
             }
             Err(error) => {
                 tracing::error!("cannot open {}: {error}", folder.display());
                 self.opened = true;
+                self.changed |= report;
             }
         }
     }
@@ -283,71 +349,4 @@ fn color_image(image: &RgbaImage) -> ColorImage {
 }
 
 #[cfg(test)]
-mod tests {
-    use std::time::Instant;
-
-    use image::{DynamicImage, RgbaImage};
-    use tarragon_cache::store::CacheStore;
-    use tarragon_core::sorting::SortMode;
-    use tarragon_db::Database;
-
-    use super::*;
-    use crate::pipeline::Config;
-
-    /// A temp folder that removes itself on drop.
-    struct TempDir(PathBuf);
-
-    impl Drop for TempDir {
-        fn drop(&mut self) {
-            let _ = std::fs::remove_dir_all(&self.0);
-        }
-    }
-
-    #[test]
-    fn a_folder_with_a_real_pipeline_settles_all_tiles() {
-        let dir =
-            TempDir(std::env::temp_dir().join(format!("tarragon-thumbs-{}", std::process::id())));
-        let folder = dir.0.join("pics");
-        std::fs::create_dir_all(&folder).expect("make the folder");
-        for name in ["a.png", "b.png", "c.png"] {
-            RgbaImage::new(8, 8)
-                .save(folder.join(name))
-                .expect("write a png");
-        }
-        let db = Arc::new(Database::open(dir.0.join("t.db")).expect("open the db"));
-        db.initialize().expect("initialize the db");
-        let config = Config {
-            cache: CacheStore::new(dir.0.join("cache")),
-            workers: 2,
-            render: Arc::new(|_| Ok(DynamicImage::ImageRgba8(RgbaImage::new(8, 8)))),
-        };
-        let repaint: Repaint = Arc::new(|| {});
-        let (pipeline, results) =
-            Pipeline::new(config, db, Arc::clone(&repaint)).expect("start the pipeline");
-        let mut thumbs = Thumbs::new(pipeline, results, Some(folder), repaint);
-        let ctx = Context::default();
-        let mut gallery = Gallery::new(SortMode::Natural);
-
-        // The first frame starts the open. The workers then finish while the
-        // frame loop has not taken the answer yet.
-        thumbs.before_draw(&ctx, &mut gallery);
-        assert!(thumbs.loaded_once().is_none(), "no tile is settled yet");
-        let start = Instant::now();
-        let summary = loop {
-            thumbs.before_draw(&ctx, &mut gallery);
-            if let Some(summary) = thumbs.loaded_once() {
-                break summary;
-            }
-            assert!(
-                start.elapsed() < Duration::from_secs(30),
-                "the grid never settled"
-            );
-            std::thread::sleep(Duration::from_millis(10));
-        };
-        assert!(
-            summary.starts_with("3 tiles settled, 0 failed"),
-            "{summary}"
-        );
-        assert_eq!(gallery.visible_len(), 3);
-    }
-}
+mod tests;

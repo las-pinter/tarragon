@@ -63,6 +63,10 @@ pub enum PipelineError {
     /// The scan thread pool did not start.
     #[error("cannot start the scan pool: {0}")]
     ScanPool(String),
+    /// The path is not a folder. `open_folder` itself reads such a path as
+    /// empty; the app checks first.
+    #[error("not a folder")]
+    NotAFolder,
     /// A database call failed.
     #[error(transparent)]
     Db(#[from] DbError),

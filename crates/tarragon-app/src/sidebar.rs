@@ -117,19 +117,29 @@ fn load_favorites(
         .collect())
 }
 
+/// What `handle_events` did.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct Handled {
+    /// Whether any event was handled, so the caller can repaint: an answer
+    /// lands after the shell drew and no input event follows it.
+    pub any: bool,
+    /// The folder of the last Navigate event; the caller opens it.
+    pub navigate: Option<PathBuf>,
+}
+
 /// Take the queued sidebar events and act on them.
-///
-/// Returns whether any event was handled, so the caller can repaint: an answer
-/// lands after the shell drew and no input event follows it.
-pub fn handle_events(shell: &mut Shell, db: &Database) -> bool {
+pub fn handle_events(shell: &mut Shell, db: &Database) -> Handled {
     let events = shell.take_sidebar_events();
-    let handled = !events.is_empty();
-    apply(shell, db, events);
-    handled
+    let any = !events.is_empty();
+    let navigate = apply(shell, db, events);
+    Handled { any, navigate }
 }
 
 /// Act on sidebar events; the view changes only after the database write worked.
-pub fn apply(shell: &mut Shell, db: &Database, events: Vec<SidebarEvent>) {
+///
+/// Returns the target of the last Navigate event. The caller opens it.
+pub fn apply(shell: &mut Shell, db: &Database, events: Vec<SidebarEvent>) -> Option<PathBuf> {
+    let mut navigate = None;
     for event in events {
         match event {
             // This read runs on the UI thread. It happens on a click, never per frame.
@@ -151,10 +161,12 @@ pub fn apply(shell: &mut Shell, db: &Database, events: Vec<SidebarEvent>) {
                     Err(error) => tracing::error!("cannot save the favorite order: {error}"),
                 }
             }
-            // Navigate and AddCurrent have no handler yet; the arm drains the queue.
-            SidebarEvent::AddCurrent | SidebarEvent::Navigate(_) => {}
+            SidebarEvent::Navigate(path) => navigate = Some(path),
+            // AddCurrent has no handler yet; the arm drains the queue.
+            SidebarEvent::AddCurrent => {}
         }
     }
+    navigate
 }
 
 #[cfg(test)]
@@ -335,8 +347,8 @@ mod tests {
         let db = db_with_favorites(&dir);
         let mut shell = Shell::new();
         init(&mut shell, &db, Some(&dir.0), None);
-        assert!(handle_events(&mut shell, &db));
-        assert!(!handle_events(&mut shell, &db));
+        assert!(handle_events(&mut shell, &db).any);
+        assert!(!handle_events(&mut shell, &db).any);
     }
 
     #[test]
@@ -345,12 +357,26 @@ mod tests {
         let db = db_with_favorites(&dir);
         let mut shell = Shell::new();
         init(&mut shell, &db, Some(&dir.0.join("gone")), None);
-        assert!(handle_events(&mut shell, &db));
+        assert!(handle_events(&mut shell, &db).any);
         let rows = shell.sidebar_mut().tree_rows();
         assert_eq!(rows.len(), 1);
         assert!(!rows[0].has_caret, "the answer marks the root as listed");
         shell.sidebar_mut().set_roots(vec![dir.0.join("gone")]);
         assert_eq!(shell.take_sidebar_events(), Vec::<SidebarEvent>::new());
+    }
+
+    #[test]
+    fn the_navigate_arm_returns_the_last_target() {
+        let dir = new_dir();
+        let db = db_with_favorites(&dir);
+        let mut shell = Shell::new();
+        let events = vec![
+            SidebarEvent::Navigate(dir.0.join("a")),
+            SidebarEvent::AddCurrent,
+            SidebarEvent::Navigate(dir.0.join("b")),
+        ];
+        assert_eq!(apply(&mut shell, &db, events), Some(dir.0.join("b")));
+        assert_eq!(apply(&mut shell, &db, vec![SidebarEvent::AddCurrent]), None);
     }
 
     #[test]

@@ -6,6 +6,7 @@ pub mod favorite;
 pub mod lister;
 pub mod paint;
 pub mod panel;
+pub mod reorder;
 pub mod row;
 pub mod tree;
 

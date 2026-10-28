@@ -40,6 +40,7 @@ fn panel_with(count: usize) -> Sidebar {
     sidebar.tree_mut().set_children(Path::new("/r"), kids);
     sidebar.tree_mut().set_expanded(Path::new("/r"), true);
     sidebar.set_favorites(vec![favorite(false)]);
+    sidebar.take_events();
     sidebar
 }
 
@@ -203,4 +204,125 @@ fn the_buttons_stay_on_screen_with_a_tall_tree() {
         let y = find(&texts, wanted).pos.y;
         assert!(y > 0.0 && y < 300.0, "{wanted} at {y}");
     }
+}
+
+/// A panel with root `/r` and nothing listed; the root events are taken.
+fn unlisted() -> Sidebar {
+    let mut sidebar = Sidebar::default();
+    sidebar.set_roots(vec![PathBuf::from("/r")]);
+    sidebar.take_events();
+    sidebar
+}
+
+fn list(path: &str) -> SidebarEvent {
+    SidebarEvent::ListChildren(PathBuf::from(path))
+}
+
+#[test]
+fn set_roots_queues_one_listing_per_root() {
+    let mut sidebar = Sidebar::default();
+    sidebar.set_roots(vec![PathBuf::from("/r"), PathBuf::from("/s")]);
+    assert_eq!(sidebar.take_events(), [list("/r"), list("/s")]);
+}
+
+#[test]
+fn expanding_an_unlisted_node_asks_once_even_after_two_clicks() {
+    let mut sidebar = unlisted();
+    sidebar.set_children(Path::new("/r"), vec![PathBuf::from("/r/a")]);
+    sidebar.tree_mut().set_expanded(Path::new("/r"), true);
+    let ctx = ready();
+    let to_caret = -(GAP + ICON_WIDTH + GAP + CARET_SLOT / 2.0);
+    click(&ctx, &mut sidebar, "a", vec2(to_caret, 5.0));
+    assert_eq!(sidebar.take_events(), [list("/r/a")]);
+    click(&ctx, &mut sidebar, "a", vec2(to_caret, 5.0));
+    click(&ctx, &mut sidebar, "a", vec2(to_caret, 5.0));
+    frame(&ctx, &mut sidebar, Vec::new());
+    assert_eq!(sidebar.take_events(), Vec::<SidebarEvent>::new());
+}
+
+#[test]
+fn set_children_answers_the_request_and_shows_the_rows() {
+    let mut sidebar = unlisted();
+    sidebar.tree_mut().set_expanded(Path::new("/r"), true);
+    sidebar.set_children(Path::new("/r"), vec![PathBuf::from("/r/a")]);
+    let texts = frame(&ready(), &mut sidebar, Vec::new());
+    find(&texts, "a");
+    assert!(sidebar.pending.is_empty());
+}
+
+#[test]
+fn set_open_folder_opens_ancestors_and_asks_for_the_unlisted() {
+    let mut sidebar = Sidebar::default();
+    sidebar.set_roots(vec![PathBuf::from("/r")]);
+    sidebar.set_open_folder(Some(PathBuf::from("/r/a/b")));
+    assert_eq!(sidebar.take_events(), [list("/r")]);
+    sidebar.set_children(Path::new("/r"), vec![PathBuf::from("/r/a")]);
+    assert_eq!(sidebar.take_events(), [list("/r/a")]);
+    sidebar.set_children(Path::new("/r/a"), vec![PathBuf::from("/r/a/b")]);
+    assert_eq!(sidebar.take_events(), Vec::<SidebarEvent>::new());
+    let texts = frame(&ready(), &mut sidebar, Vec::new());
+    find(&texts, "b");
+}
+
+#[test]
+fn an_open_folder_outside_all_roots_expands_nothing() {
+    let mut sidebar = unlisted();
+    sidebar.set_open_folder(Some(PathBuf::from("/elsewhere/x")));
+    assert_eq!(sidebar.take_events(), Vec::<SidebarEvent>::new());
+    assert_eq!(
+        sidebar
+            .tree_mut()
+            .rows()
+            .iter()
+            .filter(|r| r.expanded)
+            .count(),
+        0
+    );
+}
+
+#[test]
+fn an_unknown_ancestor_ends_the_walk_without_a_loop() {
+    let mut sidebar = unlisted();
+    sidebar.set_open_folder(Some(PathBuf::from("/r/.h/x")));
+    assert_eq!(sidebar.take_events(), Vec::<SidebarEvent>::new());
+    sidebar.set_children(Path::new("/r"), vec![PathBuf::from("/r/a")]);
+    assert_eq!(sidebar.take_events(), Vec::<SidebarEvent>::new());
+    assert!(sidebar.pending.is_empty());
+}
+
+#[test]
+fn an_unrelated_answer_keeps_a_collapsed_ancestor_closed() {
+    let mut sidebar = unlisted();
+    sidebar.set_children(
+        Path::new("/r"),
+        vec![PathBuf::from("/r/a"), PathBuf::from("/r/c")],
+    );
+    sidebar.set_open_folder(Some(PathBuf::from("/r/a/b")));
+    sidebar.take_events();
+    sidebar.tree_mut().set_expanded(Path::new("/r"), false);
+    sidebar.pending.insert(PathBuf::from("/r/c"));
+    sidebar.set_children(Path::new("/r/c"), vec![PathBuf::from("/r/c/d")]);
+    assert!(!sidebar.tree_mut().rows()[0].expanded);
+}
+
+#[test]
+fn a_removed_root_forgets_its_request_in_flight() {
+    let mut sidebar = unlisted();
+    sidebar.set_roots(Vec::new());
+    sidebar.set_roots(vec![PathBuf::from("/r")]);
+    assert_eq!(sidebar.take_events(), [list("/r")]);
+}
+
+#[test]
+fn nested_roots_duplicate_roots_and_a_root_as_open_folder() {
+    let mut sidebar = Sidebar::default();
+    sidebar.set_roots(vec![PathBuf::from("/h"), PathBuf::from("/h/cli")]);
+    sidebar.set_open_folder(Some(PathBuf::from("/h/cli/x")));
+    assert_eq!(sidebar.take_events(), [list("/h"), list("/h/cli")]);
+    let mut sidebar = Sidebar::default();
+    sidebar.set_roots(vec![PathBuf::from("/r"), PathBuf::from("/r")]);
+    assert_eq!(sidebar.take_events(), [list("/r")]);
+    let mut sidebar = unlisted();
+    sidebar.set_open_folder(Some(PathBuf::from("/r")));
+    assert_eq!(sidebar.take_events(), Vec::<SidebarEvent>::new());
 }

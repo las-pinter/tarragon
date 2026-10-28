@@ -337,6 +337,10 @@ fn a_library_row_click_queues_one_navigate_and_set_folder_follows() {
     apply_theme(&ctx);
     let mut shell = Shell::new();
     shell.sidebar_mut().set_roots(vec![PathBuf::from("/r")]);
+    assert_eq!(
+        shell.take_sidebar_events(),
+        [SidebarEvent::ListChildren(PathBuf::from("/r"))]
+    );
     draw(&ctx, &mut shell);
     let output = ctx.run_ui(input(), |ui| shell.show(ui));
     let pos = output

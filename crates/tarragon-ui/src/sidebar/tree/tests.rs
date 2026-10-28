@@ -196,3 +196,14 @@ fn set_expanded_sets_the_flag_directly() {
     tree.set_expanded(Path::new("/r"), true);
     assert!(tree.rows()[0].expanded);
 }
+
+#[test]
+fn is_listed_is_true_only_for_a_listed_known_folder() {
+    let mut tree = TreeModel::default();
+    tree.set_roots(&paths(&["/r"]));
+    assert!(!tree.is_listed(Path::new("/r")));
+    tree.set_children(Path::new("/r"), paths(&["/r/a"]));
+    assert!(tree.is_listed(Path::new("/r")));
+    assert!(!tree.is_listed(Path::new("/r/a")));
+    assert!(!tree.is_listed(Path::new("/nope")));
+}

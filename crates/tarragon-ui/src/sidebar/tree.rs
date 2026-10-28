@@ -60,8 +60,9 @@ impl TreeModel {
             return;
         }
         let mut kept: Vec<PathBuf> = Vec::new();
+        let mut seen: HashSet<PathBuf> = HashSet::new();
         for child in children {
-            if child.starts_with(path) && child != path && !kept.contains(&child) {
+            if child.starts_with(path) && child != path && seen.insert(child.clone()) {
                 kept.push(child);
             }
         }
@@ -74,11 +75,27 @@ impl TreeModel {
         self.sweep();
     }
 
-    /// Open or close a known folder.
-    pub fn set_expanded(&mut self, path: &Path, expanded: bool) {
-        if let Some(node) = self.nodes.get_mut(path) {
+    /// Whether the folder is known and its children are listed.
+    #[must_use]
+    pub fn is_listed(&self, path: &Path) -> bool {
+        self.nodes
+            .get(path)
+            .is_some_and(|node| node.children.is_some())
+    }
+
+    /// Whether the folder is a node of the tree.
+    #[must_use]
+    pub fn is_known(&self, path: &Path) -> bool {
+        self.nodes.contains_key(path)
+    }
+
+    /// Open or close a known folder; return whether the flag changed.
+    pub fn set_expanded(&mut self, path: &Path, expanded: bool) -> bool {
+        self.nodes.get_mut(path).is_some_and(|node| {
+            let changed = node.expanded != expanded;
             node.expanded = expanded;
-        }
+            changed
+        })
     }
 
     /// Flip a known folder between open and closed.

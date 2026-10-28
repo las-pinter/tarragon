@@ -3,6 +3,7 @@
 //! The panel never touches the disk or the database. It queues events that
 //! the shell turns into work.
 
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use egui::{Button, Frame, Margin, Panel, RichText, ScrollArea, Ui, vec2};
@@ -22,6 +23,10 @@ pub enum SidebarEvent {
     AddCurrent,
     /// Remove this favorite.
     Remove(PathBuf),
+    /// List the subfolders of this folder, then call `set_children`.
+    ///
+    /// The app must answer every request, with an empty list on error.
+    ListChildren(PathBuf),
 }
 
 /// The panel state and its event queue.
@@ -42,14 +47,63 @@ pub struct Sidebar {
     selected_favorite: Option<PathBuf>,
     /// Events not yet taken by the shell.
     events: Vec<SidebarEvent>,
+    /// Folders that a `ListChildren` event asked for and `set_children` has not answered.
+    pending: HashSet<PathBuf>,
 }
 
 impl Sidebar {
     /// Replace the roots in the data and in the tree, so they cannot differ.
     pub fn set_roots(&mut self, roots: Vec<PathBuf>) {
         self.tree.set_roots(&roots);
+        self.pending.retain(|path| self.tree.is_known(path));
+        for root in &roots {
+            ask_listing(&self.tree, &mut self.pending, &mut self.events, root);
+        }
         self.state.set_roots(roots);
         self.dirty = true;
+        self.reveal();
+    }
+
+    /// Store the listed children of a folder and answer its pending request.
+    pub fn set_children(&mut self, path: &Path, children: Vec<PathBuf>) {
+        self.tree.set_children(path, children);
+        let was_pending = self.pending.remove(path);
+        let below = self
+            .state
+            .selected()
+            .is_some_and(|open| open != path && open.starts_with(path));
+        if was_pending && below {
+            self.reveal();
+        }
+        self.dirty = true;
+    }
+
+    /// Open the ancestors of the open folder, top down, so its row shows.
+    ///
+    /// Only roots that contain the folder count. The walk stops at the first
+    /// ancestor that is not listed yet and asks for its listing; the next
+    /// `set_children` continues the walk.
+    fn reveal(&mut self) {
+        let Some(folder) = self.state.selected().map(Path::to_path_buf) else {
+            return;
+        };
+        let roots = self.state.roots().to_vec();
+        let mut changed = false;
+        for root in roots.iter().filter(|root| folder.starts_with(root)) {
+            let mut chain: Vec<&Path> = folder.ancestors().skip(1).collect();
+            chain.retain(|path| path.starts_with(root));
+            for path in chain.into_iter().rev() {
+                if !self.tree.is_known(path) {
+                    break;
+                }
+                changed |= self.tree.set_expanded(path, true);
+                if !self.tree.is_listed(path) {
+                    ask_listing(&self.tree, &mut self.pending, &mut self.events, path);
+                    break;
+                }
+            }
+        }
+        self.dirty |= changed;
     }
 
     /// Replace the favorites; the Remove target is dropped if its row is gone.
@@ -73,6 +127,7 @@ impl Sidebar {
     /// Set the folder open in the gallery.
     pub fn set_open_folder(&mut self, folder: Option<PathBuf>) {
         self.state.set_selected(folder);
+        self.reveal();
     }
 
     /// The favorite that Remove acts on, or none.
@@ -81,7 +136,8 @@ impl Sidebar {
         self.selected_favorite.as_deref()
     }
 
-    /// The folder tree, so the shell can store listed children.
+    /// The folder tree, for tests; the app stores children with `set_children`.
+    #[cfg(test)]
     pub fn tree_mut(&mut self) -> &mut TreeModel {
         self.dirty = true;
         &mut self.tree
@@ -130,6 +186,14 @@ impl Sidebar {
                             }
                             RowAction::Toggle => {
                                 self.tree.toggle(&row.path);
+                                if !row.expanded {
+                                    ask_listing(
+                                        &self.tree,
+                                        &mut self.pending,
+                                        &mut self.events,
+                                        &row.path,
+                                    );
+                                }
                                 self.dirty = true;
                                 ui.ctx().request_repaint();
                             }
@@ -181,6 +245,18 @@ impl Sidebar {
                 self.events.push(SidebarEvent::Remove(path));
             }
         });
+    }
+}
+
+/// Queue a `ListChildren` for a folder that is not listed and not asked for yet.
+fn ask_listing(
+    tree: &TreeModel,
+    pending: &mut HashSet<PathBuf>,
+    events: &mut Vec<SidebarEvent>,
+    path: &Path,
+) {
+    if tree.is_known(path) && !tree.is_listed(path) && pending.insert(path.to_path_buf()) {
+        events.push(SidebarEvent::ListChildren(path.to_path_buf()));
     }
 }
 

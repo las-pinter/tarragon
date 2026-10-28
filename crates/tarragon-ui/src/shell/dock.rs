@@ -110,4 +110,6 @@ pub(super) fn name(pane: Pane) -> &'static str {
 }
 
 #[cfg(test)]
+mod preview_tests;
+#[cfg(test)]
 mod tests;

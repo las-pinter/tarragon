@@ -165,6 +165,8 @@ pub const WINDOW_SIZE: [f32; 2] = [1280.0, 800.0];
 pub const SIDEBAR_WIDTH: f32 = 220.0;
 /// `--preview-width`: default Preview dock width, in points.
 pub const PREVIEW_WIDTH: f32 = 490.0;
+/// `.preview-img` min-height: the Preview image box height, in points.
+pub const PREVIEW_IMAGE_HEIGHT: f32 = 260.0;
 
 /// `--font-sans`: stylesheet sans stack.
 ///

@@ -102,6 +102,15 @@ impl App {
             tracing::warn!("the stored window state was invalid and was repaired");
         }
         let mut shell = Shell::new().with_sort_mode(window_state.sort_mode());
+        // Log only the size: the stored text is not useful in a log line.
+        if let Some(text) = &window_state.layout
+            && !shell.restore_layout(text)
+        {
+            tracing::warn!(
+                "the stored dock layout ({} bytes) is invalid and was ignored",
+                text.len()
+            );
+        }
         // Normalize once, so the pipeline and the sidebar see the same path.
         let folder = startup.folder.as_deref().map(sidebar::normalize);
         let home = sidebar::home_dir();
@@ -180,9 +189,10 @@ impl App {
         }
     }
 
-    /// Write the window rectangle and sort mode to the database.
+    /// Write the window rectangle, dock layout, and sort mode to the database.
     fn save_window_state(&mut self) {
         self.window_state.geometry = self.geometry;
+        self.window_state.layout = Some(self.shell.layout_json());
         let settings = Settings::new(&self.db);
         if let Err(error) = settings.set_window_state_value(&self.window_state) {
             tracing::warn!("cannot save the window state: {error}");

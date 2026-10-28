@@ -296,3 +296,63 @@ fn ui_pass_does_not_take_the_activate_request() {
     let guard = app.guard.as_ref().expect("guard");
     assert!(guard.take_activate_request(), "the request is still there");
 }
+
+/// A layout text with Library hidden and Log shown.
+fn changed_layout() -> String {
+    use tarragon_ui::layout::{Pane, default_dock, set_visible, to_json};
+
+    let mut dock = default_dock();
+    set_visible(&mut dock, Pane::Library, false);
+    set_visible(&mut dock, Pane::Log, true);
+    to_json(&dock)
+}
+
+/// Store `layout` in the window state of a fresh database, then open an app on it.
+fn app_with_stored_layout(dir: &TempDir, layout: &str) -> App {
+    let mut app = app_at(dir, None);
+    app.window_state.layout = Some(layout.to_owned());
+    Settings::new(&app.db)
+        .set_window_state_value(&app.window_state)
+        .expect("store the window state");
+    drop(app);
+    app_at(dir, None)
+}
+
+#[test]
+fn a_stored_layout_restores_into_the_shell() {
+    let dir = new_dir();
+    let app = app_with_stored_layout(&dir, &changed_layout());
+    assert!(!app.shell.library_visible());
+    assert!(app.shell.log_visible());
+}
+
+#[test]
+fn a_corrupt_stored_layout_gives_the_first_dock() {
+    let dir = new_dir();
+    let app = app_with_stored_layout(&dir, "{not a layout");
+    assert!(app.shell.library_visible());
+    assert!(!app.shell.log_visible());
+}
+
+#[test]
+fn the_saved_state_carries_the_dock_and_a_restart_restores_it() {
+    let dir = new_dir();
+    let mut app = app_at(&dir, None);
+    assert!(app.shell.toggle_log());
+    app.save_window_state();
+    assert_eq!(
+        app.window_state.layout.as_deref(),
+        Some(app.shell.layout_json().as_str())
+    );
+    drop(app);
+
+    let mut app = app_at(&dir, None);
+    assert!(app.shell.log_visible());
+    app.shell.reset_layout();
+    app.save_window_state();
+    drop(app);
+
+    let app = app_at(&dir, None);
+    assert!(!app.shell.log_visible());
+    assert!(app.shell.library_visible());
+}

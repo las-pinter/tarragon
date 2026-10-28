@@ -4,9 +4,13 @@
 //! program saved with the file. It reads far less data than the layer
 //! compositor, and it matches what the artist saw when saving. The merged
 //! image is used when all of these hold: the section parsed, it holds channels,
-//! each channel covers the canvas, and the pixels decode. Any other case falls
-//! back to the layer compositor. A merged image that is blank but the right
-//! size passes: the renderer cannot tell a blank picture from a real one.
+//! each channel covers the canvas, the pixels decode, and the file does not
+//! mark the image as a placeholder. Any other case falls back to the layer
+//! compositor. A merged image that is blank but the right size passes: the
+//! renderer cannot tell a blank picture from a real one. The exception is a
+//! file that says its merged image is a placeholder, as Photoshop does when
+//! Maximize Compatibility is off. That file goes to the compositor, and a
+//! canvas over the cap then gives [`RenderError::TooLarge`].
 //!
 //! A canvas over the full-tier edge reads the merged image through a step: the
 //! output keeps every Nth pixel, N the smallest integer that fits both edges.
@@ -119,7 +123,10 @@ pub(crate) fn merged_is_usable(file: &PsdFile) -> bool {
     };
     let has_colors = (0..color_channels)
         .all(|id| i16::try_from(id).is_ok_and(|id| file.merged.channel(id).is_some()));
+    // A placeholder merged image is blank but sized right, so only the flag
+    // can reject it.
     file.merged_error.is_none()
+        && file.has_real_merged_data != Some(false)
         && has_colors
         && file.merged.channels.iter().all(|channel| {
             let bounds = channel.bounds;

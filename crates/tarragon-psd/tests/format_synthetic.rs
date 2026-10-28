@@ -272,3 +272,28 @@ fn a_bad_real_rectangle_does_not_fail_the_file() {
     assert_eq!(mask.real_bounds, None);
     assert_eq!(mask.default_color, 255);
 }
+
+/// A document with one resource block, or none.
+fn merged_flag_of(resource: Option<(u16, Vec<u8>)>) -> Option<bool> {
+    let mut spec = DocumentSpec::new(2, 2, 8, 3);
+    spec.resources.extend(resource);
+    open(build_psd(&spec)).file().has_real_merged_data
+}
+
+#[test]
+fn the_version_info_resource_sets_the_real_merged_data_flag() {
+    let info = |flag: u8| vec![0, 0, 0, 1, flag, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1];
+    assert_eq!(merged_flag_of(Some((1057, info(0)))), Some(false));
+    assert_eq!(merged_flag_of(Some((1057, info(1)))), Some(true));
+    assert_eq!(merged_flag_of(None), None);
+    // Another block must not set the flag.
+    assert_eq!(merged_flag_of(Some((1037, info(1)))), None);
+}
+
+#[test]
+fn a_short_version_info_resource_leaves_the_flag_unknown() {
+    for length in [0, 1, 4] {
+        let data = vec![0; length];
+        assert_eq!(merged_flag_of(Some((1057, data))), None, "{length} bytes");
+    }
+}

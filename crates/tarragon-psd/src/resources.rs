@@ -1,8 +1,9 @@
-//! Read the image resources that the effect paint needs.
+//! Read the image resources that the renderers need.
 //!
 //! The section holds `8BIM` blocks: a signature, a two-byte id, a padded
 //! Pascal name, a four-byte length, the data, and one even-byte pad. Only the
-//! two global light ids are read here; every other block is skipped.
+//! two global light ids and the version info id are read here; every other
+//! block is skipped.
 //!
 //! A short block ends the walk and keeps the values read so far. A block with
 //! another signature is skipped, because only an `8BIM` block carries a value
@@ -19,24 +20,38 @@ const SIGNATURE: &[u8; 4] = b"8BIM";
 const GLOBAL_ANGLE_ID: u16 = 1037;
 /// The global light altitude id.
 const GLOBAL_ALTITUDE_ID: u16 = 1038;
+/// The version info id. Its data is a version, then the real merged data flag.
+const VERSION_INFO_ID: u16 = 1057;
+/// The bytes the flag needs: the four-byte version and the flag byte.
+const VERSION_INFO_MIN: u64 = 5;
+
+/// The values read from the image resources section.
+pub(crate) struct ImageResources {
+    /// The document global light.
+    pub(crate) global_light: GlobalLight,
+    /// Whether the merged image is a real picture, when the file says.
+    pub(crate) has_real_merged_data: Option<bool>,
+}
 
 /// The most a block head can take: signature, id, a 255 byte name with its
 /// length byte and pad, and the data length.
 const MAX_HEAD: usize = 4 + 2 + 1 + 255 + 1 + 4;
 
-/// Read the document global light from the image resources section.
+/// Read the global light and the merged data flag from the image resources.
 ///
 /// The window covers the section. Each block is walked by its head and its
 /// data is skipped by seeking, so a large block that holds no light value is
-/// never read. A missing id keeps the default value, so a file without the
-/// resources paints the same way Photoshop does.
+/// never read. A missing light id keeps the default value, so a file without
+/// the resources paints the same way Photoshop does. A missing or short version
+/// info block leaves the flag unknown.
 ///
 /// # Errors
 ///
 /// Only a failed read of the source is an error. A malformed block ends the
 /// walk and keeps the values read so far.
-pub(crate) fn read_global_light(window: &mut Window) -> Result<GlobalLight, PsdError> {
+pub(crate) fn read_resources(window: &mut Window) -> Result<ImageResources, PsdError> {
     let mut light = GlobalLight::default();
+    let mut has_real_merged_data = None;
     while window.remaining() >= 12 {
         let count = to_usize(window.remaining().min(MAX_HEAD as u64))?;
         let start = window.pos();
@@ -58,13 +73,19 @@ pub(crate) fn read_global_light(window: &mut Window) -> Result<GlobalLight, PsdE
                 light.altitude = degrees;
             }
         }
+        if known && id == VERSION_INFO_ID && size >= VERSION_INFO_MIN {
+            has_real_merged_data = Some(window.peek(5, false)?[4] != 0);
+        }
         window.skip(size)?;
         // The data block is padded to an even length.
         if size % 2 == 1 && window.skip(1).is_err() {
             break;
         }
     }
-    Ok(light)
+    Ok(ImageResources {
+        global_light: light,
+        has_real_merged_data,
+    })
 }
 
 /// Read a block head: whether the signature is known, the id, the data length.

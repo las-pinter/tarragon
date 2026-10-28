@@ -16,7 +16,7 @@ use crate::layer::{LayerSectionData, parse_layer_section};
 use crate::limits::{MAX_DIMENSION, MAX_HEADER_CHANNELS, ParseOptions, full_tier_size};
 use crate::merged::read_merged_image;
 use crate::reader::{Reader, to_usize};
-use crate::resources::read_global_light;
+use crate::resources::read_resources;
 use crate::source::Source;
 use crate::window::Window;
 
@@ -113,10 +113,11 @@ pub(crate) fn parse_with(
     // Image resources: a four-byte length then the data.
     let resources_length = u64::from(window.read_u32()?);
     window.require(resources_length)?;
-    // Only the global light is read from the resources. The walk skips every
-    // other block by seeking, so a large block is never read.
+    // Only the global light and the merged data flag are read from the
+    // resources. The walk skips every other block by seeking, so a large block
+    // is never read.
     let mut resources = Window::new(source, window.pos(), window.pos() + resources_length);
-    let global_light = read_global_light(&mut resources)?;
+    let image_resources = read_resources(&mut resources)?;
     window.skip(resources_length)?;
 
     // Layer and mask information. The section length bounds every layer read.
@@ -168,7 +169,8 @@ pub(crate) fn parse_with(
         layer_count: section.layer_count,
         layers: section.layers,
         global_mask: section.global_mask,
-        global_light,
+        global_light: image_resources.global_light,
+        has_real_merged_data: image_resources.has_real_merged_data,
         patterns: section.patterns,
         merged_has_alpha: section.merged_has_alpha,
         layer_info_error: section.layer_info_error,

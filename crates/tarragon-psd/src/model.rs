@@ -172,6 +172,10 @@ pub struct PsdFile {
     pub global_mask: Option<GlobalMask>,
     /// The document global light for the effects that follow it.
     pub global_light: GlobalLight,
+    /// Whether the merged image is a real picture. `Some(false)` means the file
+    /// was saved without a full-quality merged image and holds a placeholder.
+    /// `None` means the file does not say.
+    pub has_real_merged_data: Option<bool>,
     /// The document pattern table from the `Patt`, `Pat2` and `Pat3` blocks.
     pub patterns: Vec<PatternEntry>,
     /// True when the layer count is negative, which marks the first extra

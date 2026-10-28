@@ -103,6 +103,53 @@ fn a_blank_merged_image_of_the_right_size_is_still_used() {
     assert_eq!(pixel(&image, 3, 3), [0, 0, 0, 255]);
 }
 
+/// The data of resource 1057: a version, the real merged data flag, and two
+/// empty unicode strings.
+fn version_info(has_real_merged_data: u8) -> Vec<u8> {
+    let mut data = 1u32.to_be_bytes().to_vec();
+    data.push(has_real_merged_data);
+    data.extend_from_slice(&[0; 8]);
+    data.extend_from_slice(&1u32.to_be_bytes());
+    data
+}
+
+/// A red layer over a white merged image, with resource 1057 set to `flag`.
+fn white_merged_with_flag(flag: u8, size: i32) -> Vec<u8> {
+    let edge = u32::try_from(size).expect("size");
+    let mut spec = DocumentSpec::new(edge, 2, 8, 3);
+    spec.layers
+        .push(LayerSpec::opaque((0, 0, 2, size), [200, 0, 0]));
+    spec.merged = (0..3).map(|_| vec![255; edge as usize * 2]).collect();
+    spec.resources.push((1057, version_info(flag)));
+    build_psd(&spec)
+}
+
+#[test]
+fn a_placeholder_merged_image_uses_the_layers() {
+    let folder = TempDir::new("placeholder");
+    let path = folder.write("a.psd", &white_merged_with_flag(0, 16));
+    let image = registry::render(&path).expect("renders");
+    assert_eq!(pixel(&image, 8, 1), [200, 0, 0, 255]);
+}
+
+#[test]
+fn a_real_merged_image_is_used_when_the_file_says_so() {
+    let folder = TempDir::new("real-merged");
+    let path = folder.write("a.psd", &white_merged_with_flag(1, 16));
+    let image = registry::render(&path).expect("renders");
+    assert_eq!(pixel(&image, 8, 1), [255, 255, 255, 255]);
+}
+
+#[test]
+fn a_placeholder_merged_image_over_the_cap_is_too_large() {
+    let folder = TempDir::new("placeholder-big");
+    let path = folder.write("big.psd", &white_merged_with_flag(0, 8200));
+    match registry::render(&path) {
+        Err(RenderError::TooLarge { edge, cap }) => assert_eq!((edge, cap), (8200, 8192)),
+        other => panic!("expected TooLarge, got {other:?}"),
+    }
+}
+
 #[test]
 fn a_missing_merged_image_uses_the_layers() {
     let folder = TempDir::new("absent");

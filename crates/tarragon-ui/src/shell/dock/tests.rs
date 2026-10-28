@@ -380,7 +380,7 @@ fn dropping_a_dragged_tab_asks_for_a_repaint() {
 
 #[test]
 fn every_panel_title_paints_in_amber() {
-    fn amber_titles(ctx: &Context, shell: &mut Shell) -> Vec<(String, Color32)> {
+    fn panel_title_colors(ctx: &Context, shell: &mut Shell) -> Vec<(String, Color32)> {
         let output = ctx.run_ui(input(), |ui| shell.show(ui));
         let mut found = Vec::new();
         for clipped in &output.shapes {
@@ -401,8 +401,8 @@ fn every_panel_title_paints_in_amber() {
     apply_theme(&ctx);
     let mut shell = Shell::new();
     shell.toggle_log();
-    amber_titles(&ctx, &mut shell);
-    let titles = amber_titles(&ctx, &mut shell);
+    panel_title_colors(&ctx, &mut shell);
+    let titles = panel_title_colors(&ctx, &mut shell);
     assert_eq!(titles.len(), 4, "{titles:?}");
     for (title, color) in titles {
         assert_eq!(color, tokens::AMBER_ACCENT, "{title} is not amber");

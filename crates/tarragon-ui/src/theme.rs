@@ -70,8 +70,11 @@ pub fn apply_theme(ctx: &Context) {
     });
 }
 
-/// Style the dock tab bar as the panel title strip: tertiary fill, amber text,
-/// the strip padding, and no boxes or lines around the tab.
+/// Style the dock tab bar as the panel title strip: tertiary fill, the strip
+/// padding, and no boxes or lines around the tab.
+///
+/// This style sets no text color. The theme's `override_text_color` wins over
+/// it, so the amber comes from the title text itself in the dock tab viewer.
 ///
 /// `text_height` is the line height of the title font. The 8 px side padding
 /// is fixed inside `egui_dock` and equals `SPACING_S`, so it is not set here.
@@ -96,7 +99,6 @@ pub(crate) fn dock_title_style(style: &mut egui_dock::Style, text_height: f32) {
         state.bg_fill = tokens::BG_TERTIARY;
         state.outline_color = Color32::TRANSPARENT;
         state.corner_radius = CornerRadius::ZERO;
-        state.text_color = tokens::AMBER_ACCENT;
     }
     // The panels own their insets and borders, so the tab body adds none.
     tab.tab_body.inner_margin = Margin::ZERO;

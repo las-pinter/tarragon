@@ -31,9 +31,10 @@ tarragon-scan = { path = "crates/tarragon-scan", version = "0.2.0" }
 # The app must ship a font that passes the allowlist. `tarragon-ui` vendors
 # the Roboto family and installs it in every target, examples included.
 egui = { version = "=0.36.2", default-features = false }
-# The app binary and the GUI stack spike use eframe 0.36.2; the spike also
-# uses egui_dock 0.21. Both renderers and both Linux window backends are on,
-# so one binary picks the renderer at run time. Default features are off:
+# The app binary and the GUI stack spike use eframe 0.36.2. The main window
+# dock in tarragon-ui and the spike use egui_dock 0.21. Both renderers and
+# both Linux window backends are on, so one binary picks the renderer at run
+# time. Default features are off:
 # `default_fonts` would bring the OFL-1.1 and Ubuntu-font-1.0 fonts.
 eframe = { version = "=0.36.2", default-features = false, features = ["glow", "wgpu", "x11", "wayland"] }
 egui_dock = "=0.21.1"

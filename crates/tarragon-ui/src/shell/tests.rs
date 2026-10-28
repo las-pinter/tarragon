@@ -343,7 +343,7 @@ fn the_library_paddings_start_at_the_panel_edge() {
     shell.set_folder(Some(PathBuf::from("/r")));
     draw(&ctx, &mut shell);
     let output = ctx.run_ui(input(), |ui| shell.show(ui));
-    // The title strip and the selected row share one fill; sort them top down.
+    // The tab bar, its tab, and the selected row share one fill; sort top down.
     let mut rects: Vec<Rect> = output
         .shapes
         .iter()
@@ -369,7 +369,12 @@ fn the_library_paddings_start_at_the_panel_edge() {
         .expect("the button is painted");
     output.drop_without_applying_deltas();
 
-    let (title, row) = (rects[0], rects[1]);
+    // The first rect is the tab bar, the panel title strip.
+    let title = rects[0];
+    let row = *rects
+        .iter()
+        .find(|rect| rect.min.y >= title.max.y)
+        .expect("the selected row is painted");
     assert!(title.min.x.abs() < 0.5, "title starts at {}", title.min.x);
     // The dock body ends at the Library leaf edge; the divider lies outside it.
     let edge = leaf_rect(&shell, Pane::Library).max.x;

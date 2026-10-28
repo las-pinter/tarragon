@@ -2,11 +2,12 @@
 
 use super::*;
 use crate::layout::{first_dock, is_visible, to_json};
+use crate::shell::tab_places;
 use crate::shell::tests::{draw, input, leaf_rect, painted_text};
-use crate::shell::{DOCK_GALLERY, DOCK_LIBRARY, DOCK_PREVIEW, Shell};
+use crate::shell::{DOCK_GALLERY, DOCK_LIBRARY, DOCK_LOG, DOCK_PREVIEW, Shell};
 use crate::theme::apply_theme;
 use crate::tokens;
-use egui::Context;
+use egui::{Color32, Context, Event, Modifiers, PointerButton, Pos2, RawInput, vec2};
 
 #[test]
 fn the_docks_draw_at_the_default_fractions() {
@@ -195,16 +196,214 @@ fn a_pane_hidden_and_shown_again_keeps_its_default_width() {
 }
 
 #[test]
-fn removing_a_tab_gives_the_same_tree_as_the_toggle() {
+fn hiding_a_tab_removes_it_like_the_toggle() {
     let mut closed = first_dock();
     let mut toggled = Shell::new();
 
-    // The close button calls `DockState::remove_tab`, as `set_visible` does,
-    // so the trees match. The button itself is not clicked here.
+    // The Hide menu action and the toggle both go through `remove_tab`, so the
+    // trees match.
     let path = closed.find_tab(&Pane::Preview).expect("preview shows");
     closed.remove_tab(path);
     toggled.toggle(Pane::Preview);
 
     assert!(!is_visible(&closed, Pane::Preview));
     assert_eq!(to_json(&closed), to_json(&toggled.dock));
+}
+
+/// Run one frame with `events`, and return the text and its position.
+fn frame_text(ctx: &Context, shell: &mut Shell, events: Vec<egui::Event>) -> Vec<(String, Pos2)> {
+    fn collect(shape: &egui::epaint::Shape, text: &mut Vec<(String, Pos2)>) {
+        match shape {
+            egui::epaint::Shape::Text(shape) => {
+                text.push((shape.galley.job.text.clone(), shape.pos));
+            }
+            egui::epaint::Shape::Vec(shapes) => shapes.iter().for_each(|s| collect(s, text)),
+            _ => {}
+        }
+    }
+    let output = ctx.run_ui(RawInput { events, ..input() }, |ui| shell.show(ui));
+    let mut text = Vec::new();
+    for clipped in &output.shapes {
+        collect(&clipped.shape, &mut text);
+    }
+    output.drop_without_applying_deltas();
+    text
+}
+
+/// A pointer button press or release at `pos`.
+fn button(pos: Pos2, button: PointerButton, pressed: bool) -> Event {
+    Event::PointerButton {
+        pos,
+        button,
+        pressed,
+        modifiers: Modifiers::NONE,
+    }
+}
+
+#[test]
+fn each_panel_title_is_painted_once() {
+    let ctx = Context::default();
+    apply_theme(&ctx);
+    let mut shell = Shell::new();
+    for log_shown in [false, true] {
+        if log_shown {
+            shell.toggle_log();
+        }
+        frame_text(&ctx, &mut shell, vec![]);
+        let text = frame_text(&ctx, &mut shell, vec![]);
+        let titles = [DOCK_LIBRARY, DOCK_GALLERY, DOCK_PREVIEW, DOCK_LOG];
+        for title in titles {
+            let want = usize::from(title != DOCK_LOG || log_shown);
+            let got = text.iter().filter(|(t, _)| t == title).count();
+            assert_eq!(
+                got, want,
+                "{title} is painted {got} times (log: {log_shown})"
+            );
+        }
+    }
+}
+
+#[test]
+fn the_tab_bar_is_a_title_strip_with_no_buttons() {
+    let ctx = Context::default();
+    apply_theme(&ctx);
+    let mut shell = Shell::new();
+    draw(&ctx, &mut shell);
+    draw(&ctx, &mut shell);
+
+    // Nothing but the title text and the strip is in the tab bar: a close
+    // button, a close-all button, or a collapse arrow would add more shapes.
+    // The bar is one title line plus the padding above and below, so the text
+    // sits one padding below the leaf top.
+    let leaf = leaf_rect(&shell, Pane::Library);
+    let text = frame_text(&ctx, &mut shell, vec![]);
+    let (_, title_pos) = text
+        .iter()
+        .find(|(t, _)| t == DOCK_LIBRARY)
+        .expect("the title is painted");
+    let want = leaf.min.y + tokens::SPACING_XS;
+    assert!(
+        (title_pos.y - want).abs() < 1.0,
+        "title at {}, want {want}",
+        title_pos.y
+    );
+
+    // A click where a close-all button would sit changes nothing.
+    let corner = Pos2::new(leaf.max.x - 12.0, leaf.min.y + 10.0);
+    let events = vec![
+        Event::PointerMoved(corner),
+        button(corner, PointerButton::Primary, true),
+        button(corner, PointerButton::Primary, false),
+    ];
+    frame_text(&ctx, &mut shell, events);
+    frame_text(&ctx, &mut shell, vec![]);
+    assert_eq!(to_json(&shell.dock), to_json(&first_dock()));
+}
+
+#[test]
+fn the_menu_actions_hide_a_pane_and_reset_the_layout() {
+    let mut hidden = Shell::new();
+    hidden.apply_tab_menu(TabMenu::Hide(Pane::Preview));
+    let mut toggled = Shell::new();
+    toggled.toggle(Pane::Preview);
+    assert_eq!(to_json(&hidden.dock), to_json(&toggled.dock));
+
+    hidden.toggle(Pane::Gallery);
+    hidden.toggle_log();
+    hidden.apply_tab_menu(TabMenu::Reset);
+    assert_eq!(to_json(&hidden.dock), to_json(&first_dock()));
+}
+
+#[test]
+fn a_right_click_on_a_tab_offers_hide_panel_and_reset() {
+    let ctx = Context::default();
+    apply_theme(&ctx);
+    let mut shell = Shell::new();
+    draw(&ctx, &mut shell);
+    draw(&ctx, &mut shell);
+
+    let leaf = leaf_rect(&shell, Pane::Preview);
+    let tab = Pos2::new(leaf.min.x + 20.0, leaf.min.y + 10.0);
+    let events = vec![
+        Event::PointerMoved(tab),
+        button(tab, PointerButton::Secondary, true),
+        button(tab, PointerButton::Secondary, false),
+    ];
+    frame_text(&ctx, &mut shell, events);
+    let text = frame_text(&ctx, &mut shell, vec![]);
+    let find = |label: &str| text.iter().find(|(t, _)| t == label).map(|(_, p)| *p);
+    let hide = find("Hide panel").expect("the menu offers Hide panel");
+    assert!(find("Reset Window Layout").is_some());
+    assert!(find("Eject").is_none() && find("Close").is_none());
+
+    let click = hide + vec2(10.0, 6.0);
+    let events = vec![
+        Event::PointerMoved(click),
+        button(click, PointerButton::Primary, true),
+        button(click, PointerButton::Primary, false),
+    ];
+    frame_text(&ctx, &mut shell, events);
+    frame_text(&ctx, &mut shell, vec![]);
+    assert!(!shell.preview_visible(), "Hide panel removed the pane");
+}
+
+#[test]
+fn dropping_a_dragged_tab_asks_for_a_repaint() {
+    let ctx = Context::default();
+    apply_theme(&ctx);
+    let mut shell = Shell::new();
+    draw(&ctx, &mut shell);
+    draw(&ctx, &mut shell);
+    let before = tab_places(&shell.dock);
+
+    let from = leaf_rect(&shell, Pane::Preview).min + vec2(20.0, 10.0);
+    let gallery = leaf_rect(&shell, Pane::Gallery);
+    let to = gallery.center();
+    let mut repainted = false;
+    let steps = [
+        vec![Event::PointerMoved(from)],
+        vec![button(from, PointerButton::Primary, true)],
+        vec![Event::PointerMoved(from + vec2(-30.0, 40.0))],
+        vec![Event::PointerMoved(to)],
+        vec![Event::PointerMoved(to)],
+        vec![button(to, PointerButton::Primary, false)],
+    ];
+    for events in steps {
+        let output = ctx.run_ui(RawInput { events, ..input() }, |ui| shell.show(ui));
+        output.drop_without_applying_deltas();
+        repainted = ctx.requested_repaint_last_pass();
+    }
+    assert_ne!(tab_places(&shell.dock), before, "the drop moved the tab");
+    assert!(repainted, "the drop asks for another frame");
+}
+
+#[test]
+fn every_panel_title_paints_in_amber() {
+    fn amber_titles(ctx: &Context, shell: &mut Shell) -> Vec<(String, Color32)> {
+        let output = ctx.run_ui(input(), |ui| shell.show(ui));
+        let mut found = Vec::new();
+        for clipped in &output.shapes {
+            if let egui::epaint::Shape::Text(shape) = &clipped.shape {
+                let text = shape.galley.job.text.clone();
+                if [DOCK_LIBRARY, DOCK_GALLERY, DOCK_PREVIEW, DOCK_LOG].contains(&text.as_str()) {
+                    // A section colour is the one the glyphs use.
+                    let color = shape.galley.job.sections[0].format.color;
+                    found.push((text, color));
+                }
+            }
+        }
+        output.drop_without_applying_deltas();
+        found
+    }
+
+    let ctx = Context::default();
+    apply_theme(&ctx);
+    let mut shell = Shell::new();
+    shell.toggle_log();
+    amber_titles(&ctx, &mut shell);
+    let titles = amber_titles(&ctx, &mut shell);
+    assert_eq!(titles.len(), 4, "{titles:?}");
+    for (title, color) in titles {
+        assert_eq!(color, tokens::AMBER_ACCENT, "{title} is not amber");
+    }
 }

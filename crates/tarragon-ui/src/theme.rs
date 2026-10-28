@@ -1,11 +1,10 @@
 //! Theme installation and the shared panel chrome.
 //!
 //! The theme maps the stylesheet tokens onto egui visuals and text styles. The
-//! panel helpers draw the title strip and the frame for every dock.
+//! panel helpers style the title strip and the frame for every dock.
 
 use egui::{
-    Color32, Context, CornerRadius, FontFamily, FontId, Frame, Margin, RichText, TextStyle, Ui,
-    Visuals, vec2,
+    Color32, Context, CornerRadius, FontId, Frame, Margin, Stroke, TextStyle, Visuals, vec2,
 };
 
 use crate::fonts;
@@ -71,23 +70,37 @@ pub fn apply_theme(ctx: &Context) {
     });
 }
 
-/// Draw one panel title strip: body size amber text on the tertiary fill.
-pub(crate) fn panel_title(ui: &mut Ui, text: &str) {
-    Frame::new()
-        .fill(tokens::BG_TERTIARY)
-        .inner_margin(Margin::symmetric(
-            points(tokens::SPACING_S),
-            points(tokens::SPACING_XS),
-        ))
-        .show(ui, |ui| {
-            ui.set_width(ui.available_width());
-            ui.label(
-                RichText::new(text)
-                    .size(tokens::SIZE_BODY)
-                    .color(tokens::AMBER_ACCENT)
-                    .family(FontFamily::Name(fonts::MEDIUM_FAMILY.into())),
-            );
-        });
+/// Style the dock tab bar as the panel title strip: tertiary fill, amber text,
+/// the strip padding, and no boxes or lines around the tab.
+///
+/// `text_height` is the line height of the title font. The 8 px side padding
+/// is fixed inside `egui_dock` and equals `SPACING_S`, so it is not set here.
+pub(crate) fn dock_title_style(style: &mut egui_dock::Style, text_height: f32) {
+    let bar = &mut style.tab_bar;
+    bar.bg_fill = tokens::BG_TERTIARY;
+    bar.height = text_height + 2.0 * tokens::SPACING_XS;
+    bar.corner_radius = CornerRadius::ZERO;
+    // The line under the bar would show as a separator the mockup lacks.
+    bar.hline_color = tokens::BG_TERTIARY;
+
+    let tab = &mut style.tab;
+    for state in [
+        &mut tab.active,
+        &mut tab.inactive,
+        &mut tab.focused,
+        &mut tab.hovered,
+        &mut tab.active_with_kb_focus,
+        &mut tab.inactive_with_kb_focus,
+        &mut tab.focused_with_kb_focus,
+    ] {
+        state.bg_fill = tokens::BG_TERTIARY;
+        state.outline_color = Color32::TRANSPARENT;
+        state.corner_radius = CornerRadius::ZERO;
+        state.text_color = tokens::AMBER_ACCENT;
+    }
+    // The panels own their insets and borders, so the tab body adds none.
+    tab.tab_body.inner_margin = Margin::ZERO;
+    tab.tab_body.stroke = Stroke::NONE;
 }
 
 /// The frame for one panel: a fill colour and a small inset.

@@ -132,7 +132,7 @@ pub fn to_json(dock: &DockState<Pane>) -> String {
 }
 
 /// Reads a saved dock. A pane that is not in the tree is hidden, so any subset is
-/// valid. Gives `None` for no panes, a pane twice, or an empty leaf.
+/// valid. Gives `None` for no panes, a pane twice, an empty leaf, or a floating window.
 #[must_use]
 pub fn from_json(text: &str) -> Option<DockState<Pane>> {
     let dock: DockState<Pane> = serde_json::from_str(text).ok()?;
@@ -150,7 +150,9 @@ pub fn from_json(text: &str) -> Option<DockState<Pane>> {
     let leaves_ok = dock
         .iter_all_nodes()
         .all(|(_, node)| !matches!(node, Node::Leaf(leaf) if leaf.is_empty()));
-    (!panes.is_empty() && once && fractions_ok && leaves_ok).then_some(dock)
+    // The panels never float, so a tab outside the main surface is damage.
+    let docked = dock.iter_all_tabs().all(|(path, _)| path.surface.is_main());
+    (!panes.is_empty() && once && fractions_ok && leaves_ok && docked).then_some(dock)
 }
 
 #[cfg(test)]
@@ -252,7 +254,10 @@ mod tests {
             panic!("the Library is a leaf");
         };
         leaf.tabs.clear();
+        let mut floating = DockState::new(vec![Pane::Library, Pane::Gallery]);
+        floating.add_window(vec![Pane::Log]);
         for bad in [
+            to_json(&floating),
             to_json(&hollow),
             String::new(),
             "not json".into(),

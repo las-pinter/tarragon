@@ -3,7 +3,8 @@
 //! The four panels sit in a dock, so the user can resize and move them.
 
 use egui::{
-    Button, CentralPanel, Context, Frame, Margin, MenuBar, Panel, RichText, Ui, ViewportCommand,
+    Button, CentralPanel, Context, FontFamily, FontId, Frame, Margin, MenuBar, Panel, RichText, Ui,
+    ViewportCommand,
 };
 use egui_dock::{DockArea, DockState, Style};
 use tarragon_core::sorting::SortMode;
@@ -12,10 +13,11 @@ use crate::gallery::Gallery;
 use crate::grid::GridItem;
 use crate::layout::{Pane, first_dock, is_visible, set_visible};
 use crate::sidebar::panel::{Sidebar, SidebarEvent};
-use crate::theme::panel_frame;
+use crate::theme::{dock_title_style, panel_frame};
 use crate::tokens;
 
 mod dock;
+use dock::TabMenu;
 mod log_panel;
 pub use log_panel::{LogLevel, LogLine, LogPanelEvents, LogSlice, LogSource, LogView};
 
@@ -142,6 +144,14 @@ impl Shell {
         self.dock = first_dock();
     }
 
+    /// Apply one choice from the tab context menu.
+    fn apply_tab_menu(&mut self, action: TabMenu) {
+        match action {
+            TabMenu::Hide(pane) => set_visible(&mut self.dock, pane, false),
+            TabMenu::Reset => self.reset_layout(),
+        }
+    }
+
     /// Draw one frame of the shell with an empty log.
     pub fn show(&mut self, ui: &mut Ui) {
         self.show_with_log(
@@ -159,6 +169,7 @@ impl Shell {
     /// building the lines when `log_visible()` is false.
     pub fn show_with_log(&mut self, ui: &mut Ui, log: &LogView<'_>) -> LogPanelEvents {
         let mut events = LogPanelEvents::default();
+        let mut menu = None;
         let ctx = ui.ctx().clone();
 
         Panel::top("tarragon-titlebar")
@@ -186,20 +197,35 @@ impl Shell {
         // The dock fills what the bars leave. It owns the panel sizes and places.
         CentralPanel::default().frame(Frame::NONE).show(ui, |ui| {
             let mut style = Style::from_egui(ui.style());
-            // The panels own their insets, so the tab body adds none.
-            style.tab.tab_body.inner_margin = Margin::ZERO;
+            let title_font = FontId::new(
+                tokens::SIZE_BODY,
+                FontFamily::Name(crate::fonts::MEDIUM_FAMILY.into()),
+            );
+            dock_title_style(&mut style, ui.fonts_mut(|f| f.row_height(&title_font)));
             let mut panes = dock::Panes {
                 sidebar: &mut self.sidebar,
                 gallery: &mut self.gallery,
                 log,
                 events: &mut events,
+                menu: &mut menu,
             };
-            let tabs = self.dock.iter_all_tabs().count();
+            let before = tab_places(&self.dock);
+            // The tab bar is the panel title: no buttons, only the right-click menu.
             DockArea::new(&mut self.dock)
                 .style(style)
+                .show_close_buttons(false)
+                .show_add_buttons(false)
+                .show_add_popup(false)
+                .show_leaf_close_all_buttons(false)
+                .show_leaf_collapse_buttons(false)
                 .show_inside(ui, &mut panes);
-            // A close button changes the tree after the panels are laid out.
-            if self.dock.iter_all_tabs().count() != tabs {
+            // A drop or the menu changes the tree after the panels are laid out,
+            // so the new places need one more frame. Comparing the few tab
+            // places is cheaper than tracking the drag state.
+            if let Some(action) = menu {
+                self.apply_tab_menu(action);
+                ui.ctx().request_repaint();
+            } else if tab_places(&self.dock) != before {
                 ui.ctx().request_repaint();
             }
         });
@@ -237,6 +263,13 @@ impl Shell {
             let _ = ui.button("Preferences...");
         });
     }
+}
+
+/// Where each panel sits in the dock: its surface, node, and tab slot.
+fn tab_places(dock: &DockState<Pane>) -> Vec<(egui_dock::TabPath, Pane)> {
+    dock.iter_all_tabs()
+        .map(|(path, pane)| (path, *pane))
+        .collect()
 }
 
 impl Default for Shell {

@@ -12,6 +12,7 @@ use tarragon_core::sorting::SortMode;
 use crate::gallery::Gallery;
 use crate::grid::GridItem;
 use crate::layout::{Pane, first_dock, from_json, is_visible, set_visible, to_json};
+use crate::preview::Preview;
 use crate::sidebar::panel::{Sidebar, SidebarEvent};
 use crate::theme::{dock_title_style, panel_frame};
 use crate::tokens;
@@ -44,6 +45,8 @@ pub struct Shell {
     gallery: Gallery,
     /// The Library panel in the left dock.
     sidebar: Sidebar,
+    /// The Preview panel in the right dock.
+    preview: Preview,
     /// Where each panel sits and how big it is. A hidden panel is not in it.
     dock: DockState<Pane>,
 }
@@ -56,6 +59,7 @@ impl Shell {
         Self {
             gallery: Gallery::new(SortMode::Natural),
             sidebar: Sidebar::default(),
+            preview: Preview::default(),
             dock: first_dock(),
         }
     }
@@ -222,6 +226,7 @@ impl Shell {
             let mut panes = dock::Panes {
                 sidebar: &mut self.sidebar,
                 gallery: &mut self.gallery,
+                preview: &mut self.preview,
                 log,
                 events: &mut events,
                 menu: &mut menu,

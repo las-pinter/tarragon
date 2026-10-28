@@ -8,6 +8,7 @@ use super::{DOCK_GALLERY, DOCK_LIBRARY, DOCK_LOG, DOCK_PREVIEW};
 use crate::fonts;
 use crate::gallery::Gallery;
 use crate::layout::Pane;
+use crate::preview::Preview;
 use crate::sidebar::panel::Sidebar;
 use crate::theme::panel_frame;
 use crate::tokens;
@@ -18,6 +19,8 @@ pub(super) struct Panes<'a> {
     pub sidebar: &'a mut Sidebar,
     /// The gallery strip and grid.
     pub gallery: &'a mut Gallery,
+    /// The Preview panel.
+    pub preview: &'a mut Preview,
     /// The lines for the Log panel.
     pub log: &'a LogView<'a>,
     /// Filled with the Log panel actions of this frame.
@@ -83,8 +86,7 @@ impl TabViewer for Panes<'_> {
             match tab {
                 Pane::Library => self.sidebar.show(ui),
                 Pane::Gallery => self.gallery.show(ui),
-                // The Preview body stays empty until the preview work lands.
-                Pane::Preview => {}
+                Pane::Preview => self.preview.show(ui),
                 Pane::Log => *self.events = log_panel::show(ui, self.log),
             }
         });

@@ -7,6 +7,7 @@ mod fonts;
 pub mod gallery;
 pub mod grid;
 pub mod layout;
+pub mod preview;
 pub mod shell;
 pub mod sidebar;
 pub mod texture_budget;

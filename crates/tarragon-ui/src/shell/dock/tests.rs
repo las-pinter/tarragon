@@ -408,3 +408,22 @@ fn every_panel_title_paints_in_amber() {
         assert_eq!(color, tokens::AMBER_ACCENT, "{title} is not amber");
     }
 }
+
+#[test]
+fn the_preview_pane_shows_the_empty_hint_when_nothing_is_selected() {
+    let ctx = Context::default();
+    apply_theme(&ctx);
+    let mut shell = Shell::new();
+
+    // The first frame lays the dock out; the second one paints the bodies.
+    let mut text = Vec::new();
+    for _ in 0..2 {
+        let output = ctx.run_ui(input(), |ui| shell.show(ui));
+        text = painted_text(&output);
+        output.drop_without_applying_deltas();
+    }
+    assert!(
+        text.iter().any(|t| t == crate::preview::EMPTY_HINT),
+        "the empty hint is not drawn: {text:?}"
+    );
+}

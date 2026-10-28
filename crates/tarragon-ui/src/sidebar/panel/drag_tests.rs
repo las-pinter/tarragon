@@ -1,8 +1,9 @@
 //! Tests for the favorite drag, the drop line, and `drop_line_rect`.
 
+use super::favorites::drop_line_rect;
 use super::tests::{click, find, frame, ready};
 use super::*;
-use egui::{Context, Event, Key, Modifiers, PointerButton, Pos2, RawInput, Shape};
+use egui::{Context, Event, Key, Modifiers, PointerButton, Pos2, RawInput, Rect, Shape, pos2};
 
 /// A panel with the favorites `fa`, `fb`, and `fc` at `/f/a`, `/f/b`, and `/f/c`.
 fn three() -> Sidebar {

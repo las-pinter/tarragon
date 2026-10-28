@@ -15,6 +15,8 @@ pub(super) struct Painted {
     pub(super) height: f32,
     /// The colour of its first section.
     color: Color32,
+    /// The format of its first section.
+    pub(super) format: egui::TextFormat,
 }
 
 /// A favorite row.
@@ -85,6 +87,7 @@ pub(super) fn frame_sized(
                 pos: text.pos,
                 height: text.galley.size().y,
                 color: text.galley.job.sections[0].format.color,
+                format: text.galley.job.sections[0].format.clone(),
             }),
             _ => None,
         })
@@ -233,6 +236,31 @@ fn the_heads_and_the_empty_text_are_painted() {
     for wanted in ["FOLDERS", "FAVORITES", "No favorites yet."] {
         find(&texts, wanted);
     }
+}
+
+#[test]
+fn the_heads_use_the_medium_family_and_letter_spacing() {
+    let mut sidebar = Sidebar::default();
+    let ctx = ready();
+    warm_up(&ctx, &mut sidebar);
+    let texts = frame(&ctx, &mut sidebar, Vec::new());
+    for wanted in ["FOLDERS", "FAVORITES"] {
+        let format = &find(&texts, wanted).format;
+        assert_eq!(
+            format.font_id.family,
+            egui::FontFamily::Name(crate::fonts::MEDIUM_FAMILY.into())
+        );
+        assert!((format.extra_letter_spacing - 0.44).abs() < 1e-4);
+    }
+}
+
+#[test]
+fn the_grip_is_painted_with_minus_one_letter_spacing() {
+    let mut sidebar = panel();
+    let ctx = ready();
+    warm_up(&ctx, &mut sidebar);
+    let texts = frame(&ctx, &mut sidebar, Vec::new());
+    assert_eq!(find(&texts, "::").format.extra_letter_spacing, -1.0);
 }
 
 #[test]

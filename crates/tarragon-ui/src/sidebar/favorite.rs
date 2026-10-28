@@ -2,8 +2,10 @@
 //!
 //! The sizes follow the favorites rules in design/mockups/theme.css.
 
+use egui::text::LayoutJob;
 use egui::{
-    CornerRadius, FontId, Frame, Margin, Rect, RichText, Sense, Shape, Stroke, Ui, pos2, vec2,
+    CornerRadius, FontId, Frame, Margin, Rect, RichText, Sense, Shape, Stroke, TextFormat, Ui,
+    pos2, vec2,
 };
 
 use super::paint::{ICON_WIDTH, paint_folder_icon};
@@ -14,6 +16,9 @@ use crate::tokens;
 const FAVORITE_HEIGHT: f32 = 27.0;
 /// Space at the left and right of the row fill, in points.
 const MARGIN: f32 = 6.0;
+
+/// Grip letter spacing, in points: `.grip` in design/mockups/theme.css.
+const GRIP_SPACING: f32 = -1.0;
 
 /// What the user did to a favorite row this frame.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -32,8 +37,7 @@ pub enum FavoriteAction {
 ///
 /// A missing folder draws dim but stays clickable, so the user can still
 /// select and remove it. The grip is the only drag handle, so a click on the
-/// row never starts a drag. The focus outline is not drawn yet, and the grip
-/// letter spacing of the mockup is not applied.
+/// row never starts a drag. The row draws no focus outline.
 ///
 /// With `dragging` set, the row draws the lifted fill and dim. The caller draws
 /// the border with `paint_lifted_border` after the list.
@@ -59,11 +63,15 @@ pub fn show_favorite_row(
     let rect = outer.shrink2(vec2(MARGIN, 0.0));
     let id = row_id(ui, salt);
     let body = ui.interact(rect, id, Sense::click());
-    let grip = ui.painter().layout_no_wrap(
+    let grip = ui.painter().layout_job(LayoutJob::single_section(
         "::".to_owned(),
-        FontId::proportional(tokens::SIZE_CAPTION),
-        tokens::TEXT_MUTED,
-    );
+        TextFormat {
+            font_id: FontId::proportional(tokens::SIZE_CAPTION),
+            color: tokens::TEXT_MUTED,
+            extra_letter_spacing: GRIP_SPACING,
+            ..Default::default()
+        },
+    ));
     let grip_x = rect.min.x + ROW_PAD;
     let grip_rect =
         Rect::from_min_size(pos2(grip_x, rect.min.y), vec2(grip.size().x, rect.height()));

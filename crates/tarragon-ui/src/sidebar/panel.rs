@@ -6,12 +6,12 @@
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
-use egui::{Button, Frame, Margin, Panel, RichText, ScrollArea, Ui, vec2};
+use egui::{Button, FontFamily, Frame, Margin, Panel, RichText, ScrollArea, Ui, vec2};
 
 use super::row::{RowAction, show_tree_row};
 use super::tree::{TreeModel, TreeRow};
 use super::{FavoriteRow, SidebarState};
-use crate::tokens;
+use crate::{fonts, tokens};
 
 mod favorites;
 
@@ -331,9 +331,12 @@ fn ask_listing(
     }
 }
 
+/// Head letter spacing, in em: 0.04em in `.side-head` of design/mockups/theme.css.
+const HEAD_SPACING_EM: f32 = 0.04;
+
 /// Draw a section head: upper case, caption size, muted, with `gap` above it.
 ///
-/// The semibold weight and letter spacing of the mockup are not drawn.
+/// The head uses the Medium family and a letter spacing of `HEAD_SPACING_EM`.
 fn head(ui: &mut Ui, text: &str, gap: f32) {
     ui.add_space(gap);
     Frame::new()
@@ -347,6 +350,8 @@ fn head(ui: &mut Ui, text: &str, gap: f32) {
             ui.label(
                 RichText::new(text.to_uppercase())
                     .size(tokens::SIZE_CAPTION)
+                    .family(FontFamily::Name(fonts::MEDIUM_FAMILY.into()))
+                    .extra_letter_spacing(tokens::SIZE_CAPTION * HEAD_SPACING_EM)
                     .color(tokens::TEXT_MUTED),
             );
         });

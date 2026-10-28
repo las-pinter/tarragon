@@ -23,6 +23,8 @@ pub struct WindowState {
     pub layout: Option<String>,
     /// The window rectangle as `[x, y, width, height]`, or none.
     pub geometry: Option<[i64; 4]>,
+    /// Whether the window was maximized, or none.
+    pub maximized: Option<bool>,
     /// The gallery sort mode name, or none.
     pub sort_mode: Option<String>,
     /// Keys this version does not name. They survive a round trip.
@@ -136,10 +138,12 @@ pub(super) fn repair(text: &str) -> (WindowState, bool) {
     let mut field = |key: &str| map.remove(key).unwrap_or(Value::Null);
     let layout = serde_json::from_value(field("layout")).unwrap_or_default();
     let geometry = serde_json::from_value(field("geometry")).unwrap_or_default();
+    let maximized = serde_json::from_value(field("maximized")).unwrap_or_default();
     let sort_mode = serde_json::from_value(field("sort_mode")).unwrap_or_default();
     let state = WindowState {
         layout,
         geometry,
+        maximized,
         sort_mode,
         extra: map,
     };

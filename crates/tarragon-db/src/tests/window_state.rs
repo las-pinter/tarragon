@@ -90,7 +90,7 @@ fn typed_window_state_keeps_an_unknown_key() {
 }
 
 #[test]
-fn typed_window_state_names_three_keys_and_keeps_the_extras() {
+fn typed_window_state_names_four_keys_and_keeps_the_extras() {
     let temp = TempDb::new();
     let settings = Settings::new(&temp.db);
     settings
@@ -107,8 +107,8 @@ fn typed_window_state_names_three_keys_and_keeps_the_extras() {
         .collect();
     assert_eq!(
         keys,
-        BTreeSet::from(["geometry", "layout", "scroll_y", "sort_mode"]),
-        "three named keys plus the extra key"
+        BTreeSet::from(["geometry", "layout", "maximized", "scroll_y", "sort_mode"]),
+        "four named keys plus the extra key"
     );
 }
 
@@ -238,4 +238,52 @@ fn a_malformed_frame_shift_reads_as_none() {
         let state: WindowState = serde_json::from_str(&text).expect("decode");
         assert_eq!(state.frame_shift(), None, "{bad}");
     }
+}
+
+#[test]
+fn the_maximized_flag_round_trips_through_the_database() {
+    let temp = TempDb::new();
+    let settings = Settings::new(&temp.db);
+    for flag in [Some(true), Some(false)] {
+        let state = WindowState {
+            maximized: flag,
+            ..WindowState::default()
+        };
+        settings
+            .set_window_state_value(&state)
+            .expect("write the state");
+        let stored = settings
+            .window_state_value()
+            .expect("read")
+            .expect("a stored state");
+        assert_eq!(stored.maximized, flag);
+    }
+}
+
+#[test]
+fn an_old_row_without_the_maximized_key_reads_as_none() {
+    let text = r#"{"layout":"library","geometry":[0,0,1200,800],"sort_mode":"date"}"#;
+    let state: WindowState = serde_json::from_str(text).expect("decode");
+    assert_eq!(state.maximized, None);
+    assert!(!state.extra.contains_key("maximized"));
+}
+
+#[test]
+fn a_wrong_typed_maximized_flag_is_repaired_to_none() {
+    let temp = TempDb::new();
+    let settings = Settings::new(&temp.db);
+    temp.db
+        .set_setting(
+            WINDOW_STATE_KEY,
+            r#"{"maximized":"yes","layout":"library"}"#,
+        )
+        .expect("write raw text");
+
+    let (state, repaired) = settings
+        .window_state_repaired()
+        .expect("read")
+        .expect("stored");
+    assert!(repaired);
+    assert_eq!(state.maximized, None);
+    assert_eq!(state.layout.as_deref(), Some("library"));
 }

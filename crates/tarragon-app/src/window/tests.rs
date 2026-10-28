@@ -3,16 +3,18 @@ use eframe::egui::{Pos2, Rect, Vec2};
 use super::*;
 
 #[test]
-fn stored_geometry_sets_size_and_position() {
-    let view = viewport_for("T", Some([10, -20, 900, 600]));
+fn maximized_sets_the_flag_and_keeps_the_default_size() {
+    let view = viewport_for("T", true);
     assert_eq!(view.title.as_deref(), Some("T"));
-    assert_eq!(view.inner_size, Some(Vec2::new(900.0, 600.0)));
-    assert_eq!(view.position, Some(Pos2::new(10.0, -20.0)));
+    assert_eq!(view.maximized, Some(true));
+    assert_eq!(view.inner_size, Some(Vec2::new(1280.0, 800.0)));
+    assert_eq!(view.position, None);
 }
 
 #[test]
-fn no_geometry_gives_the_default_size_and_no_position() {
-    let view = viewport_for("T", None);
+fn not_maximized_sets_the_flag_off_and_keeps_the_default_size() {
+    let view = viewport_for("T", false);
+    assert_eq!(view.maximized, Some(false));
     assert_eq!(view.inner_size, Some(Vec2::new(1280.0, 800.0)));
     assert_eq!(view.position, None);
 }
@@ -71,6 +73,18 @@ fn ms(value: u64) -> Duration {
     START + Duration::from_millis(value)
 }
 
+/// A viewport that asks for a stored rectangle, as the tracker still expects.
+#[expect(clippy::cast_precision_loss, reason = "window sizes are small")]
+fn placed(title: &str, geometry: Option<Geometry>) -> ViewportBuilder {
+    let builder = ViewportBuilder::default().with_title(title);
+    match geometry {
+        Some([x, y, width, height]) => builder
+            .with_inner_size([width as f32, height as f32])
+            .with_position([x as f32, y as f32]),
+        None => builder.with_inner_size(DEFAULT_SIZE),
+    }
+}
+
 /// A report of a window manager that put the window `step` below the asked
 /// position and shows no frame offset, as inner equals outer.
 fn reported(view: &ViewportBuilder, step: f32) -> ViewportInfo {
@@ -89,7 +103,7 @@ fn late_steps_of_the_window_manager_keep_the_geometry_over_restarts() {
     let stored = [217, 219, 2011, 1105];
     let mut geometry = Some(stored);
     for _ in 0..3 {
-        let view = viewport_for("T", geometry);
+        let view = placed("T", geometry);
         let mut tracker = Tracker::new(geometry);
         for (time, step) in [(0, 0.0), (200, 14.0), (400, 28.0), (600, 28.0)] {
             geometry = tracker.track(&reported(&view, step), geometry, ms(time), false);
@@ -102,7 +116,7 @@ fn late_steps_of_the_window_manager_keep_the_geometry_over_restarts() {
 #[test]
 fn a_move_after_the_settle_time_is_kept_without_the_offset() {
     let stored = Some([100, 100, 800, 600]);
-    let view = viewport_for("T", stored);
+    let view = placed("T", stored);
     let mut tracker = Tracker::new(stored);
     let mut geometry = stored;
     for (time, step) in std::iter::once((0, 0.0)).chain((1..=13).map(|i| (i * 200, 28.0))) {
@@ -121,7 +135,7 @@ fn a_move_after_the_settle_time_is_kept_without_the_offset() {
 #[test]
 fn user_input_freezes_the_offset() {
     let stored = Some([100, 100, 800, 600]);
-    let view = viewport_for("T", stored);
+    let view = placed("T", stored);
     let mut tracker = Tracker::new(stored);
     let mut geometry = tracker.track(&reported(&view, 28.0), stored, ms(0), false);
     geometry = tracker.track(&reported(&view, 28.0), geometry, ms(300), true);
@@ -139,7 +153,7 @@ fn user_input_freezes_the_offset() {
 #[test]
 fn an_exit_while_settling_saves_the_asked_position() {
     let stored = Some([217, 219, 2011, 1105]);
-    let view = viewport_for("T", stored);
+    let view = placed("T", stored);
     let mut tracker = Tracker::new(stored);
     let geometry = tracker.track(&reported(&view, 14.0), stored, ms(0), false);
     assert_eq!(geometry, Some([217, 219, 2011, 1105]));
@@ -156,7 +170,7 @@ fn an_exit_while_settling_saves_the_asked_position() {
 #[test]
 fn exactly_the_settle_time_freezes() {
     let stored = Some([100, 100, 800, 600]);
-    let view = viewport_for("T", stored);
+    let view = placed("T", stored);
     let mut tracker = Tracker::new(stored);
     tracker.track(&reported(&view, 28.0), stored, ms(0), false);
     for time in (1..=9).map(|i| i * 200) {
@@ -171,7 +185,7 @@ fn exactly_the_settle_time_freezes() {
 #[test]
 fn minimized_frames_do_not_use_up_the_settle_time() {
     let stored = Some([100, 100, 800, 600]);
-    let view = viewport_for("T", stored);
+    let view = placed("T", stored);
     let mut tracker = Tracker::new(stored);
     let minimized = ViewportInfo {
         minimized: Some(true),
@@ -195,7 +209,7 @@ fn minimized_frames_do_not_use_up_the_settle_time() {
 #[test]
 fn a_long_gap_between_frames_does_not_end_the_settle_time() {
     let stored = Some([100, 100, 800, 600]);
-    let view = viewport_for("T", stored);
+    let view = placed("T", stored);
     let mut tracker = Tracker::new(stored);
     tracker.track(&reported(&view, 0.0), stored, ms(0), false);
     let geometry = tracker.track(&reported(&view, 28.0), stored, ms(3000), false);
@@ -207,7 +221,7 @@ fn a_long_gap_between_frames_does_not_end_the_settle_time() {
 #[test]
 fn user_input_on_the_first_frame_freezes_at_zero() {
     let stored = Some([100, 100, 800, 600]);
-    let view = viewport_for("T", stored);
+    let view = placed("T", stored);
     let mut tracker = Tracker::new(stored);
     let geometry = tracker.track(&reported(&view, 28.0), stored, ms(0), true);
     assert!(!tracker.settling());
@@ -217,7 +231,7 @@ fn user_input_on_the_first_frame_freezes_at_zero() {
 #[test]
 fn a_negative_offset_is_taken_like_a_positive_one() {
     let stored = Some([100, 100, 800, 600]);
-    let view = viewport_for("T", stored);
+    let view = placed("T", stored);
     let mut tracker = Tracker::new(stored);
     let geometry = tracker.track(&reported(&view, -28.0), stored, ms(0), false);
     assert_eq!(geometry, stored);
@@ -260,7 +274,7 @@ fn no_asked_position_gives_no_offset_and_no_settling() {
 /// shift is zero. Then the user moves it after the settle time.
 fn clamped_start_then_move(saved: Option<[i64; 2]>) -> Option<Geometry> {
     let stored = Some([100, 0, 800, 600]);
-    let view = viewport_for("T", stored);
+    let view = placed("T", stored);
     let mut tracker = Tracker::new(stored).with_saved_shift(saved);
     let mut geometry = stored;
     for time in (0..=10).map(|i| i * 200) {
@@ -301,7 +315,7 @@ fn a_far_saved_shift_is_ignored() {
 #[test]
 fn a_measured_shift_wins_over_the_saved_one() {
     let stored = Some([100, 100, 800, 600]);
-    let view = viewport_for("T", stored);
+    let view = placed("T", stored);
     let mut tracker = Tracker::new(stored).with_saved_shift(Some([0, 50]));
     let mut geometry = stored;
     for time in (0..=10).map(|i| i * 200) {
@@ -321,7 +335,7 @@ fn a_measured_shift_wins_over_the_saved_one() {
 #[test]
 fn no_shift_is_reported_while_settling_or_when_zero() {
     let stored = Some([100, 100, 800, 600]);
-    let view = viewport_for("T", stored);
+    let view = placed("T", stored);
     let mut tracker = Tracker::new(stored);
     tracker.track(&reported(&view, 28.0), stored, ms(0), false);
     assert_eq!(tracker.measured_shift(), None);

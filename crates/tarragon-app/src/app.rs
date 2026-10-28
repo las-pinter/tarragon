@@ -136,9 +136,10 @@ impl App {
         })
     }
 
-    /// The stored window rectangle, if any.
-    pub fn geometry(&self) -> Option<Geometry> {
-        self.geometry
+    /// Whether the window was maximized at the last exit. A fresh state reads
+    /// as not maximized.
+    pub fn maximized(&self) -> bool {
+        self.window_state.maximized.unwrap_or(false)
     }
 
     /// Make an activate request repaint the window.

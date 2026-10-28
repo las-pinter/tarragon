@@ -4,18 +4,11 @@ use std::time::Duration;
 
 use eframe::egui::{UserAttentionType, ViewportBuilder, ViewportCommand, ViewportInfo};
 
-/// The inner size used when no geometry is stored, in points.
+/// The inner size of a window that is not maximized, in points.
 const DEFAULT_SIZE: [f32; 2] = tarragon_ui::tokens::WINDOW_SIZE;
 
 /// Window geometry as `[x, y, width, height]`.
 pub type Geometry = [i64; 4];
-
-/// Convert a stored value to points. Window sizes are far below the range
-/// where an f32 loses whole numbers.
-#[expect(clippy::cast_precision_loss, reason = "window sizes are small")]
-fn points(value: i64) -> f32 {
-    value as f32
-}
 
 /// Convert a rectangle part to a stored value, rounded to the nearest whole.
 #[expect(clippy::cast_possible_truncation, reason = "window sizes are small")]
@@ -23,15 +16,14 @@ fn whole(value: f32) -> i64 {
     value.round() as i64
 }
 
-/// The viewport for a start: the stored rectangle, or the default size.
-pub fn viewport_for(title: &str, geometry: Option<Geometry>) -> ViewportBuilder {
-    let builder = ViewportBuilder::default().with_title(title);
-    match geometry {
-        Some([x, y, width, height]) => builder
-            .with_inner_size([points(width), points(height)])
-            .with_position([points(x), points(y)]),
-        None => builder.with_inner_size(DEFAULT_SIZE),
-    }
+/// The viewport for a start. The size is always the default, so a window that
+/// leaves the maximized state has a normal size to return to. The caller
+/// centers it.
+pub fn viewport_for(title: &str, maximized: bool) -> ViewportBuilder {
+    ViewportBuilder::default()
+        .with_title(title)
+        .with_inner_size(DEFAULT_SIZE)
+        .with_maximized(maximized)
 }
 
 /// The largest offset between the asked and the reported position that is

@@ -13,7 +13,8 @@ use crate::window;
 /// Run the window with one renderer until it closes.
 fn run_with(renderer: Renderer, app: App) -> eframe::Result<()> {
     let options = NativeOptions {
-        viewport: window::viewport_for(PRODUCT_NAME, app.geometry()),
+        viewport: window::viewport_for(PRODUCT_NAME, app.maximized()),
+        centered: true,
         renderer,
         ..Default::default()
     };

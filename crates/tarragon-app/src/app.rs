@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
-use eframe::egui::{Context, Event, Ui, ViewportCommand};
+use eframe::egui::{Context, Ui, ViewportCommand};
 use tarragon_cache::store::CacheStore;
 use tarragon_db::Database;
 use tarragon_db::settings::{SettingKey, SettingValue, Settings, SettingsError, WindowState};
@@ -20,7 +20,7 @@ use crate::logview::LogCache;
 use crate::pipeline::{Config, Pipeline, Repaint};
 use crate::sidebar;
 use crate::thumbs::{ExitWait, Thumbs};
-use crate::window::{self, Geometry};
+use crate::window;
 
 /// How often the open Log panel looks for new lines. The ring cannot wake the
 /// UI, and egui otherwise repaints only on input.
@@ -54,10 +54,6 @@ pub struct App {
     logs: LogCache,
     /// The Debug checkbox state.
     debug: bool,
-    /// The last known window rectangle.
-    geometry: Option<Geometry>,
-    /// Follows the window rectangle across frames.
-    tracker: window::Tracker,
     /// The single-instance guard. It stays alive as long as the app.
     guard: Option<Arc<Guard>>,
     /// The folder pipeline. It idles until a folder is opened.
@@ -118,9 +114,6 @@ impl App {
         let repaint_ctx = Arc::new(OnceLock::new());
         let thumbs = start_thumbs(path, &db, folder, &repaint_ctx)?;
         Ok(Self {
-            geometry: window_state.geometry,
-            tracker: window::Tracker::new(window_state.geometry)
-                .with_saved_shift(window_state.frame_shift()),
             db,
             window_state,
             shell,
@@ -191,16 +184,9 @@ impl App {
         }
     }
 
-    /// Write the window rectangle, maximized flag, dock layout, and sort mode to the database.
+    /// Write the maximized flag, dock layout, and sort mode to the database.
     fn save_window_state(&mut self) {
-        self.window_state.geometry = self.geometry;
         self.window_state.layout = Some(self.shell.layout_json());
-        // A run still settling at exit measured nothing, so it keeps the value.
-        if let Some(shift) = self.tracker.measured_shift() {
-            self.window_state.set_frame_shift(Some(shift));
-        } else if self.tracker.measured_no_shift() {
-            self.window_state.set_frame_shift(None);
-        }
         let settings = Settings::new(&self.db);
         if let Err(error) = settings.set_window_state_value(&self.window_state) {
             tracing::warn!("cannot save the window state: {error}");
@@ -252,26 +238,8 @@ impl eframe::App for App {
 
     fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
-        let old = self.geometry;
-        self.geometry = ctx.input(|input| {
-            let acted = input.events.iter().any(|event| {
-                matches!(
-                    event,
-                    Event::Key { pressed: true, .. }
-                        | Event::Text(_)
-                        | Event::PointerButton { pressed: true, .. }
-                        | Event::MouseWheel { .. }
-                        | Event::Touch { .. }
-                )
-            });
-            let now = Duration::from_secs_f64(input.time.max(0.0));
-            self.tracker.track(input.viewport(), old, now, acted)
-        });
         self.window_state.maximized = ctx
             .input(|input| window::maximized_from(input.viewport(), self.window_state.maximized));
-        if self.tracker.settling() {
-            ctx.request_repaint_after(window::SETTLE_REPAINT);
-        }
 
         // Pull before the draw and hold no lock during it, so a line logged
         // mid-frame cannot deadlock.
@@ -313,8 +281,6 @@ impl eframe::App for App {
 
     // The argument exists because the eframe `glow` feature is on.
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
-        self.geometry = self.tracker.at_exit(self.geometry);
-        tracing::debug!("window geometry to save: {:?}", self.geometry);
         self.save_window_state();
         self.thumbs.shutdown(&self.exit_wait);
     }

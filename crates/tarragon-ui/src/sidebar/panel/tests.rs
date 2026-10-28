@@ -6,11 +6,11 @@ use crate::sidebar::row::{CARET_SLOT, GAP};
 use egui::{Color32, Context, Event, Modifiers, PointerButton, Pos2, RawInput, Rect, Shape};
 
 /// One painted text.
-struct Painted {
+pub(super) struct Painted {
     /// The string.
-    string: String,
+    pub(super) string: String,
     /// The top-left corner.
-    pos: Pos2,
+    pub(super) pos: Pos2,
     /// The colour of its first section.
     color: Color32,
 }
@@ -50,14 +50,14 @@ fn panel() -> Sidebar {
 }
 
 /// A context with the theme.
-fn ready() -> Context {
+pub(super) fn ready() -> Context {
     let ctx = Context::default();
     crate::apply_theme(&ctx);
     ctx
 }
 
 /// Run one frame on a 400 by 300 screen and return the painted texts.
-fn frame(ctx: &Context, sidebar: &mut Sidebar, events: Vec<Event>) -> Vec<Painted> {
+pub(super) fn frame(ctx: &Context, sidebar: &mut Sidebar, events: Vec<Event>) -> Vec<Painted> {
     let raw = RawInput {
         screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(400.0, 300.0))),
         events,
@@ -81,7 +81,7 @@ fn frame(ctx: &Context, sidebar: &mut Sidebar, events: Vec<Event>) -> Vec<Painte
 }
 
 /// The first painted text equal to `wanted`.
-fn find<'a>(texts: &'a [Painted], wanted: &str) -> &'a Painted {
+pub(super) fn find<'a>(texts: &'a [Painted], wanted: &str) -> &'a Painted {
     texts
         .iter()
         .find(|text| text.string == wanted)
@@ -89,7 +89,7 @@ fn find<'a>(texts: &'a [Painted], wanted: &str) -> &'a Painted {
 }
 
 /// Click at `offset` from the text `wanted`, over three frames.
-fn click(ctx: &Context, sidebar: &mut Sidebar, wanted: &str, offset: egui::Vec2) {
+pub(super) fn click(ctx: &Context, sidebar: &mut Sidebar, wanted: &str, offset: egui::Vec2) {
     let pos = find(&frame(ctx, sidebar, Vec::new()), wanted).pos + offset;
     let press = |pressed| Event::PointerButton {
         pos,

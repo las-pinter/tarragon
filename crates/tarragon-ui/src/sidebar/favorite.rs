@@ -2,7 +2,9 @@
 //!
 //! The sizes follow the favorites rules in design/mockups/theme.css.
 
-use egui::{CornerRadius, Frame, Margin, RichText, Sense, Ui, pos2, vec2};
+use egui::{
+    CornerRadius, FontId, Frame, Margin, Rect, RichText, Sense, Shape, Stroke, Ui, pos2, vec2,
+};
 
 use super::paint::{ICON_WIDTH, paint_folder_icon};
 use super::row::{GAP, ROW_PAD, icon_y, paint_name, row_colors, row_id};
@@ -20,12 +22,25 @@ pub enum FavoriteAction {
     None,
     /// The row was clicked, so the folder opens in the gallery.
     Open,
+    /// The user began to drag the grip.
+    DragStarted,
+    /// The user let go of the grip.
+    Dropped,
 }
 
 /// Draw one favorite row and report the action.
 ///
 /// A missing folder draws dim but stays clickable, so the user can still
-/// select and remove it. The drag grip and focus outline are not drawn yet.
+/// select and remove it. The grip is the only drag handle, so a click on the
+/// row never starts a drag. The focus outline is not drawn yet, and the grip
+/// letter spacing of the mockup is not applied.
+///
+/// With `dragging` set, the row draws the lifted look of a dragged row.
+///
+/// The row rect comes back so the caller can find the drop slot.
+///
+/// `DragStarted` and `Dropped` win over `Open`. A `Dropped` in the same frame
+/// as `DragStarted` is lost; the panel's lost-release guard ends that drag.
 ///
 /// The `salt` must be unique per row within the list. Favorites use the same
 /// `row_id` scheme as the tree row, so two lists in one ui need their own
@@ -35,31 +50,76 @@ pub fn show_favorite_row(
     label: &str,
     selected: bool,
     missing: bool,
+    dragging: bool,
     salt: usize,
-) -> FavoriteAction {
+) -> (FavoriteAction, Rect) {
     let (outer, _) =
         ui.allocate_exact_size(vec2(ui.available_width(), FAVORITE_HEIGHT), Sense::hover());
     let rect = outer.shrink2(vec2(MARGIN, 0.0));
-    let body = ui.interact(rect, row_id(ui, salt), Sense::click());
+    let id = row_id(ui, salt);
+    let body = ui.interact(rect, id, Sense::click());
+    let grip = ui.painter().layout_no_wrap(
+        "::".to_owned(),
+        FontId::proportional(tokens::SIZE_CAPTION),
+        tokens::TEXT_MUTED,
+    );
+    let grip_x = rect.min.x + ROW_PAD;
+    let grip_rect =
+        Rect::from_min_size(pos2(grip_x, rect.min.y), vec2(grip.size().x, rect.height()));
+    let handle = ui.interact(grip_rect, id.with("grip"), Sense::drag());
 
     let (fill, text, icon) = row_colors(selected, body.hovered());
+    let fill = if dragging {
+        tokens::SURFACE_HIGHLIGHT
+    } else {
+        fill
+    };
     // Muted text is the dimmest readable token, so a missing folder reads as gone.
     let (text, icon) = if missing {
         (tokens::TEXT_MUTED, tokens::TEXT_MUTED)
     } else {
         (text, icon)
     };
-    let painter = ui.painter();
+    let mut painter = ui.painter().clone();
+    if dragging {
+        // The mockup dims the dragged row to 0.75 and dashes an amber border.
+        painter.set_opacity(0.75);
+    }
     painter.rect_filled(rect, CornerRadius::same(tokens::RADIUS_M), fill);
-    let icon_x = rect.min.x + ROW_PAD;
-    paint_folder_icon(painter, pos2(icon_x, icon_y(rect)), icon);
-    paint_name(painter, label, icon_x + ICON_WIDTH + GAP, rect, text);
+    if dragging {
+        let corners = [
+            rect.left_top(),
+            rect.right_top(),
+            rect.right_bottom(),
+            rect.left_bottom(),
+            rect.left_top(),
+        ];
+        painter.extend(Shape::dashed_line(
+            &corners,
+            Stroke::new(1.0, tokens::AMBER_ACCENT),
+            3.0,
+            3.0,
+        ));
+    }
+    painter.galley(
+        pos2(grip_x, rect.center().y - grip.size().y / 2.0),
+        grip.clone(),
+        tokens::TEXT_MUTED,
+    );
+    let icon_x = grip_x + grip.size().x + GAP;
+    paint_folder_icon(&painter, pos2(icon_x, icon_y(rect)), icon);
+    paint_name(&painter, label, icon_x + ICON_WIDTH + GAP, rect, text);
 
-    if body.clicked() {
+    let action = if handle.drag_started() {
+        FavoriteAction::DragStarted
+    } else if handle.drag_stopped() {
+        FavoriteAction::Dropped
+    } else if body.clicked() {
         FavoriteAction::Open
     } else {
         FavoriteAction::None
-    }
+    };
+    (action, rect)
 }
 
 /// Draw the muted text that shows when the user has no favorites.

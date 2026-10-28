@@ -27,7 +27,7 @@ fn frame(ctx: &Context, raw: RawInput, count: usize, selected: bool, missing: bo
     let (mut actions, mut rects) = (Vec::new(), Vec::new());
     let output = ctx.run_ui(raw, |ui| {
         for salt in 0..count {
-            actions.push(show_favorite_row(ui, "same", selected, missing, salt));
+            actions.push(show_favorite_row(ui, "same", selected, missing, false, salt).0);
             rects.push(ctx.read_response(row_id(ui, salt)).expect("row").rect);
         }
     });
@@ -59,10 +59,10 @@ fn has_fill(shapes: &[Shape], fill: Color32) -> bool {
         .any(|shape| matches!(shape, Shape::Rect(rect) if rect.fill == fill))
 }
 
-/// Whether any painted text has this colour.
+/// Whether any painted text other than the grip has this colour.
 fn has_text_color(shapes: &[Shape], color: Color32) -> bool {
     shapes.iter().any(|shape| match shape {
-        Shape::Text(text) => text
+        Shape::Text(text) if text.galley.job.text != "::" => text
             .galley
             .job
             .sections
@@ -174,7 +174,7 @@ fn the_fill_is_inset_6_on_each_side() {
     let output = ctx.run_ui(input(Vec::new()), |ui| {
         min_x = ui.max_rect().min.x;
         avail = ui.available_width();
-        show_favorite_row(ui, "same", true, false, 0);
+        show_favorite_row(ui, "same", true, false, false, 0);
     });
     let fill = output
         .shapes
@@ -187,4 +187,45 @@ fn the_fill_is_inset_6_on_each_side() {
     output.drop_without_applying_deltas();
     assert!((fill.min.x - (min_x + 6.0)).abs() < f32::EPSILON);
     assert!((fill.width() - (avail - 12.0)).abs() < f32::EPSILON);
+}
+
+/// The painted shapes of two rows, the first one lifted when `lift` is set.
+fn two_rows(lift: bool) -> Vec<Shape> {
+    let ctx = Context::default();
+    crate::apply_theme(&ctx);
+    let output = ctx.run_ui(input(Vec::new()), |ui| {
+        show_favorite_row(ui, "same", false, false, lift, 0);
+        show_favorite_row(ui, "same", false, false, false, 1);
+    });
+    let shapes = output.shapes.iter().map(|c| c.shape.clone()).collect();
+    output.drop_without_applying_deltas();
+    shapes
+}
+
+#[test]
+fn a_lifted_row_paints_the_highlight_and_a_dashed_amber_border() {
+    let dimmed = |color: Color32| color.gamma_multiply(0.75);
+    let shapes = two_rows(true);
+    assert!(has_fill(&shapes, dimmed(tokens::SURFACE_HIGHLIGHT)));
+    let dashes = shapes.iter().any(|shape| {
+        matches!(shape, Shape::LineSegment { stroke, .. } if stroke.color == dimmed(tokens::AMBER_ACCENT))
+    });
+    assert!(dashes);
+    assert!(!has_fill(
+        &two_rows(false),
+        dimmed(tokens::SURFACE_HIGHLIGHT)
+    ));
+}
+
+#[test]
+fn the_row_after_a_lifted_row_is_not_dimmed() {
+    let count = |shapes: &[Shape]| {
+        shapes
+            .iter()
+            .filter(|s| matches!(s, Shape::Rect(r) if r.fill == tokens::TEXT_SECONDARY))
+            .count()
+    };
+    let (plain, lifted) = (count(&two_rows(false)), count(&two_rows(true)));
+    assert!(plain > 0);
+    assert_eq!(lifted * 2, plain);
 }

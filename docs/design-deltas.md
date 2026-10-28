@@ -69,12 +69,46 @@ allowed, so the monospace delta closes when that file lands.
 Before: the design draws docks that a docking layout manages. The default sizes
 are Library 220 px, Gallery in the centre, Preview 490 px, and Log hidden.
 
-After: plain egui panels draw the same regions at the same default sizes. The
-Log panel spans the gallery width and stays hidden on the first frame. No panel
-can move or resize yet.
+After: the four panels sit in an egui_dock area. A drag on a divider resizes
+the panels beside it, and a drag on a title moves a panel. A tab cannot float
+as a window. The Log starts hidden. The split shares come from the sidebar and
+preview widths over the default window size, so a restored or resized window
+scales the panels.
 
-Reason: no docking library is in the tree. The docking work owns the layout
-later and replaces these panels.
+Reason: the design asks for docks that the user can resize and move, and
+egui_dock gives that.
+
+## Dock titles and menu
+
+Before: the mockup `.panel-title` strip shows one title for each panel. It has
+no buttons and no menu.
+
+After: the dock tab bar is the panel title. It takes the strip fill, the amber
+text, and a height from the title font. The 8 px side padding is fixed inside
+egui_dock. A leaf that holds two panels shows two titles side by side, which the
+mockup never shows. Only the chosen panel's body shows, and the other panel
+waits behind its title. The bar has no close, close-all, collapse, or add
+buttons. A right click on a title gives Hide panel and Reset Window Layout. The
+View menu also toggles each panel.
+
+Reason: a move needs a title that the user can grab, so the title and the tab
+are one control. Hide and reset need a menu because the bar has no buttons.
+
+## Dock layout state
+
+Before: the design does not say how a layout lasts between runs, or how a
+hidden panel returns.
+
+After: a hidden panel comes back at its default place next to the panels that
+are shown, and at its default width while the Library is shown. With fewer
+panels shown, it takes its place relative to the ones that remain. The layout
+is saved with the window state at exit and restored at start. A saved layout
+that does not load gives the first layout, which has the Log hidden. Reset
+Window Layout resets the panels only. It does not change the window size or
+position.
+
+Reason: a layout that the user arranged should last. A bad saved layout must
+not stop the start, and a reset should not move the window.
 
 ## Dock chrome
 

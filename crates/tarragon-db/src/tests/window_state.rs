@@ -217,3 +217,25 @@ fn an_unknown_stored_sort_mode_reads_as_natural() {
     };
     assert_eq!(state.sort_mode(), SortMode::Natural);
 }
+
+#[test]
+fn the_frame_shift_round_trips_through_the_extra_keys() {
+    let mut state = WindowState::default();
+    assert_eq!(state.frame_shift(), None);
+    state.set_frame_shift(Some([0, 28]));
+    let text = serde_json::to_string(&state).expect("encode");
+    let back: WindowState = serde_json::from_str(&text).expect("decode");
+    assert_eq!(back.frame_shift(), Some([0, 28]));
+    state.set_frame_shift(None);
+    assert_eq!(state.frame_shift(), None);
+    assert!(!state.extra.contains_key("frame_shift"));
+}
+
+#[test]
+fn a_malformed_frame_shift_reads_as_none() {
+    for bad in ["[1]", "[1,2,3]", "\"28\"", "[1.5,2]", "null", "{}"] {
+        let text = format!(r#"{{"frame_shift":{bad}}}"#);
+        let state: WindowState = serde_json::from_str(&text).expect("decode");
+        assert_eq!(state.frame_shift(), None, "{bad}");
+    }
+}

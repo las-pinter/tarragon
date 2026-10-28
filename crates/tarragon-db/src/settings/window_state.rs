@@ -10,6 +10,9 @@ use crate::DbError;
 /// The storage key for the hidden window state JSON blob.
 pub const WINDOW_STATE_KEY: &str = "window_state";
 
+/// The key in [`WindowState::extra`] for the last measured window frame shift.
+const FRAME_SHIFT_KEY: &str = "frame_shift";
+
 /// The retained window layout, geometry, and sort mode.
 ///
 /// Unknown keys stay in [`WindowState::extra`], so a round trip loses nothing.
@@ -40,6 +43,22 @@ impl WindowState {
     /// Store the sort mode under its storage name.
     pub fn set_sort_mode(&mut self, mode: SortMode) {
         self.sort_mode = Some(mode.as_str().to_owned());
+    }
+
+    /// The saved frame shift as `[x, y]`. A missing or malformed value reads
+    /// as none.
+    #[must_use]
+    pub fn frame_shift(&self) -> Option<[i64; 2]> {
+        serde_json::from_value(self.extra.get(FRAME_SHIFT_KEY)?.clone()).ok()
+    }
+
+    /// Save the frame shift as `[x, y]` in the extra keys, or drop it for
+    /// `None`.
+    pub fn set_frame_shift(&mut self, shift: Option<[i64; 2]>) {
+        match shift {
+            Some(shift) => self.extra.insert(FRAME_SHIFT_KEY.to_owned(), shift.into()),
+            None => self.extra.remove(FRAME_SHIFT_KEY),
+        };
     }
 }
 

@@ -1,7 +1,8 @@
 //! Dock layout for the four main panels.
 
 use crate::tokens::{PREVIEW_WIDTH, SIDEBAR_WIDTH};
-use egui_dock::{DockState, NodeIndex};
+use egui::Rect;
+use egui_dock::{DockState, Node, NodeIndex};
 use serde::{Deserialize, Serialize};
 
 /// Window width the default split fractions are computed for.
@@ -22,6 +23,9 @@ pub enum Pane {
     Log,
 }
 
+/// Every pane, for the duplicate check on a loaded layout.
+const ALL: [Pane; 4] = [Pane::Library, Pane::Gallery, Pane::Preview, Pane::Log];
+
 /// Builds the first-run layout: Library, Gallery, Preview, and Log under Gallery.
 #[must_use]
 pub fn default_dock() -> DockState<Pane> {
@@ -39,10 +43,47 @@ pub fn default_dock() -> DockState<Pane> {
     dock
 }
 
+/// Writes the dock as JSON for the saved window state.
+///
+/// # Panics
+///
+/// Never in practice: every rect is zeroed first, so serialization cannot fail.
+#[must_use]
+pub fn to_json(dock: &DockState<Pane>) -> String {
+    // An undrawn dock holds infinite rects, which JSON writes as null and cannot read back.
+    // The next frame sets every rect again, so zero is a safe stand-in.
+    let mut dock = dock.clone();
+    for (_, node) in dock.iter_all_nodes_mut() {
+        match node {
+            Node::Leaf(leaf) => (leaf.rect, leaf.viewport) = (Rect::ZERO, Rect::ZERO),
+            Node::Horizontal(split) | Node::Vertical(split) => split.rect = Rect::ZERO,
+            Node::Empty => {}
+        }
+    }
+    serde_json::to_string(&dock).expect("every rect is finite, so the dock serializes")
+}
+
+/// Reads a saved dock. A pane that is not in the tree is hidden, so any subset is
+/// valid. Gives `None` for no panes or a pane twice.
+#[must_use]
+pub fn from_json(text: &str) -> Option<DockState<Pane>> {
+    let dock: DockState<Pane> = serde_json::from_str(text).ok()?;
+    // A stale or hand-edited layout must not show a panel twice.
+    let panes: Vec<Pane> = dock.iter_all_tabs().map(|(_, pane)| *pane).collect();
+    let once = ALL
+        .iter()
+        .all(|one| panes.iter().filter(|p| *p == one).count() <= 1);
+    // A fraction outside 0..=1 would make egui_dock draw a negative-size panel.
+    let fractions_ok = dock.iter_all_nodes().all(|(_, node)| match node {
+        Node::Horizontal(split) | Node::Vertical(split) => (0.0..=1.0).contains(&split.fraction),
+        _ => true,
+    });
+    (!panes.is_empty() && once && fractions_ok).then_some(dock)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use egui_dock::Node;
 
     fn node_of(dock: &DockState<Pane>, pane: Pane) -> NodeIndex {
         dock.main_surface().find_tab(&pane).expect("pane in dock").0
@@ -97,5 +138,63 @@ mod tests {
             let got = fraction(&tree[index]);
             assert!((got - want).abs() < 1e-6, "{index:?}: {got} != {want}");
         }
+    }
+
+    #[test]
+    fn a_saved_layout_loads_back_the_same() {
+        let json = to_json(&default_dock());
+        let back = from_json(&json).expect("default layout loads");
+        assert_eq!(to_json(&back), json);
+        assert_eq!(
+            node_of(&back, Pane::Log),
+            node_of(&default_dock(), Pane::Log)
+        );
+    }
+
+    #[test]
+    fn a_layout_without_one_pane_loads_without_it() {
+        let three = to_json(&DockState::new(vec![
+            Pane::Library,
+            Pane::Gallery,
+            Pane::Preview,
+        ]));
+        let back = from_json(&three).expect("a subset loads");
+        assert_eq!(back.iter_all_tabs().count(), 3);
+        assert!(back.main_surface().find_tab(&Pane::Log).is_none());
+    }
+
+    #[test]
+    fn a_layout_that_is_not_valid_gives_none() {
+        let good = to_json(&default_dock());
+        let none = to_json(&DockState::new(vec![]));
+        let wide = good.replacen("0.171875", "1.5", 1);
+        assert_ne!(wide, good);
+        let twice = to_json(&DockState::new(vec![
+            Pane::Library,
+            Pane::Library,
+            Pane::Gallery,
+        ]));
+        assert!(good.contains("\"Log\""));
+        for bad in [
+            String::new(),
+            "not json".into(),
+            good.replace("\"Log\"", "\"Bogus\""),
+            none,
+            twice,
+            wide,
+        ] {
+            assert!(from_json(&bad).is_none(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn a_moved_divider_survives_a_round_trip() {
+        let mut dock = default_dock();
+        let Node::Horizontal(split) = &mut dock.main_surface_mut()[NodeIndex::root()] else {
+            panic!("root is a horizontal split");
+        };
+        split.fraction = 0.4;
+        let back = from_json(&to_json(&dock)).expect("layout loads");
+        assert!((fraction(&back.main_surface()[NodeIndex::root()]) - 0.4).abs() < 1e-6);
     }
 }

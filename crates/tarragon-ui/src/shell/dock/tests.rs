@@ -18,10 +18,11 @@ fn the_docks_draw_at_the_default_fractions() {
     draw(&ctx, &mut shell);
 
     // The splits are shares of the window width; the screen is wider than the
-    // 1280 points the shares come from. A divider takes a few points.
+    // default width the shares come from. A divider takes a few points.
     let width = 1400.0;
-    let library = tokens::SIDEBAR_WIDTH / 1280.0 * width;
-    let preview = tokens::PREVIEW_WIDTH / (1280.0 - tokens::SIDEBAR_WIDTH) * (width - library);
+    let library = tokens::SIDEBAR_WIDTH / tokens::WINDOW_SIZE[0] * width;
+    let preview = tokens::PREVIEW_WIDTH / (tokens::WINDOW_SIZE[0] - tokens::SIDEBAR_WIDTH)
+        * (width - library);
     let got_library = leaf_rect(&shell, Pane::Library).width();
     let got_preview = leaf_rect(&shell, Pane::Preview).width();
     assert!(

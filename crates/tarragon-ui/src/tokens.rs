@@ -1,14 +1,14 @@
 //! Theme tokens: palette, spacing, radii, type scale, and motion values.
 //!
 //! The values come from the `:root` block of `design/mockups/theme.css`. Each
-//! doc comment names its stylesheet token, so the two stay traceable. The one
-//! exception is `BUCKET_PINK`, which has no stylesheet row. Colours convert to
-//! `egui::Color32` at compile time.
+//! doc comment names its stylesheet token, so the two stay traceable. The two
+//! exceptions are `BUCKET_PINK` and `WINDOW_SIZE`, which have no stylesheet
+//! row. Colours convert to `egui::Color32` at compile time.
 
 use egui::Color32;
 
 // The whole `:root` block of `theme.css` is ported on purpose, plus
-// `BUCKET_PINK`. Some values have no consumer yet.
+// `BUCKET_PINK` and `WINDOW_SIZE`. Some values have no consumer yet.
 
 /// `--bg-primary`: window and gallery background.
 pub const BG_PRIMARY: Color32 = Color32::from_rgb(0x16, 0x15, 0x1a);
@@ -158,6 +158,9 @@ pub const DURATION_NORMAL: f32 = 0.2;
 pub const GRID_GAP: f32 = 14.0;
 /// `--thumbnail`: grid cell size, in points.
 pub const THUMBNAIL_SIZE: f32 = 160.0;
+/// Default window size in points. The dock split shares are computed for its
+/// width, so the app and the layout must read the same value.
+pub const WINDOW_SIZE: [f32; 2] = [1280.0, 800.0];
 /// `--sidebar-width`: default Library dock width, in points.
 pub const SIDEBAR_WIDTH: f32 = 220.0;
 /// `--preview-width`: default Preview dock width, in points.

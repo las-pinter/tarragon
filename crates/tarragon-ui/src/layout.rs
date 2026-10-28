@@ -1,12 +1,12 @@
 //! Dock layout for the four main panels.
 
-use crate::tokens::{PREVIEW_WIDTH, SIDEBAR_WIDTH};
+use crate::tokens::{PREVIEW_WIDTH, SIDEBAR_WIDTH, WINDOW_SIZE};
 use egui::Rect;
 use egui_dock::{DockState, Node, NodeIndex, Tree};
 use serde::{Deserialize, Serialize};
 
 /// Window width the default split fractions are computed for.
-const DEFAULT_WIDTH: f32 = 1280.0;
+const DEFAULT_WIDTH: f32 = WINDOW_SIZE[0];
 /// Share of the height that the Gallery keeps above the Log.
 const GALLERY_HEIGHT: f32 = 0.75;
 /// Share of the width that the Library takes on the left.

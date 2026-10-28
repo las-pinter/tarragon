@@ -330,6 +330,8 @@ fn a_stored_layout_restores_into_the_shell() {
 fn a_corrupt_stored_layout_gives_the_first_dock() {
     let dir = new_dir();
     let app = app_with_stored_layout(&dir, "{not a layout");
+    let first = tarragon_ui::layout::to_json(&tarragon_ui::layout::first_dock());
+    assert_eq!(app.shell.layout_json(), first);
     assert!(app.shell.library_visible());
     assert!(!app.shell.log_visible());
 }

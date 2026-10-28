@@ -5,7 +5,7 @@ use std::time::Duration;
 use eframe::egui::{UserAttentionType, ViewportBuilder, ViewportCommand, ViewportInfo};
 
 /// The inner size used when no geometry is stored, in points.
-const DEFAULT_SIZE: [f32; 2] = [1280.0, 800.0];
+const DEFAULT_SIZE: [f32; 2] = tarragon_ui::tokens::WINDOW_SIZE;
 
 /// Window geometry as `[x, y, width, height]`.
 pub type Geometry = [i64; 4];

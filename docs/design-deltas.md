@@ -196,3 +196,56 @@ this file records the difference.
 
 Reason: pink hues were wrongly neutral. Transparent pixels added colours that
 are not visible. Artists need to find images with transparency.
+
+## Library sidebar layout
+
+Before: `design/mockups/library.html` shows one column. The folder tree and the
+FAVORITES section share it, and the favorites follow the tree.
+
+After: the FAVORITES section sits in its own panel above the buttons. The panel
+fits its rows, up to half the dock, and scrolls on its own. The folder tree
+scrolls above it. Sidebar rows are painted directly. They draw no focus outline
+and publish no screen-reader information. The section heads FOLDERS and
+FAVORITES use the Roboto Medium face, the nearest vendored weight to the
+mockup's 600, with the mockup's 0.04 em letter spacing.
+
+Reason: a tall folder tree would push the favorites out of view, so the
+favorites sit in their own panel and stay visible. The mockups define no focus
+state for these rows.
+
+## Favorites drag
+
+Before: `design/mockups/favorites-reorder.html` shows the `::` grip
+(`.grip`, `design/mockups/theme.css` line 437) only in the reorder state. The
+head reads "(drag to reorder)", and a hint line follows the list. The drop line
+(`.drop-line`, lines 430-435) takes 8 px of layout: 3 px margins and a 2 px
+line. The lifted row (`.fav-row.dragging`, lines 424-428) has a dashed border
+that follows the row radius.
+
+After: every favorite row shows the grip. The head reads FAVORITES, and no hint
+line is drawn. The drop line overlays the row edge and takes no layout, so rows
+stay still during a drag. The dashed border of the lifted row has square
+corners.
+
+Reason: the grip is the only drag handle, so it shows on every row. egui 0.36.2
+has no helper for a rounded dashed rectangle. A dashed path needs hand-built arc
+points, so the border keeps square corners. A permanent grip shows that the
+order can change, so the head text and the hint line add nothing.
+
+## Favorite labels and roots
+
+Before: the mockups do not define how a favorite gets its label, and they do
+not define the tree roots. `design/mockups/library.html` lines 38-41 show only
+sample paths such as `sketches/2026-10`.
+
+After: a favorite shows the stored label when it is not blank. Otherwise it
+shows the path below the longest tree root that contains it, for example
+`sketches/2026-10`. A favorite equal to a root shows the folder name of that
+root. A path below no root, or a root with no folder name such as `/`, shows
+the full path. A favorite whose folder is missing shows dim text and a dim
+icon. The tree roots are the home folder and, when it is outside home, the
+folder given on the command line.
+
+Reason: the sidebar needs a short name for each favorite and a start point for
+the tree. The home folder holds a user's files by default, and the
+command-line folder must stay reachable when it is outside home.

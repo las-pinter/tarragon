@@ -1,4 +1,4 @@
-//! The hidden window-state blob: layout, geometry, and sort mode.
+//! The hidden window-state blob: layout, maximized flag, and sort mode.
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -10,10 +10,11 @@ use crate::DbError;
 /// The storage key for the hidden window state JSON blob.
 pub const WINDOW_STATE_KEY: &str = "window_state";
 
-/// The key in [`WindowState::extra`] for the last measured window frame shift.
-const FRAME_SHIFT_KEY: &str = "frame_shift";
+/// Keys that older versions stored and no version reads. They are dropped on
+/// read, so they do not stay in [`WindowState::extra`] for good.
+const RETIRED_KEYS: [&str; 2] = ["geometry", "frame_shift"];
 
-/// The retained window layout, geometry, and sort mode.
+/// The retained window layout, maximized flag, and sort mode.
 ///
 /// Unknown keys stay in [`WindowState::extra`], so a round trip loses nothing.
 /// A named key that is absent from the stored text reads as `None`.
@@ -21,8 +22,6 @@ const FRAME_SHIFT_KEY: &str = "frame_shift";
 pub struct WindowState {
     /// The dock layout name, or none.
     pub layout: Option<String>,
-    /// The window rectangle as `[x, y, width, height]`, or none.
-    pub geometry: Option<[i64; 4]>,
     /// Whether the window was maximized, or none.
     pub maximized: Option<bool>,
     /// The gallery sort mode name, or none.
@@ -46,22 +45,6 @@ impl WindowState {
     pub fn set_sort_mode(&mut self, mode: SortMode) {
         self.sort_mode = Some(mode.as_str().to_owned());
     }
-
-    /// The saved frame shift as `[x, y]`. A missing or malformed value reads
-    /// as none.
-    #[must_use]
-    pub fn frame_shift(&self) -> Option<[i64; 2]> {
-        serde_json::from_value(self.extra.get(FRAME_SHIFT_KEY)?.clone()).ok()
-    }
-
-    /// Save the frame shift as `[x, y]` in the extra keys, or drop it for
-    /// `None`.
-    pub fn set_frame_shift(&mut self, shift: Option<[i64; 2]>) {
-        match shift {
-            Some(shift) => self.extra.insert(FRAME_SHIFT_KEY.to_owned(), shift.into()),
-            None => self.extra.remove(FRAME_SHIFT_KEY),
-        };
-    }
 }
 
 impl Settings<'_> {
@@ -82,7 +65,8 @@ impl Settings<'_> {
     /// Read the typed window state with read-repair, and report the repair.
     ///
     /// The flag is `true` when the stored text was not a valid window state.
-    /// The stored text is not rewritten.
+    /// The stored text is not rewritten. Keys that no version reads any more are
+    /// left out of the result, so the next save removes them.
     ///
     /// # Errors
     ///
@@ -129,20 +113,24 @@ impl Settings<'_> {
 /// A named key with the wrong type reads as `None`, so the valid keys and the
 /// extra keys survive. Text that is not a JSON object reads as the default.
 pub(super) fn repair(text: &str) -> (WindowState, bool) {
-    if let Ok(state) = serde_json::from_str::<WindowState>(text) {
+    if let Ok(mut state) = serde_json::from_str::<WindowState>(text) {
+        for key in RETIRED_KEYS {
+            state.extra.remove(key);
+        }
         return (state, false);
     }
     let Ok(Value::Object(mut map)) = serde_json::from_str::<Value>(text) else {
         return (WindowState::default(), true);
     };
+    for key in RETIRED_KEYS {
+        map.remove(key);
+    }
     let mut field = |key: &str| map.remove(key).unwrap_or(Value::Null);
     let layout = serde_json::from_value(field("layout")).unwrap_or_default();
-    let geometry = serde_json::from_value(field("geometry")).unwrap_or_default();
     let maximized = serde_json::from_value(field("maximized")).unwrap_or_default();
     let sort_mode = serde_json::from_value(field("sort_mode")).unwrap_or_default();
     let state = WindowState {
         layout,
-        geometry,
         maximized,
         sort_mode,
         extra: map,

@@ -191,7 +191,7 @@ impl App {
         }
     }
 
-    /// Write the window rectangle, dock layout, and sort mode to the database.
+    /// Write the window rectangle, maximized flag, dock layout, and sort mode to the database.
     fn save_window_state(&mut self) {
         self.window_state.geometry = self.geometry;
         self.window_state.layout = Some(self.shell.layout_json());
@@ -267,6 +267,8 @@ impl eframe::App for App {
             let now = Duration::from_secs_f64(input.time.max(0.0));
             self.tracker.track(input.viewport(), old, now, acted)
         });
+        self.window_state.maximized = ctx
+            .input(|input| window::maximized_from(input.viewport(), self.window_state.maximized));
         if self.tracker.settling() {
             ctx.request_repaint_after(window::SETTLE_REPAINT);
         }

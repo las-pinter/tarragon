@@ -1,4 +1,4 @@
-use eframe::egui::{RawInput, ViewportCommand, ViewportId};
+use eframe::egui::{RawInput, ViewportCommand, ViewportId, ViewportInfo};
 use std::time::Instant;
 
 use eframe::{App as _, Frame};
@@ -334,6 +334,23 @@ fn a_corrupt_stored_layout_gives_the_first_dock() {
     assert_eq!(app.shell.layout_json(), first);
     assert!(app.shell.library_visible());
     assert!(!app.shell.log_visible());
+}
+
+#[test]
+fn the_saved_state_carries_the_maximized_flag_and_a_restart_reads_it() {
+    let dir = new_dir();
+    let mut app = app_at(&dir, None);
+    assert!(!app.maximized());
+    let info = ViewportInfo {
+        maximized: Some(true),
+        ..Default::default()
+    };
+    app.window_state.maximized = window::maximized_from(&info, app.window_state.maximized);
+    app.save_window_state();
+    drop(app);
+
+    let app = app_at(&dir, None);
+    assert!(app.maximized());
 }
 
 #[test]

@@ -16,6 +16,17 @@ fn whole(value: f32) -> i64 {
     value.round() as i64
 }
 
+/// The maximized flag to keep after a frame. A minimized or full-screen window
+/// reports a state that is not the user's choice, and a frame with no reading
+/// (some platforms report only on the first frame) says nothing, so both keep
+/// the old value.
+pub fn maximized_from(info: &ViewportInfo, old: Option<bool>) -> Option<bool> {
+    if info.minimized == Some(true) || info.fullscreen == Some(true) {
+        return old;
+    }
+    info.maximized.or(old)
+}
+
 /// The viewport for a start. The size is always the default, so a window that
 /// leaves the maximized state has a normal size to return to. The caller
 /// centers it.

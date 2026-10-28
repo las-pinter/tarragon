@@ -65,6 +65,50 @@ fn minimized_window_keeps_the_old_geometry() {
     assert_eq!(geometry_from(&ViewportInfo::default(), None, [0, 0]), None);
 }
 
+fn maximized_info(maximized: Option<bool>) -> ViewportInfo {
+    ViewportInfo {
+        maximized,
+        ..Default::default()
+    }
+}
+
+#[test]
+fn a_reading_replaces_the_old_maximized_value() {
+    assert_eq!(
+        maximized_from(&maximized_info(Some(true)), None),
+        Some(true)
+    );
+    assert_eq!(
+        maximized_from(&maximized_info(Some(false)), Some(true)),
+        Some(false)
+    );
+}
+
+#[test]
+fn a_frame_with_no_reading_keeps_the_old_maximized_value() {
+    assert_eq!(
+        maximized_from(&maximized_info(None), Some(true)),
+        Some(true)
+    );
+    assert_eq!(maximized_from(&maximized_info(None), None), None);
+}
+
+#[test]
+fn a_minimized_or_full_screen_frame_keeps_the_old_maximized_value() {
+    let minimized = ViewportInfo {
+        minimized: Some(true),
+        maximized: Some(false),
+        ..Default::default()
+    };
+    assert_eq!(maximized_from(&minimized, Some(true)), Some(true));
+    let full = ViewportInfo {
+        fullscreen: Some(true),
+        maximized: Some(false),
+        ..Default::default()
+    };
+    assert_eq!(maximized_from(&full, Some(true)), Some(true));
+}
+
 /// The time of the first frame in the tests.
 const START: Duration = Duration::from_secs(10);
 

@@ -99,15 +99,21 @@ pub struct Thumbs {
 }
 
 impl Thumbs {
-    /// Hold `pipeline` and open `folder` on the first frame. The open waits
-    /// for a frame so a window that never starts does no work.
+    /// Hold `pipeline` and open `folder` on the first frame, if there is one.
+    /// The open waits for a frame so a window that never starts does no work.
+    /// Without a folder the pipeline idles.
     #[must_use]
-    pub fn new(pipeline: Pipeline, results: Results, folder: PathBuf, repaint: Repaint) -> Self {
+    pub fn new(
+        pipeline: Pipeline,
+        results: Results,
+        folder: Option<PathBuf>,
+        repaint: Repaint,
+    ) -> Self {
         Self {
             slot: Slot::Idle(pipeline),
             results,
             feed: Feed::new(GRID_BUDGET_BYTES),
-            pending: Some(folder),
+            pending: folder,
             synced: None,
             opened: false,
             announced: false,
@@ -318,7 +324,7 @@ mod tests {
         let repaint: Repaint = Arc::new(|| {});
         let (pipeline, results) =
             Pipeline::new(config, db, Arc::clone(&repaint)).expect("start the pipeline");
-        let mut thumbs = Thumbs::new(pipeline, results, folder, repaint);
+        let mut thumbs = Thumbs::new(pipeline, results, Some(folder), repaint);
         let ctx = Context::default();
         let mut gallery = Gallery::new(SortMode::Natural);
 

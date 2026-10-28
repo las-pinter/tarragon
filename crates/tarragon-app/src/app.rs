@@ -60,8 +60,8 @@ pub struct App {
     tracker: window::Tracker,
     /// The single-instance guard. It stays alive as long as the app.
     guard: Option<Arc<Guard>>,
-    /// The folder pipeline, when a folder was given.
-    thumbs: Option<Thumbs>,
+    /// The folder pipeline. It idles until a folder is opened.
+    thumbs: Thumbs,
     /// The window context for worker threads, set once the window exists.
     repaint_ctx: Arc<OnceLock<Context>>,
     /// Close the window when the grid is done.
@@ -102,13 +102,12 @@ impl App {
             tracing::warn!("the stored window state was invalid and was repaired");
         }
         let mut shell = Shell::new().with_sort_mode(window_state.sort_mode());
+        // Normalize once, so the pipeline and the sidebar see the same path.
+        let folder = startup.folder.as_deref().map(sidebar::normalize);
         let home = sidebar::home_dir();
-        sidebar::init(&mut shell, &db, home.as_deref(), startup.folder.as_deref());
+        sidebar::init(&mut shell, &db, home.as_deref(), folder.as_deref());
         let repaint_ctx = Arc::new(OnceLock::new());
-        let thumbs = match startup.folder {
-            Some(folder) => Some(start_thumbs(path, &db, folder, &repaint_ctx)?),
-            None => None,
-        };
+        let thumbs = start_thumbs(path, &db, folder, &repaint_ctx)?;
         Ok(Self {
             geometry: window_state.geometry,
             tracker: window::Tracker::new(window_state.geometry),
@@ -185,12 +184,12 @@ impl App {
     }
 }
 
-/// Build the pipeline for `folder`. The cache sits where the `cache_dir`
+/// Build the pipeline, and open `folder` on the first frame when there is one. The cache sits where the `cache_dir`
 /// setting says, else beside the database.
 fn start_thumbs(
     db_path: &Path,
     db: &Arc<Database>,
-    folder: PathBuf,
+    folder: Option<PathBuf>,
     repaint_ctx: &Arc<OnceLock<Context>>,
 ) -> Result<Thumbs, Box<dyn Error>> {
     let setting = Settings::new(db)
@@ -254,9 +253,7 @@ impl eframe::App for App {
             self.logs.pull(&self.ring);
             ctx.request_repaint_after(LOG_REFRESH);
         }
-        if let Some(thumbs) = &mut self.thumbs {
-            thumbs.before_draw(&ctx, self.shell.gallery_mut());
-        }
+        self.thumbs.before_draw(&ctx, self.shell.gallery_mut());
         let source = self.logs.source();
         let view = LogView {
             source: &source,
@@ -267,14 +264,12 @@ impl eframe::App for App {
         if sidebar::handle_events(&mut self.shell, &self.db) {
             ctx.request_repaint();
         }
-        if let Some(thumbs) = &mut self.thumbs {
-            thumbs.after_draw(self.shell.gallery_mut());
-            if self.close_when_loaded
-                && let Some(summary) = thumbs.loaded_once()
-            {
-                tracing::info!("{summary}");
-                ctx.send_viewport_cmd(ViewportCommand::Close);
-            }
+        self.thumbs.after_draw(self.shell.gallery_mut());
+        if self.close_when_loaded
+            && let Some(summary) = self.thumbs.loaded_once()
+        {
+            tracing::info!("{summary}");
+            ctx.send_viewport_cmd(ViewportCommand::Close);
         }
 
         if let Err(error) = self.persist_sort_if_changed() {
@@ -287,15 +282,15 @@ impl eframe::App for App {
         self.geometry = self.tracker.at_exit(self.geometry);
         tracing::debug!("window geometry to save: {:?}", self.geometry);
         self.save_window_state();
-        if let Some(thumbs) = &mut self.thumbs {
-            thumbs.shutdown(&self.exit_wait);
-        }
+        self.thumbs.shutdown(&self.exit_wait);
     }
 }
 
 #[cfg(test)]
 mod tests {
     use eframe::egui::{RawInput, ViewportCommand, ViewportId};
+    use std::time::Instant;
+
     use eframe::{App as _, Frame};
 
     use super::*;
@@ -384,6 +379,58 @@ mod tests {
             .map(|f| f.path.clone())
             .collect();
         assert_eq!(shown, wanted);
+    }
+
+    /// Open an app on a fresh database in `dir` with the given start folder.
+    fn app_at(dir: &TempDir, folder: Option<PathBuf>) -> App {
+        let (_filter, control) = LogControl::new_filter();
+        let startup = Startup {
+            folder,
+            close_when_loaded: false,
+            exit_wait: ExitWait::default(),
+        };
+        App::open(&dir.0.join("t.db"), LogRing::new(), control, None, startup).expect("open")
+    }
+
+    #[test]
+    fn an_app_without_a_folder_opens_and_runs_a_frame() {
+        let dir = new_dir();
+        let mut app = app_at(&dir, None);
+        let ctx = Context::default();
+        tarragon_ui::install(&ctx);
+        let mut frame = Frame::_new_kittest();
+        let mut output = ctx.run_ui(RawInput::default(), |ui| app.ui(ui, &mut frame));
+        output.textures_delta.clear();
+        assert_eq!(app.shell.gallery_mut().folder(), None);
+    }
+
+    #[test]
+    fn a_dot_dot_folder_reaches_thumbs_and_sidebar_as_the_same_path() {
+        let dir = new_dir();
+        for name in ["a", "b"] {
+            std::fs::create_dir_all(dir.0.join(name)).expect("create a folder");
+        }
+        let raw = dir.0.join("a").join("..").join("b");
+        let wanted = dir.0.join("b");
+        let mut app = app_at(&dir, Some(raw));
+        let ctx = Context::default();
+        tarragon_ui::install(&ctx);
+        let mut frame = Frame::_new_kittest();
+        let started = Instant::now();
+        while app.shell.gallery_mut().folder().is_none() {
+            assert!(
+                started.elapsed() < Duration::from_secs(10),
+                "the open never finished"
+            );
+            let mut output = ctx.run_ui(RawInput::default(), |ui| app.ui(ui, &mut frame));
+            output.textures_delta.clear();
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert_eq!(app.shell.gallery_mut().folder(), Some(wanted.as_path()));
+        assert_eq!(
+            app.shell.sidebar_mut().open_folder(),
+            Some(wanted.as_path())
+        );
     }
 
     #[test]

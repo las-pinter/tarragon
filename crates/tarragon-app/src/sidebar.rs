@@ -32,7 +32,7 @@ fn home_from(home: Option<OsString>, profile: Option<OsString>) -> Option<PathBu
 /// A link stays a link, so the path matches the listed children of the tree.
 /// A home that is a link next to a physical working folder can show the tree
 /// twice; that limit is accepted.
-fn normalize(path: &Path) -> PathBuf {
+pub(crate) fn normalize(path: &Path) -> PathBuf {
     let mut out = PathBuf::new();
     for part in path.components() {
         match part {

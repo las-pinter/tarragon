@@ -191,6 +191,39 @@ fn a_navigate_event_opens_a_folder_in_an_app_without_one() {
 }
 
 #[test]
+fn navigate_then_add_current_shows_the_new_favorite() {
+    use tarragon_ui::sidebar::panel::SidebarEvent;
+
+    let dir = new_dir();
+    let pics = dir.0.join("pics");
+    make_pngs(&pics, &["a.png"]);
+    let mut app = app_at(&dir, None);
+    let ctx = Context::default();
+    tarragon_ui::install(&ctx);
+    let mut frame = Frame::_new_kittest();
+    app.shell
+        .sidebar_mut()
+        .push_event(SidebarEvent::Navigate(pics.clone()));
+    run_until_idle(&mut app, &ctx, &mut frame);
+    app.shell.sidebar_mut().push_event(SidebarEvent::AddCurrent);
+    let mut output = ctx.run_ui(RawInput::default(), |ui| app.ui(ui, &mut frame));
+    output.textures_delta.clear();
+    let shown: Vec<PathBuf> = app
+        .shell
+        .sidebar_mut()
+        .favorites()
+        .iter()
+        .map(|f| f.path.clone())
+        .collect();
+    assert_eq!(shown, std::slice::from_ref(&pics));
+    assert_eq!(app.db.list_favorites().unwrap().len(), 1);
+    assert_eq!(
+        app.shell.sidebar_mut().selected_favorite(),
+        Some(pics.as_path())
+    );
+}
+
+#[test]
 fn a_failed_navigate_keeps_the_old_folder_and_restores_the_highlight() {
     use tarragon_ui::sidebar::panel::SidebarEvent;
 

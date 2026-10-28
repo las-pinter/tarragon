@@ -156,7 +156,29 @@ fn remove_needs_a_selected_favorite_and_clears_it() {
         sidebar.take_events(),
         [SidebarEvent::Remove(PathBuf::from("/f/x"))]
     );
+    assert_eq!(sidebar.selected_favorite(), Some(Path::new("/f/x")));
+    sidebar.set_favorites(Vec::new());
     assert_eq!(sidebar.selected_favorite(), None);
+}
+
+#[test]
+fn clicking_a_tree_row_that_is_not_a_favorite_clears_the_selection() {
+    let mut sidebar = panel();
+    events_after(&mut sidebar, "fav");
+    assert_eq!(sidebar.selected_favorite(), Some(Path::new("/f/x")));
+    events_after(&mut sidebar, "a");
+    assert_eq!(sidebar.open_folder(), Some(Path::new("/r/a")));
+    assert_eq!(sidebar.selected_favorite(), None);
+}
+
+#[test]
+fn clicking_a_tree_row_equal_to_a_favorite_selects_that_favorite() {
+    let mut sidebar = panel();
+    let mut row = favorite(false);
+    row.path = PathBuf::from("/r/a");
+    sidebar.set_favorites(vec![row]);
+    events_after(&mut sidebar, "a");
+    assert_eq!(sidebar.selected_favorite(), Some(Path::new("/r/a")));
 }
 
 #[test]
@@ -325,4 +347,32 @@ fn nested_roots_duplicate_roots_and_a_root_as_open_folder() {
     let mut sidebar = unlisted();
     sidebar.set_open_folder(Some(PathBuf::from("/r")));
     assert_eq!(sidebar.take_events(), Vec::<SidebarEvent>::new());
+}
+
+#[test]
+fn the_open_folder_selects_the_favorite_with_that_path() {
+    let mut sidebar = Sidebar::default();
+    sidebar.set_favorites(vec![favorite(false)]);
+    sidebar.set_open_folder(Some(PathBuf::from("/f/other")));
+    assert_eq!(sidebar.selected_favorite(), None);
+    sidebar.set_open_folder(Some(PathBuf::from("/f/x")));
+    assert_eq!(sidebar.selected_favorite(), Some(Path::new("/f/x")));
+    sidebar.set_open_folder(Some(PathBuf::from("/f/other")));
+    assert_eq!(
+        sidebar.selected_favorite(),
+        None,
+        "another folder clears it"
+    );
+    sidebar.set_open_folder(Some(PathBuf::from("/f/x")));
+    sidebar.set_open_folder(None);
+    assert_eq!(sidebar.selected_favorite(), None);
+}
+
+#[test]
+fn a_new_favorite_list_selects_the_open_folder_when_it_matches() {
+    let mut sidebar = Sidebar::default();
+    sidebar.set_open_folder(Some(PathBuf::from("/f/x")));
+    assert_eq!(sidebar.selected_favorite(), None);
+    sidebar.set_favorites(vec![favorite(false)]);
+    assert_eq!(sidebar.selected_favorite(), Some(Path::new("/f/x")));
 }

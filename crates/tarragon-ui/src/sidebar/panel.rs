@@ -38,8 +38,8 @@ pub enum SidebarEvent {
 
 /// The panel state and its event queue.
 ///
-/// `SidebarState.selected` is the open folder. The favorite that Remove acts
-/// on is kept apart, so opening a tree folder does not arm Remove.
+/// `SidebarState.selected` is the open folder. The selected favorite follows
+/// it: the favorite equal to the open folder, else none. Remove acts on it.
 #[derive(Debug, Default)]
 pub struct Sidebar {
     /// Favorites, roots, and the open folder.
@@ -50,7 +50,7 @@ pub struct Sidebar {
     rows: Vec<TreeRow>,
     /// Whether the tree changed since `rows` was built.
     dirty: bool,
-    /// The favorite that Remove acts on.
+    /// The favorite equal to the open folder, else none; Remove acts on it.
     selected_favorite: Option<PathBuf>,
     /// Events not yet taken by the shell.
     events: Vec<SidebarEvent>,
@@ -117,19 +117,28 @@ impl Sidebar {
         self.dirty |= changed;
     }
 
-    /// Replace the favorites; the Remove target is dropped if its row is gone.
+    /// Replace the favorites. The selected favorite follows the open folder.
     ///
     /// A drag in progress ends, because its index may point at another row now.
     pub fn set_favorites(&mut self, favorites: Vec<FavoriteRow>) {
         self.dragging = None;
-        let gone = self
-            .selected_favorite
-            .as_ref()
-            .is_some_and(|path| !favorites.iter().any(|fav| &fav.path == path));
-        if gone {
-            self.selected_favorite = None;
-        }
         self.state.set_favorites(favorites);
+        self.select_open_favorite();
+    }
+
+    /// The selected favorite is the one equal to the open folder, else none.
+    fn select_open_favorite(&mut self) {
+        self.selected_favorite = self
+            .state
+            .selected()
+            .filter(|open| self.state.favorites().iter().any(|fav| fav.path == *open))
+            .map(Path::to_path_buf);
+    }
+
+    /// Open a folder from a click and update the selected favorite.
+    fn open(&mut self, path: PathBuf) {
+        self.state.set_selected(Some(path));
+        self.select_open_favorite();
     }
 
     /// The folder open in the gallery, or none.
@@ -138,9 +147,11 @@ impl Sidebar {
         self.state.selected()
     }
 
-    /// Set the folder open in the gallery.
+    /// Set the folder open in the gallery. The selected favorite follows it:
+    /// the favorite with that path, else none.
     pub fn set_open_folder(&mut self, folder: Option<PathBuf>) {
         self.state.set_selected(folder);
+        self.select_open_favorite();
         self.reveal();
     }
 
@@ -214,11 +225,12 @@ impl Sidebar {
             .inner_margin(Margin::symmetric(6, 2))
             .show(ui, |ui| {
                 ui.push_id("tree", |ui| {
+                    let mut navigate = None;
                     for (index, row) in self.rows.iter().enumerate() {
                         let open = self.state.selected() == Some(row.path.as_path());
                         match show_tree_row(ui, row, open, index) {
                             RowAction::Navigate => {
-                                self.state.set_selected(Some(row.path.clone()));
+                                navigate = Some(row.path.clone());
                                 ui.ctx().request_repaint();
                                 self.events.push(SidebarEvent::Navigate(row.path.clone()));
                             }
@@ -237,6 +249,9 @@ impl Sidebar {
                             }
                             RowAction::None => {}
                         }
+                    }
+                    if let Some(path) = navigate {
+                        self.open(path);
                     }
                 });
             });
@@ -272,8 +287,7 @@ impl Sidebar {
             }
         });
         if let Some(path) = opened {
-            self.selected_favorite = Some(path.clone());
-            self.state.set_selected(Some(path.clone()));
+            self.open(path.clone());
             self.events.push(SidebarEvent::Navigate(path));
         }
         self.finish_drag(ui, &rects, dropped);
@@ -322,7 +336,7 @@ impl Sidebar {
             }
             let remove = ui.add_enabled(self.selected_favorite.is_some(), small("Remove"));
             if remove.clicked()
-                && let Some(path) = self.selected_favorite.take()
+                && let Some(path) = self.selected_favorite.clone()
             {
                 self.events.push(SidebarEvent::Remove(path));
             }

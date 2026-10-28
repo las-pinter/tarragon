@@ -307,6 +307,7 @@ impl Thumbs {
                 tracing::error!("the open thread ended without an answer");
                 self.slot = Slot::Gone;
                 self.opened = true;
+                self.changed |= self.pending.is_none();
                 return;
             }
         };

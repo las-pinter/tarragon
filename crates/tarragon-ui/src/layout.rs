@@ -144,7 +144,7 @@ pub fn from_json(text: &str) -> Option<DockState<Pane>> {
     // A fraction outside 0..=1 would make egui_dock draw a negative-size panel.
     let fractions_ok = dock.iter_all_nodes().all(|(_, node)| match node {
         Node::Horizontal(split) | Node::Vertical(split) => (0.0..=1.0).contains(&split.fraction),
-        _ => true,
+        Node::Leaf(_) | Node::Empty => true,
     });
     // The dock never keeps an empty leaf, so one in a saved layout is damage.
     let leaves_ok = dock

@@ -11,7 +11,7 @@ use tarragon_core::sorting::SortMode;
 
 use crate::gallery::Gallery;
 use crate::grid::GridItem;
-use crate::layout::{Pane, first_dock, is_visible, set_visible};
+use crate::layout::{Pane, first_dock, from_json, is_visible, set_visible, to_json};
 use crate::sidebar::panel::{Sidebar, SidebarEvent};
 use crate::theme::{dock_title_style, panel_frame};
 use crate::tokens;
@@ -142,6 +142,23 @@ impl Shell {
     /// The gallery items and the sort mode stay as they are.
     pub fn reset_layout(&mut self) {
         self.dock = first_dock();
+    }
+
+    /// The dock as JSON text, for saving between runs.
+    #[must_use]
+    pub fn layout_json(&self) -> String {
+        to_json(&self.dock)
+    }
+
+    /// Replace the dock with a saved layout. Returns false, and keeps the
+    /// current dock, when the text is not a valid layout. The caller uses
+    /// the result to choose the default for the Log panel.
+    pub fn restore_layout(&mut self, text: &str) -> bool {
+        let Some(dock) = from_json(text) else {
+            return false;
+        };
+        self.dock = dock;
+        true
     }
 
     /// Apply one choice from the tab context menu.

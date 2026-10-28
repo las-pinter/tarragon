@@ -384,3 +384,27 @@ fn the_library_paddings_start_at_the_panel_edge() {
     // The button text sits 8 pt of inset plus 8 pt of button padding in.
     assert!((button_x - 16.0).abs() < 0.5, "button text at {button_x}");
 }
+
+#[test]
+fn restore_layout_round_trips_a_changed_layout() {
+    let mut shell = Shell::new();
+    set_visible(&mut shell.dock, Pane::Library, false);
+    set_visible(&mut shell.dock, Pane::Log, true);
+    let text = shell.layout_json();
+
+    let mut fresh = Shell::new();
+    assert!(fresh.restore_layout(&text));
+    assert!(!fresh.library_visible());
+    assert!(fresh.log_visible());
+    assert_eq!(fresh.gallery_visible(), shell.gallery_visible());
+    assert_eq!(fresh.preview_visible(), shell.preview_visible());
+    assert_eq!(fresh.layout_json(), text);
+}
+
+#[test]
+fn restore_layout_keeps_the_dock_on_garbage() {
+    let mut shell = Shell::new();
+    let before = shell.layout_json();
+    assert!(!shell.restore_layout("not json"));
+    assert_eq!(shell.layout_json(), before);
+}

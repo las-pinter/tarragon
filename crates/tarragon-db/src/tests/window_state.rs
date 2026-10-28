@@ -294,3 +294,33 @@ fn an_old_row_with_geometry_and_frame_shift_loses_both_keys_on_the_next_save() {
     assert!(!object.contains_key("frame_shift"));
     assert_eq!(object.get("scroll_y"), Some(&Value::from(9)));
 }
+
+#[test]
+fn a_repaired_row_also_loses_the_retired_keys_on_the_next_save() {
+    let temp = TempDb::new();
+    let settings = Settings::new(&temp.db);
+    temp.db
+        .set_setting(
+            WINDOW_STATE_KEY,
+            r#"{"layout":7,"geometry":"x","frame_shift":[0,28],"scroll_y":9}"#,
+        )
+        .expect("write raw text");
+
+    let (state, repaired) = settings
+        .window_state_repaired()
+        .expect("read")
+        .expect("stored");
+    assert!(repaired);
+    assert!(!state.extra.contains_key("geometry"));
+    assert!(!state.extra.contains_key("frame_shift"));
+    settings
+        .set_window_state_value(&state)
+        .expect("write the state");
+
+    let text = settings.window_state().expect("read").expect("stored text");
+    let value: Value = serde_json::from_str(&text).expect("the text is JSON");
+    let object = value.as_object().expect("the text is an object");
+    assert!(!object.contains_key("geometry"));
+    assert!(!object.contains_key("frame_shift"));
+    assert_eq!(object.get("scroll_y"), Some(&Value::from(9)));
+}

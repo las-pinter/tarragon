@@ -80,6 +80,8 @@ impl Settings<'_> {
 
     /// Read the typed window state and refuse a malformed stored value.
     ///
+    /// It reports the stored text as it is and does not strip retired keys.
+    ///
     /// # Errors
     ///
     /// Returns [`DbError::WindowState`] inside [`SettingsError::Db`] when the

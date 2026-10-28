@@ -72,7 +72,7 @@ are Library 220 px, Gallery in the centre, Preview 490 px, and Log hidden.
 After: the four panels sit in an egui_dock area. A drag on a divider resizes
 the panels beside it, and a drag on a title moves a panel. A tab cannot float
 as a window. The Log starts hidden. The split shares come from the sidebar and
-preview widths over the default window size, so a restored or resized window
+preview widths over the default window size, so a maximized or resized window
 scales the panels.
 
 Reason: the design asks for docks that the user can resize and move, and
@@ -109,6 +109,21 @@ position.
 
 Reason: a layout that the user arranged should last. A bad saved layout must
 not stop the start, and a reset should not move the window.
+
+## Window state
+
+Before: the design does not say where the window opens.
+
+After: at exit the app saves the maximized flag with the layout and the sort
+mode. It does not save the position or the size. A window that was maximized
+opens maximized. Any other window opens at the default size, 1280 by 800 px,
+centered on the primary monitor. The next save drops any older saved position
+and size. Known limits: a Wayland compositor places the window itself, so
+centering may not apply. The primary monitor is used, not the last monitor of
+the window. A minimized or full-screen window keeps the earlier saved value.
+
+Reason: the window does not need to reopen where it was left. Tracking the
+window edges and the frame offset was unreliable across window managers.
 
 ## Dock chrome
 

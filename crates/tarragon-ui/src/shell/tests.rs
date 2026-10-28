@@ -1,15 +1,15 @@
 //! Tests for the application shell.
 
 use super::*;
+use crate::layout::Pane;
 use crate::theme::apply_theme;
 use egui::{
-    Color32, Context, Event, FontId, Id, Modifiers, PanelState, PointerButton, Pos2, RawInput,
-    Rect, vec2,
+    Color32, Context, Event, FontId, Id, Modifiers, PointerButton, Pos2, RawInput, Rect, vec2,
 };
 use std::path::PathBuf;
 
 /// The headless screen, wide and tall enough for both docks.
-fn input() -> RawInput {
+pub(super) fn input() -> RawInput {
     RawInput {
         screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1400.0, 900.0))),
         ..Default::default()
@@ -17,14 +17,9 @@ fn input() -> RawInput {
 }
 
 /// Draw one headless frame.
-fn draw(ctx: &Context, shell: &mut Shell) {
+pub(super) fn draw(ctx: &Context, shell: &mut Shell) {
     ctx.run_ui(input(), |ui| shell.show(ui))
         .drop_without_applying_deltas();
-}
-
-/// The stored state of one panel from the last frame.
-fn panel(ctx: &Context, id: &str) -> Option<PanelState> {
-    PanelState::load(ctx, Id::new(id))
 }
 
 /// One gallery item with no texture.
@@ -45,7 +40,7 @@ fn dated_items() -> Vec<GridItem> {
 }
 
 /// Every text shape in the frame.
-fn painted_text(output: &egui::FullOutput) -> Vec<String> {
+pub(super) fn painted_text(output: &egui::FullOutput) -> Vec<String> {
     fn collect(shape: &egui::epaint::Shape, text: &mut Vec<String>) {
         match shape {
             egui::epaint::Shape::Text(shape) => text.push(shape.galley.job.text.clone()),
@@ -132,48 +127,16 @@ fn the_shell_draws_two_frames_after_the_theme_applies() {
     assert_eq!(glyphs, 8, "the theme must install Roboto");
 }
 
-#[test]
-fn the_docks_draw_at_the_token_widths() {
-    let ctx = Context::default();
-    apply_theme(&ctx);
-
-    let mut shell = Shell::new();
-    draw(&ctx, &mut shell);
-
-    let library = panel(&ctx, "tarragon-Library").expect("the library dock is drawn");
-    let preview = panel(&ctx, "tarragon-Preview").expect("the preview dock is drawn");
-    assert!(
-        (library.size().x - tokens::SIDEBAR_WIDTH).abs() < 0.5,
-        "library is {} points wide",
-        library.size().x
-    );
-    assert!(
-        (preview.size().x - tokens::PREVIEW_WIDTH).abs() < 0.5,
-        "preview is {} points wide",
-        preview.size().x
-    );
-}
-
-#[test]
-fn the_log_toggle_changes_whether_the_panel_is_drawn() {
-    let ctx = Context::default();
-    apply_theme(&ctx);
-    let mut shell = Shell::new();
-
-    // Clear the stored state, so a hidden panel cannot leave a trace.
-    let drawn = |ctx: &Context, shell: &mut Shell| {
-        ctx.data_mut(|data| data.remove::<PanelState>(Id::new("tarragon-Log")));
-        draw(ctx, shell);
-        panel(ctx, "tarragon-Log").is_some()
-    };
-
-    assert!(!drawn(&ctx, &mut shell), "the log panel starts hidden");
-
-    assert!(shell.toggle_log(), "the first toggle shows the log");
-    assert!(drawn(&ctx, &mut shell), "the log panel is drawn");
-
-    assert!(!shell.toggle_log(), "the second toggle hides the log");
-    assert!(!drawn(&ctx, &mut shell), "the log panel is hidden again");
+/// The rect of the leaf that holds `pane`, from the last frame.
+pub(super) fn leaf_rect(shell: &Shell, pane: Pane) -> Rect {
+    let (node, _) = shell
+        .dock
+        .main_surface()
+        .find_tab(&pane)
+        .expect("the pane is in the dock");
+    shell.dock.main_surface()[node]
+        .rect()
+        .expect("the leaf was drawn")
 }
 
 #[test]
@@ -189,20 +152,13 @@ fn the_log_panel_starts_hidden_and_the_view_toggle_flips_it() {
 }
 
 #[test]
-fn the_dock_widths_start_at_the_token_values() {
-    let shell = Shell::new();
-
-    assert!((shell.sidebar_width() - tokens::SIDEBAR_WIDTH).abs() < f32::EPSILON);
-    assert!((shell.preview_width() - tokens::PREVIEW_WIDTH).abs() < f32::EPSILON);
-}
-
-#[test]
 fn reset_layout_restores_the_defaults() {
     let mut shell = Shell::new();
     shell.toggle_log();
-    shell.library_visible = false;
-    shell.gallery_visible = false;
-    shell.preview_visible = false;
+    for pane in [Pane::Library, Pane::Gallery, Pane::Preview] {
+        shell.toggle(pane);
+    }
+    assert!(!shell.library_visible() && !shell.gallery_visible() && !shell.preview_visible());
 
     shell.reset_layout();
 
@@ -415,8 +371,8 @@ fn the_library_paddings_start_at_the_panel_edge() {
 
     let (title, row) = (rects[0], rects[1]);
     assert!(title.min.x.abs() < 0.5, "title starts at {}", title.min.x);
-    // The panel keeps 1 pt on its right edge for the separator line.
-    let edge = tokens::SIDEBAR_WIDTH - 1.0;
+    // The dock body ends at the Library leaf edge; the divider lies outside it.
+    let edge = leaf_rect(&shell, Pane::Library).max.x;
     assert!((title.max.x - edge).abs() < 0.5, "title is {title:?}");
     assert!((row.min.x - 6.0).abs() < 0.5, "row starts at {}", row.min.x);
     assert!((row.max.x - (edge - 6.0)).abs() < 0.5);

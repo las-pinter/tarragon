@@ -1,17 +1,21 @@
 //! Application shell: the window frame, the menu bar, and the dock panels.
 //!
-//! The frame uses plain egui panels with fixed sizes. A docking layout lands
-//! later, so the panels cannot move or resize yet.
+//! The four panels sit in a dock, so the user can resize and move them.
 
-use egui::{Button, CentralPanel, Context, Margin, MenuBar, Panel, RichText, Ui, ViewportCommand};
+use egui::{
+    Button, CentralPanel, Context, Frame, Margin, MenuBar, Panel, RichText, Ui, ViewportCommand,
+};
+use egui_dock::{DockArea, DockState, Style};
 use tarragon_core::sorting::SortMode;
 
 use crate::gallery::Gallery;
 use crate::grid::GridItem;
+use crate::layout::{Pane, first_dock, is_visible, set_visible};
 use crate::sidebar::panel::{Sidebar, SidebarEvent};
-use crate::theme::{panel_frame, panel_title};
+use crate::theme::panel_frame;
 use crate::tokens;
 
+mod dock;
 mod log_panel;
 pub use log_panel::{LogLevel, LogLine, LogPanelEvents, LogSlice, LogSource, LogView};
 
@@ -31,33 +35,15 @@ pub const DOCK_LOG: &str = "Log";
 const TITLEBAR_HEIGHT: f32 = 30.0;
 /// Menu bar height, in points.
 const MENUBAR_HEIGHT: f32 = 26.0;
-/// Log panel share of the free workspace height.
-const LOG_HEIGHT_FRACTION: f32 = 0.25;
-/// Log panel minimum height, in points. `theme.css` sets a 150 px floor.
-const LOG_HEIGHT_FLOOR: f32 = 150.0;
 
-/// The window frame. It holds the panel flags and the default dock sizes.
-#[expect(
-    clippy::struct_excessive_bools,
-    reason = "the four dock flags mirror the four View menu toggles"
-)]
+/// The window frame. The dock holds which panels show and where they sit.
 pub struct Shell {
-    /// Whether the Library dock shows on the left.
-    library_visible: bool,
-    /// Whether the Gallery panel shows in the centre.
-    gallery_visible: bool,
-    /// Whether the Preview dock shows on the right.
-    preview_visible: bool,
-    /// Whether the Log panel shows under the gallery.
-    log_visible: bool,
-    /// Library dock width, in points.
-    sidebar_width: f32,
-    /// Preview dock width, in points.
-    preview_width: f32,
     /// The gallery strip and grid in the centre panel.
     gallery: Gallery,
     /// The Library panel in the left dock.
     sidebar: Sidebar,
+    /// Where each panel sits and how big it is. A hidden panel is not in it.
+    dock: DockState<Pane>,
 }
 
 impl Shell {
@@ -66,51 +52,34 @@ impl Shell {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            library_visible: true,
-            gallery_visible: true,
-            preview_visible: true,
-            log_visible: false,
-            sidebar_width: tokens::SIDEBAR_WIDTH,
-            preview_width: tokens::PREVIEW_WIDTH,
             gallery: Gallery::new(SortMode::Natural),
             sidebar: Sidebar::default(),
+            dock: first_dock(),
         }
-    }
-
-    /// Library dock width, in points.
-    #[must_use]
-    pub fn sidebar_width(&self) -> f32 {
-        self.sidebar_width
-    }
-
-    /// Preview dock width, in points.
-    #[must_use]
-    pub fn preview_width(&self) -> f32 {
-        self.preview_width
     }
 
     /// Whether the Library dock is visible.
     #[must_use]
     pub fn library_visible(&self) -> bool {
-        self.library_visible
+        is_visible(&self.dock, Pane::Library)
     }
 
     /// Whether the Gallery panel is visible.
     #[must_use]
     pub fn gallery_visible(&self) -> bool {
-        self.gallery_visible
+        is_visible(&self.dock, Pane::Gallery)
     }
 
     /// Whether the Preview dock is visible.
     #[must_use]
     pub fn preview_visible(&self) -> bool {
-        self.preview_visible
+        is_visible(&self.dock, Pane::Preview)
     }
 
     /// Whether the Log panel is visible.
     #[must_use]
     pub fn log_visible(&self) -> bool {
-        self.log_visible
+        is_visible(&self.dock, Pane::Log)
     }
 
     /// Replace the items that the gallery shows.
@@ -155,20 +124,22 @@ impl Shell {
 
     /// Show or hide the Log panel. Returns the new state.
     pub fn toggle_log(&mut self) -> bool {
-        self.log_visible = !self.log_visible;
-        self.log_visible
+        self.toggle(Pane::Log)
+    }
+
+    /// Flip one panel and return its new state.
+    fn toggle(&mut self, pane: Pane) -> bool {
+        let show = !is_visible(&self.dock, pane);
+        set_visible(&mut self.dock, pane, show);
+        show
     }
 
     /// Restore the mockup defaults for the dock sizes and panel visibility.
+    /// The Log starts hidden, as on a fresh start.
     ///
     /// The gallery items and the sort mode stay as they are.
     pub fn reset_layout(&mut self) {
-        self.library_visible = true;
-        self.gallery_visible = true;
-        self.preview_visible = true;
-        self.log_visible = false;
-        self.sidebar_width = tokens::SIDEBAR_WIDTH;
-        self.preview_width = tokens::PREVIEW_WIDTH;
+        self.dock = first_dock();
     }
 
     /// Draw one frame of the shell with an empty log.
@@ -212,47 +183,26 @@ impl Shell {
                 MenuBar::new().ui(ui, |ui| self.menu_bar(ui, &ctx));
             });
 
-        if self.library_visible {
-            Panel::left(format!("tarragon-{DOCK_LIBRARY}"))
-                .exact_size(self.sidebar_width)
-                .resizable(false)
-                // No inset: the title strip and the sidebar own their paddings.
-                .frame(panel_frame(tokens::BG_SECONDARY, Margin::ZERO))
-                .show(ui, |ui| {
-                    panel_title(ui, DOCK_LIBRARY);
-                    self.sidebar.show(ui);
-                });
-        }
-
-        if self.preview_visible {
-            Panel::right(format!("tarragon-{DOCK_PREVIEW}"))
-                .exact_size(self.preview_width)
-                .resizable(false)
-                .frame(panel_frame(tokens::BG_PRIMARY, Margin::same(8)))
-                .show(ui, |ui| {
-                    panel_title(ui, DOCK_PREVIEW);
-                });
-        }
-
-        // A bottom panel here spans the gallery width only, as the mockup shows.
-        if self.log_visible {
-            let log_height = (ui.available_height() * LOG_HEIGHT_FRACTION).max(LOG_HEIGHT_FLOOR);
-            Panel::bottom(format!("tarragon-{DOCK_LOG}"))
-                .exact_size(log_height)
-                .resizable(false)
-                .frame(panel_frame(tokens::BG_SECONDARY, Margin::same(8)))
-                .show(ui, |ui| {
-                    panel_title(ui, DOCK_LOG);
-                    events = log_panel::show(ui, log);
-                });
-        }
-
-        if self.gallery_visible {
-            // The gallery draws no title strip: its top strip holds the tabs.
-            CentralPanel::default()
-                .frame(panel_frame(tokens::BG_PRIMARY, Margin::same(8)))
-                .show(ui, |ui| self.gallery.show(ui));
-        }
+        // The dock fills what the bars leave. It owns the panel sizes and places.
+        CentralPanel::default().frame(Frame::NONE).show(ui, |ui| {
+            let mut style = Style::from_egui(ui.style());
+            // The panels own their insets, so the tab body adds none.
+            style.tab.tab_body.inner_margin = Margin::ZERO;
+            let mut panes = dock::Panes {
+                sidebar: &mut self.sidebar,
+                gallery: &mut self.gallery,
+                log,
+                events: &mut events,
+            };
+            let tabs = self.dock.iter_all_tabs().count();
+            DockArea::new(&mut self.dock)
+                .style(style)
+                .show_inside(ui, &mut panes);
+            // A close button changes the tree after the panels are laid out.
+            if self.dock.iter_all_tabs().count() != tabs {
+                ui.ctx().request_repaint();
+            }
+        });
         events
     }
 
@@ -268,10 +218,15 @@ impl Shell {
             }
         });
         ui.menu_button("View", |ui| {
-            toggle_row(ui, DOCK_LIBRARY, &mut self.library_visible);
-            toggle_row(ui, DOCK_GALLERY, &mut self.gallery_visible);
-            toggle_row(ui, DOCK_PREVIEW, &mut self.preview_visible);
-            toggle_row(ui, DOCK_LOG, &mut self.log_visible);
+            for pane in [Pane::Library, Pane::Gallery, Pane::Preview, Pane::Log] {
+                let visible = is_visible(&self.dock, pane);
+                if ui
+                    .add(Button::new(dock::name(pane)).selected(visible))
+                    .clicked()
+                {
+                    set_visible(&mut self.dock, pane, !visible);
+                }
+            }
             ui.separator();
             if ui.button("Reset Window Layout").clicked() {
                 self.reset_layout();
@@ -287,13 +242,6 @@ impl Shell {
 impl Default for Shell {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-/// Draw one menu toggle row and flip the flag when the row is clicked.
-fn toggle_row(ui: &mut Ui, label: &str, visible: &mut bool) {
-    if ui.add(Button::new(label).selected(*visible)).clicked() {
-        *visible = !*visible;
     }
 }
 

@@ -11,6 +11,8 @@ pub(super) struct Painted {
     pub(super) string: String,
     /// The top-left corner.
     pub(super) pos: Pos2,
+    /// The height of the laid-out text.
+    pub(super) height: f32,
     /// The colour of its first section.
     color: Color32,
 }
@@ -58,8 +60,18 @@ pub(super) fn ready() -> Context {
 
 /// Run one frame on a 400 by 300 screen and return the painted texts.
 pub(super) fn frame(ctx: &Context, sidebar: &mut Sidebar, events: Vec<Event>) -> Vec<Painted> {
+    frame_sized(ctx, sidebar, events, vec2(400.0, 300.0))
+}
+
+/// Run one frame on a screen of `size` and return the painted texts.
+pub(super) fn frame_sized(
+    ctx: &Context,
+    sidebar: &mut Sidebar,
+    events: Vec<Event>,
+    size: egui::Vec2,
+) -> Vec<Painted> {
     let raw = RawInput {
-        screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(400.0, 300.0))),
+        screen_rect: Some(Rect::from_min_size(Pos2::ZERO, size)),
         events,
         ..Default::default()
     };
@@ -71,6 +83,7 @@ pub(super) fn frame(ctx: &Context, sidebar: &mut Sidebar, events: Vec<Event>) ->
             Shape::Text(text) => Some(Painted {
                 string: text.galley.job.text.clone(),
                 pos: text.pos,
+                height: text.galley.size().y,
                 color: text.galley.job.sections[0].format.color,
             }),
             _ => None,
@@ -88,8 +101,20 @@ pub(super) fn find<'a>(texts: &'a [Painted], wanted: &str) -> &'a Painted {
         .unwrap_or_else(|| panic!("no text {wanted}"))
 }
 
-/// Click at `offset` from the text `wanted`, over three frames.
+/// Run frames until the layout settles.
+///
+/// egui sizes the favorites panel from the frame before, so a new list needs
+/// a few frames before the rows stand where a test looks for them. Three
+/// frames are the most a new list needs: measure, apply the minimum, resize.
+pub(super) fn warm_up(ctx: &Context, sidebar: &mut Sidebar) {
+    for _ in 0..3 {
+        frame(ctx, sidebar, Vec::new());
+    }
+}
+
+/// Click at `offset` from the text `wanted`, after the layout settles, over three frames.
 pub(super) fn click(ctx: &Context, sidebar: &mut Sidebar, wanted: &str, offset: egui::Vec2) {
+    warm_up(ctx, sidebar);
     let pos = find(&frame(ctx, sidebar, Vec::new()), wanted).pos + offset;
     let press = |pressed| Event::PointerButton {
         pos,
@@ -202,7 +227,9 @@ fn add_queues_add_current_and_take_drains() {
 #[test]
 fn the_heads_and_the_empty_text_are_painted() {
     let mut sidebar = Sidebar::default();
-    let texts = frame(&ready(), &mut sidebar, Vec::new());
+    let ctx = ready();
+    warm_up(&ctx, &mut sidebar);
+    let texts = frame(&ctx, &mut sidebar, Vec::new());
     for wanted in ["FOLDERS", "FAVORITES", "No favorites yet."] {
         find(&texts, wanted);
     }

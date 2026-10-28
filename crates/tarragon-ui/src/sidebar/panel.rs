@@ -58,6 +58,19 @@ pub struct Sidebar {
     ///
     /// Held across frames for the drop, Escape, and the lost-release guard.
     dragging: Option<usize>,
+    /// The height of the favorite rows in the last frame.
+    ///
+    /// egui sizes the favorites panel and its scroll area from the frame
+    /// before and does not repaint when the content changes, so a change asks
+    /// for a repaint. It also feeds `min_scrolled_height` of the favorites
+    /// scroll area, which lifts the viewport above egui's 64 px default.
+    favorites_height: f32,
+    /// The height of the favorites panel in the last frame.
+    ///
+    /// The panel follows its scroll area one frame late, and a dock that
+    /// grows gives no change of `favorites_height`, so a change of the panel
+    /// rect also asks for a repaint. The chain ends when the rect is stable.
+    favorites_panel_height: f32,
 }
 
 impl Sidebar {
@@ -195,21 +208,53 @@ impl Sidebar {
         std::mem::take(&mut self.events)
     }
 
-    /// Draw the panel body: the buttons pinned at the bottom, the lists scrolling above them.
+    /// Draw the panel body, bottom up: the buttons, the favorites, then the tree.
+    ///
+    /// The favorites take their content height, at most half the dock, and
+    /// scroll on their own, so they stay in view however tall the tree is.
+    /// The content height of the last frame is the minimum height of the
+    /// scroll area; without it egui keeps the panel at its 64 px default.
     pub fn show(&mut self, ui: &mut Ui) {
+        let half = ui.available_height() / 2.0;
         Panel::bottom("tarragon-sidebar-buttons")
             .resizable(false)
             .show_separator_line(false)
             .frame(Frame::NONE.inner_margin(Margin::same(8)))
             .show(ui, |ui| self.show_buttons(ui));
+        let favorites = Panel::bottom("tarragon-sidebar-favorites")
+            .resizable(false)
+            .show_separator_line(false)
+            .frame(Frame::NONE)
+            .max_size(half)
+            .show(ui, |ui| {
+                ui.spacing_mut().item_spacing.y = 0.0;
+                head(ui, "Favorites", 14.0);
+                let room = (half - ui.min_rect().height()).max(0.0);
+                ScrollArea::vertical()
+                    .id_salt("favorites-scroll")
+                    .max_height(room)
+                    .min_scrolled_height(self.favorites_height.min(room))
+                    .auto_shrink([false, true])
+                    .show(ui, |ui| self.show_favorites(ui))
+                    .content_size
+                    .y
+            });
+        let height = favorites.inner;
+        let panel_height = favorites.response.rect.height();
+        if (height - self.favorites_height).abs() > 0.5
+            || (panel_height - self.favorites_panel_height).abs() > 0.5
+        {
+            self.favorites_height = height;
+            self.favorites_panel_height = panel_height;
+            ui.ctx().request_repaint();
+        }
         ScrollArea::vertical()
+            .id_salt("tree-scroll")
             .auto_shrink([false, false])
             .show(ui, |ui| {
                 ui.spacing_mut().item_spacing.y = 0.0;
                 head(ui, "Folders", 0.0);
                 self.show_tree(ui);
-                head(ui, "Favorites", 14.0);
-                self.show_favorites(ui);
             });
     }
 
@@ -309,5 +354,7 @@ fn head(ui: &mut Ui, text: &str, gap: f32) {
 
 #[cfg(test)]
 mod drag_tests;
+#[cfg(test)]
+mod layout_tests;
 #[cfg(test)]
 mod tests;

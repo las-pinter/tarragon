@@ -65,7 +65,8 @@ impl Sidebar {
         }
         let spans: Vec<(f32, f32)> = rects.iter().map(|r| (r.min.y, r.max.y)).collect();
         let pointer = ui.input(|input| input.pointer.latest_pos());
-        let slot = pointer.and_then(|pos| drop_slot(&spans, pos.y));
+        let inside = pointer.filter(|pos| ui.clip_rect().contains(*pos));
+        let slot = inside.and_then(|pos| drop_slot(&spans, pos.y));
         let paths: Vec<PathBuf> = self
             .state
             .favorites()

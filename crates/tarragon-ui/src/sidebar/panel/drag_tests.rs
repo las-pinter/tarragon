@@ -1,7 +1,7 @@
 //! Tests for the favorite drag, the drop line, and `drop_line_rect`.
 
 use super::favorites::drop_line_rect;
-use super::tests::{click, find, frame, ready};
+use super::tests::{click, find, frame, ready, warm_up};
 use super::*;
 use egui::{Context, Event, Key, Modifiers, PointerButton, Pos2, RawInput, Rect, Shape, pos2};
 
@@ -35,6 +35,7 @@ fn order(sidebar: &Sidebar) -> Vec<PathBuf> {
 
 /// Press the grip of favorite `row`, drag to `drop_y` above or below its label, and stop before release.
 fn drag_to(ctx: &Context, sidebar: &mut Sidebar, row: usize, drop_y: f32) -> Pos2 {
+    warm_up(ctx, sidebar);
     let texts = frame(ctx, sidebar, Vec::new());
     let grip = texts.iter().filter(|t| t.string == "::").nth(row).unwrap();
     let start = grip.pos + vec2(2.0, 5.0);
@@ -70,6 +71,7 @@ fn release(ctx: &Context, sidebar: &mut Sidebar, pos: Pos2) {
 
 /// The y of the label `wanted`.
 fn label_y(ctx: &Context, sidebar: &mut Sidebar, wanted: &str) -> f32 {
+    warm_up(ctx, sidebar);
     find(&frame(ctx, sidebar, Vec::new()), wanted).pos.y
 }
 

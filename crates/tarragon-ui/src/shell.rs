@@ -216,7 +216,8 @@ impl Shell {
             Panel::left(format!("tarragon-{DOCK_LIBRARY}"))
                 .exact_size(self.sidebar_width)
                 .resizable(false)
-                .frame(panel_frame(tokens::BG_SECONDARY, Margin::same(8)))
+                // No inset: the title strip and the sidebar own their paddings.
+                .frame(panel_frame(tokens::BG_SECONDARY, Margin::ZERO))
                 .show(ui, |ui| {
                     panel_title(ui, DOCK_LIBRARY);
                     self.sidebar.show(ui);

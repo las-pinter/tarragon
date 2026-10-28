@@ -377,3 +377,49 @@ fn a_library_row_click_queues_one_navigate_and_set_folder_follows() {
         Some(std::path::Path::new("/other"))
     );
 }
+
+#[test]
+fn the_library_paddings_start_at_the_panel_edge() {
+    let ctx = Context::default();
+    apply_theme(&ctx);
+    let mut shell = Shell::new();
+    shell.sidebar_mut().set_roots(vec![PathBuf::from("/r")]);
+    shell.set_folder(Some(PathBuf::from("/r")));
+    draw(&ctx, &mut shell);
+    let output = ctx.run_ui(input(), |ui| shell.show(ui));
+    // The title strip and the selected row share one fill; sort them top down.
+    let mut rects: Vec<Rect> = output
+        .shapes
+        .iter()
+        .filter_map(|clipped| match &clipped.shape {
+            egui::epaint::Shape::Rect(shape)
+                if shape.fill == tokens::BG_TERTIARY && shape.rect.min.x < 20.0 =>
+            {
+                Some(shape.rect)
+            }
+            _ => None,
+        })
+        .collect();
+    rects.sort_by(|a, b| a.min.y.total_cmp(&b.min.y));
+    let button_x = output
+        .shapes
+        .iter()
+        .find_map(|clipped| match &clipped.shape {
+            egui::Shape::Text(text) if text.galley.job.text == "Add Current Folder" => {
+                Some(text.pos.x)
+            }
+            _ => None,
+        })
+        .expect("the button is painted");
+    output.drop_without_applying_deltas();
+
+    let (title, row) = (rects[0], rects[1]);
+    assert!(title.min.x.abs() < 0.5, "title starts at {}", title.min.x);
+    // The panel keeps 1 pt on its right edge for the separator line.
+    let edge = tokens::SIDEBAR_WIDTH - 1.0;
+    assert!((title.max.x - edge).abs() < 0.5, "title is {title:?}");
+    assert!((row.min.x - 6.0).abs() < 0.5, "row starts at {}", row.min.x);
+    assert!((row.max.x - (edge - 6.0)).abs() < 0.5);
+    // The button text sits 8 pt of inset plus 8 pt of button padding in.
+    assert!((button_x - 16.0).abs() < 0.5, "button text at {button_x}");
+}

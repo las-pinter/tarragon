@@ -9,6 +9,7 @@ mod logging;
 mod logview;
 mod pipeline;
 mod run;
+mod sidebar;
 mod thumbs;
 mod window;
 

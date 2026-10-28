@@ -18,6 +18,7 @@ use crate::logging::LogControl;
 use crate::logging::ring::LogRing;
 use crate::logview::LogCache;
 use crate::pipeline::{Config, Pipeline, Repaint};
+use crate::sidebar;
 use crate::thumbs::{ExitWait, Thumbs};
 use crate::window::{self, Geometry};
 
@@ -100,7 +101,9 @@ impl App {
         if repaired {
             tracing::warn!("the stored window state was invalid and was repaired");
         }
-        let shell = Shell::new().with_sort_mode(window_state.sort_mode());
+        let mut shell = Shell::new().with_sort_mode(window_state.sort_mode());
+        let home = sidebar::home_dir();
+        sidebar::init(&mut shell, &db, home.as_deref(), startup.folder.as_deref());
         let repaint_ctx = Arc::new(OnceLock::new());
         let thumbs = match startup.folder {
             Some(folder) => Some(start_thumbs(path, &db, folder, &repaint_ctx)?),
@@ -261,6 +264,9 @@ impl eframe::App for App {
         };
         let events = self.shell.show_with_log(ui, &view);
         self.apply_log_events(events);
+        if sidebar::handle_events(&mut self.shell, &self.db) {
+            ctx.request_repaint();
+        }
         if let Some(thumbs) = &mut self.thumbs {
             thumbs.after_draw(self.shell.gallery_mut());
             if self.close_when_loaded
@@ -340,6 +346,44 @@ mod tests {
             std::env::temp_dir().join(format!("tarragon-app-raise-{}-{id}", std::process::id()));
         std::fs::create_dir_all(&dir).expect("create the temp dir");
         TempDir(dir)
+    }
+
+    #[test]
+    fn a_reorder_event_persists_across_a_restart() {
+        use tarragon_ui::sidebar::panel::SidebarEvent;
+
+        let dir = new_dir();
+        let db_path = dir.0.join("tarragon.db");
+        let open = || {
+            let (_filter, control) = LogControl::new_filter();
+            let startup = Startup {
+                folder: None,
+                close_when_loaded: false,
+                exit_wait: ExitWait::default(),
+            };
+            App::open(&db_path, LogRing::new(), control, None, startup).expect("open the app")
+        };
+        let paths: Vec<PathBuf> = ["a", "b", "c"].map(|n| dir.0.join(n)).to_vec();
+        let mut app = open();
+        for (order, path) in paths.iter().enumerate() {
+            let order = i64::try_from(order).unwrap();
+            let stored = app.db.add_favorite(&path.to_string_lossy(), None, order);
+            stored.expect("add a favorite");
+        }
+        let wanted = vec![paths[2].clone(), paths[0].clone(), paths[1].clone()];
+        let events = vec![SidebarEvent::Reorder(wanted.clone())];
+        sidebar::apply(&mut app.shell, &app.db, events);
+        drop(app);
+
+        let mut app = open();
+        let shown: Vec<PathBuf> = app
+            .shell
+            .sidebar_mut()
+            .favorites()
+            .iter()
+            .map(|f| f.path.clone())
+            .collect();
+        assert_eq!(shown, wanted);
     }
 
     #[test]

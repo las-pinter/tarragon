@@ -144,6 +144,24 @@ impl Sidebar {
         self.reveal();
     }
 
+    /// The favorites in list order.
+    #[must_use]
+    pub fn favorites(&self) -> &[FavoriteRow] {
+        self.state.favorites()
+    }
+
+    /// The tree roots.
+    #[must_use]
+    pub fn roots(&self) -> &[PathBuf] {
+        self.state.roots()
+    }
+
+    /// The visible tree rows, top down.
+    #[must_use]
+    pub fn tree_rows(&self) -> Vec<TreeRow> {
+        self.tree.rows()
+    }
+
     /// The favorite that Remove acts on, or none.
     #[must_use]
     pub fn selected_favorite(&self) -> Option<&Path> {

@@ -57,3 +57,11 @@ fn a_zero_size_gives_an_empty_rect_at_the_centre() {
     let flat = Rect::from_min_size(pos2(0.0, 0.0), vec2(0.0, 30.0));
     assert_eq!(fit_rect((50, 50), flat).size(), Vec2::ZERO);
 }
+
+#[test]
+fn the_box_fills_what_the_content_below_leaves_and_never_drops_under_the_minimum() {
+    let min = tokens::PREVIEW_IMAGE_HEIGHT;
+    assert_eq!(box_height(900.0, 200.0), 699.5);
+    assert_eq!(box_height(400.0, 200.0), min);
+    assert_eq!(box_height(900.0, 0.0), 899.5);
+}

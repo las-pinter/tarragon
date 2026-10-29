@@ -31,9 +31,23 @@ pub fn fit_rect(image: (u32, u32), area: Rect) -> Rect {
     Rect::from_center_size(area.center(), size * scale)
 }
 
-/// Draw the dark box and the picture inside it.
-pub fn show_box(ui: &mut Ui, image: &PreviewImage) {
-    let size = vec2(ui.available_width(), tokens::PREVIEW_IMAGE_HEIGHT);
+/// The room, in points, that the box leaves free at the bottom.
+const SLACK: f32 = 0.5;
+
+/// The box height that fills a `viewport` when `below` of content follows the
+/// box, including the gap. A short viewport keeps the minimum and scrolls.
+///
+/// The box stops half a point short of the viewport. Content that ends exactly
+/// at the edge could flip the scroll bar on and off through float rounding.
+#[must_use]
+pub fn box_height(viewport: f32, below: f32) -> f32 {
+    (viewport - below - SLACK).max(tokens::PREVIEW_IMAGE_HEIGHT)
+}
+
+/// Draw the dark box, `height` tall, and the picture inside it. Returns the
+/// box rect.
+pub fn show_box(ui: &mut Ui, image: &PreviewImage, height: f32) -> Rect {
+    let size = vec2(ui.available_width(), height);
     let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
     let painter = ui.painter();
     painter.rect_filled(
@@ -48,6 +62,7 @@ pub fn show_box(ui: &mut Ui, image: &PreviewImage) {
         uv,
         Color32::WHITE,
     );
+    rect
 }
 
 #[cfg(test)]

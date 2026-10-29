@@ -8,6 +8,8 @@ use crate::tokens;
 mod add;
 pub mod budget;
 mod colors;
+#[cfg(test)]
+mod fill_tests;
 mod image;
 mod meta;
 mod mosaic;
@@ -58,6 +60,9 @@ pub struct Preview {
     colors_enabled: bool,
     /// Events not yet taken by the app.
     events: Vec<PreviewEvent>,
+    /// The height of everything below the picture box in the last frame. The
+    /// box can only fill the rest of the pane once that height is known.
+    below_box: f32,
 }
 
 impl Default for Preview {
@@ -74,6 +79,7 @@ impl Default for Preview {
             add: add::AddState::default(),
             colors_enabled: true,
             events: Vec::new(),
+            below_box: 0.0,
         }
     }
 }
@@ -86,6 +92,10 @@ impl Preview {
 
     /// Set the picture to show, or `None` for no picture.
     pub fn set_image(&mut self, image: Option<PreviewImage>) {
+        if image.is_none() {
+            // The next box is sized from a fresh measure.
+            self.below_box = 0.0;
+        }
         self.image = image;
     }
 
@@ -140,7 +150,7 @@ impl Preview {
     pub fn show(&mut self, ui: &mut Ui) {
         let (colors, tags, enabled) = (&self.colors, &self.tags, self.colors_enabled);
         let (known, add) = (&self.known_tags, &mut self.add);
-        let events = &mut self.events;
+        let (events, below_box) = (&mut self.events, &mut self.below_box);
         let (mosaic, total, cap) = (&self.mosaic, self.mosaic_total, self.mosaic_cap);
         // A big selection with one picture ready already shows a one-cell
         // mosaic, so the panel does not flip to the single box while it fills.
@@ -154,11 +164,13 @@ impl Preview {
             (image, meta) => {
                 ScrollArea::vertical()
                     .auto_shrink([false, false])
-                    .show(ui, |ui| {
+                    .show_viewport(ui, |ui, viewport| {
+                        let mut box_bottom = None;
                         if multi {
                             mosaic::show(ui, mosaic, total, cap);
                         } else if let Some(image) = image {
-                            image::show_box(ui, image);
+                            let height = image::box_height(viewport.height(), *below_box);
+                            box_bottom = Some(image::show_box(ui, image, height).bottom());
                         }
                         if let Some(meta) = meta {
                             meta::show_grid(ui, meta);
@@ -168,6 +180,15 @@ impl Preview {
                             colors::show_row(ui, colors, events);
                         }
                         tags::show_pills(ui, tags, known, add, events);
+                        if let Some(bottom) = box_bottom {
+                            // The content below is only known after layout, so
+                            // the next frame sizes the box with it.
+                            let below = ui.min_rect().bottom() - bottom;
+                            if (below - *below_box).abs() > 0.5 {
+                                *below_box = below;
+                                ui.ctx().request_repaint();
+                            }
+                        }
                     });
             }
         }

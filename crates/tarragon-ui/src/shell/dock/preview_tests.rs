@@ -115,12 +115,8 @@ fn the_preview_pane_paints_the_picture_inside_the_pane_only_when_set() {
         "{:?} is outside {pane:?}",
         found[0].1
     );
-    // The picture grows to the box height, with its 4:3 shape kept.
+    // The picture keeps its 4:3 shape inside the box.
     let size = found[0].1.size();
-    assert!(
-        (size.y - crate::tokens::PREVIEW_IMAGE_HEIGHT).abs() < 0.01,
-        "{size:?}"
-    );
     assert!((size.x / size.y - 4.0 / 3.0).abs() < 0.001, "{size:?}");
 
     shell.preview.set_image(None);
@@ -151,10 +147,7 @@ fn a_large_picture_is_scaled_down_inside_the_pane() {
         "{:?} is outside {pane:?}",
         found[0].1
     );
-    assert!(
-        size.x < 4000.0 && size.y <= crate::tokens::PREVIEW_IMAGE_HEIGHT + 0.01,
-        "{size:?}"
-    );
+    assert!(size.x < 4000.0 && size.y <= pane.height(), "{size:?}");
     assert!((size.x / size.y - 4.0 / 3.0).abs() < 0.001, "{size:?}");
 }
 

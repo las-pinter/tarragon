@@ -1,8 +1,8 @@
 //! The N-up mosaic that replaces the picture box for a multi-selection.
 
-use egui::{Color32, CornerRadius, Pos2, Rect, RichText, Sense, Ui, pos2, vec2};
+use egui::{CornerRadius, Rect, RichText, Sense, Ui, vec2};
 
-use super::image::{PreviewImage, fit_rect};
+use super::image::{PreviewImage, paint_picture};
 use crate::tokens;
 
 /// How many images the mosaic shows when the setting is not read yet.
@@ -19,7 +19,8 @@ fn shown(count: usize, cap: usize) -> usize {
     count.min(cap)
 }
 
-/// The height of the grid for `count` images, so the caller can reserve it.
+/// The height of the grid for `count` images, padding included, so the caller
+/// can reserve it.
 #[expect(
     clippy::cast_precision_loss,
     reason = "a row count is tiny, far below 2^24"
@@ -30,12 +31,14 @@ fn grid_height(count: usize, cap: usize) -> f32 {
         return 0.0;
     }
     let rows = n.div_ceil(columns(n)) as f32;
-    rows * tokens::PREVIEW_MOSAIC_CELL_HEIGHT + (rows - 1.0) * tokens::SPACING_S
+    rows * tokens::PREVIEW_MOSAIC_CELL_HEIGHT
+        + (rows - 1.0) * tokens::SPACING_S
+        + 2.0 * tokens::PREVIEW_MOSAIC_PADDING
 }
 
 /// The cell rects for the first `cap` of `count` images, row by row. The
-/// columns share the width of `area` and each cell has the fixed cell height.
-/// An area with no width gives no cells.
+/// columns share the width of `area` less the grid padding and each cell has
+/// the fixed cell height. An area with no room gives no cells.
 #[must_use]
 #[expect(
     clippy::cast_precision_loss,
@@ -43,6 +46,7 @@ fn grid_height(count: usize, cap: usize) -> f32 {
 )]
 pub fn grid_cells(count: usize, cap: usize, area: Rect) -> Vec<Rect> {
     let n = shown(count, cap);
+    let area = area.shrink(tokens::PREVIEW_MOSAIC_PADDING);
     if n == 0 || area.width() <= 0.0 || area.height() <= 0.0 {
         return Vec::new();
     }
@@ -71,7 +75,6 @@ pub fn more_hint(total: usize, shown: usize) -> Option<String> {
 pub fn show(ui: &mut Ui, images: &[PreviewImage], total: usize, cap: usize) {
     let size = vec2(ui.available_width(), grid_height(images.len(), cap));
     let (area, _) = ui.allocate_exact_size(size, Sense::hover());
-    let uv = Rect::from_min_max(Pos2::ZERO, pos2(1.0, 1.0));
     for (cell, image) in grid_cells(images.len(), cap, area).into_iter().zip(images) {
         let painter = ui.painter();
         painter.rect_filled(
@@ -79,12 +82,7 @@ pub fn show(ui: &mut Ui, images: &[PreviewImage], total: usize, cap: usize) {
             CornerRadius::same(tokens::RADIUS_M),
             tokens::BG_SECONDARY,
         );
-        painter.image(
-            image.texture,
-            fit_rect(image.size, cell),
-            uv,
-            Color32::WHITE,
-        );
+        paint_picture(painter, image, cell, tokens::RADIUS_M);
     }
     if let Some(hint) = more_hint(total, shown(images.len(), cap)) {
         ui.add_space(tokens::SPACING_S);

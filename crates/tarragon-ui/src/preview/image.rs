@@ -1,6 +1,7 @@
 //! The picture box at the top of the Preview panel.
 
-use egui::{Color32, CornerRadius, Pos2, Rect, Sense, TextureId, Ui, Vec2, pos2, vec2};
+use egui::epaint::RectShape;
+use egui::{Color32, CornerRadius, Painter, Pos2, Rect, Sense, TextureId, Ui, Vec2, pos2, vec2};
 
 use crate::tokens;
 
@@ -31,6 +32,21 @@ pub fn fit_rect(image: (u32, u32), area: Rect) -> Rect {
     Rect::from_center_size(area.center(), size * scale)
 }
 
+/// Paint `image` fitted inside `area` with rounded corners. A plain image mesh
+/// has square corners and would cover the rounded box behind it, so the
+/// texture goes on a rounded rect instead.
+pub fn paint_picture(painter: &Painter, image: &PreviewImage, area: Rect, radius: u8) {
+    let uv = Rect::from_min_max(Pos2::ZERO, pos2(1.0, 1.0));
+    painter.add(
+        RectShape::filled(
+            fit_rect(image.size, area),
+            CornerRadius::same(radius),
+            Color32::WHITE,
+        )
+        .with_texture(image.texture, uv),
+    );
+}
+
 /// The room, in points, that the box leaves free at the bottom.
 const SLACK: f32 = 0.5;
 
@@ -55,13 +71,8 @@ pub fn show_box(ui: &mut Ui, image: &PreviewImage, height: f32) -> Rect {
         CornerRadius::same(tokens::RADIUS_L),
         tokens::BG_SECONDARY,
     );
-    let uv = Rect::from_min_max(Pos2::ZERO, pos2(1.0, 1.0));
-    painter.image(
-        image.texture,
-        fit_rect(image.size, rect),
-        uv,
-        Color32::WHITE,
-    );
+    let inner = rect.shrink(tokens::PREVIEW_IMAGE_INSET);
+    paint_picture(painter, image, inner, tokens::RADIUS_L);
     rect
 }
 

@@ -1,7 +1,8 @@
 //! Tests for the picture fit.
 
 use super::*;
-use egui::pos2;
+use egui::epaint::RectShape;
+use egui::{CornerRadius, TextureId, pos2};
 
 fn area() -> Rect {
     Rect::from_min_size(pos2(10.0, 20.0), vec2(400.0, 200.0))
@@ -64,4 +65,58 @@ fn the_box_fills_what_the_content_below_leaves_and_never_drops_under_the_minimum
     assert_eq!(box_height(900.0, 200.0), 699.5);
     assert_eq!(box_height(400.0, 200.0), min);
     assert_eq!(box_height(900.0, 0.0), 899.5);
+}
+
+/// Run one frame of `show_box` for a 64 x 48 picture and give the box rect and
+/// the painted shapes.
+fn paint_box(height: f32) -> (Rect, Vec<egui::Shape>) {
+    let ctx = egui::Context::default();
+    let input = egui::RawInput {
+        screen_rect: Some(Rect::from_min_size(pos2(0.0, 0.0), vec2(400.0, 600.0))),
+        ..Default::default()
+    };
+    let image = PreviewImage {
+        texture: TextureId::User(7),
+        size: (64, 48),
+    };
+    let mut rect = Rect::NOTHING;
+    let output = ctx.run_ui(input, |ui| rect = show_box(ui, &image, height));
+    let shapes = output.shapes.iter().map(|c| c.shape.clone()).collect();
+    output.drop_without_applying_deltas();
+    (rect, shapes)
+}
+
+/// The textured rects among `shapes`.
+fn textured(shapes: &[egui::Shape]) -> Vec<RectShape> {
+    shapes
+        .iter()
+        .flat_map(|s| match s {
+            egui::Shape::Vec(inner) => textured(inner),
+            egui::Shape::Rect(r) if r.brush.is_some() => vec![r.clone()],
+            _ => Vec::new(),
+        })
+        .collect()
+}
+
+#[test]
+fn the_picture_is_inset_from_the_box_and_keeps_its_rounded_corners() {
+    let (rect, shapes) = paint_box(300.0);
+    let pictures = textured(&shapes);
+    assert_eq!(pictures.len(), 1);
+    let inner = rect.shrink(tokens::PREVIEW_IMAGE_INSET);
+    assert_eq!(pictures[0].rect, fit_rect((64, 48), inner));
+    assert_eq!(
+        pictures[0].corner_radius,
+        CornerRadius::same(tokens::RADIUS_L)
+    );
+    assert_eq!(tokens::PREVIEW_IMAGE_INSET, 16.0);
+}
+
+#[test]
+fn a_picture_that_fills_the_inner_area_stays_16_points_off_every_box_edge() {
+    // 64 x 48 fits exactly in a 4:3 inner area: 400 - 32 = 368 wide, 276 tall.
+    let (rect, shapes) = paint_box(276.0 + 32.0);
+    let picture = textured(&shapes)[0].rect;
+    assert_eq!(picture.min - rect.min, vec2(16.0, 16.0));
+    assert_eq!(rect.max - picture.max, vec2(16.0, 16.0));
 }

@@ -3,14 +3,16 @@
 use super::{columns, grid_cells, grid_height, more_hint};
 use egui::{Rect, pos2};
 
-/// A 100 point wide area at (10, 20); gaps of 8 divide it into whole numbers.
+/// A 116 point wide area at (10, 20). The 8 point padding leaves 100 points,
+/// and gaps of 8 divide that into whole numbers.
 fn area() -> Rect {
-    Rect::from_min_size(pos2(10.0, 20.0), egui::vec2(100.0, 500.0))
+    Rect::from_min_size(pos2(10.0, 20.0), egui::vec2(116.0, 516.0))
 }
 
-/// A 120 point tall cell at `x`, `y` (relative to the area) and `w` wide.
+/// A 120 point tall cell at `x`, `y` (relative to the padded grid) and `w`
+/// wide. The grid starts 8 points inside the area.
 fn cell(x: f32, y: f32, w: f32) -> Rect {
-    Rect::from_min_size(pos2(10.0 + x, 20.0 + y), egui::vec2(w, 120.0))
+    Rect::from_min_size(pos2(18.0 + x, 28.0 + y), egui::vec2(w, 120.0))
 }
 
 #[test]
@@ -77,19 +79,21 @@ fn no_images_or_no_area_give_no_cells() {
     let none: Vec<Rect> = Vec::new();
     let point = Rect::from_min_size(pos2(5.0, 5.0), egui::Vec2::ZERO);
     let flat = Rect::from_min_size(pos2(0.0, 0.0), egui::vec2(100.0, 0.0));
+    let thin = Rect::from_min_size(pos2(0.0, 0.0), egui::vec2(16.0, 500.0));
     assert_eq!(grid_cells(0, 9, area()), none);
     assert_eq!(grid_cells(4, 0, area()), none);
     assert_eq!(grid_cells(4, 9, point), none);
     assert_eq!(grid_cells(4, 9, flat), none);
+    assert_eq!(grid_cells(4, 9, thin), none);
 }
 
 #[test]
-fn the_grid_height_counts_rows_and_gaps() {
+fn the_grid_height_counts_rows_gaps_and_padding() {
     assert_eq!(grid_height(0, 9), 0.0);
-    assert_eq!(grid_height(2, 9), 120.0);
-    assert_eq!(grid_height(3, 9), 248.0);
-    assert_eq!(grid_height(9, 9), 3.0 * 120.0 + 2.0 * 8.0);
-    assert_eq!(grid_height(12, 4), 248.0);
+    assert_eq!(grid_height(2, 9), 136.0);
+    assert_eq!(grid_height(3, 9), 264.0);
+    assert_eq!(grid_height(9, 9), 3.0 * 120.0 + 2.0 * 8.0 + 16.0);
+    assert_eq!(grid_height(12, 4), 264.0);
 }
 
 #[test]
@@ -98,4 +102,33 @@ fn the_hint_counts_the_selected_images_the_mosaic_does_not_draw() {
     assert_eq!(more_hint(20, 9).as_deref(), Some("+11 more"));
     assert_eq!(more_hint(5, 3).as_deref(), Some("+2 more"));
     assert_eq!(more_hint(3, 3), None);
+}
+
+#[test]
+fn each_painted_picture_carries_the_cell_corner_radius() {
+    use super::{PreviewImage, show};
+    let ctx = egui::Context::default();
+    let input = egui::RawInput {
+        screen_rect: Some(Rect::from_min_size(
+            pos2(0.0, 0.0),
+            egui::vec2(400.0, 600.0),
+        )),
+        ..Default::default()
+    };
+    let images = [PreviewImage {
+        texture: egui::TextureId::User(3),
+        size: (50, 50),
+    }; 2];
+    let output = ctx.run_ui(input, |ui| show(ui, &images, 2, 9));
+    let radii: Vec<egui::CornerRadius> = output
+        .shapes
+        .iter()
+        .filter_map(|c| match &c.shape {
+            egui::Shape::Rect(r) if r.brush.is_some() => Some(r.corner_radius),
+            _ => None,
+        })
+        .collect();
+    output.drop_without_applying_deltas();
+    let want = egui::CornerRadius::same(crate::tokens::RADIUS_M);
+    assert_eq!(radii, [want, want]);
 }

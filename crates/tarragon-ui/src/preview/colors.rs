@@ -1,6 +1,6 @@
 //! The row of colour squares: which colours the selected images carry.
 
-use egui::{RichText, Ui};
+use egui::Ui;
 
 use super::PreviewEvent;
 use crate::swatch::{self, Swatch};
@@ -33,14 +33,8 @@ impl ColorState {
 /// One state for each square, in `Swatch::ALL` order.
 pub type ColorStates = [ColorState; 12];
 
-/// Draw the Tags heading and the squares. A click queues an event.
+/// Draw the squares. A click queues an event.
 pub fn show_row(ui: &mut Ui, states: &ColorStates, events: &mut Vec<PreviewEvent>) {
-    ui.add_space(tokens::SPACING_S);
-    ui.label(
-        RichText::new("Tags")
-            .size(tokens::SIZE_CAPTION)
-            .color(tokens::TEXT_MUTED),
-    );
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = tokens::SPACING_XS;
         for (swatch, state) in Swatch::ALL.into_iter().zip(states) {

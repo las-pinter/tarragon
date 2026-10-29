@@ -2,25 +2,30 @@
 
 use egui::{Align, Layout, RichText, ScrollArea, Ui};
 
+use crate::swatch::Swatch;
 use crate::tokens;
 
 mod colors;
 mod image;
 mod meta;
+mod tags;
 pub use colors::{ColorState, ColorStates};
 pub use image::PreviewImage;
 pub use meta::Meta;
-
-use crate::swatch::Swatch;
+pub use tags::TagPill;
 
 /// The hint shown while nothing is selected.
 pub const EMPTY_HINT: &str = "Select an image to preview it";
 
 /// What the panel asks the app to do.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PreviewEvent {
     /// The user clicked this colour square.
     ColorClicked(Swatch),
+    /// The user clicked the x on this tag: remove it from every selected image.
+    TagRemoved(String),
+    /// The user clicked a partial tag: add it to every selected image.
+    TagApplied(String),
 }
 
 /// The state of the Preview panel.
@@ -32,6 +37,8 @@ pub struct Preview {
     image: Option<PreviewImage>,
     /// How many selected images carry each colour.
     colors: ColorStates,
+    /// The user tags of the selected images, in display order.
+    tags: Vec<TagPill>,
     /// Whether the colour squares show; settings can turn colour tags off.
     colors_enabled: bool,
     /// Events not yet taken by the app.
@@ -44,6 +51,7 @@ impl Default for Preview {
             meta: None,
             image: None,
             colors: ColorStates::default(),
+            tags: Vec::new(),
             colors_enabled: true,
             events: Vec::new(),
         }
@@ -66,6 +74,11 @@ impl Preview {
         self.colors = colors;
     }
 
+    /// Set the tag pills to show, with how many selected images carry each.
+    pub fn set_tags(&mut self, tags: Vec<TagPill>) {
+        self.tags = tags;
+    }
+
     /// Show or hide the colour squares, to follow the colour tags setting.
     pub fn set_colors_enabled(&mut self, enabled: bool) {
         self.colors_enabled = enabled;
@@ -78,7 +91,8 @@ impl Preview {
 
     /// Draw the panel body. It scrolls, so a short pane loses nothing.
     pub fn show(&mut self, ui: &mut Ui) {
-        let (colors, enabled, events) = (&self.colors, self.colors_enabled, &mut self.events);
+        let (colors, tags, enabled) = (&self.colors, &self.tags, self.colors_enabled);
+        let events = &mut self.events;
         match (&self.image, &self.meta) {
             (None, None) => show_empty(ui),
             (image, meta) => {
@@ -91,9 +105,11 @@ impl Preview {
                         if let Some(meta) = meta {
                             meta::show_grid(ui, meta);
                         }
+                        tags::show_heading(ui);
                         if enabled {
                             colors::show_row(ui, colors, events);
                         }
+                        tags::show_pills(ui, tags, events);
                     });
             }
         }

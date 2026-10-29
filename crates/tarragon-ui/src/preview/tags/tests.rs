@@ -1,7 +1,8 @@
 //! Tests for the Tags heading and the pill row.
 
 use super::TagPill;
-use crate::preview::{ColorState, Meta, Preview, PreviewEvent};
+use crate::preview::test_support::{pill, preview};
+use crate::preview::{ColorState, Preview, PreviewEvent};
 use crate::tokens;
 use egui::{Color32, Context, Event, PointerButton, Pos2, Rect, vec2};
 
@@ -11,25 +12,6 @@ fn input(width: f32, events: Vec<Event>) -> egui::RawInput {
         events,
         ..Default::default()
     }
-}
-
-fn pill(name: &str, state: ColorState) -> TagPill {
-    TagPill {
-        name: name.into(),
-        state,
-    }
-}
-
-pub(super) fn preview(tags: Vec<TagPill>) -> Preview {
-    let mut preview = Preview::default();
-    preview.set_meta(Some(Meta {
-        name: "a.png".into(),
-        dimensions: None,
-        size: None,
-        format: "PNG".into(),
-    }));
-    preview.set_tags(tags);
-    preview
 }
 
 /// Whether a fill is the coral-dark pill background at one of the three opacities.

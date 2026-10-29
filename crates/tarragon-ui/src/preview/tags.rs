@@ -2,6 +2,7 @@
 
 use egui::{Color32, CornerRadius, CursorIcon, FontId, Rect, RichText, Sense, Ui, pos2, vec2};
 
+use super::add::{self, AddState};
 use super::{ColorState, PreviewEvent};
 use crate::tokens;
 
@@ -28,19 +29,42 @@ pub fn show_heading(ui: &mut Ui) {
     );
 }
 
-/// Draw the pills, wrapping to new lines. The x on a pill removes the tag; a
-/// click on the rest of a partial pill applies the tag to every selected image.
-pub fn show_pills(ui: &mut Ui, pills: &[TagPill], events: &mut Vec<PreviewEvent>) {
-    if pills.is_empty() {
-        return;
-    }
+/// Draw the pills, wrapping to new lines, then the "+ add" button at the end.
+/// The x on a pill removes the tag; a click on the rest of a partial pill
+/// applies the tag to every selected image.
+pub fn show_pills(
+    ui: &mut Ui,
+    pills: &[TagPill],
+    known: &[String],
+    add: &mut AddState,
+    events: &mut Vec<PreviewEvent>,
+) {
     ui.add_space(tokens::SPACING_S);
-    ui.horizontal_wrapped(|ui| {
-        ui.spacing_mut().item_spacing = vec2(tokens::SPACING_XS, tokens::SPACING_XS);
-        for pill in pills {
-            show_pill(ui, pill, events);
-        }
-    });
+    let button = ui
+        .horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing = vec2(tokens::SPACING_XS, tokens::SPACING_XS);
+            for pill in pills {
+                show_pill(ui, pill, events);
+            }
+            // The input replaces the button, as in the mockup.
+            (!matches!(add, AddState::Input { .. })).then(|| add::show_button(ui, add))
+        })
+        .inner;
+    if let (Some(button), AddState::Menu) = (&button, &*add) {
+        // A fully applied tag has nothing to add; a partial one still does.
+        let full = |name: &str| {
+            pills
+                .iter()
+                .any(|p| p.name == name && p.state == ColorState::All)
+        };
+        let choices: Vec<&str> = known
+            .iter()
+            .map(String::as_str)
+            .filter(|name| !full(name))
+            .collect();
+        add::show_menu(ui, ui.id().with("add-menu"), button, &choices, add, events);
+    }
+    add::show_input(ui, ui.id().with("add-input"), add, events);
 }
 
 fn show_pill(ui: &mut Ui, pill: &TagPill, events: &mut Vec<PreviewEvent>) {

@@ -147,6 +147,8 @@ pub const SPACING_XL: f32 = 24.0;
 pub const RADIUS_NONE: u8 = 0;
 /// `--radius-xs`: extra small rounding, in points.
 pub const RADIUS_XS: u8 = 3;
+/// The width of a control border, in points.
+pub const STROKE_WIDTH: f32 = 1.0;
 /// `--radius-s`: small rounding, in points.
 pub const RADIUS_S: u8 = 4;
 /// `--radius-m`: medium rounding, in points.

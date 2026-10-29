@@ -5,10 +5,13 @@ use egui::{Align, Layout, RichText, ScrollArea, Ui};
 use crate::swatch::Swatch;
 use crate::tokens;
 
+mod add;
 mod colors;
 mod image;
 mod meta;
 mod tags;
+#[cfg(test)]
+mod test_support;
 pub use colors::{ColorState, ColorStates};
 pub use image::PreviewImage;
 pub use meta::Meta;
@@ -39,6 +42,10 @@ pub struct Preview {
     colors: ColorStates,
     /// The user tags of the selected images, in display order.
     tags: Vec<TagPill>,
+    /// Every known user tag name, for the "+ add" menu. Colour tags are left out.
+    known_tags: Vec<String>,
+    /// Which part of the "+ add" control is open.
+    add: add::AddState,
     /// Whether the colour squares show; settings can turn colour tags off.
     colors_enabled: bool,
     /// Events not yet taken by the app.
@@ -52,6 +59,8 @@ impl Default for Preview {
             image: None,
             colors: ColorStates::default(),
             tags: Vec::new(),
+            known_tags: Vec::new(),
+            add: add::AddState::default(),
             colors_enabled: true,
             events: Vec::new(),
         }
@@ -79,9 +88,21 @@ impl Preview {
         self.tags = tags;
     }
 
+    /// Set the user tag names the "+ add" menu offers. The menu hides the
+    /// ones every selected image already has.
+    pub fn set_known_tags(&mut self, names: Vec<String>) {
+        self.known_tags = names;
+    }
+
     /// Show or hide the colour squares, to follow the colour tags setting.
     pub fn set_colors_enabled(&mut self, enabled: bool) {
         self.colors_enabled = enabled;
+    }
+
+    /// Close the "+ add" menu and input. The app calls it when the selection
+    /// changes; `set_tags` must not, because tags refresh after every tag event.
+    pub fn selection_changed(&mut self) {
+        self.add = add::AddState::default();
     }
 
     /// Return the queued events and empty the queue.
@@ -92,9 +113,14 @@ impl Preview {
     /// Draw the panel body. It scrolls, so a short pane loses nothing.
     pub fn show(&mut self, ui: &mut Ui) {
         let (colors, tags, enabled) = (&self.colors, &self.tags, self.colors_enabled);
+        let (known, add) = (&self.known_tags, &mut self.add);
         let events = &mut self.events;
         match (&self.image, &self.meta) {
-            (None, None) => show_empty(ui),
+            (None, None) => {
+                // A hidden input must not come back stale with the next selection.
+                *add = add::AddState::default();
+                show_empty(ui);
+            }
             (image, meta) => {
                 ScrollArea::vertical()
                     .auto_shrink([false, false])
@@ -109,7 +135,7 @@ impl Preview {
                         if enabled {
                             colors::show_row(ui, colors, events);
                         }
-                        tags::show_pills(ui, tags, events);
+                        tags::show_pills(ui, tags, known, add, events);
                     });
             }
         }

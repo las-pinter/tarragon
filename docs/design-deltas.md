@@ -298,3 +298,67 @@ folder given on the command line.
 Reason: the sidebar needs a short name for each favorite and a start point for
 the tree. The home folder holds a user's files by default, and the
 command-line folder must stay reachable when it is outside home.
+
+## Preview empty state and picture box
+
+Before: the mockups show the Preview panel only with a selection and define no
+empty state. In `design/mockups/preview-single.html` the picture box grows
+with the pane, with a 260 px minimum set inline. The stylesheet default is
+140 px.
+
+After: with nothing selected the panel shows the muted hint "Select an image to
+preview it" in the middle. The picture box keeps the mockup's growth and fixes
+the 260 px minimum in the design tokens. The metadata and the tags sit below
+it. A pane that is too short keeps the 260 px box and scrolls. The picture is
+scaled to fit inside the box with its aspect ratio kept.
+
+Reason: a blank panel gives no hint about what to do.
+
+## Preview colour squares
+
+Before: `design/mockups/preview-single.html` shows ten squares, one for each
+original bucket. The checkerboard has no colour values in the stylesheet.
+
+After: the row has twelve squares: the eleven colour buckets, then a
+checkerboard square for `transparent` at the end. The two checkerboard greys
+are `#b0b0b0` and `#707070`, which have no stylesheet row. The row is hidden
+when colour tags are turned off in the settings. The opacity of a square follows
+the mockup: 1.0 when all selected images carry the colour, 0.5 when some do,
+and 0.3 when none do.
+
+Reason: the app has eleven buckets and the transparency tag, so the row shows
+them all. The row hides when colour tags are off, because its squares would act
+on tags that do not exist then.
+
+## Preview tag pills and the add menu
+
+Before: in the mockup the remove x on a tag pill always shows, and a pill has
+3 px of vertical padding. The menu has a minimum width of 210 px.
+
+After: the x shows only while the pointer is over the pill. Its room is always
+reserved, so the pill does not change size on hover. A pill has 2 px of vertical
+padding, which is half of the 4 px spacing step. The "+ add" menu keeps the
+tags that only some of the selected images carry, so the user can apply them to
+all of them. It leaves out a tag only when every selected image has it. The
+210 px minimum width is dropped. The menu is as wide as its widest row, up to
+the width of the pane, and a long name ends in an ellipsis. The menu shows at
+most eight rows and then scrolls. "Create new..." stays in view below them.
+
+Reason: a permanent x on every pill adds noise, and the mockup has no spacing
+token for 3 px. A tag that only some images carry still needs a way to reach the
+rest. A fixed wide menu could run past the edge of a narrow pane.
+
+## Preview mosaic
+
+Before: `design/mockups/preview-mosaic.html` shows a grid of cells for a
+multi-selection. Each cell has a file-type badge. The mockup shows no caption
+under the grid.
+
+After: when more images are selected than the grid shows, a caption such as
+"+3 more" sits under the grid. The cells draw no file-type badge yet, because
+the Preview has no format data for them. There are no boxes for a picture that
+is still loading or for an empty cell yet.
+
+Reason: the caption tells the user that the grid is not the whole selection.
+The badge and the loading and empty boxes wait for data the Preview does not
+have yet.

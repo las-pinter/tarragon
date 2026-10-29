@@ -2,13 +2,15 @@
 //!
 //! The values come from the `:root` block of `design/mockups/theme.css`. Each
 //! doc comment names its stylesheet token, so the two stay traceable. The two
-//! exceptions are `BUCKET_PINK` and `WINDOW_SIZE`, which have no stylesheet
-//! row. Colours convert to `egui::Color32` at compile time.
+//! exceptions are `BUCKET_PINK`, `CHECKER_LIGHT`, `CHECKER_DARK`, and
+//! `WINDOW_SIZE`, which have no stylesheet row. Colours convert to
+//! `egui::Color32` at compile time.
 
 use egui::Color32;
 
 // The whole `:root` block of `theme.css` is ported on purpose, plus
-// `BUCKET_PINK` and `WINDOW_SIZE`. Some values have no consumer yet.
+// `BUCKET_PINK`, the checker greys and `WINDOW_SIZE`. Some values have no
+// consumer yet.
 
 /// `--bg-primary`: window and gallery background.
 pub const BG_PRIMARY: Color32 = Color32::from_rgb(0x16, 0x15, 0x1a);
@@ -124,6 +126,11 @@ pub const BUCKET_MAGENTA: Color32 = Color32::from_rgb(0xe9, 0x1e, 0x63);
 pub const BUCKET_PINK: Color32 = Color32::from_rgb(0xff, 0x80, 0xab);
 /// `--bucket-neutral`: neutral colour bucket.
 pub const BUCKET_NEUTRAL: Color32 = Color32::from_rgb(0x7f, 0x8c, 0x8d);
+
+/// Light cell of the checkerboard in the transparent swatch. No stylesheet row.
+pub const CHECKER_LIGHT: Color32 = Color32::from_rgb(0xb0, 0xb0, 0xb0);
+/// Dark cell of the checkerboard in the transparent swatch. No stylesheet row.
+pub const CHECKER_DARK: Color32 = Color32::from_rgb(0x70, 0x70, 0x70);
 
 /// `--space-xs`: extra small gap, in points.
 pub const SPACING_XS: f32 = 4.0;

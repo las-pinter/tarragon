@@ -10,6 +10,7 @@ pub mod layout;
 pub mod preview;
 pub mod shell;
 pub mod sidebar;
+pub mod swatch;
 pub mod texture_budget;
 pub mod theme;
 pub mod tokens;

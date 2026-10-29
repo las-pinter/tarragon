@@ -147,8 +147,6 @@ pub const SPACING_XL: f32 = 24.0;
 pub const RADIUS_NONE: u8 = 0;
 /// `--radius-xs`: extra small rounding, in points.
 pub const RADIUS_XS: u8 = 3;
-/// The width of a control border, in points.
-pub const STROKE_WIDTH: f32 = 1.0;
 /// `--radius-s`: small rounding, in points.
 pub const RADIUS_S: u8 = 4;
 /// `--radius-m`: medium rounding, in points.
@@ -163,6 +161,9 @@ pub const DURATION_FAST: f32 = 0.15;
 /// `--dur-normal`: normal animation, in seconds.
 pub const DURATION_NORMAL: f32 = 0.2;
 
+/// The width of a control border, in points.
+pub const STROKE_WIDTH: f32 = 1.0;
+
 /// `--grid-gap`: gap between grid cells, in points.
 pub const GRID_GAP: f32 = 14.0;
 /// `--thumbnail`: grid cell size, in points.
@@ -176,6 +177,8 @@ pub const SIDEBAR_WIDTH: f32 = 220.0;
 pub const PREVIEW_WIDTH: f32 = 490.0;
 /// `.preview-img` min-height: the Preview image box height, in points.
 pub const PREVIEW_IMAGE_HEIGHT: f32 = 260.0;
+/// `.mosaic-cell` height: one Preview mosaic cell, in points.
+pub const PREVIEW_MOSAIC_CELL_HEIGHT: f32 = 120.0;
 
 /// `--font-sans`: stylesheet sans stack.
 ///

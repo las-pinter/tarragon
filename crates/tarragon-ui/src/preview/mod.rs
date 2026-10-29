@@ -9,6 +9,7 @@ mod add;
 mod colors;
 mod image;
 mod meta;
+mod mosaic;
 mod tags;
 #[cfg(test)]
 mod test_support;
@@ -38,6 +39,12 @@ pub struct Preview {
     meta: Option<Meta>,
     /// The picture of that file, when it is ready.
     image: Option<PreviewImage>,
+    /// The pictures of a multi-selection that are ready, in display order.
+    mosaic: Vec<PreviewImage>,
+    /// How many images are selected, which can exceed `mosaic`.
+    mosaic_total: usize,
+    /// How many mosaic pictures show at most.
+    mosaic_cap: usize,
     /// How many selected images carry each colour.
     colors: ColorStates,
     /// The user tags of the selected images, in display order.
@@ -57,6 +64,9 @@ impl Default for Preview {
         Self {
             meta: None,
             image: None,
+            mosaic: Vec::new(),
+            mosaic_total: 0,
+            mosaic_cap: mosaic::DEFAULT_CAP,
             colors: ColorStates::default(),
             tags: Vec::new(),
             known_tags: Vec::new(),
@@ -76,6 +86,21 @@ impl Preview {
     /// Set the picture to show, or `None` for no picture.
     pub fn set_image(&mut self, image: Option<PreviewImage>) {
         self.image = image;
+    }
+
+    /// Set the ready pictures of a multi-selection and how many images are
+    /// selected in all. With two or more selected and a picture ready, the
+    /// mosaic replaces the single picture; the selected images it does not
+    /// draw become a "+k more" hint.
+    pub fn set_mosaic(&mut self, images: Vec<PreviewImage>, total: usize) {
+        self.mosaic = images;
+        self.mosaic_total = total;
+    }
+
+    /// Set how many pictures the mosaic shows at most, to follow the
+    /// `max_multi_preview` setting. Zero counts as one.
+    pub fn set_max_multi_preview(&mut self, cap: usize) {
+        self.mosaic_cap = cap.max(1);
     }
 
     /// Set how many selected images carry each colour, in `Swatch::ALL` order.
@@ -115,8 +140,12 @@ impl Preview {
         let (colors, tags, enabled) = (&self.colors, &self.tags, self.colors_enabled);
         let (known, add) = (&self.known_tags, &mut self.add);
         let events = &mut self.events;
+        let (mosaic, total, cap) = (&self.mosaic, self.mosaic_total, self.mosaic_cap);
+        // A big selection with one picture ready already shows a one-cell
+        // mosaic, so the panel does not flip to the single box while it fills.
+        let multi = total >= 2 && !mosaic.is_empty();
         match (&self.image, &self.meta) {
-            (None, None) => {
+            (None, None) if !multi => {
                 // A hidden input must not come back stale with the next selection.
                 *add = add::AddState::default();
                 show_empty(ui);
@@ -125,7 +154,9 @@ impl Preview {
                 ScrollArea::vertical()
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
-                        if let Some(image) = image {
+                        if multi {
+                            mosaic::show(ui, mosaic, total, cap);
+                        } else if let Some(image) = image {
                             image::show_box(ui, image);
                         }
                         if let Some(meta) = meta {

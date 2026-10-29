@@ -62,7 +62,7 @@ fn the_preview_pane_shows_the_metadata_labels_and_values_once_set() {
 }
 
 /// The texture and rect of every picture shape in the frame.
-fn painted_pictures(output: &egui::FullOutput) -> Vec<(egui::TextureId, egui::Rect)> {
+pub(super) fn painted_pictures(output: &egui::FullOutput) -> Vec<(egui::TextureId, egui::Rect)> {
     use egui::epaint::Shape;
     fn collect(shape: &Shape, found: &mut Vec<(egui::TextureId, egui::Rect)>) {
         match shape {

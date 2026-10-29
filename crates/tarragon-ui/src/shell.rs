@@ -2,24 +2,21 @@
 //!
 //! The four panels sit in a dock, so the user can resize and move them.
 
-use egui::{
-    Button, CentralPanel, Context, FontFamily, FontId, Frame, Margin, MenuBar, Panel, RichText, Ui,
-    ViewportCommand,
-};
+use egui::{CentralPanel, FontFamily, FontId, Frame, Margin, MenuBar, Panel, RichText, Ui};
 use egui_dock::{DockArea, DockState, Style};
 use tarragon_core::sorting::SortMode;
 
 use crate::gallery::Gallery;
 use crate::grid::GridItem;
 use crate::layout::{Pane, first_dock, from_json, is_visible, set_visible, to_json};
-use crate::preview::Preview;
+use crate::preview::{Preview, PreviewEvent};
 use crate::sidebar::panel::{Sidebar, SidebarEvent};
 use crate::theme::{dock_title_style, panel_frame};
 use crate::tokens;
 
 mod dock;
-use dock::TabMenu;
 mod log_panel;
+mod menu;
 pub use log_panel::{LogLevel, LogLine, LogPanelEvents, LogSlice, LogSource, LogView};
 
 /// The product name shown in the title bar.
@@ -47,6 +44,8 @@ pub struct Shell {
     sidebar: Sidebar,
     /// The Preview panel in the right dock.
     preview: Preview,
+    /// The gallery selection revision that the Preview last saw.
+    seen_selection: u64,
     /// Where each panel sits and how big it is. A hidden panel is not in it.
     dock: DockState<Pane>,
 }
@@ -60,6 +59,7 @@ impl Shell {
             gallery: Gallery::new(SortMode::Natural),
             sidebar: Sidebar::default(),
             preview: Preview::default(),
+            seen_selection: 0,
             dock: first_dock(),
         }
     }
@@ -109,6 +109,28 @@ impl Shell {
     /// Return the Library events since the last call, and clear them.
     pub fn take_sidebar_events(&mut self) -> Vec<SidebarEvent> {
         self.sidebar.take_events()
+    }
+
+    /// The Preview panel, for the app to set the picture, colours, and tags.
+    pub fn preview_mut(&mut self) -> &mut Preview {
+        &mut self.preview
+    }
+
+    /// Return the Preview events since the last call, and clear them.
+    pub fn take_preview_events(&mut self) -> Vec<PreviewEvent> {
+        self.preview.take_events()
+    }
+
+    /// The paths of the selected gallery items, in display order.
+    #[must_use]
+    pub fn selected_paths(&self) -> Vec<std::path::PathBuf> {
+        self.gallery.selected_paths()
+    }
+
+    /// A counter that grows each time `selected_paths` returns another list.
+    #[must_use]
+    pub fn selection_revision(&self) -> u64 {
+        self.gallery.selection_revision()
     }
 
     /// The gallery, for the app to set tile textures and read the visible tiles.
@@ -165,14 +187,6 @@ impl Shell {
         true
     }
 
-    /// Apply one choice from the tab context menu.
-    fn apply_tab_menu(&mut self, action: TabMenu) {
-        match action {
-            TabMenu::Hide(pane) => set_visible(&mut self.dock, pane, false),
-            TabMenu::Reset => self.reset_layout(),
-        }
-    }
-
     /// Draw one frame of the shell with an empty log.
     pub fn show(&mut self, ui: &mut Ui) {
         self.show_with_log(
@@ -192,6 +206,13 @@ impl Shell {
         let mut events = LogPanelEvents::default();
         let mut menu = None;
         let ctx = ui.ctx().clone();
+
+        // A menu opened for the old selection would act on the wrong images.
+        let revision = self.gallery.selection_revision();
+        if revision != self.seen_selection {
+            self.seen_selection = revision;
+            self.preview.selection_changed();
+        }
 
         Panel::top("tarragon-titlebar")
             .exact_size(TITLEBAR_HEIGHT)
@@ -252,38 +273,6 @@ impl Shell {
             }
         });
         events
-    }
-
-    /// Draw the File, View, and Settings menus. The items are placeholders.
-    fn menu_bar(&mut self, ui: &mut Ui, ctx: &Context) {
-        ui.menu_button("File", |ui| {
-            // The folder picker lands with the scan work.
-            let _ = ui.button("Open Folder...");
-            if ui.button("Quit").clicked() {
-                ctx.send_viewport_cmd(ViewportCommand::Close);
-                // The menu must close before the window goes away.
-                ui.close();
-            }
-        });
-        ui.menu_button("View", |ui| {
-            for pane in [Pane::Library, Pane::Gallery, Pane::Preview, Pane::Log] {
-                let visible = is_visible(&self.dock, pane);
-                if ui
-                    .add(Button::new(dock::name(pane)).selected(visible))
-                    .clicked()
-                {
-                    set_visible(&mut self.dock, pane, !visible);
-                }
-            }
-            ui.separator();
-            if ui.button("Reset Window Layout").clicked() {
-                self.reset_layout();
-            }
-        });
-        ui.menu_button("Settings", |ui| {
-            // The settings screens land with the settings work.
-            let _ = ui.button("Preferences...");
-        });
     }
 }
 

@@ -8,6 +8,8 @@ use egui::{
 };
 use std::path::PathBuf;
 
+mod preview_wiring;
+
 /// The headless screen, wide and tall enough for both docks.
 pub(super) fn input() -> RawInput {
     RawInput {

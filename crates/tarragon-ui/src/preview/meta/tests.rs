@@ -60,3 +60,77 @@ fn rows_give_the_four_mockup_fields_and_unknown_for_missing_values() {
     ];
     assert_eq!(bare.rows(), want.map(|(k, v)| (k, v.to_owned())));
 }
+
+mod paint {
+    use super::*;
+    use crate::preview::Preview;
+    use egui::{Color32, Context, Pos2, Rect, Shape, vec2};
+
+    /// A painted text: its string, its place, the colour of its first section,
+    /// and the override colour the shape carries.
+    type Text = (String, Pos2, Color32, Option<Color32>);
+
+    fn walk(shape: &Shape, found: &mut Vec<Text>) {
+        match shape {
+            Shape::Vec(shapes) => shapes.iter().for_each(|s| walk(s, found)),
+            Shape::Text(t) => found.push((
+                t.galley.job.text.clone(),
+                t.pos,
+                t.galley.job.sections[0].format.color,
+                t.override_text_color,
+            )),
+            _ => {}
+        }
+    }
+
+    fn texts() -> Vec<Text> {
+        let mut preview = Preview::default();
+        preview.set_meta(Some(Meta {
+            name: "a.png".into(),
+            dimensions: Some((64, 48)),
+            size: Some(10),
+            format: "PNG".into(),
+        }));
+        let ctx = Context::default();
+        crate::theme::apply_theme(&ctx);
+        let mut found = Vec::new();
+        for _ in 0..3 {
+            found.clear();
+            let input = egui::RawInput {
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(400.0, 600.0))),
+                ..Default::default()
+            };
+            let output = ctx.run_ui(input, |ui| preview.show(ui));
+            output
+                .shapes
+                .iter()
+                .for_each(|c| walk(&c.shape, &mut found));
+            output.drop_without_applying_deltas();
+        }
+        found
+    }
+
+    fn at(texts: &[Text], want: &str) -> Text {
+        texts.iter().find(|t| t.0 == want).cloned().unwrap()
+    }
+
+    #[test]
+    fn metadata_rows_are_18_points_apart() {
+        let found = texts();
+        let rows = ["File", "Dimensions", "Size", "Format"].map(|k| at(&found, k).1.y);
+        let pitch = tokens::PREVIEW_META_ROW_HEIGHT + tokens::SPACING_XS / 2.0;
+        assert_eq!(
+            rows.windows(2).map(|w| w[1] - w[0]).collect::<Vec<_>>(),
+            [pitch; 3]
+        );
+    }
+
+    #[test]
+    fn values_are_tertiary_and_keys_muted_with_no_override() {
+        let found = texts();
+        let value = at(&found, "PNG");
+        assert_eq!((value.2, value.3), (tokens::TEXT_TERTIARY, None));
+        let key = at(&found, "Format");
+        assert_eq!((key.2, key.3), (tokens::TEXT_MUTED, None));
+    }
+}

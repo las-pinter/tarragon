@@ -76,6 +76,9 @@ pub fn show_grid(ui: &mut Ui, meta: &Meta) {
             .color(tokens::TEXT_MUTED),
     );
     Grid::new("preview-meta")
+        // egui rows are at least as tall as a button; the stylesheet's are
+        // one text line.
+        .min_row_height(tokens::PREVIEW_META_ROW_HEIGHT)
         .spacing(vec2(tokens::SPACING_S, tokens::SPACING_XS / 2.0))
         .show(ui, |ui| {
             for (key, value) in meta.rows() {

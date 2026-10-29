@@ -185,6 +185,10 @@ pub const PREVIEW_MOSAIC_PADDING: f32 = SPACING_S;
 /// `.tag-pills` min-height: the least height of the Preview pill row, in
 /// points, so the "+ add" button keeps its place below an empty or short row.
 pub const PREVIEW_TAG_ROW_HEIGHT: f32 = 36.0;
+/// `.meta-key` and `.meta-val` line height: the height of one Preview metadata
+/// row, in points. With the 2 point `.meta-grid` gap it gives the 18 point row
+/// pitch of the mockup.
+pub const PREVIEW_META_ROW_HEIGHT: f32 = 16.0;
 /// `.menu-row` height: 5 point padding either side of the text line, measured
 /// at 27 points between rows in the mockup.
 pub const MENU_ROW_HEIGHT: f32 = 27.0;

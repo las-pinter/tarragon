@@ -1,6 +1,6 @@
 //! The Preview panel body: the selected image or images, and their details.
 
-use egui::{Align, Layout, RichText, ScrollArea, Ui};
+use egui::{RichText, ScrollArea, Ui};
 
 use crate::swatch::Swatch;
 use crate::tokens;
@@ -13,6 +13,8 @@ mod fill_tests;
 mod image;
 mod meta;
 mod mosaic;
+#[cfg(test)]
+mod pane_tests;
 mod tags;
 #[cfg(test)]
 mod test_support;
@@ -162,34 +164,41 @@ impl Preview {
                 show_empty(ui);
             }
             (image, meta) => {
-                ScrollArea::vertical()
-                    .auto_shrink([false, false])
-                    .show_viewport(ui, |ui, viewport| {
-                        let mut box_bottom = None;
-                        if multi {
-                            mosaic::show(ui, mosaic, total, cap);
-                        } else if let Some(image) = image {
-                            let height = image::box_height(viewport.height(), *below_box);
-                            box_bottom = Some(image::show_box(ui, image, height).bottom());
-                        }
-                        if let Some(meta) = meta {
-                            meta::show_grid(ui, meta);
-                        }
-                        tags::show_heading(ui);
-                        if enabled {
-                            colors::show_row(ui, colors, events);
-                        }
-                        tags::show_pills(ui, tags, known, add, events);
-                        if let Some(bottom) = box_bottom {
-                            // The content below is only known after layout, so
-                            // the next frame sizes the box with it.
-                            let below = ui.min_rect().bottom() - bottom;
-                            if (below - *below_box).abs() > 0.5 {
-                                *below_box = below;
-                                ui.ctx().request_repaint();
+                // The scope keeps the solid bar from leaking to the caller's ui.
+                ui.scope(|ui| {
+                    // Floating bars show only on hover, so cut-off content on a
+                    // short pane would give no sign. A solid bar is there while
+                    // the content overflows and takes no room otherwise.
+                    ui.spacing_mut().scroll = egui::style::ScrollStyle::solid();
+                    ScrollArea::vertical()
+                        .auto_shrink([false, false])
+                        .show_viewport(ui, |ui, viewport| {
+                            let mut box_bottom = None;
+                            if multi {
+                                mosaic::show(ui, mosaic, total, cap);
+                            } else if let Some(image) = image {
+                                let height = image::box_height(viewport.height(), *below_box);
+                                box_bottom = Some(image::show_box(ui, image, height).bottom());
                             }
-                        }
-                    });
+                            if let Some(meta) = meta {
+                                meta::show_grid(ui, meta);
+                            }
+                            tags::show_heading(ui);
+                            if enabled {
+                                colors::show_row(ui, colors, events);
+                            }
+                            tags::show_pills(ui, tags, known, add, events);
+                            if let Some(bottom) = box_bottom {
+                                // The content below is only known after layout, so
+                                // the next frame sizes the box with it.
+                                let below = ui.min_rect().bottom() - bottom;
+                                if (below - *below_box).abs() > 0.5 {
+                                    *below_box = below;
+                                    ui.ctx().request_repaint();
+                                }
+                            }
+                        });
+                });
             }
         }
     }
@@ -197,14 +206,11 @@ impl Preview {
 
 /// The hint sits in the middle, muted, like the other panels' empty text.
 fn show_empty(ui: &mut Ui) {
-    ui.with_layout(
-        Layout::top_down(Align::Center).with_main_align(Align::Center),
-        |ui| {
-            ui.label(
-                RichText::new(EMPTY_HINT)
-                    .size(tokens::SIZE_SMALL)
-                    .color(tokens::TEXT_MUTED),
-            );
-        },
-    );
+    ui.centered_and_justified(|ui| {
+        ui.label(
+            RichText::new(EMPTY_HINT)
+                .size(tokens::SIZE_SMALL)
+                .color(tokens::TEXT_MUTED),
+        );
+    });
 }

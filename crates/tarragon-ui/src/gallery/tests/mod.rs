@@ -4,6 +4,7 @@ mod debounce;
 mod frames;
 mod scope;
 mod search;
+mod selected;
 mod sort;
 mod thumbs;
 

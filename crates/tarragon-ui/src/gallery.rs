@@ -15,6 +15,7 @@ use tarragon_core::sorting::SortMode;
 use crate::grid::{GridItem, Selection, VirtualGrid, items_in_order, metrics_for};
 use crate::tokens;
 
+mod selected;
 pub(crate) mod strip;
 mod thumbs;
 
@@ -106,6 +107,10 @@ pub struct Gallery {
     sort_mode: SortMode,
     /// The selected cell indices.
     selection: Selection,
+    /// Grows each time the result of `selected_paths` changes.
+    selection_revision: u64,
+    /// The selected paths that the revision last saw.
+    seen_paths: Vec<PathBuf>,
     /// Whether the sort mode changed since the last take.
     sort_changed: bool,
     /// Item indices in sort order.
@@ -136,6 +141,8 @@ impl Gallery {
             debouncer: Debouncer::default(),
             sort_mode,
             selection: Selection::default(),
+            selection_revision: 0,
+            seen_paths: Vec::new(),
             sort_changed: false,
             order: Vec::new(),
             visible: Vec::new(),
@@ -303,6 +310,7 @@ impl Gallery {
             .collect();
         self.visible = visible;
         self.selection.retain_from(&self.visible);
+        self.sync_selection_revision();
     }
 
     /// Return whether the item belongs to the active scope.
@@ -374,8 +382,7 @@ impl Gallery {
         );
         self.record_painted();
         if let Some(click) = response.click {
-            self.selection
-                .apply_click(click.position, &self.visible, click.modifiers);
+            self.apply_grid_click(click);
         }
     }
 }

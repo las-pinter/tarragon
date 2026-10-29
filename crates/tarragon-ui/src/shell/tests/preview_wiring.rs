@@ -1,6 +1,7 @@
 //! Tests for the Preview events and the selection hand-off through a full Shell.
 
 use super::{draw, input, leaf_rect};
+use crate::grid::GridItem;
 use crate::layout::Pane;
 use crate::preview::{Meta, PreviewEvent};
 use crate::shell::Shell;
@@ -103,17 +104,17 @@ fn a_selection_change_closes_the_add_menu_and_a_quiet_frame_keeps_it() {
     let (ctx, mut shell) = setup();
     shell.preview_mut().set_known_tags(vec!["hands".into()]);
     shell.set_folder(Some(PathBuf::from("/images")));
-    shell.set_items(vec![crate::grid::GridItem::new(
-        PathBuf::from("/images/a.png"),
-        1,
-        None,
-    )]);
+    shell.set_items(vec![GridItem::new(PathBuf::from("/images/a.png"), 1, None)]);
     draw(&ctx, &mut shell);
 
     // Select the tile with the pointer, then open the menu.
     let tile = text_pos(&ctx, &mut shell, "a.png") + vec2(3.0, 3.0);
     click(&ctx, &mut shell, tile);
-    assert_eq!(shell.selected_paths().len(), 1, "the click selected a tile");
+    assert_eq!(
+        shell.selected_paths(),
+        [PathBuf::from("/images/a.png")],
+        "the click selected the tile"
+    );
     let add = text_pos(&ctx, &mut shell, "+ add") + vec2(3.0, 3.0);
     click(&ctx, &mut shell, add);
     assert!(is_drawn(&ctx, &mut shell, "hands"), "the menu is open");
@@ -134,5 +135,34 @@ fn a_selection_change_closes_the_add_menu_and_a_quiet_frame_keeps_it() {
     assert!(
         !is_drawn(&ctx, &mut shell, "hands"),
         "the selection change closed the menu"
+    );
+}
+
+#[test]
+fn a_gallery_click_that_changes_the_selection_leaves_the_menu_closed_next_frame() {
+    let (ctx, mut shell) = setup();
+    shell.preview_mut().set_known_tags(vec!["hands".into()]);
+    shell.set_folder(Some(PathBuf::from("/images")));
+    shell.set_items(vec![
+        GridItem::new(PathBuf::from("/images/a.png"), 1, None),
+        GridItem::new(PathBuf::from("/images/b.png"), 2, None),
+    ]);
+    draw(&ctx, &mut shell);
+
+    let first = text_pos(&ctx, &mut shell, "a.png") + vec2(3.0, 3.0);
+    click(&ctx, &mut shell, first);
+    let add = text_pos(&ctx, &mut shell, "+ add") + vec2(3.0, 3.0);
+    click(&ctx, &mut shell, add);
+    assert!(is_drawn(&ctx, &mut shell, "hands"), "the menu is open");
+
+    // The press also counts as a press outside the menu, which closes it on
+    // its own. This pins the end state a user sees; the revision rule itself is
+    // pinned by the test above, where no pointer is involved.
+    let second = text_pos(&ctx, &mut shell, "b.png") + vec2(3.0, 3.0);
+    click(&ctx, &mut shell, second);
+    assert_eq!(shell.selected_paths(), [PathBuf::from("/images/b.png")]);
+    assert!(
+        !is_drawn(&ctx, &mut shell, "hands"),
+        "the menu is closed by the next frame"
     );
 }

@@ -151,6 +151,24 @@ fn a_cell_size_that_is_not_exact_in_binary_leaves_no_sliver() {
 }
 
 #[test]
+fn a_side_a_hair_over_a_whole_cell_count_keeps_its_thin_last_cell() {
+    let rect = Rect::from_min_size(Pos2::ZERO, vec2(6.01, 6.01));
+    let cells = checker_cells(rect, 6.0, 0);
+    assert_eq!(cells.len(), 4, "two cells per side");
+    assert!(cells[1].rect.width() > 0.0 && cells[1].rect.width() < 0.02);
+    assert_eq!(cells[3].rect.max, rect.max);
+}
+
+#[test]
+fn a_side_that_divides_with_float_error_gets_no_extra_cell() {
+    // 4.9 / 0.7 is a hair above 7 in f32, so only the count bias avoids a sliver.
+    let rect = Rect::from_min_size(Pos2::ZERO, vec2(4.9, 4.9));
+    let cells = checker_cells(rect, 0.7, 0);
+    assert_eq!(cells.len(), 49, "seven cells per side");
+    assert!(cells.iter().all(|c| c.rect.width() > 0.69));
+}
+
+#[test]
 fn a_cut_grid_keeps_the_pattern_and_rounds_its_four_corners() {
     let rect = Rect::from_min_size(Pos2::ZERO, vec2(10.0, 7.0));
     let cells = checker_cells(rect, 6.0, 4);

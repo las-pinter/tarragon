@@ -158,12 +158,12 @@ fn a_large_picture_is_scaled_down_inside_the_pane() {
     assert!((size.x / size.y - 4.0 / 3.0).abs() < 0.001, "{size:?}");
 }
 
-/// The y of the first painted text that equals `want`.
-fn text_y(output: &egui::FullOutput, want: &str) -> Option<f32> {
+/// The position of the first painted text that equals `want`.
+fn text_pos(output: &egui::FullOutput, want: &str) -> Option<egui::Pos2> {
     use egui::epaint::Shape;
-    fn find(shape: &Shape, want: &str) -> Option<f32> {
+    fn find(shape: &Shape, want: &str) -> Option<egui::Pos2> {
         match shape {
-            Shape::Text(text) if text.galley.job.text == want => Some(text.pos.y),
+            Shape::Text(text) if text.galley.job.text == want => Some(text.pos),
             Shape::Vec(shapes) => shapes.iter().find_map(|s| find(s, want)),
             _ => None,
         }
@@ -195,23 +195,24 @@ fn a_short_pane_scrolls_so_the_metadata_can_be_reached() {
         events,
         ..Default::default()
     };
-    let mut frame = |ctx: &Context, events| {
+    let frame = |ctx: &Context, shell: &mut Shell, events| {
         let output = ctx.run_ui(short(events), |ui| shell.show(ui));
-        let y = text_y(&output, "Format");
+        let pos = text_pos(&output, "Format");
         output.drop_without_applying_deltas();
-        y
+        pos
     };
-    frame(&ctx, vec![]);
-    // A row below the pane edge is not painted at all.
-    assert_eq!(
-        frame(&ctx, vec![]),
-        None,
-        "the last row fits without scrolling"
+    frame(&ctx, &mut shell, vec![]);
+    let pane = crate::shell::tests::leaf_rect(&shell, crate::layout::Pane::Preview);
+    // egui may cull a clipped label or may paint it outside the pane.
+    let visible = |pos: Option<egui::Pos2>| pos.is_some_and(|p| pane.contains(p));
+    let before = frame(&ctx, &mut shell, vec![]);
+    assert!(
+        !visible(before),
+        "the last row is already visible before scrolling"
     );
 
-    let over = egui::pos2(1300.0, 150.0);
     let wheel = vec![
-        egui::Event::PointerMoved(over),
+        egui::Event::PointerMoved(pane.center()),
         egui::Event::MouseWheel {
             unit: egui::MouseWheelUnit::Point,
             delta: egui::vec2(0.0, -200.0),
@@ -219,12 +220,13 @@ fn a_short_pane_scrolls_so_the_metadata_can_be_reached() {
             modifiers: egui::Modifiers::NONE,
         },
     ];
-    frame(&ctx, wheel);
-    for _ in 0..3 {
-        frame(&ctx, vec![]);
+    // The scroll eases over several frames, so poll until the row shows up.
+    let mut found = visible(frame(&ctx, &mut shell, wheel));
+    for _ in 0..30 {
+        if found {
+            break;
+        }
+        found = visible(frame(&ctx, &mut shell, vec![]));
     }
-    assert!(
-        frame(&ctx, vec![]).is_some(),
-        "the last row is out of reach after scrolling"
-    );
+    assert!(found, "the last row is still hidden after scrolling");
 }

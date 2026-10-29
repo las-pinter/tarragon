@@ -6,6 +6,7 @@ use crate::swatch::Swatch;
 use crate::tokens;
 
 mod add;
+pub mod budget;
 mod colors;
 mod image;
 mod meta;

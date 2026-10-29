@@ -240,8 +240,11 @@ fn a_very_long_tag_name_keeps_the_menu_inside_the_pane() {
     assert!(menu.max.x <= 400.0, "the menu reaches x = {}", menu.max.x);
 }
 
+// This only checks that a narrow pane does not panic. The width floor in
+// `show_menu` cannot be seen here: the panel grows to its widest content, so
+// the room left for the menu never gets small enough to reach it.
 #[test]
-fn a_very_narrow_pane_still_opens_the_menu_with_a_non_negative_width() {
+fn a_very_narrow_pane_still_opens_the_menu_without_a_panic() {
     let mut preview = preview_with(vec![], &["hands"]);
     let ctx = Context::default();
     crate::theme::apply_theme(&ctx);
@@ -273,6 +276,5 @@ fn a_very_narrow_pane_still_opens_the_menu_with_a_non_negative_width() {
                 .flatten()
         })
     });
-    let menu = menu.expect("the menu is open");
-    assert!(menu.width() >= 0.0, "{menu:?}");
+    assert!(menu.is_some(), "the menu is open");
 }

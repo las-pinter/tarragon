@@ -147,7 +147,7 @@ fn a_press_in_the_menu_frame_but_off_every_row_keeps_it_open() {
     let texts = frame(&ctx, &mut preview, vec![]);
     let row = find(&texts, CREATE_NEW).unwrap();
     // Left of the row text lies the row padding, then the frame margin.
-    let margin = Pos2::new(row.x - crate::tokens::SPACING_S - 2.0, row.y + 3.0);
+    let margin = Pos2::new(row.x - crate::tokens::MENU_ROW_PAD_X - 2.0, row.y + 3.0);
     frame(&ctx, &mut preview, click(margin));
     assert!(has(&frame(&ctx, &mut preview, vec![]), CREATE_NEW));
     assert_eq!(preview.take_events(), Vec::<PreviewEvent>::new());

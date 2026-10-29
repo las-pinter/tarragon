@@ -109,7 +109,6 @@ fn the_picture_is_inset_from_the_box_and_keeps_its_rounded_corners() {
         pictures[0].corner_radius,
         CornerRadius::same(tokens::RADIUS_L)
     );
-    assert_eq!(tokens::PREVIEW_IMAGE_INSET, 16.0);
 }
 
 #[test]

@@ -29,7 +29,8 @@ pub fn show_heading(ui: &mut Ui) {
     );
 }
 
-/// Draw the pills, wrapping to new lines, then the "+ add" button at the end.
+/// Draw the pills, wrapping to new lines, then the "+ add" button on its own
+/// row below them.
 /// The x on a pill removes the tag; a click on the rest of a partial pill
 /// applies the tag to every selected image.
 pub fn show_pills(
@@ -39,17 +40,19 @@ pub fn show_pills(
     add: &mut AddState,
     events: &mut Vec<PreviewEvent>,
 ) {
-    ui.add_space(tokens::SPACING_S);
-    let button = ui
-        .horizontal_wrapped(|ui| {
+    // The pill row keeps a minimum height, so the button stays put as pills
+    // come and go.
+    ui.scope(|ui| {
+        ui.set_min_height(tokens::PREVIEW_TAG_ROW_HEIGHT);
+        ui.horizontal_wrapped(|ui| {
             ui.spacing_mut().item_spacing = vec2(tokens::SPACING_XS, tokens::SPACING_XS);
             for pill in pills {
                 show_pill(ui, pill, events);
             }
-            // The input replaces the button, as in the mockup.
-            (!matches!(add, AddState::Input { .. })).then(|| add::show_button(ui, add))
-        })
-        .inner;
+        });
+    });
+    // The input replaces the button, as in the mockup.
+    let button = (!matches!(add, AddState::Input { .. })).then(|| add::show_button(ui, add));
     if let (Some(button), AddState::Menu) = (&button, &*add) {
         // A fully applied tag has nothing to add; a partial one still does.
         let full = |name: &str| {

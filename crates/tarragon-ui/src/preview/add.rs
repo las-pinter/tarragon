@@ -2,8 +2,9 @@
 //! input for a new tag name.
 
 use egui::{
-    Area, CornerRadius, CursorIcon, FontId, Frame, Id, Key, Margin, Order, Response, ScrollArea,
-    Sense, Stroke, StrokeKind, TextEdit, Ui, text::LayoutJob, text_edit::TextEditState, vec2,
+    Align2, Area, CornerRadius, CursorIcon, FontId, Frame, Id, Key, Margin, Order, Pos2, Rect,
+    Response, ScrollArea, Sense, Stroke, StrokeKind, TextEdit, Ui, Vec2, text::LayoutJob,
+    text_edit::TextEditState, vec2,
 };
 
 use super::PreviewEvent;
@@ -40,8 +41,11 @@ pub fn show_button(ui: &mut Ui, state: &mut AddState) -> Response {
     let galley = ui
         .painter()
         .layout_no_wrap("+ add".to_owned(), font, tokens::TEXT_MUTED);
+    // The stylesheet pads 2 and 8 points inside a 1 point border.
     let pad = vec2(tokens::SPACING_S, tokens::SPACING_XS / 2.0);
-    let (rect, response) = ui.allocate_exact_size(galley.size() + pad * 2.0, Sense::click());
+    let border = Vec2::splat(tokens::STROKE_WIDTH);
+    let (rect, response) =
+        ui.allocate_exact_size(galley.size() + (pad + border) * 2.0, Sense::click());
     let response = response.on_hover_cursor(CursorIcon::PointingHand);
     let radius = CornerRadius::same(tokens::RADIUS_XL);
     let hovered = response.hovered();
@@ -60,7 +64,7 @@ pub fn show_button(ui: &mut Ui, state: &mut AddState) -> Response {
     } else {
         tokens::TEXT_MUTED
     };
-    painter.galley(rect.min + pad, galley, color);
+    painter.galley(rect.min + pad + border, galley, color);
     if response.clicked() {
         *state = if *state == AddState::Menu {
             AddState::Closed
@@ -71,7 +75,40 @@ pub fn show_button(ui: &mut Ui, state: &mut AddState) -> Response {
     response
 }
 
-/// Draw the menu under `button`. A row applies its tag; "Create new..." opens
+/// The height of a menu with `choices` tag rows, borders and padding
+/// included. The tag rows scroll past `MENU_ROWS`.
+#[must_use]
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "a row count is tiny, far below 2^24"
+)]
+pub fn menu_height(choices: usize) -> f32 {
+    let tags = (choices as f32).min(MENU_ROWS) * tokens::MENU_ROW_HEIGHT;
+    let separator = if choices > 0 { SEPARATOR } else { 0.0 };
+    tags + separator + tokens::MENU_ROW_HEIGHT + 2.0 * (tokens::SPACING_XS + tokens::STROKE_WIDTH)
+}
+
+/// Where a menu `height` tall opens: under `button`, or above it when it does
+/// not fit under and does fit above. The corner is the one that touches the
+/// button side. `bounds` is the window less its edge margin.
+#[must_use]
+pub fn menu_placement(button: Rect, height: f32, bounds: Rect) -> (Pos2, Align2) {
+    let gap = tokens::SPACING_XS;
+    let below = button.left_bottom() + vec2(0.0, gap);
+    let fits_below = below.y + height <= bounds.bottom();
+    let fits_above = button.top() - gap - height >= bounds.top();
+    if fits_below || !fits_above {
+        (below, Align2::LEFT_TOP)
+    } else {
+        (button.left_top() - vec2(0.0, gap), Align2::LEFT_BOTTOM)
+    }
+}
+
+/// The height of the line between the tag rows and "Create new...": a 1 point
+/// rule with 4 points of margin either side.
+const SEPARATOR: f32 = tokens::STROKE_WIDTH + 2.0 * tokens::SPACING_XS;
+
+/// Draw the menu next to `button`. A row applies its tag; "Create new..." opens
 /// the input. Escape or a press outside closes it with no event.
 pub fn show_menu(
     ui: &Ui,
@@ -81,11 +118,14 @@ pub fn show_menu(
     state: &mut AddState,
     events: &mut Vec<PreviewEvent>,
 ) {
-    let pos = button.rect.left_bottom() + vec2(0.0, tokens::SPACING_XS);
+    let bounds = ui.ctx().content_rect().shrink(tokens::MENU_EDGE_MARGIN);
+    let (pos, pivot) = menu_placement(button.rect, menu_height(choices.len()), bounds);
     let room = ui.max_rect().right() - pos.x;
     let area = Area::new(id)
         .order(Order::Foreground)
         .fixed_pos(pos)
+        .pivot(pivot)
+        .constrain_to(bounds)
         .show(ui.ctx(), |ui| {
             Frame::new()
                 .fill(tokens::BG_TERTIARY)
@@ -93,6 +133,8 @@ pub fn show_menu(
                 .corner_radius(CornerRadius::same(tokens::RADIUS_M))
                 .inner_margin(Margin::same(points(tokens::SPACING_XS)))
                 .show(ui, |ui| {
+                    // The rows touch each other, as in the stylesheet.
+                    ui.spacing_mut().item_spacing.y = 0.0;
                     let mut next = None;
                     // The rows share the width of the longest one. Filling the
                     // free width would stretch the menu to the screen edge.
@@ -103,20 +145,18 @@ pub fn show_menu(
                         .chain([&CREATE_NEW])
                         .map(|text| text_width(ui, text))
                         .fold(0.0, f32::max)
-                        + 2.0 * tokens::SPACING_S)
+                        + 2.0 * tokens::MENU_ROW_PAD_X)
                         .min(
                             room - tokens::STROKE_WIDTH * 2.0
                                 - 2.0 * tokens::SPACING_XS
                                 - ui.spacing().scroll.allocated_width(),
                         )
                         // A very narrow pane must not give a negative width.
-                        .max(2.0 * tokens::SPACING_S);
+                        .max(2.0 * tokens::MENU_ROW_PAD_X);
                     // Only the tags scroll, so "Create new..." stays reachable
                     // however many tags there are.
-                    let row =
-                        tokens::SIZE_BODY + 2.0 * tokens::SPACING_XS + ui.spacing().item_spacing.y;
                     ScrollArea::vertical()
-                        .max_height(MENU_ROWS * row)
+                        .max_height(MENU_ROWS * tokens::MENU_ROW_HEIGHT)
                         .auto_shrink([true, true])
                         .show(ui, |ui| {
                             for name in choices {
@@ -127,7 +167,7 @@ pub fn show_menu(
                             }
                         });
                     if !choices.is_empty() {
-                        ui.separator();
+                        ui.add(egui::Separator::default().spacing(SEPARATOR));
                     }
                     if menu_row(ui, CREATE_NEW, width).clicked() {
                         next = Some(AddState::Input {
@@ -167,18 +207,18 @@ fn text_width(ui: &Ui, text: &str) -> f32 {
 /// One menu row, `width` wide so the whole row takes the click.
 fn menu_row(ui: &mut Ui, text: &str, width: f32) -> Response {
     let font = FontId::proportional(tokens::SIZE_BODY);
-    let pad = vec2(tokens::SPACING_S, tokens::SPACING_XS);
+    let pad_x = tokens::MENU_ROW_PAD_X;
     let mut job = LayoutJob::simple(
         text.to_owned(),
         font,
         tokens::TEXT_PRIMARY,
-        (width - 2.0 * pad.x).max(0.0),
+        (width - 2.0 * pad_x).max(0.0),
     );
     job.wrap.max_rows = 1;
     job.wrap.break_anywhere = true;
     let galley = ui.painter().layout_job(job);
     let (rect, response) =
-        ui.allocate_exact_size(vec2(width, galley.size().y + pad.y * 2.0), Sense::click());
+        ui.allocate_exact_size(vec2(width, tokens::MENU_ROW_HEIGHT), Sense::click());
     let response = response.on_hover_cursor(CursorIcon::PointingHand);
     let painter = ui.painter();
     let color = if response.hovered() {
@@ -191,7 +231,8 @@ fn menu_row(ui: &mut Ui, text: &str, width: f32) -> Response {
     } else {
         tokens::TEXT_PRIMARY
     };
-    painter.galley(rect.min + pad, galley, color);
+    let at = rect.min + vec2(pad_x, (rect.height() - galley.size().y) / 2.0);
+    painter.galley(at, galley, color);
     response
 }
 

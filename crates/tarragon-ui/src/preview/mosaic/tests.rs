@@ -120,15 +120,22 @@ fn each_painted_picture_carries_the_cell_corner_radius() {
         size: (50, 50),
     }; 2];
     let output = ctx.run_ui(input, |ui| show(ui, &images, 2, 9));
-    let radii: Vec<egui::CornerRadius> = output
-        .shapes
-        .iter()
-        .filter_map(|c| match &c.shape {
-            egui::Shape::Rect(r) if r.brush.is_some() => Some(r.corner_radius),
-            _ => None,
-        })
-        .collect();
+    let (mut cells, mut pictures) = (Vec::new(), Vec::new());
+    for clipped in &output.shapes {
+        if let egui::Shape::Rect(r) = &clipped.shape {
+            if r.brush.is_some() {
+                pictures.push((r.rect, r.corner_radius));
+            } else if r.fill == crate::tokens::BG_SECONDARY {
+                cells.push(r.rect);
+            }
+        }
+    }
     output.drop_without_applying_deltas();
     let want = egui::CornerRadius::same(crate::tokens::RADIUS_M);
-    assert_eq!(radii, [want, want]);
+    let expected: Vec<_> = cells
+        .iter()
+        .map(|cell| (crate::preview::image::fit_rect((50, 50), *cell), want))
+        .collect();
+    assert_eq!(cells.len(), 2);
+    assert_eq!(pictures, expected);
 }

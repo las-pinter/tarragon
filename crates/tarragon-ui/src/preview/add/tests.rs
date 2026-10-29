@@ -100,7 +100,7 @@ fn open_input(ctx: &Context, preview: &mut Preview) {
 }
 
 #[test]
-fn the_add_pill_paints_after_the_last_tag_pill_and_also_with_no_tags() {
+fn the_add_button_paints_below_the_tag_pills_and_also_with_no_tags() {
     let mut empty = preview_with(vec![], &[]);
     let ctx = setup(&mut empty);
     assert!(has(&frame(&ctx, &mut empty, vec![]), "+ add"));
@@ -112,10 +112,7 @@ fn the_add_pill_paints_after_the_last_tag_pill_and_also_with_no_tags() {
     let ctx = setup(&mut full);
     let texts = frame(&ctx, &mut full, vec![]);
     let (two, add) = (find(&texts, "two").unwrap(), find(&texts, "+ add").unwrap());
-    assert!(
-        add.x > two.x && (add.y - two.y).abs() < 6.0,
-        "{two:?} {add:?}"
-    );
+    assert!(add.y > two.y + 20.0 && add.x <= two.x, "{two:?} {add:?}");
 }
 
 #[test]
@@ -219,4 +216,5 @@ fn the_default_state_is_closed() {
     assert_eq!(AddState::default(), AddState::Closed);
 }
 
+mod layout;
 mod more;

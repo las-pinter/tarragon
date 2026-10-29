@@ -182,6 +182,17 @@ pub const PREVIEW_MOSAIC_CELL_HEIGHT: f32 = 120.0;
 /// `.mosaic` padding (`--space-s`): the room between the Preview mosaic grid
 /// and the panel padding, in points.
 pub const PREVIEW_MOSAIC_PADDING: f32 = SPACING_S;
+/// `.tag-pills` min-height: the least height of the Preview pill row, in
+/// points, so the "+ add" button keeps its place below an empty or short row.
+pub const PREVIEW_TAG_ROW_HEIGHT: f32 = 36.0;
+/// `.menu-row` height: 5 point padding either side of the text line, measured
+/// at 27 points between rows in the mockup.
+pub const MENU_ROW_HEIGHT: f32 = 27.0;
+/// `.menu-row` horizontal padding, in points.
+pub const MENU_ROW_PAD_X: f32 = 10.0;
+/// The room between a popup menu and the window edge, in points. The
+/// stylesheet has no rule for it; the mockups never touch the edge.
+pub const MENU_EDGE_MARGIN: f32 = SPACING_S;
 /// The room between the `.preview-img` box edge and the picture, in points.
 /// The mockup draws the picture as a rounded `.thumb` at 88% of the 260 point
 /// box height, about 16 points a side.

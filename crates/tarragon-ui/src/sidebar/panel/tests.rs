@@ -3,6 +3,7 @@
 use super::*;
 use crate::sidebar::paint::ICON_WIDTH;
 use crate::sidebar::row::{CARET_SLOT, GAP};
+use egui::vec2;
 use egui::{Color32, Context, Event, Modifiers, PointerButton, Pos2, RawInput, Rect, Shape};
 
 /// One painted text.

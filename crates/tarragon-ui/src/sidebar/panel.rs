@@ -6,11 +6,12 @@
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
-use egui::{Button, FontFamily, Frame, Margin, Panel, RichText, ScrollArea, Ui, vec2};
+use egui::{FontFamily, Frame, Margin, Panel, RichText, ScrollArea, Ui};
 
 use super::row::{RowAction, show_tree_row};
 use super::tree::{TreeModel, TreeRow};
 use super::{FavoriteRow, SidebarState};
+use crate::widgets::small_button;
 use crate::{fonts, tokens};
 
 mod favorites;
@@ -304,12 +305,13 @@ impl Sidebar {
     fn show_buttons(&mut self, ui: &mut Ui) {
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = tokens::SPACING_S;
-            ui.spacing_mut().button_padding = vec2(8.0, 3.0);
-            let small = |text| Button::new(RichText::new(text).size(tokens::SIZE_SMALL));
-            if ui.add(small("Add Current Folder")).clicked() {
+            if small_button(ui, "Add Current Folder").clicked() {
                 self.events.push(SidebarEvent::AddCurrent);
             }
-            let remove = ui.add_enabled(self.selected_favorite.is_some(), small("Remove"));
+            let enabled = self.selected_favorite.is_some();
+            let remove = ui
+                .add_enabled_ui(enabled, |ui| small_button(ui, "Remove"))
+                .inner;
             if remove.clicked()
                 && let Some(path) = self.selected_favorite.clone()
             {

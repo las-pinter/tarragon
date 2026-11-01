@@ -3,6 +3,7 @@
 use super::tests::{Painted, find, frame, frame_sized, ready};
 use super::*;
 use egui::Context;
+use egui::vec2;
 use egui::{Event, Modifiers, MouseWheelUnit, PointerButton, Pos2};
 
 /// A panel with root `/r` over `folders` children and `count` favorites named `f0`, `f1`, ...

@@ -272,6 +272,12 @@ impl Gallery {
         }
     }
 
+    /// The tag names and folder paths that the filter menus list.
+    #[must_use]
+    pub fn filter_lists(&self) -> (&[String], &[String]) {
+        (&self.tags, &self.folders)
+    }
+
     /// Keep only the items whose path is in `paths`, or all items for `None`.
     ///
     /// The set holds paths in the form of the item paths.

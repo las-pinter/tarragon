@@ -8,6 +8,9 @@ use tarragon_db::settings::{SettingKey, SettingValue, Settings};
 use tarragon_db::{Database, DbError};
 use tarragon_ui::gallery::Gallery;
 
+mod lists;
+pub use lists::{init, update};
+
 /// Return the paths that match the tag, colour, and folder filters.
 ///
 /// Returns `None` when none of these filters is active in `scope`, which means

@@ -99,9 +99,7 @@ impl App {
             tracing::warn!("the stored window state was invalid and was repaired");
         }
         let mut shell = Shell::new().with_sort_mode(window_state.sort_mode());
-        shell
-            .gallery_mut()
-            .set_colors_enabled(filtering::colors_enabled(&db));
+        filtering::init(shell.gallery_mut(), &db);
         // Log only the size: the stored text is not useful in a log line.
         if let Some(text) = &window_state.layout
             && !shell.restore_layout(text)
@@ -270,7 +268,7 @@ impl eframe::App for App {
         if handled.any {
             ctx.request_repaint();
         }
-        if filtering::apply_change(self.shell.gallery_mut(), &self.db) {
+        if filtering::update(self.shell.gallery_mut(), &self.db) {
             ctx.request_repaint();
         }
         self.thumbs.after_draw(self.shell.gallery_mut());

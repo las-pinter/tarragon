@@ -1,6 +1,9 @@
 //! Tests for the colour square painter.
 
-use super::{CHECKER_CELL, SIZE, Swatch, bucket_color, checker_cells, show};
+use super::{
+    CHECKER_CELL, FILTER_SIZE, SIZE, Swatch, bucket_color, checker_cells, outline, show,
+    show_filter,
+};
 use crate::tokens;
 use egui::{Color32, Context, CornerRadius, Pos2, Rect, vec2};
 use std::collections::HashSet;
@@ -205,4 +208,103 @@ fn show_takes_the_given_size_and_senses_clicks() {
     let (size, sense) = seen.expect("the closure ran");
     assert_eq!(size, vec2(30.0, 30.0));
     assert!(sense.senses_click());
+}
+
+#[test]
+fn the_outline_has_three_states_and_active_wins() {
+    let rest = outline(false, false);
+    assert_eq!((rest.width, rest.color), (1.0, tokens::BORDER_INACTIVE));
+    let hover = outline(false, true);
+    assert_eq!((hover.width, hover.color), (1.0, tokens::TEXT_PRIMARY));
+    let active = outline(true, false);
+    assert_eq!((active.width, active.color), (2.0, tokens::AMBER_ACCENT));
+    assert_eq!(outline(true, true), active);
+}
+
+fn filter_frame(swatch: Swatch, active: bool) -> (egui::Response, Vec<egui::epaint::ClippedShape>) {
+    let ctx = Context::default();
+    let mut response = None;
+    let output = ctx.run_ui(input(), |ui| {
+        response = Some(show_filter(ui, swatch, active));
+    });
+    let shapes = output.shapes.clone();
+    output.drop_without_applying_deltas();
+    (response.expect("the closure ran"), shapes)
+}
+
+#[test]
+fn a_filter_square_is_36_points_and_senses_clicks() {
+    let (response, _) = filter_frame(Swatch::Transparent, true);
+    assert_eq!(response.rect.size(), vec2(FILTER_SIZE, FILTER_SIZE));
+    assert_eq!(FILTER_SIZE, 36.0);
+    assert!(response.sense.senses_click());
+}
+
+#[test]
+fn the_outline_is_rounded_and_inside_and_the_checker_keeps_its_corners() {
+    use egui::epaint::Shape;
+    fn collect<'a>(shape: &'a Shape, found: &mut Vec<&'a egui::epaint::RectShape>) {
+        match shape {
+            Shape::Vec(shapes) => shapes.iter().for_each(|s| collect(s, found)),
+            Shape::Rect(r) => found.push(r),
+            _ => {}
+        }
+    }
+    let (_, shapes) = filter_frame(Swatch::Transparent, true);
+    let mut rects = Vec::new();
+    for c in &shapes {
+        collect(&c.shape, &mut rects);
+    }
+    let stroked: Vec<_> = rects.iter().filter(|r| r.stroke.width > 0.0).collect();
+    assert_eq!(stroked.len(), 1);
+    assert_eq!(
+        stroked[0].corner_radius,
+        CornerRadius::same(tokens::RADIUS_S)
+    );
+    assert_eq!(stroked[0].stroke_kind, egui::StrokeKind::Inside);
+    let rounded = rects
+        .iter()
+        .filter(|r| r.stroke.width == 0.0 && r.corner_radius != CornerRadius::ZERO);
+    assert_eq!(rounded.count(), 4);
+}
+
+fn stroked_widths(shapes: &[egui::epaint::ClippedShape]) -> Vec<(f32, Color32)> {
+    use egui::epaint::Shape;
+    fn collect(shape: &Shape, found: &mut Vec<(f32, Color32)>) {
+        match shape {
+            Shape::Vec(shapes) => shapes.iter().for_each(|s| collect(s, found)),
+            Shape::Rect(r) if r.stroke.width > 0.0 => {
+                found.push((r.stroke.width, r.stroke.color));
+            }
+            _ => {}
+        }
+    }
+    let mut found = Vec::new();
+    for c in shapes {
+        collect(&c.shape, &mut found);
+    }
+    found
+}
+
+#[test]
+fn show_filter_draws_the_outline_for_its_active_flag() {
+    let (_, shapes) = filter_frame(Swatch::Bucket(ColorBucket::Red), true);
+    assert_eq!(stroked_widths(&shapes), [(2.0, tokens::AMBER_ACCENT)]);
+    let (_, shapes) = filter_frame(Swatch::Bucket(ColorBucket::Red), false);
+    assert_eq!(stroked_widths(&shapes), [(1.0, tokens::BORDER_INACTIVE)]);
+}
+
+#[test]
+fn the_preview_square_has_no_outline() {
+    for swatch in [Swatch::Bucket(ColorBucket::Red), Swatch::Transparent] {
+        let ctx = Context::default();
+        let mut size = None;
+        let output = ctx.run_ui(input(), |ui| {
+            size = Some(show(ui, swatch, SIZE, 1.0).rect.size());
+        });
+        let shapes = output.shapes.clone();
+        output.drop_without_applying_deltas();
+        assert_eq!(size, Some(vec2(SIZE, SIZE)));
+        assert!(stroked_widths(&shapes).is_empty(), "{swatch:?}");
+    }
 }

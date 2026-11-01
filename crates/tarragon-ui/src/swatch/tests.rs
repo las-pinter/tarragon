@@ -268,7 +268,7 @@ fn the_outline_is_rounded_and_inside_and_the_checker_keeps_its_corners() {
     assert_eq!(rounded.count(), 4);
 }
 
-fn stroked_widths(shapes: &[egui::epaint::ClippedShape]) -> Vec<(f32, Color32)> {
+pub(crate) fn stroked_widths(shapes: &[egui::epaint::ClippedShape]) -> Vec<(f32, Color32)> {
     use egui::epaint::Shape;
     fn collect(shape: &Shape, found: &mut Vec<(f32, Color32)>) {
         match shape {

@@ -196,4 +196,4 @@ pub fn show_filter(ui: &mut Ui, swatch: Swatch, active: bool) -> Response {
 }
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;

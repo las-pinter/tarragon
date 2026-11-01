@@ -101,6 +101,8 @@ pub struct Gallery {
     search: String,
     /// The filter text that is visible now.
     applied_search: String,
+    /// The number of active filters that the info bar shows.
+    filter_count: usize,
     /// The timer that applies the typed search.
     debouncer: Debouncer,
     /// The current sort order.
@@ -138,6 +140,7 @@ impl Gallery {
             raw_folder: None,
             search: String::new(),
             applied_search: String::new(),
+            filter_count: 0,
             debouncer: Debouncer::default(),
             sort_mode,
             selection: Selection::default(),
@@ -226,6 +229,11 @@ impl Gallery {
         }
         self.sort_changed = false;
         Some(self.sort_mode)
+    }
+
+    /// Set the number of active filters that the info bar shows.
+    pub fn set_filter_count(&mut self, count: usize) {
+        self.filter_count = count;
     }
 
     /// Number of items the filters show.

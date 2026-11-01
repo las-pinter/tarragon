@@ -1,10 +1,10 @@
-//! The gallery top strip: tabs, search field, info bar, and sort pills.
+//! The gallery top strip: tabs, search field, info bar, filter pill, and sort pills.
 
 use std::time::Instant;
 
 use egui::{
-    Align, CornerRadius, FontId, Frame, Id, Layout, Margin, Response, RichText, Sense, Stroke,
-    StrokeKind, TextEdit, Ui, vec2,
+    Align, Color32, CornerRadius, FontId, Frame, Id, Label, Layout, Margin, Rect, Response,
+    RichText, Sense, Stroke, StrokeKind, TextEdit, Ui, Vec2, vec2,
 };
 use tarragon_core::sorting::SortMode;
 
@@ -24,6 +24,10 @@ const SORT_GAP: f32 = 6.0;
 const PILL_PAD_X: f32 = 10.0;
 /// Vertical pill padding, in points.
 const PILL_PAD_Y: f32 = 3.0;
+/// Horizontal filter pill padding, in points. The stylesheet sets 8 px.
+const FILTER_PAD_X: f32 = 8.0;
+/// Vertical filter pill padding, in points. The stylesheet sets 2 px.
+const FILTER_PAD_Y: f32 = 2.0;
 
 impl Gallery {
     /// Draw the tab bar, the search field, the info bar, and the sort pills.
@@ -100,19 +104,20 @@ impl Gallery {
         }
     }
 
-    /// Draw the info bar and the sort pills. Returns the picked sort mode.
+    /// Draw the info bar, the filter pill, and the sort pills. Returns the
+    /// picked sort mode.
     fn sort_segment(&self, ui: &mut Ui) -> Option<SortMode> {
         let info = self.info_text();
         let mut picked = None;
         ui.horizontal(|ui| {
-            ui.label(
-                RichText::new(info)
-                    .size(tokens::SIZE_CAPTION)
-                    .color(tokens::TEXT_MUTED),
-            );
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 // Right-to-left layout puts the label last on the screen.
                 ui.spacing_mut().item_spacing.x = SORT_GAP;
+                if let Some(text) = filter_pill_text(self.filter_count) {
+                    let style = (tokens::AMBER_DARK, tokens::AMBER_ACCENT, Stroke::NONE);
+                    let pad = vec2(FILTER_PAD_X, FILTER_PAD_Y);
+                    pill_frame(ui, &text, style, pad);
+                }
                 for mode in SortMode::ALL.into_iter().rev() {
                     if sort_pill(ui, mode, self.sort_mode == mode).clicked() {
                         picked = Some(mode);
@@ -123,6 +128,13 @@ impl Gallery {
                         .size(tokens::SIZE_SMALL)
                         .color(tokens::TEXT_MUTED),
                 );
+                // The info text takes the width that the controls leave.
+                ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
+                    let text = RichText::new(info)
+                        .size(tokens::SIZE_CAPTION)
+                        .color(tokens::TEXT_MUTED);
+                    ui.add(Label::new(text).truncate());
+                });
             });
         });
         picked
@@ -177,20 +189,40 @@ fn sort_pill(ui: &mut Ui, mode: SortMode, active: bool) -> Response {
     } else {
         (tokens::BG_SECONDARY, tokens::TEXT_SECONDARY, Stroke::NONE)
     };
+    let pad = vec2(PILL_PAD_X, PILL_PAD_Y);
+    let rect = pill_frame(ui, sort_label(mode), (fill, color, border), pad);
+    ui.interact(
+        rect,
+        Id::new(("tarragon-sort-pill", mode.as_str())),
+        Sense::click(),
+    )
+}
+
+/// Paint a caption pill from its fill, text colour, border, and padding.
+/// Returns its rect.
+fn pill_frame(
+    ui: &mut Ui,
+    text: &str,
+    (fill, color, border): (Color32, Color32, Stroke),
+    pad: Vec2,
+) -> Rect {
     let galley = ui.painter().layout_no_wrap(
-        sort_label(mode).to_owned(),
+        text.to_owned(),
         FontId::proportional(tokens::SIZE_CAPTION),
         color,
     );
-    let size = galley.size() + vec2(2.0 * PILL_PAD_X, 2.0 * PILL_PAD_Y);
-    let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
-    let id = Id::new(("tarragon-sort-pill", mode.as_str()));
-    let response = ui.interact(rect, id, Sense::click());
-    let radius = CornerRadius::same(tokens::RADIUS_M);
+    let (rect, _) = ui.allocate_exact_size(galley.size() + 2.0 * pad, Sense::hover());
     let painter = ui.painter();
+    let radius = CornerRadius::same(tokens::RADIUS_M);
     painter.rect(rect, radius, fill, border, StrokeKind::Inside);
     painter.galley(rect.center() - galley.size() / 2.0, galley, color);
-    response
+    rect
+}
+
+/// The filter pill text, or none when no filter is active.
+pub(crate) fn filter_pill_text(count: usize) -> Option<String> {
+    let noun = if count == 1 { "filter" } else { "filters" };
+    (count > 0).then(|| format!("{count} {noun} active"))
 }
 
 /// The sort label for a mode.

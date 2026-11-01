@@ -364,3 +364,12 @@ is still loading or for an empty cell yet.
 Reason: the caption tells the user that the grid is not the whole selection.
 The badge and the loading and empty boxes wait for data the Preview does not
 have yet.
+
+## Filter count pill
+
+Before: `design/mockups/info-bar.html` shows a pill that reads "N filters
+active". The mockup has no singular form.
+
+After: one filter reads "1 filter active".
+
+Reason: "1 filters active" reads as an error.

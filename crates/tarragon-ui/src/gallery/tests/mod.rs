@@ -1,6 +1,7 @@
 //! Tests for the gallery strip and the search timer.
 
 mod debounce;
+mod filter_pill;
 mod frames;
 mod scope;
 mod search;
@@ -10,7 +11,7 @@ mod thumbs;
 
 use std::path::PathBuf;
 
-use super::strip::sort_label;
+use super::strip::{filter_pill_text, sort_label};
 use super::*;
 use egui::{Event, Id, Modifiers, PointerButton, Pos2, RawInput, Rect, vec2};
 

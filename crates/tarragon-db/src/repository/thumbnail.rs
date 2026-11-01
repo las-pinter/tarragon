@@ -1,7 +1,10 @@
 //! Thumbnail row reads and writes.
 
+use std::collections::HashSet;
+
 use rusqlite::{OptionalExtension, params};
 use tarragon_core::entity::FileInfo;
+use tarragon_core::sorting::natural_cmp;
 
 use crate::like::{folder_deep_like, folder_like, normalize_path};
 use crate::{Database, DbError};
@@ -126,7 +129,10 @@ impl Database {
         Ok(count)
     }
 
-    /// List the distinct parent folders in the thumbnail table, sorted.
+    /// List the distinct parent folders in the thumbnail table.
+    ///
+    /// The list is in natural order, so `a2` comes before `a10`. A path
+    /// with no parent folder adds no entry.
     ///
     /// # Errors
     ///
@@ -136,7 +142,7 @@ impl Database {
         let conn = self.lock()?;
         let mut stmt = conn.prepare("SELECT path FROM thumbnails WHERE path != ''")?;
         let rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
-        let mut folders = std::collections::BTreeSet::new();
+        let mut folders = HashSet::new();
         for row in rows {
             let path = row?;
             if let Some(index) = path.rfind('/')
@@ -145,7 +151,9 @@ impl Database {
                 folders.insert(path[..index].to_owned());
             }
         }
-        Ok(folders.into_iter().collect())
+        let mut folders: Vec<String> = folders.into_iter().collect();
+        folders.sort_by(|left, right| natural_cmp(left, right));
+        Ok(folders)
     }
 
     /// Set `last_accessed` on many paths in one transaction.

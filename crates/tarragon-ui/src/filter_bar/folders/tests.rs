@@ -4,7 +4,7 @@ use std::path::Path;
 
 use super::show_folders;
 use crate::test_support::input;
-use egui::{Context, Event, PointerButton, Pos2, epaint::Shape};
+use egui::{Context, Event, Pos2, epaint::Shape};
 use tarragon_core::filter_bar::FilterBar;
 use tarragon_core::filter_state::FilterScope;
 
@@ -48,7 +48,7 @@ impl Rig {
         raw.time = Some(f64::from(u32::try_from(self.ctx.cumulative_pass_nr()).unwrap_or(0)) * 0.5);
         let out = self.ctx.run_ui(raw, |ui| {
             ui.style_mut().interaction.tooltip_delay = 0.0;
-            changed = show_folders(ui, "folders", &mut self.bar, &self.folders, self.scope);
+            changed = show_folders(ui, "folders", &mut self.bar, &self.folders, self.scope).changed;
         });
         let mut texts = Vec::new();
         for clipped in &out.shapes {
@@ -77,14 +77,7 @@ impl Rig {
 
     /// Click at `pos` and return whether the filter changed.
     fn click(&mut self, pos: Pos2) -> bool {
-        let button = |pressed| Event::PointerButton {
-            pos,
-            button: PointerButton::Primary,
-            pressed,
-            modifiers: egui::Modifiers::NONE,
-        };
-        self.frame(vec![Event::PointerMoved(pos), button(true)]);
-        self.frame(vec![button(false)]).0
+        self.frame(crate::test_support::click(pos)).0
     }
 
     fn click_text(&mut self, text: &str) -> bool {

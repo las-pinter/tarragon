@@ -2,7 +2,7 @@
 
 use super::show_tags;
 use crate::test_support::input;
-use egui::{Context, Event, PointerButton, Pos2, epaint::Shape};
+use egui::{Context, Event, Pos2, epaint::Shape};
 use tarragon_core::filter_bar::FilterBar;
 
 struct Rig {
@@ -29,7 +29,7 @@ impl Rig {
     fn frame(&mut self, events: Vec<Event>) -> (bool, Vec<Text>) {
         let mut changed = false;
         let out = self.ctx.run_ui(input(600.0, events), |ui| {
-            changed = show_tags(ui, "tags", &mut self.bar, &self.names);
+            changed = show_tags(ui, "tags", &mut self.bar, &self.names).changed;
         });
         let texts = out
             .shapes
@@ -52,14 +52,7 @@ impl Rig {
 
     /// Click at `pos` and return whether the filter changed.
     fn click(&mut self, pos: Pos2) -> bool {
-        let button = |pressed| Event::PointerButton {
-            pos,
-            button: PointerButton::Primary,
-            pressed,
-            modifiers: egui::Modifiers::NONE,
-        };
-        self.frame(vec![Event::PointerMoved(pos), button(true)]);
-        self.frame(vec![button(false)]).0
+        self.frame(crate::test_support::click(pos)).0
     }
 
     /// Click the text drawn in the button row (`in_bar`) or in the menu.

@@ -18,19 +18,37 @@ pub(super) enum Edit {
     Row(usize),
 }
 
+/// What a filter row did this frame.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Shown {
+    /// The filter changed.
+    pub changed: bool,
+    /// A menu went from closed to open.
+    pub opened: bool,
+}
+
+impl std::ops::BitOrAssign for Shown {
+    fn bitor_assign(&mut self, other: Self) {
+        self.changed |= other.changed;
+        self.opened |= other.opened;
+    }
+}
+
 /// Draw a wrapping row of an optional menu button and the chips.
 ///
 /// `chips` hold a label and a tooltip. `rows` hold a label and a tick. With no
-/// `button` there is no menu. `id_salt` keys the open state of the menu.
+/// `button` there is no menu. `id_salt` keys the open state of the menu. The
+/// flag is true when the menu opened this frame.
 pub(super) fn show_list(
     ui: &mut Ui,
     id_salt: impl Hash + Debug,
     button: Option<&str>,
     chips: &[(String, String)],
     rows: &[(String, bool)],
-) -> Option<Edit> {
+) -> (Option<Edit>, bool) {
     let open_id = Id::new(id_salt).with("open");
-    let mut open = button.is_some() && ui.data(|d| d.get_temp(open_id)).unwrap_or(false);
+    let was_open = button.is_some() && ui.data(|d| d.get_temp(open_id)).unwrap_or(false);
+    let mut open = was_open;
     let mut edit = None;
     let rect = ui
         .horizontal_wrapped(|ui| {
@@ -48,6 +66,7 @@ pub(super) fn show_list(
             rect
         })
         .inner;
+    let opened = open && !was_open;
     if let (true, Some(rect)) = (open, rect) {
         match show_check_menu(ui, open_id.with("menu"), rect, rows) {
             MenuResult::Toggled(i) => edit = Some(Edit::Row(i)),
@@ -56,5 +75,5 @@ pub(super) fn show_list(
         }
     }
     ui.data_mut(|d| d.insert_temp(open_id, open));
-    edit
+    (edit, opened)
 }

@@ -1,6 +1,6 @@
 //! Shared helpers for headless widget tests.
 
-use egui::{Context, Event, Pos2, RawInput, Rect, vec2};
+use egui::{Context, Event, PointerButton, Pos2, RawInput, Rect, vec2};
 
 /// Raw input for a screen `width` points wide, carrying `events`.
 pub(crate) fn input(width: f32, events: Vec<Event>) -> RawInput {
@@ -18,4 +18,15 @@ pub(crate) fn context() -> Context {
     ctx.run_ui(input(600.0, vec![]), |_| {})
         .drop_without_applying_deltas();
     ctx
+}
+
+/// The events of a primary click at `at`: move, press, release.
+pub(crate) fn click(at: Pos2) -> Vec<Event> {
+    let button = |pressed| Event::PointerButton {
+        pos: at,
+        button: PointerButton::Primary,
+        pressed,
+        modifiers: egui::Modifiers::NONE,
+    };
+    vec![Event::PointerMoved(at), button(true), button(false)]
 }

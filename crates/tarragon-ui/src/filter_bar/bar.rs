@@ -6,6 +6,7 @@ use tarragon_core::filter_state::FilterScope;
 
 use super::colors::show_colors;
 use super::folders::show_folders;
+use super::list::Shown;
 use super::tags::show_tags;
 use crate::tokens;
 
@@ -15,7 +16,9 @@ const BAR_PAD: i8 = 4;
 /// 4 px.
 const INFO_PAD: f32 = 4.0;
 
-/// Draw the colour, tag, and folder rows and return true when a filter changed.
+/// Draw the colour, tag, and folder rows and report what happened.
+///
+/// `changed` is true when a filter changed. `opened` is true when a menu opened.
 ///
 /// `tags` and `folders` fill the menus. The colour row is empty when
 /// `colors_enabled` is false. The folder row is empty when it has no button and
@@ -27,8 +30,8 @@ pub fn show(
     folders: &[String],
     scope: FilterScope,
     colors_enabled: bool,
-) -> bool {
-    let mut changed = false;
+) -> Shown {
+    let mut shown = Shown::default();
     // The bar pads 4 px on every side and puts 12 px between rows. The info
     // bar adds 4 px below itself.
     let outer = ui.spacing().item_spacing.y;
@@ -40,17 +43,17 @@ pub fn show(
             if colors_enabled {
                 if let Some(choice) = show_colors(ui, bar, true) {
                     bar.toggle_color(choice);
-                    changed = true;
+                    shown.changed = true;
                 }
                 ui.add_space(tokens::SPACING_M);
             }
-            changed |= show_tags(ui, "tarragon-filter-tags", bar, tags);
+            shown |= show_tags(ui, "tarragon-filter-tags", bar, tags);
             if scope == FilterScope::Global || !bar.folder_order().is_empty() {
                 ui.add_space(tokens::SPACING_M);
-                changed |= show_folders(ui, "tarragon-filter-folders", bar, folders, scope);
+                shown |= show_folders(ui, "tarragon-filter-folders", bar, folders, scope);
             }
         });
-    changed
+    shown
 }
 
 #[cfg(test)]

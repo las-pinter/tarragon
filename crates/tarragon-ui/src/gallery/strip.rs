@@ -73,7 +73,7 @@ impl Gallery {
                 let scope = self.filter_scope();
                 let colors = self.colors_enabled;
                 let (names, paths) = (&self.tags, &self.folders);
-                self.filter_changed |=
+                self.filter_events |=
                     filter_bar::show(ui, &mut self.bar, names, paths, scope, colors);
             });
     }

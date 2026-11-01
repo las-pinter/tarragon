@@ -14,6 +14,7 @@ use tarragon_core::filter_bar::FilterBar;
 use tarragon_core::filter_state::{FilterScope, FilterState};
 use tarragon_core::sorting::SortMode;
 
+use crate::filter_bar::Shown;
 use crate::grid::{GridItem, Selection, VirtualGrid, items_in_order, metrics_for};
 use crate::tokens;
 
@@ -111,8 +112,8 @@ pub struct Gallery {
     folders: Vec<String>,
     /// Whether the colour row shows.
     colors_enabled: bool,
-    /// Whether the filters or the scope changed since the last take.
-    filter_changed: bool,
+    /// What the filter bar reported since the last take.
+    filter_events: Shown,
     /// The timer that applies the typed search.
     debouncer: Debouncer,
     /// The current sort order.
@@ -154,7 +155,7 @@ impl Gallery {
             tags: Vec::new(),
             folders: Vec::new(),
             colors_enabled: true,
-            filter_changed: false,
+            filter_events: Shown::default(),
             debouncer: Debouncer::default(),
             sort_mode,
             selection: Selection::default(),
@@ -220,7 +221,7 @@ impl Gallery {
             return;
         }
         self.scope = scope;
-        self.filter_changed = true;
+        self.filter_events.changed = true;
         self.refresh_view();
     }
 
@@ -256,11 +257,21 @@ impl Gallery {
 
     /// Return the filters and scope once after a bar change or a scope switch.
     pub fn take_filter_change(&mut self) -> Option<(FilterState, FilterScope)> {
-        if !self.filter_changed {
+        if !std::mem::take(&mut self.filter_events.changed) {
             return None;
         }
-        self.filter_changed = false;
         Some((self.bar.state.clone(), self.filter_scope()))
+    }
+
+    /// Replace the tag names and folder paths that the filter menus list.
+    pub fn set_filter_lists(&mut self, tags: Vec<String>, folders: Vec<String>) {
+        self.tags = tags;
+        self.folders = folders;
+    }
+
+    /// Return true once after a tag or folder menu opened, and clear the flag.
+    pub fn take_filter_menu_opened(&mut self) -> bool {
+        std::mem::take(&mut self.filter_events.opened)
     }
 
     /// Show or hide the colour row. Hiding clears the colour filters.
@@ -271,7 +282,7 @@ impl Gallery {
         }
         let before = (self.bar.state.colors.len(), self.bar.state.transparent);
         self.bar.clear_colors();
-        self.filter_changed |= before != (0, false);
+        self.filter_events.changed |= before != (0, false);
     }
 
     /// Number of items the filters show.

@@ -1,7 +1,7 @@
 //! Filter bar state: the filters plus the order their chips were added.
 
 use std::collections::BTreeSet;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 use crate::color::ColorBucket;
 use crate::filter_state::FilterState;
@@ -13,6 +13,22 @@ pub enum ColorChoice {
     Bucket(ColorBucket),
     /// The transparent flag. It maps to `FilterState::transparent`.
     Transparent,
+}
+
+/// A short display name for a folder path: its last two normal parts joined
+/// with `/`. A path with two parts or fewer, or none (such as `/`), is returned
+/// whole. The root does not count as a part.
+#[must_use]
+pub fn short_folder_name(path: &str) -> String {
+    let parts: Vec<_> = Path::new(path)
+        .components()
+        .filter(|c| !matches!(c, Component::RootDir | Component::Prefix(_)))
+        .map(|c| c.as_os_str().to_string_lossy())
+        .collect();
+    match parts.as_slice() {
+        [.., a, b] if parts.len() > 2 => format!("{a}/{b}"),
+        _ => path.to_owned(),
+    }
 }
 
 /// The filter state with the chip order for tags and folders.
@@ -90,6 +106,19 @@ mod tests {
     use super::{ColorChoice, FilterBar};
     use crate::color::ColorBucket;
     use crate::filter_state::FilterScope;
+
+    #[test]
+    fn short_names_keep_the_last_two_parts() {
+        let short = super::short_folder_name;
+        assert_eq!(short("/home/u/photos/vacation"), "photos/vacation");
+        assert_eq!(short("/a/b"), "/a/b");
+        assert_eq!(short("/a/b/c/"), "b/c");
+        assert_eq!(short("/a/b/"), "/a/b/");
+        assert_eq!(
+            (short("/"), short("photos"), short("")),
+            ("/".into(), "photos".into(), String::new())
+        );
+    }
 
     type Step = (fn(&mut FilterBar), usize, usize);
 

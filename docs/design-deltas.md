@@ -241,9 +241,9 @@ stylesheet row). Colour extraction skips pixels with alpha below 128. An image
 with 25 percent or more of such pixels is flagged transparent. The flag becomes
 the `transparent` tag when the scan pipeline stores it, which it does not do
 yet. `transparent` is a colour-filter value beside the buckets. It follows the
-same AND rule, the tag cannot be deleted, and the filter bar will use a
-checkerboard swatch for it, which is not drawn yet. The mockups stay frozen, so
-this file records the difference.
+same AND rule, the tag cannot be deleted, and the filter bar draws a
+checkerboard swatch for it after the eleven bucket swatches. The mockups stay
+frozen, so this file records the difference.
 
 Reason: pink hues were wrongly neutral. Transparent pixels added colours that
 are not visible. Artists need to find images with transparency.
@@ -373,3 +373,50 @@ active". The mockup has no singular form.
 After: one filter reads "1 filter active".
 
 Reason: "1 filters active" reads as an error.
+
+## Filter colour row
+
+Before: `design/mockups/filter-colors.html` shows ten swatches. The row is always
+there.
+
+After: the row has twelve swatches of the same size: the eleven buckets, then the
+checkerboard `transparent` swatch. The outline states match
+`design/mockups/theme.css` lines 616-630. The row is hidden when the
+`color_tag_enabled` setting is off.
+
+Reason: the app has eleven buckets and the transparency tag. With colour tags
+off, the row has nothing to filter.
+
+## Folder labels
+
+Before: `design/mockups/filter-folders.html` shows the last two path parts on
+the folder chips only. The mockup does not show a tooltip. No mockup shows the
+folder menu rows.
+
+After: the folder menu lists the distinct DB folders as checkable rows. The rows
+use the same last two path parts. A chip tooltip shows the full path.
+
+Reason: two folders can share the last two parts. The full path tells them
+apart.
+
+## Info text overflow
+
+Before: `design/mockups/info-bar.html` does not say what happens when the
+window is too narrow for the info text and the pills.
+
+After: the info text ends in an ellipsis and takes the width that is left. The
+filter pill and the sort pills keep their size.
+
+Reason: a pill that shrinks or wraps becomes hard to read and hard to click.
+
+## Filter bar rows
+
+Before: `design/mockups/main-window.html` lines 57-71 put the swatches and the
+"Filter Tags" button in one `filterbar` row.
+
+After: the bar stacks three rows below the info bar with 12 pt gaps: colours,
+then tags, then folders. The tag button and its chips share the tags row. The
+folder button and its chips share the folders row.
+
+Reason: the chips of each kind wrap in their own row. The folder row shows only
+in All Images scope, or when it has chips.

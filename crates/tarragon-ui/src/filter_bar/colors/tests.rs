@@ -2,18 +2,11 @@
 
 use super::show_colors;
 use crate::swatch::tests::stroked_widths;
+use crate::test_support::input;
 use crate::tokens;
-use egui::{Context, Event, Modifiers, PointerButton, Pos2, Rect, vec2};
+use egui::{Context, Event, Modifiers, PointerButton, Rect, vec2};
 use tarragon_core::color::ColorBucket;
 use tarragon_core::filter_bar::{ColorChoice, FilterBar};
-
-fn input(width: f32, events: Vec<Event>) -> egui::RawInput {
-    egui::RawInput {
-        screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(width, 400.0))),
-        events,
-        ..Default::default()
-    }
-}
 
 struct Frame {
     shapes: Vec<egui::epaint::ClippedShape>,

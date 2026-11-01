@@ -12,6 +12,8 @@ pub mod preview;
 pub mod shell;
 pub mod sidebar;
 pub mod swatch;
+#[cfg(test)]
+pub(crate) mod test_support;
 pub mod texture_budget;
 pub mod theme;
 pub mod tokens;

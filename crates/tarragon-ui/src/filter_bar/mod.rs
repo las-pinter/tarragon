@@ -2,3 +2,4 @@
 
 pub mod chip;
 pub mod colors;
+pub mod menu;

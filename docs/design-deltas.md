@@ -207,7 +207,9 @@ Before: the multi-select badge is an 18 pt coral circle with an 11 pt bold `v`
 glyph, as `design/mockups/theme.css` line 810 shows.
 
 After: the badge paints the same circle and draws the check with two line
-segments.
+segments. The filter menu tick, a `v` in `design/mockups/filter-tags.html`
+line 47, is also a painted check. It is amber when checked. An unchecked row
+keeps a blank of the same width.
 
 Reason: the vendored Roboto family has no check glyph, and a text `v` reads as
 a letter at the caption size. The difference is visual only.

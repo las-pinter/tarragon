@@ -1,6 +1,4 @@
-//! Where the "+ add" menu opens and how tall it is.
-
-use egui::{Align2, Pos2, Rect, vec2};
+//! How tall the "+ add" menu is.
 
 use crate::tokens;
 
@@ -22,20 +20,4 @@ pub(super) fn menu_height(choices: usize) -> f32 {
     let tags = (choices as f32).min(MENU_ROWS) * tokens::MENU_ROW_HEIGHT;
     let separator = if choices > 0 { SEPARATOR } else { 0.0 };
     tags + separator + tokens::MENU_ROW_HEIGHT + 2.0 * (tokens::SPACING_XS + tokens::STROKE_WIDTH)
-}
-
-/// Where a menu `height` tall opens: under `button`, or above it when it does
-/// not fit under and does fit above. The corner is the one that touches the
-/// button side. `bounds` is the window less its edge margin.
-#[must_use]
-pub(super) fn menu_placement(button: Rect, height: f32, bounds: Rect) -> (Pos2, Align2) {
-    let gap = tokens::SPACING_XS;
-    let below = button.left_bottom() + vec2(0.0, gap);
-    let fits_below = below.y + height <= bounds.bottom();
-    let fits_above = button.top() - gap - height >= bounds.top();
-    if fits_below || !fits_above {
-        (below, Align2::LEFT_TOP)
-    } else {
-        (button.left_top() - vec2(0.0, gap), Align2::LEFT_BOTTOM)
-    }
 }

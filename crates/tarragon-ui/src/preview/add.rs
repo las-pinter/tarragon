@@ -6,8 +6,9 @@ use egui::{
     Sense, Stroke, StrokeKind, TextEdit, Ui, Vec2, text::LayoutJob, text_edit::TextEditState, vec2,
 };
 
-use self::menu_layout::{MENU_ROWS, SEPARATOR, menu_height, menu_placement};
+use self::menu_layout::{MENU_ROWS, SEPARATOR, menu_height};
 use super::PreviewEvent;
+use crate::popup::{menu_frame, menu_placement, row_frame, text_width};
 use crate::theme::points;
 use crate::tokens;
 
@@ -93,11 +94,7 @@ pub fn show_menu(
         .pivot(pivot)
         .constrain_to(bounds)
         .show(ui.ctx(), |ui| {
-            Frame::new()
-                .fill(tokens::BG_TERTIARY)
-                .stroke(Stroke::new(tokens::STROKE_WIDTH, tokens::SURFACE_HIGHLIGHT))
-                .corner_radius(CornerRadius::same(tokens::RADIUS_M))
-                .inner_margin(Margin::same(points(tokens::SPACING_XS)))
+            menu_frame()
                 .show(ui, |ui| {
                     // The rows touch each other, as in the stylesheet.
                     ui.spacing_mut().item_spacing.y = 0.0;
@@ -161,15 +158,6 @@ pub fn show_menu(
     }
 }
 
-/// The width of `text` in the menu font.
-fn text_width(ui: &Ui, text: &str) -> f32 {
-    let font = FontId::proportional(tokens::SIZE_BODY);
-    ui.painter()
-        .layout_no_wrap(text.to_owned(), font, tokens::TEXT_PRIMARY)
-        .size()
-        .x
-}
-
 /// One menu row, `width` wide so the whole row takes the click.
 fn menu_row(ui: &mut Ui, text: &str, width: f32) -> Response {
     let font = FontId::proportional(tokens::SIZE_BODY);
@@ -183,22 +171,9 @@ fn menu_row(ui: &mut Ui, text: &str, width: f32) -> Response {
     job.wrap.max_rows = 1;
     job.wrap.break_anywhere = true;
     let galley = ui.painter().layout_job(job);
-    let (rect, response) =
-        ui.allocate_exact_size(vec2(width, tokens::MENU_ROW_HEIGHT), Sense::click());
-    let response = response.on_hover_cursor(CursorIcon::PointingHand);
-    let painter = ui.painter();
-    let color = if response.hovered() {
-        painter.rect_filled(
-            rect,
-            CornerRadius::same(tokens::RADIUS_S),
-            tokens::SURFACE_HIGHLIGHT,
-        );
-        tokens::AMBER_ACCENT
-    } else {
-        tokens::TEXT_PRIMARY
-    };
+    let (rect, response, color) = row_frame(ui, width);
     let at = rect.min + vec2(pad_x, (rect.height() - galley.size().y) / 2.0);
-    painter.galley(at, galley, color);
+    ui.painter().galley(at, galley, color);
     response
 }
 

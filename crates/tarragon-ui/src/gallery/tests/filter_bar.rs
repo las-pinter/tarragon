@@ -134,3 +134,27 @@ fn a_frame_with_an_open_menu_reports_no_new_open() {
     frame(&ctx, &mut gallery, Vec::new()).drop_without_applying_deltas();
     assert!(!gallery.take_filter_menu_opened());
 }
+
+#[test]
+fn escape_closes_an_open_menu() {
+    for (label, row) in [
+        ("Filter Tags", "lighting"),
+        ("Filter Folders", "u/sketches"),
+    ] {
+        let (ctx, mut gallery) = listed();
+        let open = click_button(&ctx, &mut gallery, label);
+        assert!(open.contains(&row.into()), "{label}");
+        let esc = Event::Key {
+            key: egui::Key::Escape,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: Modifiers::NONE,
+        };
+        frame(&ctx, &mut gallery, vec![esc]).drop_without_applying_deltas();
+        let out = frame(&ctx, &mut gallery, Vec::new());
+        let found: Vec<_> = texts(&out).into_iter().map(|t| t.0).collect();
+        out.drop_without_applying_deltas();
+        assert!(!found.contains(&row.into()), "{label}");
+    }
+}

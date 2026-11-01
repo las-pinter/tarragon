@@ -4,7 +4,7 @@
 //! pills. The grid paints the visible items. [`Gallery::set_items`] sorts the
 //! items; the scope and name filters run when a filter input changes.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -102,8 +102,8 @@ pub struct Gallery {
     raw_folder: Option<PathBuf>,
     /// The text the user typed.
     search: String,
-    /// The filter text that is visible now.
-    applied_search: String,
+    /// The paths that the database filter keeps, or none for no filter.
+    filter_result: Option<HashSet<PathBuf>>,
     /// The colour, tag, and folder filters.
     bar: FilterBar,
     /// The tag names that the tag menu lists.
@@ -150,7 +150,7 @@ impl Gallery {
             folder: None,
             raw_folder: None,
             search: String::new(),
-            applied_search: String::new(),
+            filter_result: None,
             bar: FilterBar::default(),
             tags: Vec::new(),
             folders: Vec::new(),
@@ -267,6 +267,17 @@ impl Gallery {
     pub fn set_filter_lists(&mut self, tags: Vec<String>, folders: Vec<String>) {
         self.tags = tags;
         self.folders = folders;
+        if self.bar.prune_folders(&self.folders) {
+            self.filter_events.changed = true;
+        }
+    }
+
+    /// Keep only the items whose path is in `paths`, or all items for `None`.
+    ///
+    /// The set holds paths in the form of the item paths.
+    pub fn set_filter_result(&mut self, paths: Option<HashSet<PathBuf>>) {
+        self.filter_result = paths;
+        self.refresh_view();
     }
 
     /// Return true once after a tag or folder menu opened, and clear the flag.
@@ -347,11 +358,10 @@ impl Gallery {
             return;
         }
         let applied = self.search.to_lowercase();
-        if applied == self.applied_search {
+        if applied == self.bar.state.text {
             return;
         }
-        self.bar.state.text.clone_from(&applied);
-        self.applied_search = applied;
+        self.bar.state.text = applied;
         self.refresh_view();
     }
 
@@ -389,14 +399,17 @@ impl Gallery {
             .is_some_and(|parent| parent == folder || self.raw_folder.as_deref() == Some(parent))
     }
 
-    /// Return whether the applied search matches the cached lower-case name.
+    /// Return whether the item passes the applied search and the path set.
     fn matches(&self, index: usize) -> bool {
-        if self.applied_search.is_empty() {
-            return true;
-        }
-        self.items
-            .get(index)
-            .is_some_and(|item| item.name_lower().contains(&self.applied_search))
+        let Some(item) = self.items.get(index) else {
+            return false;
+        };
+        let text = &self.bar.state.text;
+        (text.is_empty() || item.name_lower().contains(text))
+            && self
+                .filter_result
+                .as_ref()
+                .is_none_or(|set| set.contains(&item.path))
     }
 
     /// The scope name for the info bar: the folder name, or `All Images`.

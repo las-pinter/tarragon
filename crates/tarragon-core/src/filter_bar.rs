@@ -92,6 +92,16 @@ impl FilterBar {
         );
     }
 
+    /// Drop every active folder that is not in `keep`. Return true if any went.
+    pub fn prune_folders(&mut self, keep: &[String]) -> bool {
+        let kept = |path: &Path| keep.iter().any(|k| Path::new(k) == path);
+        let before = self.folder_order.len();
+        self.state.folders.retain(|f| kept(f));
+        self.folder_order.retain(|f| kept(f));
+        debug_assert_eq!(self.state.folders.len(), self.folder_order.len());
+        self.folder_order.len() != before
+    }
+
     /// Clear the color buckets and the transparent flag. Tags and folders stay.
     pub fn clear_colors(&mut self) {
         self.state.colors.clear();
@@ -157,6 +167,18 @@ mod tests {
         bar.toggle_folder(Path::new("/a"));
         assert_eq!(bar.tag_order(), ["z", "m"]);
         assert_eq!(bar.folder_order(), [Path::new("/z"), Path::new("/m")]);
+    }
+
+    #[test]
+    fn prune_folders_drops_stale_chips_in_both_lists() {
+        let mut bar = FilterBar::default();
+        for f in ["/a", "/b", "/c"] {
+            bar.toggle_folder(Path::new(f));
+        }
+        assert!(!bar.prune_folders(&["/a".into(), "/b".into(), "/c".into()]));
+        assert!(bar.prune_folders(&["/a".into(), "/c".into()]));
+        assert_eq!(bar.folder_order(), [Path::new("/a"), Path::new("/c")]);
+        assert_eq!(bar.state.folders.len(), 2);
     }
 
     #[test]

@@ -3,6 +3,7 @@
 mod debounce;
 mod filter_bar;
 mod filter_pill;
+mod filter_result;
 mod frames;
 mod scope;
 mod search;

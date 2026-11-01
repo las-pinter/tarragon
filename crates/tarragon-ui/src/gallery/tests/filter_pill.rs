@@ -5,6 +5,7 @@ use crate::test_support;
 use egui::Rect;
 use egui::epaint::Shape;
 use tarragon_core::color::ColorBucket;
+use tarragon_core::filter_bar::ColorChoice;
 use tarragon_core::filter_state::{FilterScope, FilterState};
 
 /// The filter count that the info bar shows for `state` in `scope`.
@@ -22,7 +23,12 @@ fn draw(width: f32, filters: usize) -> Vec<(String, Rect)> {
     let ctx = test_support::context();
     crate::theme::apply_theme(&ctx);
     let mut gallery = Gallery::new(SortMode::Natural);
-    gallery.set_filter_count(filters);
+    for bucket in [ColorBucket::Red, ColorBucket::Blue]
+        .into_iter()
+        .take(filters)
+    {
+        gallery.bar.toggle_color(ColorChoice::Bucket(bucket));
+    }
     let output = ctx.run_ui(test_support::input(width, vec![]), |ui| gallery.show(ui));
     let text = output
         .shapes
@@ -57,11 +63,7 @@ fn pill_text_for_search_counts_once() {
     let mut gallery = Gallery::new(SortMode::Natural);
     for typed in ["cat", "   "] {
         search(&mut gallery, typed);
-        let state = FilterState {
-            text: gallery.applied_search.clone(),
-            ..FilterState::default()
-        };
-        assert_eq!(count(&state, gallery.scope()), 1, "{typed:?}");
+        assert_eq!(count(&gallery.bar.state, gallery.scope()), 1, "{typed:?}");
     }
     assert_eq!(filter_pill_text(1).as_deref(), Some("1 filter active"));
 }

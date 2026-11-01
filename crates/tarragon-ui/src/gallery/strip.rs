@@ -9,6 +9,7 @@ use egui::{
 use tarragon_core::sorting::SortMode;
 
 use super::{Gallery, Scope};
+use crate::filter_bar;
 use crate::theme::points;
 use crate::tokens;
 
@@ -69,6 +70,11 @@ impl Gallery {
                 if let Some(mode) = picked {
                     self.pick_sort_mode(mode);
                 }
+                let scope = self.filter_scope();
+                let colors = self.colors_enabled;
+                let (names, paths) = (&self.tags, &self.folders);
+                self.filter_changed |=
+                    filter_bar::show(ui, &mut self.bar, names, paths, scope, colors);
             });
     }
 
@@ -113,7 +119,10 @@ impl Gallery {
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 // Right-to-left layout puts the label last on the screen.
                 ui.spacing_mut().item_spacing.x = SORT_GAP;
-                if let Some(text) = filter_pill_text(self.filter_count) {
+                // The pill draws before the bar, so a bar click shows next frame.
+                if let Some(text) =
+                    filter_pill_text(self.bar.state.active_count(self.filter_scope()))
+                {
                     let style = (tokens::AMBER_DARK, tokens::AMBER_ACCENT, Stroke::NONE);
                     let pad = vec2(FILTER_PAD_X, FILTER_PAD_Y);
                     pill_frame(ui, &text, style, pad);

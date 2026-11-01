@@ -10,6 +10,8 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use egui::Ui;
+use tarragon_core::filter_bar::FilterBar;
+use tarragon_core::filter_state::{FilterScope, FilterState};
 use tarragon_core::sorting::SortMode;
 
 use crate::grid::{GridItem, Selection, VirtualGrid, items_in_order, metrics_for};
@@ -101,8 +103,16 @@ pub struct Gallery {
     search: String,
     /// The filter text that is visible now.
     applied_search: String,
-    /// The number of active filters that the info bar shows.
-    filter_count: usize,
+    /// The colour, tag, and folder filters.
+    bar: FilterBar,
+    /// The tag names that the tag menu lists.
+    tags: Vec<String>,
+    /// The folder paths that the folder menu lists.
+    folders: Vec<String>,
+    /// Whether the colour row shows.
+    colors_enabled: bool,
+    /// Whether the filters or the scope changed since the last take.
+    filter_changed: bool,
     /// The timer that applies the typed search.
     debouncer: Debouncer,
     /// The current sort order.
@@ -140,7 +150,11 @@ impl Gallery {
             raw_folder: None,
             search: String::new(),
             applied_search: String::new(),
-            filter_count: 0,
+            bar: FilterBar::default(),
+            tags: Vec::new(),
+            folders: Vec::new(),
+            colors_enabled: true,
+            filter_changed: false,
             debouncer: Debouncer::default(),
             sort_mode,
             selection: Selection::default(),
@@ -206,7 +220,16 @@ impl Gallery {
             return;
         }
         self.scope = scope;
+        self.filter_changed = true;
         self.refresh_view();
+    }
+
+    /// The filter scope that matches the scope tab.
+    fn filter_scope(&self) -> FilterScope {
+        match self.scope {
+            Scope::Folder => FilterScope::Folder,
+            Scope::All => FilterScope::Global,
+        }
     }
 
     /// The current sort mode.
@@ -231,9 +254,24 @@ impl Gallery {
         Some(self.sort_mode)
     }
 
-    /// Set the number of active filters that the info bar shows.
-    pub fn set_filter_count(&mut self, count: usize) {
-        self.filter_count = count;
+    /// Return the filters and scope once after a bar change or a scope switch.
+    pub fn take_filter_change(&mut self) -> Option<(FilterState, FilterScope)> {
+        if !self.filter_changed {
+            return None;
+        }
+        self.filter_changed = false;
+        Some((self.bar.state.clone(), self.filter_scope()))
+    }
+
+    /// Show or hide the colour row. Hiding clears the colour filters.
+    pub fn set_colors_enabled(&mut self, enabled: bool) {
+        self.colors_enabled = enabled;
+        if enabled {
+            return;
+        }
+        let before = (self.bar.state.colors.len(), self.bar.state.transparent);
+        self.bar.clear_colors();
+        self.filter_changed |= before != (0, false);
     }
 
     /// Number of items the filters show.
@@ -301,6 +339,7 @@ impl Gallery {
         if applied == self.applied_search {
             return;
         }
+        self.bar.state.text.clone_from(&applied);
         self.applied_search = applied;
         self.refresh_view();
     }

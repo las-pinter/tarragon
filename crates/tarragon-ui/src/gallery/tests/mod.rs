@@ -1,6 +1,7 @@
 //! Tests for the gallery strip and the search timer.
 
 mod debounce;
+mod filter_bar;
 mod filter_pill;
 mod frames;
 mod scope;

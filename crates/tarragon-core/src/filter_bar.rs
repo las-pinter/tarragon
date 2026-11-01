@@ -1,0 +1,177 @@
+//! Filter bar state: the filters plus the order their chips were added.
+
+use std::collections::BTreeSet;
+use std::path::{Path, PathBuf};
+
+use crate::color::ColorBucket;
+use crate::filter_state::FilterState;
+
+/// One entry of the color menu.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ColorChoice {
+    /// A dominant-color bucket. It maps to `FilterState::colors`.
+    Bucket(ColorBucket),
+    /// The transparent flag. It maps to `FilterState::transparent`.
+    Transparent,
+}
+
+/// The filter state with the chip order for tags and folders.
+///
+/// Change tags and folders only through `toggle_tag` and `toggle_folder`.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct FilterBar {
+    /// The active filters.
+    pub state: FilterState,
+    tag_order: Vec<String>,
+    folder_order: Vec<PathBuf>,
+}
+
+/// Flip `item` in `set` and keep `order` in step with it.
+fn toggle_ordered<T: Ord + Clone>(set: &mut BTreeSet<T>, order: &mut Vec<T>, item: T) {
+    if set.remove(&item) {
+        order.retain(|x| *x != item);
+    } else {
+        set.insert(item.clone());
+        order.push(item);
+    }
+    debug_assert_eq!(set.len(), order.len());
+}
+
+impl FilterBar {
+    /// Active tags in activation order.
+    #[must_use]
+    pub fn tag_order(&self) -> &[String] {
+        &self.tag_order
+    }
+
+    /// Active folders in activation order.
+    #[must_use]
+    pub fn folder_order(&self) -> &[PathBuf] {
+        &self.folder_order
+    }
+
+    /// Flip a color bucket or the transparent flag.
+    pub fn toggle_color(&mut self, choice: ColorChoice) {
+        match choice {
+            ColorChoice::Bucket(bucket) => {
+                if !self.state.colors.remove(&bucket) {
+                    self.state.colors.insert(bucket);
+                }
+            }
+            ColorChoice::Transparent => self.state.transparent = !self.state.transparent,
+        }
+    }
+
+    /// Flip a tag. A new tag goes last in `tag_order`.
+    pub fn toggle_tag(&mut self, tag: &str) {
+        toggle_ordered(&mut self.state.tags, &mut self.tag_order, tag.to_owned());
+    }
+
+    /// Flip a folder. A new folder goes last in `folder_order`.
+    pub fn toggle_folder(&mut self, folder: &Path) {
+        toggle_ordered(
+            &mut self.state.folders,
+            &mut self.folder_order,
+            folder.to_path_buf(),
+        );
+    }
+
+    /// Clear the color buckets and the transparent flag. Tags and folders stay.
+    pub fn clear_colors(&mut self) {
+        self.state.colors.clear();
+        self.state.transparent = false;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use super::{ColorChoice, FilterBar};
+    use crate::color::ColorBucket;
+    use crate::filter_state::FilterScope;
+
+    type Step = (fn(&mut FilterBar), usize, usize);
+
+    #[test]
+    fn toggling_twice_returns_to_empty() {
+        let mut bar = FilterBar::default();
+        bar.toggle_color(ColorChoice::Bucket(ColorBucket::Blue));
+        bar.toggle_color(ColorChoice::Transparent);
+        bar.toggle_tag("a");
+        bar.toggle_folder(Path::new("/x"));
+        bar.toggle_color(ColorChoice::Bucket(ColorBucket::Blue));
+        bar.toggle_color(ColorChoice::Transparent);
+        bar.toggle_tag("a");
+        bar.toggle_folder(Path::new("/x"));
+        assert_eq!(bar, FilterBar::default());
+    }
+
+    #[test]
+    fn transparent_sets_flag_not_colors() {
+        let mut bar = FilterBar::default();
+        bar.toggle_color(ColorChoice::Transparent);
+        assert!(bar.state.transparent);
+        assert!(bar.state.colors.is_empty());
+    }
+
+    #[test]
+    fn order_follows_activation_and_removal_keeps_rest() {
+        let mut bar = FilterBar::default();
+        for t in ["z", "a", "m"] {
+            bar.toggle_tag(t);
+        }
+        for f in ["/z", "/a", "/m"] {
+            bar.toggle_folder(Path::new(f));
+        }
+        bar.toggle_tag("a");
+        bar.toggle_folder(Path::new("/a"));
+        assert_eq!(bar.tag_order(), ["z", "m"]);
+        assert_eq!(bar.folder_order(), [Path::new("/z"), Path::new("/m")]);
+    }
+
+    #[test]
+    fn active_count_tracks_chips() {
+        let mut bar = FilterBar::default();
+        // (step, Global count, Folder count) after the step.
+        let steps: [Step; 5] = [
+            (
+                |b| b.toggle_color(ColorChoice::Bucket(ColorBucket::Red)),
+                1,
+                1,
+            ),
+            (|b| b.toggle_color(ColorChoice::Transparent), 2, 2),
+            (|b| b.toggle_tag("a"), 3, 3),
+            (|b| b.toggle_folder(Path::new("/x")), 4, 3),
+            (|b| b.toggle_folder(Path::new("/x")), 3, 3),
+        ];
+        for (step, global, folder) in steps {
+            step(&mut bar);
+            assert_eq!(bar.state.active_count(FilterScope::Global), global);
+            assert_eq!(bar.state.active_count(FilterScope::Folder), folder);
+        }
+    }
+
+    #[test]
+    fn re_added_tag_goes_last() {
+        let mut bar = FilterBar::default();
+        bar.toggle_tag("a");
+        bar.toggle_tag("b");
+        bar.toggle_tag("a");
+        bar.toggle_tag("a");
+        assert_eq!(bar.tag_order(), ["b", "a"]);
+    }
+
+    #[test]
+    fn clear_colors_keeps_tags_and_folders() {
+        let mut bar = FilterBar::default();
+        bar.toggle_color(ColorChoice::Bucket(ColorBucket::Red));
+        bar.toggle_color(ColorChoice::Transparent);
+        bar.toggle_tag("a");
+        bar.toggle_folder(Path::new("/x"));
+        bar.clear_colors();
+        assert!(bar.state.colors.is_empty() && !bar.state.transparent);
+        assert_eq!(bar.tag_order(), ["a"]);
+        assert_eq!(bar.folder_order(), [Path::new("/x")]);
+    }
+}

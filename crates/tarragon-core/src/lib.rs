@@ -11,6 +11,7 @@
 pub mod color;
 pub mod entity;
 pub mod error;
+pub mod filter_bar;
 pub mod filter_state;
 pub mod format;
 pub mod paths;

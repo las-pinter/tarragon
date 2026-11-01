@@ -4,6 +4,8 @@ mod app;
 mod cli;
 mod data_dir;
 mod feed;
+#[cfg_attr(not(test), expect(dead_code, reason = "no caller in the app yet"))]
+mod filtering;
 mod instance;
 mod logging;
 mod logview;

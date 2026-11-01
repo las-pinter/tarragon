@@ -4,7 +4,6 @@ mod app;
 mod cli;
 mod data_dir;
 mod feed;
-#[cfg_attr(not(test), expect(dead_code, reason = "no caller in the app yet"))]
 mod filtering;
 mod instance;
 mod logging;
@@ -12,6 +11,8 @@ mod logview;
 mod pipeline;
 mod run;
 mod sidebar;
+#[cfg(test)]
+mod test_ui;
 mod thumbs;
 mod window;
 

@@ -4,7 +4,9 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 
 use tarragon_core::filter_state::{FilterScope, FilterState};
+use tarragon_db::settings::{SettingKey, SettingValue, Settings};
 use tarragon_db::{Database, DbError};
+use tarragon_ui::gallery::Gallery;
 
 /// Return the paths that match the tag, colour, and folder filters.
 ///
@@ -31,6 +33,44 @@ pub fn filter_paths(
     }
     let rows = db.filter_thumbnails(&query)?;
     Ok(Some(rows.iter().map(|row| item_path(&row.path)).collect()))
+}
+
+/// Run the filter change that the gallery reports, if there is one.
+///
+/// A failed query is logged and the gallery shows all items. Returns true when
+/// a change was applied.
+pub fn apply_change(gallery: &mut Gallery, db: &Database) -> bool {
+    apply_with(gallery, |state, scope| filter_paths(db, state, scope))
+}
+
+/// Like [`apply_change`], with the query as a parameter.
+fn apply_with(
+    gallery: &mut Gallery,
+    query: impl FnOnce(&FilterState, FilterScope) -> Result<Option<HashSet<PathBuf>>, DbError>,
+) -> bool {
+    let Some((state, scope)) = gallery.take_filter_change() else {
+        return false;
+    };
+    let paths = query(&state, scope).unwrap_or_else(|error| {
+        tracing::warn!("cannot filter the gallery: {error}");
+        None
+    });
+    gallery.set_filter_result(paths);
+    true
+}
+
+/// Whether the colour row shows, from the `color_tag_enabled` setting.
+///
+/// A setting that cannot be read counts as on, and is logged.
+pub fn colors_enabled(db: &Database) -> bool {
+    match Settings::new(db).get(SettingKey::ColorTagEnabled) {
+        Ok(SettingValue::Bool(value)) => value,
+        Ok(_) => true,
+        Err(error) => {
+            tracing::warn!("cannot read the colour tag setting: {error}");
+            true
+        }
+    }
 }
 
 /// Build the gallery item path for a stored database path.
@@ -60,7 +100,7 @@ mod tests {
     use super::filter_paths;
 
     /// A temporary folder, unique per call, removed on drop.
-    struct TempDir(PathBuf);
+    pub(super) struct TempDir(PathBuf);
 
     impl Drop for TempDir {
         fn drop(&mut self) {
@@ -72,7 +112,7 @@ mod tests {
     ///
     /// `a`: night, red, transparent. `b`: night, red. `c`: night, blue.
     /// `d`: red, transparent. `e`: none.
-    fn seeded() -> (Database, TempDir) {
+    pub(super) fn seeded() -> (Database, TempDir) {
         static NEXT: AtomicU64 = AtomicU64::new(0);
         let id = NEXT.fetch_add(1, Ordering::Relaxed);
         let dir = TempDir(
@@ -221,3 +261,6 @@ mod tests {
         assert_eq!(run(&none, FilterScope::Global), Some(HashSet::new()));
     }
 }
+
+#[cfg(test)]
+mod apply_tests;

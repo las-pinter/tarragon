@@ -8,7 +8,7 @@ use crate::instance::{self, Outcome};
 use crate::logging::LogControl;
 
 /// A temporary folder that removes itself on drop, also after a failed assert.
-struct TempDir(std::path::PathBuf);
+pub(super) struct TempDir(pub(super) std::path::PathBuf);
 
 impl Drop for TempDir {
     fn drop(&mut self) {
@@ -44,7 +44,7 @@ fn app_with_pending_request(dir: &TempDir) -> App {
     app
 }
 
-fn new_dir() -> TempDir {
+pub(super) fn new_dir() -> TempDir {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let id = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let dir = std::env::temp_dir().join(format!("tarragon-app-raise-{}-{id}", std::process::id()));

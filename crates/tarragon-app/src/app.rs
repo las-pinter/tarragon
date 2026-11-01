@@ -13,6 +13,7 @@ use tarragon_ui::Shell;
 use tarragon_ui::shell::{LogPanelEvents, LogView};
 
 use crate::data_dir;
+use crate::filtering;
 use crate::instance::Guard;
 use crate::logging::LogControl;
 use crate::logging::ring::LogRing;
@@ -98,6 +99,9 @@ impl App {
             tracing::warn!("the stored window state was invalid and was repaired");
         }
         let mut shell = Shell::new().with_sort_mode(window_state.sort_mode());
+        shell
+            .gallery_mut()
+            .set_colors_enabled(filtering::colors_enabled(&db));
         // Log only the size: the stored text is not useful in a log line.
         if let Some(text) = &window_state.layout
             && !shell.restore_layout(text)
@@ -266,6 +270,9 @@ impl eframe::App for App {
         if handled.any {
             ctx.request_repaint();
         }
+        if filtering::apply_change(self.shell.gallery_mut(), &self.db) {
+            ctx.request_repaint();
+        }
         self.thumbs.after_draw(self.shell.gallery_mut());
         if self.close_when_loaded
             && let Some(summary) = self.thumbs.loaded_once()
@@ -286,5 +293,7 @@ impl eframe::App for App {
     }
 }
 
+#[cfg(test)]
+mod filter_tests;
 #[cfg(test)]
 mod tests;

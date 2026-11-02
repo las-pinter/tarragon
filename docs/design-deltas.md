@@ -420,3 +420,24 @@ folder button and its chips share the folders row.
 
 Reason: the chips of each kind wrap in their own row. The folder row shows only
 in All Images scope, or when it has chips.
+
+## Gallery minimum width
+
+Before: the mockups set no minimum width for the Gallery panel.
+
+After: the Gallery panel is never narrower than 260 pt. The dock keeps this
+width when the user drags a separator.
+
+Reason: below about 224 pt the info bar clips on the left. The pills and the
+info text need the width.
+
+## All Images scope
+
+Before: the mockups do not say which files All Images lists.
+
+After: All Images shows the whole library, read from the `thumbnails` rows. It
+includes files that no longer exist on disk. They stay in the list until a
+later rescan step removes their rows. The Python application behaves the same.
+
+Reason: the rows give the library without a scan of every folder. A scan of
+100,000 files would be slow.

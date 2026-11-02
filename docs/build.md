@@ -247,13 +247,17 @@ Notes:
   only for the folder that it opens, so a stored library can have rows without
   a folder row. Causes are a trailing slash in the folder text, rows removed by
   `cleanup_stale_folder_uuids`, and an old database. Each missing folder costs
-  one `get_or_create_folder_uuid` transaction. With one call for each folder, 1,000
-  folders without folder rows made `open_library` take about 12 s on its first run.
-  `open_library` now calls `get_or_create_folder_uuids`, which creates the
-  missing folder ids in one transaction. A second ignored test
+  one `get_or_create_folder_uuid` transaction. With one call for each folder,
+  1,000 folders without folder rows made `open_library` take about 12 s on its
+  first run. `open_library` now calls `get_or_create_folder_uuids`, which
+  creates the missing folder ids in one transaction. A second ignored test
   (`library_of_100k_without_folder_rows_opens_fast`) seeds 1,000 folders with
   no folder row. Its `open_library` took 98 to 108 ms on three runs, with a
-  bar of 1 s. The follow-up is done.
+  bar of 1 s.
+- The database has one connection behind a mutex. The writer thread locks it
+  for each row. A library that opens during heavy row writes can wait for the
+  lock. One wait of 0.9 s was seen once. No test measures it. A later fix is a
+  batched writer transaction or a separate read connection.
 - The page cache is warm. No cold-cache run was done.
 - Follow-up: measure the queue reorder cost for each scroll step, to find the
   cause of the 17 ms frame.

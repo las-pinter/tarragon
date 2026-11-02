@@ -33,7 +33,7 @@ pub fn short_folder_name(path: &str) -> String {
 
 /// The filter state with the chip order for tags and folders.
 ///
-/// Change tags and folders only through `toggle_tag` and `toggle_folder`.
+/// Change tags and folders only through the toggle, rename, and prune methods.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct FilterBar {
     /// The active filters.
@@ -100,6 +100,35 @@ impl FilterBar {
         self.folder_order.retain(|f| kept(f));
         debug_assert_eq!(self.state.folders.len(), self.folder_order.len());
         self.folder_order.len() != before
+    }
+
+    /// Rename an active tag and keep its place in `tag_order`. Return false if
+    /// `old` is not active, or if `old` and `new` are the same name.
+    ///
+    /// If `new` is already active, only `old` goes, so no chip repeats.
+    pub fn rename_tag(&mut self, old: &str, new: &str) -> bool {
+        if old == new || !self.state.tags.remove(old) {
+            return false;
+        }
+        if self.state.tags.contains(new) {
+            self.tag_order.retain(|t| t != old);
+        } else {
+            self.state.tags.insert(new.to_owned());
+            if let Some(slot) = self.tag_order.iter_mut().find(|t| *t == old) {
+                new.clone_into(slot);
+            }
+        }
+        debug_assert_eq!(self.state.tags.len(), self.tag_order.len());
+        true
+    }
+
+    /// Drop every active tag that is not in `keep`. Return true if any went.
+    pub fn prune_tags(&mut self, keep: &[String]) -> bool {
+        let before = self.tag_order.len();
+        self.state.tags.retain(|t| keep.contains(t));
+        self.tag_order.retain(|t| keep.contains(t));
+        debug_assert_eq!(self.state.tags.len(), self.tag_order.len());
+        self.tag_order.len() != before
     }
 
     /// Clear the color buckets and the transparent flag. Tags and folders stay.
@@ -179,6 +208,57 @@ mod tests {
         assert!(bar.prune_folders(&["/a".into(), "/c".into()]));
         assert_eq!(bar.folder_order(), [Path::new("/a"), Path::new("/c")]);
         assert_eq!(bar.state.folders.len(), 2);
+    }
+
+    fn tag_bar(tags: &[&str]) -> FilterBar {
+        let mut bar = FilterBar::default();
+        for t in tags {
+            bar.toggle_tag(t);
+        }
+        bar
+    }
+
+    #[test]
+    fn rename_tag_keeps_the_chip_place() {
+        let mut bar = tag_bar(&["a", "b", "c"]);
+        assert!(bar.rename_tag("b", "z"));
+        assert_eq!(bar.tag_order(), ["a", "z", "c"]);
+        assert!(bar.state.tags.contains("z") && !bar.state.tags.contains("b"));
+        assert_eq!(bar.state.tags.len(), 3);
+    }
+
+    #[test]
+    fn rename_inactive_tag_changes_nothing() {
+        let mut bar = tag_bar(&["a", "b"]);
+        let before = bar.clone();
+        assert!(!bar.rename_tag("x", "y"));
+        assert_eq!(bar, before);
+    }
+
+    #[test]
+    fn rename_onto_active_tag_drops_only_the_old_chip() {
+        let mut bar = tag_bar(&["a", "b", "c"]);
+        assert!(bar.rename_tag("a", "c"));
+        assert_eq!(bar.tag_order(), ["b", "c"]);
+        assert_eq!(bar.state.tags.len(), 2);
+        assert!(!bar.state.tags.contains("a"));
+    }
+
+    #[test]
+    fn rename_to_the_same_name_keeps_the_chip() {
+        let mut bar = tag_bar(&["a", "b"]);
+        let before = bar.clone();
+        assert!(!bar.rename_tag("a", "a"));
+        assert_eq!(bar, before);
+    }
+
+    #[test]
+    fn prune_tags_drops_stale_chips_in_both_lists() {
+        let mut bar = tag_bar(&["a", "b", "c"]);
+        assert!(bar.prune_tags(&["a".into()]));
+        assert_eq!(bar.tag_order(), ["a"]);
+        assert_eq!(bar.state.tags.len(), 1);
+        assert!(!bar.prune_tags(&["a".into()]));
     }
 
     #[test]

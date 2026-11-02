@@ -1,5 +1,9 @@
 //! Dock layout for the four main panels.
 
+mod min_width;
+
+pub use min_width::keep_gallery_wide;
+
 use crate::tokens::{PREVIEW_WIDTH, SIDEBAR_WIDTH, WINDOW_SIZE};
 use egui::Rect;
 use egui_dock::{DockState, Node, NodeIndex, Tree};

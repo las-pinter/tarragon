@@ -1,16 +1,16 @@
 //! Theme tokens: palette, spacing, radii, type scale, and motion values.
 //!
 //! The values come from the `:root` block of `design/mockups/theme.css`. Each
-//! doc comment names its stylesheet token, so the two stay traceable. The two
-//! exceptions are `BUCKET_PINK`, `CHECKER_LIGHT`, `CHECKER_DARK`, and
-//! `WINDOW_SIZE`, which have no stylesheet row. Colours convert to
-//! `egui::Color32` at compile time.
+//! doc comment names its stylesheet token, so the two stay traceable. The
+//! exceptions are `BUCKET_PINK`, `CHECKER_LIGHT`, `CHECKER_DARK`,
+//! `WINDOW_SIZE`, and `GALLERY_MIN_WIDTH`, which have no stylesheet row.
+//! Colours convert to `egui::Color32` at compile time.
 
 use egui::Color32;
 
 // The whole `:root` block of `theme.css` is ported on purpose, plus
-// `BUCKET_PINK`, the checker greys and `WINDOW_SIZE`. Some values have no
-// consumer yet.
+// `BUCKET_PINK`, the checker greys, `WINDOW_SIZE` and `GALLERY_MIN_WIDTH`.
+// Some values have no consumer yet.
 
 /// `--bg-primary`: window and gallery background.
 pub const BG_PRIMARY: Color32 = Color32::from_rgb(0x16, 0x15, 0x1a);
@@ -171,6 +171,9 @@ pub const THUMBNAIL_SIZE: f32 = 160.0;
 /// Default window size in points. The dock split shares are computed for its
 /// width, so the app and the layout must read the same value.
 pub const WINDOW_SIZE: [f32; 2] = [1280.0, 800.0];
+/// Least Gallery dock width, in points. Below it the info bar clips. It has no
+/// stylesheet row.
+pub const GALLERY_MIN_WIDTH: f32 = 260.0;
 /// `--sidebar-width`: default Library dock width, in points.
 pub const SIDEBAR_WIDTH: f32 = 220.0;
 /// `--preview-width`: default Preview dock width, in points.

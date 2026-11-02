@@ -1,16 +1,6 @@
 [advisories]
 version = 2
 yanked = "deny"
-# The `zip` reader stays on 8.6.0 by a version pin. All three advisories cover
-# the `extract` helpers, which copy archive entries onto the file system. The
-# render crate only reads member bytes by name, so it never calls those helpers.
-# Move the `=8.6.0` pin in `Cargo.toml` to 9.x and delete these ignores in the
-# same change.
-ignore = [
-    { id = "RUSTSEC-2026-0367", reason = "zip extract helper; never called, member bytes are read by name" },
-    { id = "RUSTSEC-2026-0368", reason = "zip extract helper; never called, member bytes are read by name" },
-    { id = "RUSTSEC-2026-0369", reason = "zip extract helper; never called, member bytes are read by name" },
-]
 unmaintained = "workspace"
 unsound = "workspace"
 

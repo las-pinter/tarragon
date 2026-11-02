@@ -64,9 +64,7 @@ image = { version = "=0.25.10", default-features = false }
 # their members, so the reader enables the `flate2` deflate backend. The other
 # features stay off so the dependency tree stays small. `deflate-zopfli` stays
 # off: zopfli only compresses on write and the renderer only reads.
-# The `=8.6.0` pin keeps `zip` on 8.x. Move the pin to 9.x and delete the
-# three advisory ignores in `deny.toml` in the same change.
-zip = { version = "=8.6.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+zip = { version = "=9.2.2", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
 # Logging. `tracing` matches the version already in the lockfile.
 # `tracing-subscriber` keeps default features off: no ANSI codes reach the

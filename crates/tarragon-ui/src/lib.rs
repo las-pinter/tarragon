@@ -13,6 +13,7 @@ pub mod preview;
 pub mod shell;
 pub mod sidebar;
 pub mod swatch;
+pub mod tag_manager;
 #[cfg(test)]
 pub(crate) mod test_support;
 pub mod texture_budget;

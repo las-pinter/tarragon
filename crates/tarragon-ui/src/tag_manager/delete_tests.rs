@@ -4,11 +4,16 @@ use super::tests::{count, editing, escape, frame, frame_at, row, settled};
 use super::{TagManager, TagManagerEvent, TagRow};
 use egui::{Context, Order};
 
-const QUESTION: &str = "Delete 'x' from 12 images?";
+pub(super) const QUESTION: &str = "Delete 'x' from 12 images?";
 
 /// Click the button painted as `label`; `last` picks the lowest one, else the
 /// highest. Return the texts of the frame after.
-fn press(ctx: &Context, manager: &mut TagManager, label: &str, last: bool) -> Vec<String> {
+pub(super) fn press(
+    ctx: &Context,
+    manager: &mut TagManager,
+    label: &str,
+    last: bool,
+) -> Vec<String> {
     let shown = frame_at(ctx, manager, vec![]);
     let mut found = shown.iter().filter(|(text, _)| text == label);
     let (_, at) = if last {
@@ -22,7 +27,7 @@ fn press(ctx: &Context, manager: &mut TagManager, label: &str, last: bool) -> Ve
     frame(ctx, manager, vec![])
 }
 
-fn open_with(rows: Vec<TagRow>) -> (Context, TagManager) {
+pub(super) fn open_with(rows: Vec<TagRow>) -> (Context, TagManager) {
     let ctx = crate::test_support::context();
     let mut manager = TagManager::default();
     manager.set_rows(rows);
@@ -32,14 +37,14 @@ fn open_with(rows: Vec<TagRow>) -> (Context, TagManager) {
 }
 
 /// A window with one row "x" of 12 images, asking to delete it.
-fn asking() -> (Context, TagManager) {
+pub(super) fn asking() -> (Context, TagManager) {
     let (ctx, mut manager) = open_with(vec![row(1, "x", 12)]);
     let texts = press(&ctx, &mut manager, "Delete", false);
     assert!(texts.iter().any(|t| t == QUESTION), "{texts:?}");
     (ctx, manager)
 }
 
-fn has(texts: &[String], want: &str) -> bool {
+pub(super) fn has(texts: &[String], want: &str) -> bool {
     texts.iter().any(|t| t == want)
 }
 
@@ -184,7 +189,7 @@ fn the_x_button_ends_the_question() {
 fn set_error_ends_the_question() {
     let (ctx, mut manager) = open_with(vec![row(1, "x", 12), row(2, "y", 3)]);
     press(&ctx, &mut manager, "Delete", false);
-    manager.set_error(2, "refused".to_owned());
+    manager.set_error(2, "refused");
     frame(&ctx, &mut manager, vec![]);
     let texts = frame(&ctx, &mut manager, vec![]);
     assert!(has(&texts, "refused"), "{texts:?}");

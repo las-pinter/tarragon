@@ -2,7 +2,7 @@
 
 use super::{TagManager, TagManagerEvent, TagRow};
 use egui::epaint::Shape;
-use egui::{Context, Event, Key, Modifiers, Order, Pos2};
+use egui::{Context, Event, Key, Modifiers, Order, Pos2, Rect};
 
 pub(super) fn row(id: i64, name: &str, count: u32) -> TagRow {
     TagRow {
@@ -26,6 +26,20 @@ pub(super) fn frame_at(
     manager: &mut TagManager,
     events: Vec<Event>,
 ) -> Vec<(String, Pos2)> {
+    frame_rects(ctx, manager, events)
+        .into_iter()
+        .map(|(text, pos, _)| (text, pos))
+        .collect()
+}
+
+/// Run one frame; return every painted text with its position and the rect it
+/// covers. The position of a right-aligned text is its right edge, so use the
+/// rect to find where a text starts.
+pub(super) fn frame_rects(
+    ctx: &Context,
+    manager: &mut TagManager,
+    events: Vec<Event>,
+) -> Vec<(String, Pos2, Rect)> {
     let output = ctx.run_ui(crate::test_support::input(600.0, events), |ui| {
         manager.show(ui.ctx());
     });
@@ -44,10 +58,13 @@ pub(super) fn settled(ctx: &Context, manager: &mut TagManager) -> Vec<String> {
     frame(ctx, manager, vec![])
 }
 
-fn collect(shape: &Shape, found: &mut Vec<(String, Pos2)>) {
+fn collect(shape: &Shape, found: &mut Vec<(String, Pos2, Rect)>) {
     match shape {
         Shape::Vec(shapes) => shapes.iter().for_each(|s| collect(s, found)),
-        Shape::Text(t) => found.push((t.galley.job.text.clone(), t.pos)),
+        Shape::Text(t) => {
+            let rect = t.galley.rect.translate(t.pos.to_vec2());
+            found.push((t.galley.job.text.clone(), t.pos, rect));
+        }
         _ => {}
     }
 }
@@ -229,7 +246,7 @@ fn set_error_reopens_the_edit_with_the_text() {
     let mut manager = TagManager::default();
     manager.set_rows(vec![row(1, "a", 1)]);
     manager.open();
-    manager.set_error(1, "refused".to_owned());
+    manager.set_error(1, "refused");
     frame(&ctx, &mut manager, vec![]);
     let texts = frame(&ctx, &mut manager, vec![]);
     assert!(texts.iter().any(|t| t == "refused"));
@@ -302,7 +319,7 @@ fn set_error_refills_the_name_that_was_refused() {
     let (ctx, mut manager) = editing(vec![row(1, "a", 1)]);
     submit(&ctx, &mut manager, "b");
     manager.set_rows(vec![row(1, "a", 1)]);
-    manager.set_error(1, "refused".to_owned());
+    manager.set_error(1, "refused");
     frame(&ctx, &mut manager, vec![]);
     let texts = frame(&ctx, &mut manager, vec![]);
     assert!(texts.iter().any(|t| t == "b"), "{texts:?}");

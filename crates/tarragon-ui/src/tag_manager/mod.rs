@@ -49,6 +49,8 @@ pub struct TagManager {
     edit: Option<Edit>,
     /// The id of the row that shows the delete question.
     confirm: Option<i64>,
+    /// The row id and text of a failed delete.
+    delete_error: Option<(i64, String)>,
     events: Vec<TagManagerEvent>,
     /// The last renamed tag id and the name sent for it.
     submitted: Option<(i64, String)>,
@@ -65,6 +67,7 @@ impl TagManager {
         self.open = false;
         self.edit = None;
         self.confirm = None;
+        self.delete_error = None;
     }
 
     /// Whether the window is shown.
@@ -90,6 +93,13 @@ impl TagManager {
         {
             self.confirm = None;
         }
+        if self
+            .delete_error
+            .as_ref()
+            .is_some_and(|(id, _)| !self.rows.iter().any(|r| r.id == *id))
+        {
+            self.delete_error = None;
+        }
     }
 
     /// Take the changes the user asked for since the last call.
@@ -98,15 +108,30 @@ impl TagManager {
     }
 
     /// Put the edit back on row `id` with `text` under the field. Call it when
-    /// a rename was refused. A missing row is ignored.
-    pub fn set_error(&mut self, id: i64, text: String) {
+    /// a rename was refused. It clears a delete message. A missing row is
+    /// ignored.
+    pub fn set_error(&mut self, id: i64, text: impl Into<String>) {
+        self.delete_error = None;
         if let Some(row) = self.rows.iter().find(|r| r.id == id) {
             // The refused name goes back in the field, so the user can fix it.
             let name = match &self.submitted {
                 Some((sent, name)) if *sent == id => name.clone(),
                 _ => row.name.clone(),
             };
-            self.edit = Some(Edit::with_error(row, name, text));
+            self.edit = Some(Edit::with_error(row, name, text.into()));
+            self.confirm = None;
+        }
+    }
+
+    /// Show `text` on row `id` in place of the count. Call it when a delete
+    /// was refused or failed. It ends any edit or delete question, on any row.
+    /// The next Rename or Delete click, `set_error`, `set_rows` without the
+    /// row, and `close` clear it. A message set while the window is closed
+    /// shows when it opens; only `close` clears it. A missing row is ignored.
+    pub fn set_delete_error(&mut self, id: i64, text: impl Into<String>) {
+        if self.rows.iter().any(|r| r.id == id) {
+            self.delete_error = Some((id, text.into()));
+            self.edit = None;
             self.confirm = None;
         }
     }
@@ -126,7 +151,8 @@ impl TagManager {
                 ui.set_width(WIDTH);
                 let before = self.events.len();
                 let (rows, edit, confirm) = (&self.rows, &mut self.edit, &mut self.confirm);
-                rename::list(ui, rows, edit, confirm, &mut self.events);
+                let delete_error = &mut self.delete_error;
+                rename::list(ui, rows, edit, confirm, delete_error, &mut self.events);
                 if let Some(TagManagerEvent::Rename { id, new_name }) = self.events[before..].last()
                 {
                     self.submitted = Some((*id, new_name.clone()));
@@ -139,10 +165,13 @@ impl TagManager {
         if !self.open {
             self.edit = None;
             self.confirm = None;
+            self.delete_error = None;
         }
     }
 }
 
+#[cfg(test)]
+mod delete_error_tests;
 #[cfg(test)]
 mod delete_tests;
 #[cfg(test)]

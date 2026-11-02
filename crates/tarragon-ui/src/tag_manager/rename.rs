@@ -10,6 +10,9 @@ use crate::tokens;
 /// The most rows the list shows before it scrolls.
 const MAX_VISIBLE_ROWS: f32 = 8.0;
 
+/// The most of the row width a delete message takes.
+pub(super) const MAX_ERROR_SHARE: f32 = 0.5;
+
 /// The row that is being renamed.
 #[derive(Debug)]
 pub(super) struct Edit {
@@ -94,6 +97,7 @@ pub(super) fn list(
     rows: &[TagRow],
     edit: &mut Option<Edit>,
     confirm: &mut Option<i64>,
+    delete_error: &mut Option<(i64, String)>,
     events: &mut Vec<TagManagerEvent>,
 ) {
     if rows.is_empty() {
@@ -117,14 +121,20 @@ pub(super) fn list(
                         continue;
                     }
                 }
-                match plain_row(ui, row) {
+                let error = delete_error
+                    .as_ref()
+                    .filter(|(id, _)| *id == row.id)
+                    .map(|(_, text)| text.as_str());
+                match plain_row(ui, row, error) {
                     Click::Rename => {
                         *edit = Some(Edit::new(row));
                         *confirm = None;
+                        *delete_error = None;
                     }
                     Click::Delete => {
                         *confirm = Some(row.id);
                         *edit = None;
+                        *delete_error = None;
                     }
                     Click::None => {}
                 }
@@ -133,8 +143,9 @@ pub(super) fn list(
 }
 
 /// Draw one row; return which button was clicked. The buttons are laid out
-/// first from the right, then the count, then the name takes the rest.
-fn plain_row(ui: &mut egui::Ui, row: &TagRow) -> Click {
+/// first from the right, then the count (or the delete `error` in its place),
+/// then the name takes the rest.
+fn plain_row(ui: &mut egui::Ui, row: &TagRow, error: Option<&str>) -> Click {
     let (row_rect, _) = ui.allocate_exact_size(
         vec2(ui.available_width(), tokens::MENU_ROW_HEIGHT),
         Sense::hover(),
@@ -151,7 +162,22 @@ fn plain_row(ui: &mut egui::Ui, row: &TagRow) -> Click {
                 } else {
                     Click::None
                 };
-                ui.label(RichText::new(count_text(row.count)).color(tokens::TEXT_MUTED));
+                if let Some(text) = error {
+                    // Capped, so a long message leaves room for the name.
+                    ui.scope(|ui| {
+                        ui.set_max_width(row_rect.width() * MAX_ERROR_SHARE);
+                        ui.add(
+                            Label::new(
+                                RichText::new(text)
+                                    .size(tokens::SIZE_SMALL)
+                                    .color(tokens::TAG_ERROR_TEXT),
+                            )
+                            .truncate(),
+                        );
+                    });
+                } else {
+                    ui.label(RichText::new(count_text(row.count)).color(tokens::TEXT_MUTED));
+                }
                 (click, ui.available_rect_before_wrap())
             },
         )

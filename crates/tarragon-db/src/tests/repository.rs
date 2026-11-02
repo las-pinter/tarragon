@@ -148,6 +148,82 @@ fn deleting_the_transparent_tag_is_refused() {
 }
 
 #[test]
+fn deleting_an_auto_color_tag_is_refused() {
+    let temp = TempDb::new();
+    let tag = temp
+        .db
+        .ensure_tag("blue", TagSource::AutoColor)
+        .expect("make the tag");
+    let paths = vec!["/refs/a.png".to_owned()];
+    temp.db
+        .add_tags_to_files_batch(&paths, std::slice::from_ref(&tag))
+        .expect("attach the tag");
+
+    let err = temp
+        .db
+        .delete_tag(tag.id)
+        .expect_err("the delete is refused");
+    assert!(matches!(&err, DbError::ProtectedTag(name) if name == "blue"));
+
+    let conn = temp.db.lock().expect("lock");
+    let tags: i64 = conn
+        .query_row("SELECT COUNT(*) FROM tags WHERE id = ?1", [tag.id], |row| {
+            row.get(0)
+        })
+        .expect("count tags");
+    let links: i64 = conn
+        .query_row("SELECT COUNT(*) FROM file_tags", [], |row| row.get(0))
+        .expect("count file_tags");
+    assert_eq!((tags, links), (1, 1), "the tag and its links must remain");
+}
+
+#[test]
+fn deleting_a_user_tag_keeps_other_tags_of_its_files() {
+    let temp = TempDb::new();
+    let doomed = temp
+        .db
+        .ensure_tag("sunset", TagSource::User)
+        .expect("make the tag");
+    let kept = temp
+        .db
+        .ensure_tag("portrait", TagSource::User)
+        .expect("make the other tag");
+    let paths: Vec<String> = ["a", "b", "c"]
+        .iter()
+        .map(|stem| format!("/refs/{stem}.png"))
+        .collect();
+    temp.db
+        .add_tags_to_files_batch(&paths, &[doomed.clone(), kept.clone()])
+        .expect("attach the tags");
+
+    let changed = temp.db.delete_tag(doomed.id).expect("delete the tag");
+    assert_eq!(changed, 1);
+
+    let conn = temp.db.lock().expect("lock");
+    let doomed_links: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM file_tags WHERE tag_id = ?1",
+            [doomed.id],
+            |row| row.get(0),
+        )
+        .expect("count deleted links");
+    let kept_links: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM file_tags WHERE tag_id = ?1",
+            [kept.id],
+            |row| row.get(0),
+        )
+        .expect("count kept links");
+    assert_eq!((doomed_links, kept_links), (0, 3));
+}
+
+#[test]
+fn deleting_an_unknown_tag_id_changes_nothing() {
+    let temp = TempDb::new();
+    assert_eq!(temp.db.delete_tag(9999).expect("delete"), 0);
+}
+
+#[test]
 fn thumbnails_have_a_last_accessed_column() {
     let temp = TempDb::new();
     temp.db

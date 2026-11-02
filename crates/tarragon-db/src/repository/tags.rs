@@ -4,7 +4,6 @@ use std::collections::HashMap;
 use std::str::FromStr;
 
 use rusqlite::{OptionalExtension, params};
-use tarragon_core::color::TRANSPARENT_TAG;
 use tarragon_core::entity::{Tag, TagSource};
 
 use crate::like::normalize_path;
@@ -195,24 +194,31 @@ impl Database {
         Ok(changed)
     }
 
-    /// Delete a tag. The `file_tags` foreign key cascades the delete.
+    /// Delete a user tag. The `file_tags` foreign key cascades the delete.
     ///
-    /// The `transparent` tag is refused, because it is a built-in color tag.
+    /// Only user tags can be deleted. Color tags are made by the app. A
+    /// missing id deletes nothing and returns zero.
     ///
     /// # Errors
     ///
-    /// Returns [`DbError::ProtectedTag`] for the `transparent` tag. Returns
-    /// [`DbError::Sqlite`] when the statement fails. Returns
+    /// Returns [`DbError::ProtectedTag`] when the tag is not a user tag.
+    /// Returns [`DbError::Core`] when the stored tag source is unknown.
+    /// Returns [`DbError::Sqlite`] when the statement fails. Returns
     /// [`DbError::LockPoisoned`] after a panic poisoned the lock.
     pub fn delete_tag(&self, tag_id: i64) -> Result<usize, DbError> {
         let conn = self.lock()?;
-        let name: Option<String> = conn
-            .query_row("SELECT name FROM tags WHERE id = ?1", [tag_id], |row| {
-                row.get(0)
-            })
+        let found: Option<(String, String)> = conn
+            .query_row(
+                "SELECT name, source FROM tags WHERE id = ?1",
+                [tag_id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
             .optional()?;
-        if name.as_deref() == Some(TRANSPARENT_TAG) {
-            return Err(DbError::ProtectedTag(TRANSPARENT_TAG.to_owned()));
+        let Some((name, source)) = found else {
+            return Ok(0);
+        };
+        if TagSource::from_str(&source)? != TagSource::User {
+            return Err(DbError::ProtectedTag(name));
         }
         let changed = conn.execute("DELETE FROM tags WHERE id = ?1", [tag_id])?;
         Ok(changed)

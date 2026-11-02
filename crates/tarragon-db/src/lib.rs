@@ -47,8 +47,8 @@ pub enum DbError {
         /// The generation this build creates and reads.
         expected: i64,
     },
-    /// The tag is built in and cannot be deleted.
-    #[error("tag {0} is protected and cannot be deleted")]
+    /// The tag is built in and cannot be changed.
+    #[error("tag {0} is built in and cannot be changed")]
     ProtectedTag(String),
     /// A user tag name is a color bucket name or `transparent`.
     #[error("tag name {0} is reserved")]

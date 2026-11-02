@@ -9,7 +9,7 @@ use super::*;
 use crate::pipeline::Config;
 
 /// A temp folder that removes itself on drop.
-struct TempDir(PathBuf);
+pub(super) struct TempDir(pub(super) PathBuf);
 
 impl Drop for TempDir {
     fn drop(&mut self) {
@@ -65,15 +65,15 @@ fn a_folder_with_a_real_pipeline_settles_all_tiles() {
 }
 
 /// A thumbs on a real pipeline with a fake renderer, and a folder tree to fill.
-struct Rig {
-    dir: TempDir,
-    thumbs: Thumbs,
-    ctx: Context,
-    gallery: Gallery,
+pub(super) struct Rig {
+    pub(super) dir: TempDir,
+    pub(super) thumbs: Thumbs,
+    pub(super) ctx: Context,
+    pub(super) gallery: Gallery,
 }
 
 impl Rig {
-    fn new(name: &str, start: Option<&str>) -> Self {
+    pub(super) fn new(name: &str, start: Option<&str>) -> Self {
         let dir = TempDir(
             std::env::temp_dir().join(format!("tarragon-thumbs-{name}-{}", std::process::id())),
         );
@@ -102,7 +102,7 @@ impl Rig {
     }
 
     /// Make the folder `name` with the given pngs.
-    fn folder(&self, name: &str, files: &[&str]) -> PathBuf {
+    pub(super) fn folder(&self, name: &str, files: &[&str]) -> PathBuf {
         let folder = self.dir.0.join(name);
         std::fs::create_dir_all(&folder).expect("make the folder");
         for file in files {
@@ -114,7 +114,7 @@ impl Rig {
     }
 
     /// Run frames until the open is over and every tile settled.
-    fn settle(&mut self) -> String {
+    pub(super) fn settle(&mut self) -> String {
         let start = Instant::now();
         loop {
             self.thumbs.before_draw(&self.ctx, &mut self.gallery);
@@ -130,7 +130,7 @@ impl Rig {
     }
 
     /// Run frames until no open runs or waits.
-    fn run_until_idle(&mut self) {
+    pub(super) fn run_until_idle(&mut self) {
         let start = Instant::now();
         while !self.thumbs.is_idle() {
             self.thumbs.before_draw(&self.ctx, &mut self.gallery);

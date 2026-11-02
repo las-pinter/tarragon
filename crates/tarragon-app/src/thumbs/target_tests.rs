@@ -57,7 +57,7 @@ fn shutdown_joins_an_opening_library() {
 }
 
 #[test]
-fn a_library_open_leaves_the_gallery_and_the_flags_alone() {
+fn a_library_open_leaves_the_folder_and_the_flags_alone() {
     let (mut thumbs, _db, dir) = thumbs_on_empty_db("library-arm");
     let ctx = Context::default();
     let mut gallery = Gallery::new(SortMode::Natural);
@@ -71,6 +71,7 @@ fn a_library_open_leaves_the_gallery_and_the_flags_alone() {
     assert!(matches!(thumbs.slot, Slot::Idle(_)));
     assert_eq!(thumbs.take_folder_change(), None);
     assert_eq!(gallery.folder(), None);
-    assert!(!thumbs.library_loaded());
+    assert!(thumbs.library_loaded());
+    assert!(!thumbs.opened);
     let _ = std::fs::remove_dir_all(dir);
 }

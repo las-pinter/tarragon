@@ -56,10 +56,6 @@ enum Target {
     /// The files of one folder, scanned from disk.
     Folder(PathBuf),
     /// Every stored row of the library.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "the All Images scope constructs it")
-    )]
     Library,
 }
 
@@ -70,6 +66,20 @@ impl std::fmt::Display for Target {
             Self::Library => f.write_str("library"),
         }
     }
+}
+
+/// How the gallery stands toward the whole library.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Library {
+    /// The gallery holds a folder, and nobody asked for the library.
+    Absent,
+    /// Asked for; it waits for an idle pipeline.
+    Wanted,
+    /// The gallery holds the whole library.
+    Loaded,
+    /// The last library open failed. The caller asks again every frame, so
+    /// this stops a retry loop; a new folder request or a folder open clears it.
+    Failed,
 }
 
 /// Where the pipeline is.
@@ -114,6 +124,8 @@ pub struct Thumbs {
     current: Option<PathBuf>,
     /// True when an open ended and the shell must learn `current`.
     changed: bool,
+    /// How the gallery stands toward the whole library.
+    library: Library,
     /// The visible revision last sent to the pipeline.
     synced: Option<u64>,
     /// True once the open is over, whether it worked or not.
@@ -142,6 +154,7 @@ impl Thumbs {
             pending: folder,
             current: None,
             changed: false,
+            library: Library::Absent,
             synced: None,
             opened: false,
             announced: false,
@@ -154,10 +167,16 @@ impl Thumbs {
     /// bounded batch of results.
     pub fn before_draw(&mut self, ctx: &Context, gallery: &mut Gallery) {
         self.finish_open(gallery);
-        if matches!(self.slot, Slot::Idle(_))
-            && let Some(folder) = self.pending.take()
-        {
-            self.start_open(Target::Folder(folder));
+        if matches!(self.slot, Slot::Idle(_)) {
+            if let Some(folder) = self.pending.take() {
+                if self.library == Library::Wanted {
+                    self.library = Library::Absent;
+                }
+                self.start_open(Target::Folder(folder));
+            } else if self.library == Library::Wanted {
+                self.library = Library::Absent;
+                self.start_open(Target::Library);
+            }
         }
         if matches!(self.slot, Slot::Opening { .. }) {
             ctx.request_repaint_after(OPEN_POLL);
@@ -202,6 +221,9 @@ impl Thumbs {
             return;
         }
         self.pending = Some(folder);
+        if self.library == Library::Failed {
+            self.library = Library::Absent;
+        }
         (self.repaint)();
     }
 
@@ -209,7 +231,9 @@ impl Thumbs {
     #[cfg(test)]
     #[must_use]
     pub(crate) fn is_idle(&self) -> bool {
-        self.pending.is_none() && !matches!(self.slot, Slot::Opening { .. })
+        self.pending.is_none()
+            && self.library != Library::Wanted
+            && !matches!(self.slot, Slot::Opening { .. })
     }
 
     /// After an open ended, return the folder the gallery shows, once, so the
@@ -245,10 +269,38 @@ impl Thumbs {
 
     /// True when the gallery holds the whole library.
     #[must_use]
-    #[cfg_attr(not(test), expect(dead_code, reason = "the All Images scope calls it"))]
-    #[expect(clippy::unused_self, reason = "the answer will come from a field soon")]
     pub fn library_loaded(&self) -> bool {
-        false
+        self.library == Library::Loaded
+    }
+
+    /// Ask for the whole library in the gallery. It does nothing while the
+    /// library is loaded, asked for, or loading, or when the last open failed.
+    /// A folder request goes first, and a later folder open drops the library
+    /// again.
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "only the tests call it until the All Images scope does"
+        )
+    )]
+    pub fn show_library(&mut self) {
+        let loading = matches!(
+            &self.slot,
+            Slot::Opening {
+                target: Target::Library,
+                ..
+            }
+        );
+        if self.library_loaded()
+            || self.library == Library::Failed
+            || self.library == Library::Wanted
+            || loading
+        {
+            return;
+        }
+        self.library = Library::Wanted;
+        (self.repaint)();
     }
 
     /// Once the folder is open and every tile has a texture or an error,
@@ -295,9 +347,12 @@ impl Thumbs {
             tracing::warn!("an open is already running; ignoring {target}");
             return;
         };
-        self.announced = false;
-        self.opened = false;
-        self.started = Instant::now();
+        // The library shows no new folder, so the summary of the folder stays.
+        if matches!(target, Target::Folder(_)) {
+            self.announced = false;
+            self.opened = false;
+            self.started = Instant::now();
+        }
         let (sender, done) = crossbeam_channel::bounded(1);
         let repaint = Arc::clone(&self.repaint);
         let job = target.clone();
@@ -318,8 +373,10 @@ impl Thumbs {
             Ok(_) => self.slot = Slot::Opening { target, done },
             Err(error) => {
                 tracing::error!("cannot start the open thread: {error}");
-                self.opened = true;
-                self.changed = true;
+                if matches!(target, Target::Folder(_)) {
+                    self.opened = true;
+                    self.changed = true;
+                }
             }
         }
     }
@@ -327,7 +384,7 @@ impl Thumbs {
     /// Take the answer of the open thread, when it is ready, and show the
     /// scanned files as placeholder tiles.
     fn finish_open(&mut self, gallery: &mut Gallery) {
-        let Slot::Opening { done, .. } = &self.slot else {
+        let Slot::Opening { target, done } = &self.slot else {
             return;
         };
         let answer = match done.try_recv() {
@@ -335,9 +392,13 @@ impl Thumbs {
             Err(TryRecvError::Empty) => return,
             Err(TryRecvError::Disconnected) => {
                 tracing::error!("the open thread ended without an answer");
+                if matches!(target, Target::Folder(_)) {
+                    self.opened = true;
+                    self.changed |= self.pending.is_none();
+                } else {
+                    self.library = Library::Failed;
+                }
                 self.slot = Slot::Gone;
-                self.opened = true;
-                self.changed |= self.pending.is_none();
                 return;
             }
         };
@@ -348,7 +409,7 @@ impl Thumbs {
         let folder = match target {
             Target::Folder(folder) => folder,
             Target::Library => {
-                tracing::debug!("the library open ended; nothing shows it yet");
+                self.finish_library(gallery, answer.result);
                 return;
             }
         };
@@ -367,6 +428,9 @@ impl Thumbs {
                 gallery.set_folder(Some(folder.clone()));
                 gallery.set_items(items);
                 self.current = Some(folder);
+                if self.library != Library::Wanted {
+                    self.library = Library::Absent;
+                }
                 self.synced = None;
                 self.opened = true;
                 self.changed |= report;
@@ -380,12 +444,41 @@ impl Thumbs {
     }
 }
 
+impl Thumbs {
+    /// Show every stored row. The folder, the highlight, and the summary stay
+    /// as they are. A failed open leaves the gallery as it was.
+    fn finish_library(&mut self, gallery: &mut Gallery, result: Result<Opened, PipelineError>) {
+        match result {
+            Ok(opened) => {
+                // The open moved the pipeline generation; without the reset
+                // the feed drops every result.
+                let keys = opened.files.iter().map(|file| file.path.clone());
+                self.feed.reset(opened.generation, keys);
+                let items = opened
+                    .files
+                    .into_iter()
+                    .map(|file| GridItem::new(file.path, file.mtime, None))
+                    .collect();
+                gallery.set_items(items);
+                self.library = Library::Loaded;
+                self.synced = None;
+            }
+            Err(error) => {
+                tracing::error!("cannot open the library: {error}");
+                self.library = Library::Failed;
+            }
+        }
+    }
+}
+
 /// Convert a thumbnail to an egui image. The pixels are not premultiplied.
 fn color_image(image: &RgbaImage) -> ColorImage {
     let size = [image.width() as usize, image.height() as usize];
     ColorImage::from_rgba_unmultiplied(size, image.as_raw())
 }
 
+#[cfg(test)]
+mod library_tests;
 #[cfg(test)]
 mod target_tests;
 #[cfg(test)]

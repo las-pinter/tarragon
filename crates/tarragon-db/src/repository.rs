@@ -5,6 +5,7 @@
 
 use rusqlite::{Connection, Row, params};
 use tarragon_core::entity::{Tag, TagSource};
+use tarragon_core::tag_name::is_reserved_tag_name;
 
 use crate::DbError;
 
@@ -144,7 +145,14 @@ fn row_to_favorite(row: &Row<'_>) -> rusqlite::Result<Favorite> {
 }
 
 /// Insert a tag if absent and return it with the requested source.
+///
+/// A user tag may not take a name the app owns. Auto-color writes pass.
 fn ensure_tag_conn(conn: &Connection, name: &str, source: TagSource) -> Result<Tag, DbError> {
+    // Without this, a user tag named `red` would join the auto tag on the
+    // name clash.
+    if source == TagSource::User && is_reserved_tag_name(name) {
+        return Err(DbError::ReservedTagName(name.to_owned()));
+    }
     let id = conn.query_row(
         "INSERT INTO tags (name, source) VALUES (?1, ?2) \
          ON CONFLICT(name) DO UPDATE SET name = name RETURNING id",

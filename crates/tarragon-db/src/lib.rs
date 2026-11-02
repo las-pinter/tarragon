@@ -50,6 +50,9 @@ pub enum DbError {
     /// The tag is built in and cannot be deleted.
     #[error("tag {0} is protected and cannot be deleted")]
     ProtectedTag(String),
+    /// A user tag name is a color bucket name or `transparent`.
+    #[error("tag name {0} is reserved")]
+    ReservedTagName(String),
     /// The shared connection lock is poisoned after a panic.
     #[error("database connection lock is poisoned")]
     LockPoisoned,

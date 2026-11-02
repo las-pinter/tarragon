@@ -18,8 +18,13 @@ impl Database {
     /// The stored `source` never changes on conflict. The returned tag keeps
     /// the requested `source`, which callers use for the association row.
     ///
+    /// A `user` tag may not be named like a color bucket or `transparent`. The
+    /// check ignores ASCII case. This method checks only that rule. The caller
+    /// trims the name and checks that it is not empty or too long.
+    ///
     /// # Errors
     ///
+    /// Returns [`DbError::ReservedTagName`] for a reserved `user` name.
     /// Returns [`DbError::Sqlite`] when the statement fails. Returns
     /// [`DbError::LockPoisoned`] after a panic poisoned the lock.
     pub fn ensure_tag(&self, name: &str, source: TagSource) -> Result<Tag, DbError> {

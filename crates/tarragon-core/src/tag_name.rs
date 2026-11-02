@@ -109,5 +109,16 @@ mod tests {
         assert!(validate_tag_name("reddish").is_ok());
         assert!(validate_tag_name("red tag").is_ok());
         assert!(!is_reserved_tag_name("reddish"));
+        assert!(!is_reserved_tag_name(" red"));
+    }
+
+    #[test]
+    fn error_text_is_shown_to_the_user() {
+        assert_eq!(TagNameError::Empty.to_string(), "Enter a tag name");
+        assert_eq!(
+            TagNameError::TooLong.to_string(),
+            "Name is longer than 64 characters"
+        );
+        assert_eq!(TagNameError::Reserved.to_string(), "Name is reserved");
     }
 }

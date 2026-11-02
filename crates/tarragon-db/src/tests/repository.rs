@@ -98,7 +98,7 @@ fn tag_delete_cascades_to_file_tags() {
     let temp = TempDb::new();
     let tag = temp
         .db
-        .ensure_tag("red", TagSource::User)
+        .ensure_tag("sunset", TagSource::User)
         .expect("make the tag");
     let paths = vec!["/refs/a.png".to_owned()];
     temp.db
@@ -290,18 +290,18 @@ fn scan_group_keeps_the_stored_mtime_and_size() {
 #[test]
 fn batched_tag_write_counts_every_pair() {
     let temp = TempDb::new();
-    let red = temp
+    let sunset = temp
         .db
-        .ensure_tag("red", TagSource::User)
-        .expect("make red");
-    let blue = temp
+        .ensure_tag("sunset", TagSource::User)
+        .expect("make sunset");
+    let harbor = temp
         .db
-        .ensure_tag("blue", TagSource::User)
-        .expect("make blue");
+        .ensure_tag("harbor", TagSource::User)
+        .expect("make harbor");
     let paths = vec!["/a.png".to_owned(), "/b.png".to_owned()];
     let pairs = temp
         .db
-        .add_tags_to_files_batch(&paths, &[red, blue])
+        .add_tags_to_files_batch(&paths, &[sunset, harbor])
         .expect("attach both tags");
     assert_eq!(pairs, 4);
     for usage in temp.db.all_tags().expect("read the usage") {
@@ -488,4 +488,70 @@ fn scan_stub_stores_no_cache_uuid() {
         .expect("read")
         .expect("row");
     assert_eq!(row.cache_uuid, None);
+}
+
+/// Count the rows in `tags`.
+fn tag_rows(temp: &TempDb) -> i64 {
+    let conn = temp.db.lock().expect("lock");
+    conn.query_row("SELECT COUNT(*) FROM tags", [], |row| row.get(0))
+        .expect("count tags")
+}
+
+#[test]
+fn user_tags_with_reserved_names_are_refused_and_add_no_row() {
+    let temp = TempDb::new();
+    for name in ["red", "Red", "transparent"] {
+        let err = temp
+            .db
+            .ensure_tag(name, TagSource::User)
+            .expect_err("a reserved name is refused");
+        assert!(
+            matches!(&err, DbError::ReservedTagName(got) if got == name),
+            "got {err:?}"
+        );
+        assert_eq!(err.to_string(), format!("tag name {name} is reserved"));
+    }
+    assert_eq!(tag_rows(&temp), 0);
+}
+
+#[test]
+fn auto_color_tags_may_use_reserved_names() {
+    let temp = TempDb::new();
+    let tag = temp
+        .db
+        .ensure_tag("red", TagSource::AutoColor)
+        .expect("auto tag");
+    assert_eq!(tag.source, TagSource::AutoColor);
+    temp.db
+        .replace_auto_color_tags(
+            "/refs/a.png",
+            &["blue".to_owned(), TRANSPARENT_TAG.to_owned()],
+        )
+        .expect("replace the auto tags");
+    assert_eq!(tag_rows(&temp), 3);
+}
+
+#[test]
+fn user_tag_named_like_a_reserved_name_prefix_is_allowed() {
+    let temp = TempDb::new();
+    let tag = temp
+        .db
+        .ensure_tag("reddish", TagSource::User)
+        .expect("plain name");
+    assert_eq!(tag.name, "reddish");
+}
+
+#[test]
+fn batched_write_takes_a_reserved_auto_tag_unchanged() {
+    let temp = TempDb::new();
+    let tag = temp
+        .db
+        .ensure_tag("red", TagSource::AutoColor)
+        .expect("auto tag");
+    let paths = vec!["/a.png".to_owned()];
+    let pairs = temp
+        .db
+        .add_tags_to_files_batch(&paths, &[tag])
+        .expect("attach");
+    assert_eq!(pairs, 1);
 }

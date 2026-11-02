@@ -476,6 +476,8 @@ fn color_image(image: &RgbaImage) -> ColorImage {
 
 #[cfg(test)]
 mod library_tests;
+#[cfg(all(test, target_os = "linux"))]
+mod scale_tests;
 #[cfg(test)]
 mod target_tests;
 #[cfg(test)]

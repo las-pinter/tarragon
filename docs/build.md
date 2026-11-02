@@ -209,6 +209,52 @@ has 16.7 ms. The hard gate for one frame is 100 ms. The slowest measured frame
 is 0.657 ms for the grid container and 0.273 ms for the whole gallery. The
 grid cost is 3.9% of the 16.7 ms budget and the gallery cost is 1.6% of it.
 
+### Library of 100,000 rows
+
+An ignored test loads a stored library of 100,000 rows (1,000 folders of 100
+files) through the real pipeline and gallery. It runs headless: egui lays out
+and tessellates, and no window opens. The render function makes 256 by 256
+images, and the test scrolls the grid by wheel events while four workers
+render.
+
+```sh
+cargo nextest run --release -p tarragon-app --run-ignored only --no-capture library_of_100k
+```
+
+Machine: Intel Core i7-12700K, 10 logical CPUs, 12 GiB RAM, Ubuntu 24.04,
+kernel 6.17.0-35-generic, release build. Two runs agreed to within 5 percent. The test asserts the five bars, so a
+regression fails it.
+
+| Measure | Result | Bar | |
+|---------|--------|-----|-----|
+| `library_files` plus `open_library` (open thread) | 0.09 s (19 ms and 75 ms) | under 1 s | pass |
+| `set_items` plus first `refresh_view` (UI thread, once) | 70 ms | under 250 ms | pass |
+| Frame time, 301 frames while scrolling | median 17 ms, p95 20 ms, max 28 ms | under 100 ms | pass |
+| Resident memory added by the library | 137 MiB (144 MiB after the scroll) | under 150 MiB | pass |
+| Grid textures while scrolling | peak 252 MiB | under 256 MiB | pass |
+
+Notes:
+
+- The frame time is the whole app frame: result upload, `Gallery::show`,
+  `after_draw`, and tessellation. It has no GPU work. A quiet frame at 10,000
+  items costs under 1 ms in the grid benchmark, so the 17 ms median comes from
+  the scroll work. The cause is not measured. A likely cause is the queue
+  reorder that runs when the visible tiles change.
+- The memory bar is checked after the scroll (144 MiB), so the margin is
+  6 MiB. The memory includes the pipeline job table of 100,000 jobs. A larger
+  library passes the bar only if this table shrinks.
+- The seed stores one folder row for each folder. A scan stores the folder row
+  only for the folder that it opens, so a stored library can have rows without
+  a folder row. Causes are a trailing slash in the folder text, rows removed by
+  `cleanup_stale_folder_uuids`, and an old database. Each missing folder costs
+  one `get_or_create_folder_uuid` transaction. The slow path was measured:
+  1,000 folders without folder rows made `open_library` take about 12 s on its
+  first run. Follow-up: create the missing folder ids in one transaction.
+- The page cache is warm. No cold-cache run was done.
+- Follow-up: measure the queue reorder cost for each scroll step, to find the
+  cause of the 17 ms frame.
+- The test runs about 80 s, mostly seeding and scrolling.
+
 ### PSD memory benchmark
 
 The `psd_rss_bench` example measures the peak resident memory of a scan that

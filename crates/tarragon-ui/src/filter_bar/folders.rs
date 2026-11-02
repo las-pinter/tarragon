@@ -39,17 +39,21 @@ pub fn show_folders(
         })
         .collect();
     let button = (scope == FilterScope::Global).then_some("Filter Folders");
-    let (edit, opened) = show_list(ui, id_salt, button, &chips, &rows);
+    let (edit, opened) = show_list(ui, id_salt, button, &chips, &rows, None);
     let path = match edit {
         Some(Edit::Chip(i)) => bar.folder_order().get(i).cloned(),
         Some(Edit::Row(i)) => folders.get(i).map(PathBuf::from),
-        None => None,
+        Some(Edit::Footer) | None => None,
     };
     let changed = path.is_some_and(|path| {
         bar.toggle_folder(&path);
         true
     });
-    Shown { changed, opened }
+    Shown {
+        changed,
+        opened,
+        ..Shown::default()
+    }
 }
 
 #[cfg(test)]

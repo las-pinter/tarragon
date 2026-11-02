@@ -29,17 +29,22 @@ pub fn show_tags(
         .iter()
         .map(|n| (n.clone(), bar.state.tags.contains(n)))
         .collect();
-    let (edit, opened) = show_list(ui, id_salt, Some("Filter Tags"), &chips, &rows);
+    let footer = Some("Manage tags...");
+    let (edit, opened) = show_list(ui, id_salt, Some("Filter Tags"), &chips, &rows, footer);
     let tag = match edit {
         Some(Edit::Chip(i)) => chips.get(i).map(|c| c.0.as_str()),
         Some(Edit::Row(i)) => names.get(i).map(String::as_str),
-        None => None,
+        Some(Edit::Footer) | None => None,
     };
     let changed = tag.is_some_and(|tag| {
         bar.toggle_tag(tag);
         true
     });
-    Shown { changed, opened }
+    Shown {
+        changed,
+        opened,
+        manage_tags: matches!(edit, Some(Edit::Footer)),
+    }
 }
 
 #[cfg(test)]

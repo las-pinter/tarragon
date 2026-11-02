@@ -16,6 +16,8 @@ pub(super) enum Edit {
     Chip(usize),
     /// The menu row at this index was clicked.
     Row(usize),
+    /// The menu footer row was clicked.
+    Footer,
 }
 
 /// What a filter row did this frame.
@@ -25,26 +27,31 @@ pub struct Shown {
     pub changed: bool,
     /// A menu went from closed to open.
     pub opened: bool,
+    /// The "Manage tags..." row was clicked.
+    pub manage_tags: bool,
 }
 
 impl std::ops::BitOrAssign for Shown {
     fn bitor_assign(&mut self, other: Self) {
         self.changed |= other.changed;
         self.opened |= other.opened;
+        self.manage_tags |= other.manage_tags;
     }
 }
 
 /// Draw a wrapping row of an optional menu button and the chips.
 ///
 /// `chips` hold a label and a tooltip. `rows` hold a label and a tick. With no
-/// `button` there is no menu. `id_salt` keys the open state of the menu. The
-/// flag is true when the menu opened this frame.
+/// `button` there is no menu. `footer` is an optional last menu row. `id_salt`
+/// keys the open state of the menu. The flag is true when the menu opened this
+/// frame.
 pub(super) fn show_list(
     ui: &mut Ui,
     id_salt: impl Hash + Debug,
     button: Option<&str>,
     chips: &[(String, String)],
     rows: &[(String, bool)],
+    footer: Option<&str>,
 ) -> (Option<Edit>, bool) {
     let open_id = Id::new(id_salt).with("open");
     let was_open = button.is_some() && ui.data(|d| d.get_temp(open_id)).unwrap_or(false);
@@ -68,8 +75,12 @@ pub(super) fn show_list(
         .inner;
     let opened = open && !was_open;
     if let (true, Some(rect)) = (open, rect) {
-        match show_check_menu(ui, open_id.with("menu"), rect, rows) {
+        match show_check_menu(ui, open_id.with("menu"), rect, rows, footer) {
             MenuResult::Toggled(i) => edit = Some(Edit::Row(i)),
+            MenuResult::Footer => {
+                edit = Some(Edit::Footer);
+                open = false;
+            }
             MenuResult::Closed => open = false,
             MenuResult::Open => {}
         }

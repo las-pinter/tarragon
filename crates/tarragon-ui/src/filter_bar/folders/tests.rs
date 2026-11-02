@@ -97,6 +97,15 @@ fn the_button_shows_in_global_scope_only() {
 }
 
 #[test]
+fn the_folder_menu_has_no_manage_tags_row() {
+    let mut rig = Rig::new(&[]);
+    rig.click_text("Filter Folders");
+    let names = rig.names();
+    assert!(names.contains(&"one/a".into()));
+    assert!(!names.contains(&"Manage tags...".into()));
+}
+
+#[test]
 fn chips_follow_activation_order() {
     let mut rig = Rig::new(&["/z/last/x", "/a/first/y", "/p/two/a"]);
     let names = rig.names();

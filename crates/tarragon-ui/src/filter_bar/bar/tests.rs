@@ -83,3 +83,15 @@ fn the_first_row_starts_8_pt_below_and_4_pt_inside() {
         "{swatch:?} {left}"
     );
 }
+
+#[test]
+fn shown_ors_the_manage_tags_flag() {
+    let mut shown = super::Shown::default();
+    shown |= super::Shown {
+        manage_tags: true,
+        ..super::Shown::default()
+    };
+    shown |= super::Shown::default();
+    assert!(shown.manage_tags);
+    assert!(!shown.changed && !shown.opened);
+}

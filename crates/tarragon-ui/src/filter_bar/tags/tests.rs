@@ -10,6 +10,7 @@ struct Rig {
     bar: FilterBar,
     names: Vec<String>,
     ticks: usize,
+    manage: bool,
 }
 
 /// A text shape: its string, colour and position.
@@ -23,13 +24,16 @@ impl Rig {
             bar: FilterBar::default(),
             names,
             ticks: 0,
+            manage: false,
         }
     }
 
     fn frame(&mut self, events: Vec<Event>) -> (bool, Vec<Text>) {
         let mut changed = false;
         let out = self.ctx.run_ui(input(600.0, events), |ui| {
-            changed = show_tags(ui, "tags", &mut self.bar, &self.names).changed;
+            let shown = show_tags(ui, "tags", &mut self.bar, &self.names);
+            changed = shown.changed;
+            self.manage = shown.manage_tags;
         });
         let texts = out
             .shapes
@@ -146,4 +150,50 @@ fn tag_count_counts_up() {
         counts.push(rig.bar.state.tags.len());
     }
     assert_eq!(counts, [0, 1, 2]);
+}
+
+#[test]
+fn the_manage_row_is_the_last_row_with_no_tags_and_with_many() {
+    for count in [0, 30] {
+        let mut rig = Rig::new();
+        rig.names = (0..count).map(|i| format!("tag-{i}")).collect();
+        rig.click_text("Filter Tags", true);
+        let view = rig.view();
+        let manage = view.iter().find(|t| t.0 == "Manage tags...");
+        let manage = manage.expect("the row is drawn");
+        // Tag rows scroll, so the footer sits within twelve rows of the button.
+        let reach = 14.0 * crate::tokens::MENU_ROW_HEIGHT;
+        assert!(manage.2.y - bar_row(&view) < reach, "{count} tags");
+        let first = view.iter().find(|t| t.0 == "tag-0");
+        assert!(first.is_none_or(|t| t.2.y < manage.2.y), "{count} tags");
+        assert_eq!(view.iter().any(|t| t.0 == "No items"), count == 0);
+    }
+}
+
+#[test]
+fn the_manage_row_reports_once_closes_the_menu_and_toggles_no_tag() {
+    let mut rig = Rig::new();
+    rig.click_text("Filter Tags", true);
+    assert!(!rig.click_text("Manage tags...", false));
+    assert!(rig.manage);
+    let view = rig.view();
+    assert!(!rig.manage);
+    assert!(!view.iter().any(|t| t.0 == "Manage tags..."));
+    assert!(rig.bar.state.tags.is_empty());
+}
+
+#[test]
+fn escape_closes_the_menu_without_reporting_the_manage_row() {
+    let mut rig = Rig::new();
+    rig.click_text("Filter Tags", true);
+    let esc = Event::Key {
+        key: egui::Key::Escape,
+        physical_key: None,
+        pressed: true,
+        repeat: false,
+        modifiers: egui::Modifiers::NONE,
+    };
+    rig.frame(vec![esc]);
+    assert!(!rig.manage);
+    assert!(!rig.view().iter().any(|t| t.0 == "Manage tags..."));
 }

@@ -11,6 +11,12 @@ pub(super) const TICK_WIDTH: f32 = 12.0;
 /// `.menu-row .lead` gap between the tick and the text, in points.
 pub(super) const LEAD_GAP: f32 = 8.0;
 
+/// The space around the rule above the footer: a 1 point rule with 4 points of
+/// margin either side.
+pub(super) const FOOTER_SEPARATOR: f32 = tokens::STROKE_WIDTH + 2.0 * tokens::SPACING_XS;
+/// What the footer adds to the menu height: the rule and one row.
+pub(super) const FOOTER_HEIGHT: f32 = FOOTER_SEPARATOR + tokens::MENU_ROW_HEIGHT;
+
 /// The height of a menu with `rows` rows, borders and padding included. An
 /// empty menu still has its one "No items" row.
 #[must_use]

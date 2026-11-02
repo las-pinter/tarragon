@@ -73,6 +73,19 @@ fn a_list_without_an_active_tag_drops_its_chip_and_flags_a_change() {
 }
 
 #[test]
+fn a_list_without_either_active_chip_drops_both() {
+    let mut gallery = Gallery::new(SortMode::Natural);
+    gallery.set_filter_lists(vec!["a".into()], vec!["/x/f".into()]);
+    gallery.bar.toggle_tag("a");
+    gallery.bar.toggle_folder(Path::new("/x/f"));
+    gallery.take_filter_change();
+    gallery.set_filter_lists(Vec::new(), Vec::new());
+    assert!(gallery.take_filter_change().is_some());
+    assert_eq!(gallery.bar.tag_order(), [] as [String; 0]);
+    assert_eq!(gallery.bar.folder_order(), [] as [PathBuf; 0]);
+}
+
+#[test]
 fn a_list_with_the_active_tags_keeps_the_chips_and_flags_nothing() {
     let mut gallery = with_tags_a_b();
     gallery.set_filter_lists(vec!["a".into(), "b".into(), "c".into()], Vec::new());
@@ -109,7 +122,7 @@ fn refreshing_the_filter_returns_the_state_once() {
 }
 
 /// Every text drawn in a frame.
-fn texts(out: &egui::FullOutput) -> Vec<(String, Pos2)> {
+pub(super) fn texts(out: &egui::FullOutput) -> Vec<(String, Pos2)> {
     let text = |s: &egui::epaint::ClippedShape| match &s.shape {
         Shape::Text(t) => Some((t.galley.text().to_owned(), t.pos)),
         _ => None,
@@ -118,7 +131,7 @@ fn texts(out: &egui::FullOutput) -> Vec<(String, Pos2)> {
 }
 
 /// Click the button with this label and return the texts of the next frame.
-fn click_button(ctx: &egui::Context, gallery: &mut Gallery, label: &str) -> Vec<String> {
+pub(super) fn click_button(ctx: &egui::Context, gallery: &mut Gallery, label: &str) -> Vec<String> {
     let first = frame(ctx, gallery, Vec::new());
     let at = texts(&first)
         .into_iter()
@@ -136,7 +149,7 @@ fn click_button(ctx: &egui::Context, gallery: &mut Gallery, label: &str) -> Vec<
 }
 
 /// A global-scope gallery with both lists set.
-fn listed() -> (egui::Context, Gallery) {
+pub(super) fn listed() -> (egui::Context, Gallery) {
     let ctx = test_support::context();
     crate::theme::apply_theme(&ctx);
     let mut gallery = Gallery::new(SortMode::Natural);

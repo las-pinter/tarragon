@@ -9,6 +9,7 @@ mod scope;
 mod search;
 mod selected;
 mod sort;
+mod tag_manager;
 mod thumbs;
 
 use std::path::PathBuf;

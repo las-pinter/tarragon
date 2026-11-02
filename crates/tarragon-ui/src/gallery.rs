@@ -16,8 +16,11 @@ use tarragon_core::sorting::SortMode;
 
 use crate::filter_bar::Shown;
 use crate::grid::{GridItem, Selection, VirtualGrid, items_in_order, metrics_for};
+use crate::tag_manager::TagManager;
+pub use crate::tag_manager::{TagManagerEvent, TagRow};
 use crate::tokens;
 
+mod manager;
 mod selected;
 pub(crate) mod strip;
 mod thumbs;
@@ -114,6 +117,8 @@ pub struct Gallery {
     colors_enabled: bool,
     /// What the filter bar reported since the last take.
     filter_events: Shown,
+    /// The "Manage tags" window.
+    tag_manager: TagManager,
     /// The timer that applies the typed search.
     debouncer: Debouncer,
     /// The current sort order.
@@ -156,6 +161,7 @@ impl Gallery {
             folders: Vec::new(),
             colors_enabled: true,
             filter_events: Shown::default(),
+            tag_manager: TagManager::default(),
             debouncer: Debouncer::default(),
             sort_mode,
             selection: Selection::default(),
@@ -340,6 +346,7 @@ impl Gallery {
         self.apply_pending_search(now);
         self.strip(ui, now);
         self.request_search_wake(ui, now);
+        self.tag_manager.show(ui.ctx());
         ui.add_space(tokens::SPACING_S);
         self.grid(ui);
     }

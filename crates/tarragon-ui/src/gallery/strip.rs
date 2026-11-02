@@ -75,6 +75,13 @@ impl Gallery {
                 let (names, paths) = (&self.tags, &self.folders);
                 self.filter_events |=
                     filter_bar::show(ui, &mut self.bar, names, paths, scope, colors);
+                // The flag latches, so read it once and clear it. One click
+                // then opens the window once, and the user can close it.
+                if std::mem::take(&mut self.filter_events.manage_tags) {
+                    self.tag_manager.open();
+                    // The app refreshes the rows when a menu opens.
+                    self.filter_events.opened = true;
+                }
             });
     }
 

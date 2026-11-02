@@ -53,6 +53,61 @@ fn disabling_colours_clears_them_and_flags_a_change() {
     assert!(state.colors.is_empty() && !state.transparent);
 }
 
+/// A gallery with the tags `a` and `b` active, in that order.
+fn with_tags_a_b() -> Gallery {
+    let mut gallery = Gallery::new(SortMode::Natural);
+    gallery.set_filter_lists(vec!["a".into(), "b".into()], Vec::new());
+    gallery.bar.toggle_tag("a");
+    gallery.bar.toggle_tag("b");
+    gallery.take_filter_change();
+    gallery
+}
+
+#[test]
+fn a_list_without_an_active_tag_drops_its_chip_and_flags_a_change() {
+    let mut gallery = with_tags_a_b();
+    gallery.set_filter_lists(vec!["b".into()], Vec::new());
+    let (state, _) = gallery.take_filter_change().expect("a change");
+    assert!(!state.tags.contains("a") && state.tags.contains("b"));
+    assert_eq!(gallery.bar.tag_order(), ["b"]);
+}
+
+#[test]
+fn a_list_with_the_active_tags_keeps_the_chips_and_flags_nothing() {
+    let mut gallery = with_tags_a_b();
+    gallery.set_filter_lists(vec!["a".into(), "b".into(), "c".into()], Vec::new());
+    assert_eq!(gallery.take_filter_change(), None);
+    assert_eq!(gallery.bar.tag_order(), ["a", "b"]);
+}
+
+#[test]
+fn renaming_an_active_tag_keeps_its_place_and_flags_a_change() {
+    let mut gallery = with_tags_a_b();
+    gallery.rename_filter_tag("a", "z");
+    let (state, _) = gallery.take_filter_change().expect("a change");
+    assert!(state.tags.contains("z") && !state.tags.contains("a"));
+    assert_eq!(gallery.bar.tag_order(), ["z", "b"]);
+    gallery.set_filter_lists(vec!["z".into(), "b".into()], Vec::new());
+    assert_eq!(gallery.take_filter_change(), None);
+}
+
+#[test]
+fn renaming_an_inactive_tag_flags_nothing() {
+    let mut gallery = with_tags_a_b();
+    gallery.rename_filter_tag("x", "y");
+    assert_eq!(gallery.take_filter_change(), None);
+    assert_eq!(gallery.bar.tag_order(), ["a", "b"]);
+}
+
+#[test]
+fn refreshing_the_filter_returns_the_state_once() {
+    let mut gallery = with_tags_a_b();
+    gallery.refresh_filter();
+    let (state, _) = gallery.take_filter_change().expect("a change");
+    assert_eq!(state.tags.len(), 2);
+    assert_eq!(gallery.take_filter_change(), None);
+}
+
 /// Every text drawn in a frame.
 fn texts(out: &egui::FullOutput) -> Vec<(String, Pos2)> {
     let text = |s: &egui::epaint::ClippedShape| match &s.shape {

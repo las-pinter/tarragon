@@ -242,6 +242,11 @@ mod tests {
         assert_eq!(bar.tag_order(), ["b", "c"]);
         assert_eq!(bar.state.tags.len(), 2);
         assert!(!bar.state.tags.contains("a"));
+        let mut bar = tag_bar(&["a", "b", "c"]);
+        assert!(bar.rename_tag("c", "a"));
+        assert_eq!(bar.tag_order(), ["a", "b"]);
+        assert_eq!(bar.state.tags.len(), 2);
+        assert!(!bar.state.tags.contains("c"));
     }
 
     #[test]
@@ -255,10 +260,11 @@ mod tests {
     #[test]
     fn prune_tags_drops_stale_chips_in_both_lists() {
         let mut bar = tag_bar(&["a", "b", "c"]);
-        assert!(bar.prune_tags(&["a".into()]));
-        assert_eq!(bar.tag_order(), ["a"]);
-        assert_eq!(bar.state.tags.len(), 1);
-        assert!(!bar.prune_tags(&["a".into()]));
+        let keep = ["a".to_owned(), "c".to_owned()];
+        assert!(bar.prune_tags(&keep));
+        assert_eq!(bar.tag_order(), ["a", "c"]);
+        assert_eq!(bar.state.tags.len(), 2);
+        assert!(!bar.prune_tags(&keep));
     }
 
     #[test]

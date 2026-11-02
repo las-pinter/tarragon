@@ -264,12 +264,29 @@ impl Gallery {
     }
 
     /// Replace the tag names and folder paths that the filter menus list.
+    ///
+    /// Active tag and folder chips that the new lists lack are dropped, and
+    /// that flags a filter change.
     pub fn set_filter_lists(&mut self, tags: Vec<String>, folders: Vec<String>) {
         self.tags = tags;
         self.folders = folders;
-        if self.bar.prune_folders(&self.folders) {
-            self.filter_events.changed = true;
-        }
+        let pruned_folders = self.bar.prune_folders(&self.folders);
+        let pruned_tags = self.bar.prune_tags(&self.tags);
+        self.filter_events.changed |= pruned_folders || pruned_tags;
+    }
+
+    /// Rename an active tag chip in place and flag a filter change.
+    /// If `new` is active too, the old chip is dropped.
+    ///
+    /// Call it before `set_filter_lists`, so the new list does not read the
+    /// rename as a removed tag. An inactive tag changes nothing.
+    pub fn rename_filter_tag(&mut self, old: &str, new: &str) {
+        self.filter_events.changed |= self.bar.rename_tag(old, new);
+    }
+
+    /// Flag a filter change so the caller runs the query again.
+    pub fn refresh_filter(&mut self) {
+        self.filter_events.changed = true;
     }
 
     /// The tag names and folder paths that the filter menus list.

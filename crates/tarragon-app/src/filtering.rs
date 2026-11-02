@@ -9,7 +9,7 @@ use tarragon_db::{Database, DbError};
 use tarragon_ui::gallery::Gallery;
 
 mod lists;
-pub use lists::{init, update};
+pub use lists::{init, refresh_lists, update};
 
 /// Return the paths that match the tag, colour, and folder filters.
 ///

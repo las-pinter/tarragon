@@ -5,6 +5,7 @@
 
 use egui::{Align2, Key, Modifiers, vec2};
 
+mod delete;
 mod rename;
 
 use rename::Edit;
@@ -46,6 +47,8 @@ pub struct TagManager {
     open: bool,
     rows: Vec<TagRow>,
     edit: Option<Edit>,
+    /// The id of the row that shows the delete question.
+    confirm: Option<i64>,
     events: Vec<TagManagerEvent>,
     /// The last renamed tag id and the name sent for it.
     submitted: Option<(i64, String)>,
@@ -61,6 +64,7 @@ impl TagManager {
     pub fn close(&mut self) {
         self.open = false;
         self.edit = None;
+        self.confirm = None;
     }
 
     /// Whether the window is shown.
@@ -69,8 +73,8 @@ impl TagManager {
         self.open
     }
 
-    /// Replace the rows. The window stays as it is, open or closed. An edit
-    /// ends when its row is gone.
+    /// Replace the rows. The window stays as it is, open or closed. An edit or
+    /// a delete question ends when its row is gone.
     pub fn set_rows(&mut self, rows: Vec<TagRow>) {
         self.rows = rows;
         if self
@@ -79,6 +83,12 @@ impl TagManager {
             .is_some_and(|e| !self.rows.iter().any(|r| r.id == e.id()))
         {
             self.edit = None;
+        }
+        if self
+            .confirm
+            .is_some_and(|id| !self.rows.iter().any(|r| r.id == id))
+        {
+            self.confirm = None;
         }
     }
 
@@ -97,6 +107,7 @@ impl TagManager {
                 _ => row.name.clone(),
             };
             self.edit = Some(Edit::with_error(row, name, text));
+            self.confirm = None;
         }
     }
 
@@ -114,20 +125,25 @@ impl TagManager {
             .show(ctx, |ui| {
                 ui.set_width(WIDTH);
                 let before = self.events.len();
-                rename::list(ui, &self.rows, &mut self.edit, &mut self.events);
+                let (rows, edit, confirm) = (&self.rows, &mut self.edit, &mut self.confirm);
+                rename::list(ui, rows, edit, confirm, &mut self.events);
                 if let Some(TagManagerEvent::Rename { id, new_name }) = self.events[before..].last()
                 {
                     self.submitted = Some((*id, new_name.clone()));
                 }
             });
-        // An open rename field consumed its Escape, so only a second one closes.
+        // An open rename field or delete question consumed its Escape, so only a
+        // second one closes.
         let escape = ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Escape));
         self.open = open && !escape;
         if !self.open {
             self.edit = None;
+            self.confirm = None;
         }
     }
 }
 
+#[cfg(test)]
+mod delete_tests;
 #[cfg(test)]
 mod tests;

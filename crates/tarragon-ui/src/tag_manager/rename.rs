@@ -4,7 +4,7 @@ use egui::text_edit::TextEditState;
 use egui::{Key, Label, Layout, Modifiers, RichText, ScrollArea, Sense, TextEdit, UiBuilder, vec2};
 use tarragon_core::tag_name::validate_tag_name;
 
-use super::{TagManagerEvent, TagRow};
+use super::{TagManagerEvent, TagRow, delete};
 use crate::tokens;
 
 /// The most rows the list shows before it scrolls.
@@ -72,7 +72,7 @@ fn judge(rows: &[TagRow], row: &TagRow, text: &str) -> Outcome {
 }
 
 /// The text after the name: "N images", or "1 image".
-fn count_text(count: u32) -> String {
+pub(super) fn count_text(count: u32) -> String {
     if count == 1 {
         "1 image".to_owned()
     } else {
@@ -80,11 +80,20 @@ fn count_text(count: u32) -> String {
     }
 }
 
-/// Draw the rows in a scroll area, or the empty text.
+/// What a click on a plain row asked for.
+enum Click {
+    None,
+    Rename,
+    Delete,
+}
+
+/// Draw the rows in a scroll area, or the empty text. One row at a time is in
+/// edit or in confirm; starting one ends the other.
 pub(super) fn list(
     ui: &mut egui::Ui,
     rows: &[TagRow],
     edit: &mut Option<Edit>,
+    confirm: &mut Option<i64>,
     events: &mut Vec<TagManagerEvent>,
 ) {
     if rows.is_empty() {
@@ -102,28 +111,48 @@ pub(super) fn list(
                         continue;
                     }
                 }
-                if plain_row(ui, row) {
-                    *edit = Some(Edit::new(row));
+                if *confirm == Some(row.id) {
+                    delete::confirm_row(ui, row, confirm, events);
+                    if confirm.is_some() {
+                        continue;
+                    }
+                }
+                match plain_row(ui, row) {
+                    Click::Rename => {
+                        *edit = Some(Edit::new(row));
+                        *confirm = None;
+                    }
+                    Click::Delete => {
+                        *confirm = Some(row.id);
+                        *edit = None;
+                    }
+                    Click::None => {}
                 }
             }
         });
 }
 
-/// Draw one row; return whether its Rename button was clicked. The button is
-/// laid out first from the right, then the count, then the name takes the rest.
-fn plain_row(ui: &mut egui::Ui, row: &TagRow) -> bool {
+/// Draw one row; return which button was clicked. The buttons are laid out
+/// first from the right, then the count, then the name takes the rest.
+fn plain_row(ui: &mut egui::Ui, row: &TagRow) -> Click {
     let (row_rect, _) = ui.allocate_exact_size(
         vec2(ui.available_width(), tokens::MENU_ROW_HEIGHT),
         Sense::hover(),
     );
     let right_to_left = Layout::right_to_left(egui::Align::Center);
-    let (clicked, rest) = ui
+    let (click, rest) = ui
         .scope_builder(
             UiBuilder::new().max_rect(row_rect).layout(right_to_left),
             |ui| {
-                let clicked = ui.small_button("Rename").clicked();
+                let click = if ui.small_button("Delete").clicked() {
+                    Click::Delete
+                } else if ui.small_button("Rename").clicked() {
+                    Click::Rename
+                } else {
+                    Click::None
+                };
                 ui.label(RichText::new(count_text(row.count)).color(tokens::TEXT_MUTED));
-                (clicked, ui.available_rect_before_wrap())
+                (click, ui.available_rect_before_wrap())
             },
         )
         .inner;
@@ -136,7 +165,7 @@ fn plain_row(ui: &mut egui::Ui, row: &TagRow) -> bool {
             ui.add(Label::new(RichText::new(&row.name)).truncate());
         },
     );
-    clicked
+    click
 }
 
 /// Draw the field and the message of the row under edit. Enter commits,

@@ -4,7 +4,7 @@ use super::{TagManager, TagManagerEvent, TagRow};
 use egui::epaint::Shape;
 use egui::{Context, Event, Key, Modifiers, Order, Pos2};
 
-fn row(id: i64, name: &str, count: u32) -> TagRow {
+pub(super) fn row(id: i64, name: &str, count: u32) -> TagRow {
     TagRow {
         id,
         name: name.to_owned(),
@@ -13,7 +13,7 @@ fn row(id: i64, name: &str, count: u32) -> TagRow {
 }
 
 /// Run one frame; return every painted text.
-fn frame(ctx: &Context, manager: &mut TagManager, events: Vec<Event>) -> Vec<String> {
+pub(super) fn frame(ctx: &Context, manager: &mut TagManager, events: Vec<Event>) -> Vec<String> {
     frame_at(ctx, manager, events)
         .into_iter()
         .map(|(text, _)| text)
@@ -21,7 +21,11 @@ fn frame(ctx: &Context, manager: &mut TagManager, events: Vec<Event>) -> Vec<Str
 }
 
 /// Run one frame; return every painted text with its position.
-fn frame_at(ctx: &Context, manager: &mut TagManager, events: Vec<Event>) -> Vec<(String, Pos2)> {
+pub(super) fn frame_at(
+    ctx: &Context,
+    manager: &mut TagManager,
+    events: Vec<Event>,
+) -> Vec<(String, Pos2)> {
     let output = ctx.run_ui(crate::test_support::input(600.0, events), |ui| {
         manager.show(ui.ctx());
     });
@@ -35,7 +39,7 @@ fn frame_at(ctx: &Context, manager: &mut TagManager, events: Vec<Event>) -> Vec<
 
 /// Run two frames and return the texts of the second. An egui window is
 /// hidden in its first frame, while it measures its content.
-fn settled(ctx: &Context, manager: &mut TagManager) -> Vec<String> {
+pub(super) fn settled(ctx: &Context, manager: &mut TagManager) -> Vec<String> {
     frame(ctx, manager, vec![]);
     frame(ctx, manager, vec![])
 }
@@ -48,7 +52,7 @@ fn collect(shape: &Shape, found: &mut Vec<(String, Pos2)>) {
     }
 }
 
-fn escape() -> Event {
+pub(super) fn escape() -> Event {
     Event::Key {
         key: Key::Escape,
         physical_key: None,
@@ -122,7 +126,7 @@ fn key(key: Key, modifiers: Modifiers) -> Event {
 
 /// An open window with `rows`, with the Rename button of the first row clicked
 /// and the field focused.
-fn editing(rows: Vec<TagRow>) -> (Context, TagManager) {
+pub(super) fn editing(rows: Vec<TagRow>) -> (Context, TagManager) {
     let ctx = crate::test_support::context();
     let mut manager = TagManager::default();
     manager.set_rows(rows);
@@ -251,7 +255,7 @@ fn the_x_button_closes_the_window() {
     assert!(!manager.is_open());
 }
 
-fn count(texts: &[String], want: &str) -> usize {
+pub(super) fn count(texts: &[String], want: &str) -> usize {
     texts.iter().filter(|t| *t == want).count()
 }
 

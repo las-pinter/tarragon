@@ -222,14 +222,14 @@ cargo nextest run --release -p tarragon-app --run-ignored only --no-capture libr
 ```
 
 Machine: Intel Core i7-12700K, 10 logical CPUs, 12 GiB RAM, Ubuntu 24.04,
-kernel 6.17.0-35-generic, release build. Two runs agreed to within 5 percent. The test asserts the five bars, so a
-regression fails it.
+kernel 6.17.0-35-generic, release build. The median and p95 agreed within 5
+percent on two runs. The test asserts the five bars, so a regression fails it.
 
 | Measure | Result | Bar | |
 |---------|--------|-----|-----|
-| `library_files` plus `open_library` (open thread) | 0.09 s (19 ms and 75 ms) | under 1 s | pass |
+| `library_files` plus `open_library` (open thread) | 0.1 s (19 ms and 75 ms) | under 1 s | pass |
 | `set_items` plus first `refresh_view` (UI thread, once) | 70 ms | under 250 ms | pass |
-| Frame time, 301 frames while scrolling | median 17 ms, p95 20 ms, max 28 ms | under 100 ms | pass |
+| Frame time, 301 frames while scrolling | median 17 ms, p95 20 ms, max 28 to 38 ms | under 100 ms | pass |
 | Resident memory added by the library | 137 MiB (144 MiB after the scroll) | under 150 MiB | pass |
 | Grid textures while scrolling | peak 252 MiB | under 256 MiB | pass |
 
@@ -247,9 +247,13 @@ Notes:
   only for the folder that it opens, so a stored library can have rows without
   a folder row. Causes are a trailing slash in the folder text, rows removed by
   `cleanup_stale_folder_uuids`, and an old database. Each missing folder costs
-  one `get_or_create_folder_uuid` transaction. The slow path was measured:
-  1,000 folders without folder rows made `open_library` take about 12 s on its
-  first run. Follow-up: create the missing folder ids in one transaction.
+  one `get_or_create_folder_uuid` transaction. With one call for each folder, 1,000
+  folders without folder rows made `open_library` take about 12 s on its first run.
+  `open_library` now calls `get_or_create_folder_uuids`, which creates the
+  missing folder ids in one transaction. A second ignored test
+  (`library_of_100k_without_folder_rows_opens_fast`) seeds 1,000 folders with
+  no folder row. Its `open_library` took 98 to 108 ms on three runs, with a
+  bar of 1 s. The follow-up is done.
 - The page cache is warm. No cold-cache run was done.
 - Follow-up: measure the queue reorder cost for each scroll step, to find the
   cause of the 17 ms frame.

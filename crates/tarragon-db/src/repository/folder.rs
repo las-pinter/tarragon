@@ -1,5 +1,6 @@
 //! Folder cache UUID reads and writes.
 
+use std::collections::HashMap;
 use std::path::Path;
 
 use rusqlite::{OptionalExtension, params};
@@ -71,6 +72,61 @@ impl Database {
         )?;
         tx.commit()?;
         Ok(uuid)
+    }
+
+    /// Return the stored UUID of each folder, and create the missing ones.
+    ///
+    /// `new_id` makes the UUID of a folder that has no row. It runs once for
+    /// each missing folder and not for a stored one. All reads and inserts run
+    /// in one transaction, so the call commits once. The map has one entry for
+    /// each distinct text in `folders`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DbError::Sqlite`] when a statement fails. Returns
+    /// [`DbError::LockPoisoned`] after a panic poisoned the lock.
+    pub fn get_or_create_folder_uuids(
+        &self,
+        folders: &[String],
+        mut new_id: impl FnMut() -> String,
+    ) -> Result<HashMap<String, String>, DbError> {
+        let mut conn = self.lock()?;
+        let tx = conn.transaction()?;
+        let mut ids = HashMap::with_capacity(folders.len());
+        {
+            let mut read =
+                tx.prepare("SELECT cache_uuid FROM folder_cache_uuids WHERE folder_path = ?1")?;
+            let mut insert = tx.prepare(
+                "INSERT INTO folder_cache_uuids (folder_path, cache_uuid) VALUES (?1, ?2)",
+            )?;
+            // Two texts can share one normalized path, so they share one row.
+            let mut by_path: HashMap<String, String> = HashMap::new();
+            for folder in folders {
+                if ids.contains_key(folder) {
+                    continue;
+                }
+                let normalized = normalize_path(folder);
+                let uuid = if let Some(uuid) = by_path.get(&normalized) {
+                    uuid.clone()
+                } else {
+                    let stored = read
+                        .query_row([&normalized], |row| row.get::<_, String>(0))
+                        .optional()?;
+                    let uuid = if let Some(uuid) = stored {
+                        uuid
+                    } else {
+                        let uuid = new_id();
+                        insert.execute(params![normalized, uuid])?;
+                        uuid
+                    };
+                    by_path.insert(normalized, uuid.clone());
+                    uuid
+                };
+                ids.insert(folder.clone(), uuid);
+            }
+        }
+        tx.commit()?;
+        Ok(ids)
     }
 
     /// Remove cache UUID rows whose source folder is gone.

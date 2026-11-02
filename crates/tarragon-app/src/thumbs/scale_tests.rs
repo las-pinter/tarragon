@@ -86,12 +86,15 @@ fn millis(duration: Duration) -> f64 {
 }
 
 /// Store `ROWS` rows in folders of `ROWS_PER_FOLDER`. A scan also stores each
-/// folder, so the seed does the same.
-fn seed(db: &Database) {
+/// folder, so the seed does the same. The first `unstored` folders get no
+/// folder row.
+fn seed(db: &Database, unstored: usize) {
     for folder in 0..ROWS / ROWS_PER_FOLDER {
         let parent = format!("/library/set{folder:04}");
-        db.get_or_create_folder_uuid(&parent, &format!("seed-{folder}"))
-            .expect("store the folder");
+        if folder >= unstored {
+            db.get_or_create_folder_uuid(&parent, &format!("seed-{folder}"))
+                .expect("store the folder");
+        }
         let files: Vec<FileInfo> = (0..ROWS_PER_FOLDER)
             .map(|file| FileInfo {
                 path: PathBuf::from(format!("/library/set{folder:04}/IMG_{file:04}.png")),
@@ -235,7 +238,7 @@ fn library_of_100k_meets_the_bars() {
     std::fs::create_dir_all(&dir.0).expect("make the temp dir");
     let db = Arc::new(Database::open(dir.0.join("t.db")).expect("open the db"));
     db.initialize().expect("initialize the db");
-    seed(&db);
+    seed(&db, 0);
 
     let config = Config {
         cache: CacheStore::new(dir.0.join("cache")),
@@ -305,5 +308,44 @@ fn library_of_100k_meets_the_bars() {
     assert!(
         peak_texture >= GRID_BUDGET_BYTES / 10 * 9,
         "the scroll never filled the budget, so the check proves nothing"
+    );
+}
+
+/// Bar: `open_library` when every folder has no folder row, in seconds.
+const MISSING_OPEN_BAR: f64 = 1.0;
+
+#[test]
+#[ignore = "measurement run: needs a release build"]
+fn library_of_100k_without_folder_rows_opens_fast() {
+    let dir =
+        TempDir(std::env::temp_dir().join(format!("tarragon-missing-{}", std::process::id())));
+    std::fs::create_dir_all(&dir.0).expect("make the temp dir");
+    let db = Arc::new(Database::open(dir.0.join("t.db")).expect("open the db"));
+    db.initialize().expect("initialize the db");
+    seed(&db, ROWS / ROWS_PER_FOLDER);
+
+    let config = Config {
+        cache: CacheStore::new(dir.0.join("cache")),
+        workers: 4,
+        render: Arc::new(|_| Ok(DynamicImage::ImageRgba8(RgbaImage::new(256, 256)))),
+    };
+    let repaint: Repaint = Arc::new(|| {});
+    let (mut pipeline, _results) =
+        Pipeline::new(config, Arc::clone(&db), repaint).expect("start the pipeline");
+
+    let started = Instant::now();
+    let first = pipeline.open_library().expect("open the library");
+    let first_time = started.elapsed();
+    assert_eq!(first.files.len(), ROWS);
+
+    println!("== 100k library, no folder rows ==");
+    println!(
+        "open_library:    {:.1} ms with {} missing folder rows; bar {MISSING_OPEN_BAR} s",
+        millis(first_time),
+        ROWS / ROWS_PER_FOLDER,
+    );
+    assert!(
+        first_time.as_secs_f64() < MISSING_OPEN_BAR,
+        "the missing-rows open bar failed"
     );
 }

@@ -1,12 +1,11 @@
 //! Jobs for files that come from stored rows, not from a scan.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::Ordering;
 
 use tarragon_cache::store::SourceStamp;
 use tarragon_core::entity::FileInfo;
-use tarragon_db::DbError;
 use tarragon_db::repository::LibraryFile;
 
 use super::job::Job;
@@ -34,25 +33,24 @@ impl Pipeline {
         // The generation moves only after the jobs are built, so a failed
         // open does not drop the results of the folder that is still shown.
         let generation = self.generation.load(Ordering::Acquire) + 1;
-        let mut failed: Option<DbError> = None;
-        let db = &self.db;
+        let mut parents: Vec<String> = Vec::new();
+        let mut seen: HashSet<&str> = HashSet::new();
+        for row in &rows {
+            let parent = parent_of(&row.path);
+            if seen.insert(parent) {
+                parents.push(parent.to_owned());
+            }
+        }
+        // One transaction makes every missing folder id.
+        let ids = self
+            .db
+            .get_or_create_folder_uuids(&parents, new_folder_id)?;
         let jobs = library_jobs(
             &rows,
             generation,
-            |parent| {
-                db.get_or_create_folder_uuid(parent, &new_folder_id())
-                    .unwrap_or_else(|error| {
-                        failed.get_or_insert(error);
-                        // The caller drops these jobs: an empty id would
-                        // share one cache folder between same-named folders.
-                        String::new()
-                    })
-            },
+            |parent| ids.get(parent).cloned().unwrap_or_default(),
             &self.failures,
         );
-        if let Some(error) = failed {
-            return Err(error.into());
-        }
         self.generation.store(generation, Ordering::Release);
         self.jobs = jobs
             .iter()

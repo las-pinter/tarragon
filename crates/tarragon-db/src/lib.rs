@@ -53,6 +53,15 @@ pub enum DbError {
     /// A user tag name is a color bucket name or `transparent`.
     #[error("tag name {0} is reserved")]
     ReservedTagName(String),
+    /// A tag name is empty or too long.
+    #[error("invalid tag name: {0}")]
+    InvalidTagName(tarragon_core::tag_name::TagNameError),
+    /// No tag has this id.
+    #[error("tag {0} does not exist")]
+    TagNotFound(i64),
+    /// Another tag already uses this name.
+    #[error("tag name {0} is already used")]
+    TagNameTaken(String),
     /// The shared connection lock is poisoned after a panic.
     #[error("database connection lock is poisoned")]
     LockPoisoned,

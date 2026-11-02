@@ -5,6 +5,7 @@ use std::str::FromStr;
 
 use rusqlite::{OptionalExtension, params};
 use tarragon_core::entity::{Tag, TagSource};
+use tarragon_core::tag_name::{TagNameError, validate_tag_name};
 
 use crate::like::normalize_path;
 use crate::{Database, DbError};
@@ -222,6 +223,68 @@ impl Database {
         }
         let changed = conn.execute("DELETE FROM tags WHERE id = ?1", [tag_id])?;
         Ok(changed)
+    }
+
+    /// Rename a user tag and return the stored name.
+    ///
+    /// The name is trimmed and checked like any new user tag name. The tag id
+    /// and its file associations stay. Names compare with case. A name that
+    /// another tag uses is refused, and tags never merge. Renaming a tag to
+    /// its own name writes nothing.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DbError::ReservedTagName`] for a reserved name. Returns
+    /// [`DbError::InvalidTagName`] for an empty or too long name. Returns
+    /// [`DbError::TagNotFound`] when no tag has the id. Returns
+    /// [`DbError::ProtectedTag`] when the tag is not a user tag. Returns
+    /// [`DbError::TagNameTaken`] when another tag uses the name. Returns
+    /// [`DbError::Core`] when the stored tag source is unknown. Returns
+    /// [`DbError::Sqlite`] when a statement fails. Returns
+    /// [`DbError::LockPoisoned`] after a panic poisoned the lock.
+    pub fn rename_tag(&self, tag_id: i64, new_name: &str) -> Result<String, DbError> {
+        let name = validate_tag_name(new_name).map_err(|err| match err {
+            TagNameError::Reserved => DbError::ReservedTagName(new_name.trim().to_owned()),
+            other => DbError::InvalidTagName(other),
+        })?;
+        let conn = self.lock()?;
+        let found: Option<(String, String)> = conn
+            .query_row(
+                "SELECT name, source FROM tags WHERE id = ?1",
+                [tag_id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .optional()?;
+        let Some((current, source)) = found else {
+            return Err(DbError::TagNotFound(tag_id));
+        };
+        if TagSource::from_str(&source)? != TagSource::User {
+            return Err(DbError::ProtectedTag(current));
+        }
+        if current == name {
+            return Ok(name);
+        }
+        let taken = conn
+            .query_row("SELECT 1 FROM tags WHERE name = ?1", [&name], |_| Ok(()))
+            .optional()?
+            .is_some();
+        if taken {
+            return Err(DbError::TagNameTaken(name));
+        }
+        match conn.execute(
+            "UPDATE tags SET name = ?1 WHERE id = ?2",
+            params![name, tag_id],
+        ) {
+            Ok(_) => Ok(name),
+            // The read above already checked the name. This catches a
+            // write from another connection that came first.
+            Err(rusqlite::Error::SqliteFailure(err, _))
+                if err.extended_code == rusqlite::ffi::SQLITE_CONSTRAINT_UNIQUE =>
+            {
+                Err(DbError::TagNameTaken(name))
+            }
+            Err(err) => Err(err.into()),
+        }
     }
 
     /// Replace the `auto_color` associations of one path in one transaction.

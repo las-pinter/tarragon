@@ -10,4 +10,5 @@ mod library;
 mod repository;
 mod settings;
 mod support;
+mod tag_rename;
 mod window_state;

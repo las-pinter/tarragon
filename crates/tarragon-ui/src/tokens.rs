@@ -127,6 +127,9 @@ pub const BUCKET_PINK: Color32 = Color32::from_rgb(0xff, 0x80, 0xab);
 /// `--bucket-neutral`: neutral colour bucket.
 pub const BUCKET_NEUTRAL: Color32 = Color32::from_rgb(0x7f, 0x8c, 0x8d);
 
+/// Error text under a tag name field. No stylesheet row.
+pub const TAG_ERROR_TEXT: Color32 = BUCKET_RED;
+
 /// Light cell of the checkerboard in the transparent swatch. No stylesheet row.
 pub const CHECKER_LIGHT: Color32 = Color32::from_rgb(0xb0, 0xb0, 0xb0);
 /// Dark cell of the checkerboard in the transparent swatch. No stylesheet row.

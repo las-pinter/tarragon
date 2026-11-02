@@ -3,16 +3,14 @@
 //! The window floats inside the main window. It is not an OS window. The caller
 //! owns the data and sets the rows.
 
-use egui::{
-    Align, Align2, FontId, Key, Label, Layout, RichText, ScrollArea, Sense, UiBuilder, vec2,
-};
+use egui::{Align2, Key, Modifiers, vec2};
 
-use crate::tokens;
+mod rename;
+
+use rename::Edit;
 
 /// Window width, in points.
 const WIDTH: f32 = 360.0;
-/// The most rows the list shows before it scrolls.
-const MAX_VISIBLE_ROWS: f32 = 8.0;
 
 /// One user tag in the list.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -25,11 +23,32 @@ pub struct TagRow {
     pub count: u32,
 }
 
+/// A change the user asked for. The caller applies it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum TagManagerEvent {
+    /// Rename a tag to a name that passed the checks.
+    Rename {
+        /// The tag id.
+        id: i64,
+        /// The new, trimmed name.
+        new_name: String,
+    },
+    /// Delete a tag.
+    Delete {
+        /// The tag id.
+        id: i64,
+    },
+}
+
 /// The state of the "Manage tags" window.
 #[derive(Debug, Default)]
 pub struct TagManager {
     open: bool,
     rows: Vec<TagRow>,
+    edit: Option<Edit>,
+    events: Vec<TagManagerEvent>,
+    /// The last renamed tag id and the name sent for it.
+    submitted: Option<(i64, String)>,
 }
 
 impl TagManager {
@@ -41,6 +60,7 @@ impl TagManager {
     /// Hide the window.
     pub fn close(&mut self) {
         self.open = false;
+        self.edit = None;
     }
 
     /// Whether the window is shown.
@@ -49,9 +69,35 @@ impl TagManager {
         self.open
     }
 
-    /// Replace the rows. The window stays as it is, open or closed.
+    /// Replace the rows. The window stays as it is, open or closed. An edit
+    /// ends when its row is gone.
     pub fn set_rows(&mut self, rows: Vec<TagRow>) {
         self.rows = rows;
+        if self
+            .edit
+            .as_ref()
+            .is_some_and(|e| !self.rows.iter().any(|r| r.id == e.id()))
+        {
+            self.edit = None;
+        }
+    }
+
+    /// Take the changes the user asked for since the last call.
+    pub fn take_events(&mut self) -> Vec<TagManagerEvent> {
+        std::mem::take(&mut self.events)
+    }
+
+    /// Put the edit back on row `id` with `text` under the field. Call it when
+    /// a rename was refused. A missing row is ignored.
+    pub fn set_error(&mut self, id: i64, text: String) {
+        if let Some(row) = self.rows.iter().find(|r| r.id == id) {
+            // The refused name goes back in the field, so the user can fix it.
+            let name = match &self.submitted {
+                Some((sent, name)) if *sent == id => name.clone(),
+                _ => row.name.clone(),
+            };
+            self.edit = Some(Edit::with_error(row, name, text));
+        }
     }
 
     /// Draw the window when it is open.
@@ -67,52 +113,20 @@ impl TagManager {
             .anchor(Align2::CENTER_CENTER, vec2(0.0, 0.0))
             .show(ctx, |ui| {
                 ui.set_width(WIDTH);
-                list(ui, &self.rows);
+                let before = self.events.len();
+                rename::list(ui, &self.rows, &mut self.edit, &mut self.events);
+                if let Some(TagManagerEvent::Rename { id, new_name }) = self.events[before..].last()
+                {
+                    self.submitted = Some((*id, new_name.clone()));
+                }
             });
-        let escape = ctx.input(|i| i.key_pressed(Key::Escape));
+        // An open rename field consumed its Escape, so only a second one closes.
+        let escape = ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Escape));
         self.open = open && !escape;
+        if !self.open {
+            self.edit = None;
+        }
     }
-}
-
-/// The text after the name: "N images", or "1 image".
-fn count_text(count: u32) -> String {
-    if count == 1 {
-        "1 image".to_owned()
-    } else {
-        format!("{count} images")
-    }
-}
-
-/// Draw the rows in a scroll area, or the empty text.
-fn list(ui: &mut egui::Ui, rows: &[TagRow]) {
-    if rows.is_empty() {
-        ui.label(RichText::new("No user tags yet").color(tokens::TEXT_MUTED));
-        return;
-    }
-    ScrollArea::vertical()
-        .max_height(tokens::MENU_ROW_HEIGHT * MAX_VISIBLE_ROWS)
-        .auto_shrink([false, true])
-        .show(ui, |ui| {
-            for row in rows {
-                let (rect, _) = ui.allocate_exact_size(
-                    vec2(ui.available_width(), tokens::MENU_ROW_HEIGHT),
-                    Sense::hover(),
-                );
-                let count = ui.painter().layout_no_wrap(
-                    count_text(row.count),
-                    FontId::proportional(tokens::SIZE_BODY),
-                    tokens::TEXT_MUTED,
-                );
-                let count_pos = rect.right_center() - vec2(count.size().x, count.size().y / 2.0);
-                let name_rect = rect.with_max_x(count_pos.x - tokens::SPACING_S);
-                ui.painter().galley(count_pos, count, tokens::TEXT_MUTED);
-                // The name takes the room left of the count and ends in an ellipsis.
-                let layout = Layout::left_to_right(Align::Center);
-                ui.scope_builder(UiBuilder::new().max_rect(name_rect).layout(layout), |ui| {
-                    ui.add(Label::new(RichText::new(&row.name)).truncate());
-                });
-            }
-        });
 }
 
 #[cfg(test)]

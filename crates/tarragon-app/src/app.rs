@@ -10,6 +10,7 @@ use tarragon_cache::store::CacheStore;
 use tarragon_db::Database;
 use tarragon_db::settings::{SettingKey, SettingValue, Settings, SettingsError, WindowState};
 use tarragon_ui::Shell;
+use tarragon_ui::gallery::Scope;
 use tarragon_ui::shell::{LogPanelEvents, LogView};
 
 use crate::data_dir;
@@ -260,6 +261,10 @@ impl eframe::App for App {
             debug: self.debug,
         };
         let events = self.shell.show_with_log(ui, &view);
+        // The folder open replaced the items, so a library reload follows it.
+        if self.shell.gallery_mut().scope() == Scope::All {
+            self.thumbs.show_library();
+        }
         self.apply_log_events(events);
         let handled = sidebar::handle_events(&mut self.shell, &self.db);
         if let Some(path) = handled.navigate {
@@ -293,5 +298,7 @@ impl eframe::App for App {
 
 #[cfg(test)]
 mod filter_tests;
+#[cfg(test)]
+mod library_tests;
 #[cfg(test)]
 mod tests;

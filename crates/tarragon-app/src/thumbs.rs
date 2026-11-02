@@ -277,13 +277,6 @@ impl Thumbs {
     /// library is loaded, asked for, or loading, or when the last open failed.
     /// A folder request goes first, and a later folder open drops the library
     /// again.
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "only the tests call it until the All Images scope does"
-        )
-    )]
     pub fn show_library(&mut self) {
         let loading = matches!(
             &self.slot,
@@ -347,10 +340,14 @@ impl Thumbs {
             tracing::warn!("an open is already running; ignoring {target}");
             return;
         };
-        // The library shows no new folder, so the summary of the folder stays.
+        // The library shows no new folder, so a summary that was announced
+        // stays. One still owed describes the tiles that the library swaps in,
+        // so its clock restarts with them.
         if matches!(target, Target::Folder(_)) {
             self.announced = false;
             self.opened = false;
+            self.started = Instant::now();
+        } else if !self.announced {
             self.started = Instant::now();
         }
         let (sender, done) = crossbeam_channel::bounded(1);

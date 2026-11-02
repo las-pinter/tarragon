@@ -169,3 +169,27 @@ fn a_successful_folder_open_clears_the_failed_latch() {
     rig.run_until_idle();
     assert_eq!(rig.thumbs.library, Library::Absent);
 }
+
+#[test]
+fn a_summary_still_owed_counts_from_the_library_start() {
+    let (mut rig, _a, _b) = rig_with_two_folders("owed");
+    rig.thumbs.announced = false;
+    let folder_start = rig.thumbs.started;
+    std::thread::sleep(Duration::from_millis(5));
+    rig.thumbs.show_library();
+    settle_library(&mut rig);
+    assert!(rig.thumbs.started > folder_start);
+    let summary = rig.thumbs.loaded_once().expect("the summary is owed");
+    assert!(summary.starts_with("3 tiles settled"), "{summary}");
+}
+
+#[test]
+fn an_announced_summary_keeps_its_start_when_the_library_loads() {
+    let (mut rig, _a, _b) = rig_with_two_folders("announced");
+    assert!(rig.thumbs.announced);
+    let folder_start = rig.thumbs.started;
+    rig.thumbs.show_library();
+    settle_library(&mut rig);
+    assert_eq!(rig.thumbs.started, folder_start);
+    assert!(rig.thumbs.loaded_once().is_none());
+}

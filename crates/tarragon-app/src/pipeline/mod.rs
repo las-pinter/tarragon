@@ -9,6 +9,7 @@
 //! A render that is already running is not stopped.
 
 mod job;
+mod library;
 mod queue;
 mod worker;
 mod writer;

@@ -9,7 +9,7 @@ use tarragon_core::sorting::natural_cmp;
 use crate::like::{folder_deep_like, folder_like, normalize_path};
 use crate::{Database, DbError};
 
-use super::{THUMBNAIL_COLUMNS, Thumbnail, ThumbnailWrite, row_to_thumbnail};
+use super::{LibraryFile, THUMBNAIL_COLUMNS, Thumbnail, ThumbnailWrite, row_to_thumbnail};
 
 /// The upsert for one scan row. A conflict keeps the stored `mtime` and
 /// `size` so a later render can detect a source change.
@@ -86,6 +86,35 @@ impl Database {
         );
         let mut stmt = conn.prepare(&sql)?;
         let rows = stmt.query_map([], row_to_thumbnail)?;
+        let mut out = Vec::new();
+        for row in rows {
+            out.push(row?);
+        }
+        Ok(out)
+    }
+
+    /// List every thumbnail row as a lean library entry, in no set order.
+    ///
+    /// The caller sorts. The read skips the other columns so a large
+    /// library loads fast.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DbError::Sqlite`] when the read fails. Returns
+    /// [`DbError::LockPoisoned`] after a panic poisoned the lock.
+    pub fn library_files(&self) -> Result<Vec<LibraryFile>, DbError> {
+        let conn = self.lock()?;
+        let mut stmt = conn.prepare(
+            "SELECT path, mtime, size, thumbnail_cache_path IS NOT NULL FROM thumbnails",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok(LibraryFile {
+                path: row.get(0)?,
+                mtime: row.get(1)?,
+                size: row.get(2)?,
+                cached: row.get(3)?,
+            })
+        })?;
         let mut out = Vec::new();
         for row in rows {
             out.push(row?);

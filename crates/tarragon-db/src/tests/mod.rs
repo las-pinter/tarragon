@@ -6,6 +6,7 @@
 mod favorites;
 mod filter;
 mod folder;
+mod library;
 mod repository;
 mod settings;
 mod support;

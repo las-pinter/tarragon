@@ -44,6 +44,19 @@ pub struct Thumbnail {
     pub last_accessed: i64,
 }
 
+/// The few thumbnail columns the library list needs.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LibraryFile {
+    /// Stored file path. It uses forward slashes.
+    pub path: String,
+    /// Source last-modified time in epoch seconds.
+    pub mtime: i64,
+    /// Source file size in bytes.
+    pub size: i64,
+    /// True when the row holds a 256 px tier cache path.
+    pub cached: bool,
+}
+
 /// A thumbnail row written after a render completes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ThumbnailWrite {

@@ -605,3 +605,5 @@ fn a_requested_file_comes_back_from_the_cache_without_a_render() {
         "an unknown path queues nothing"
     );
 }
+
+mod library_open;

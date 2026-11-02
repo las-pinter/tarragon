@@ -2594,6 +2594,7 @@ dependencies = [
  "egui_dock",
  "image",
  "log",
+ "rusqlite",
  "tarragon-cache",
  "tarragon-core",
  "tarragon-db",

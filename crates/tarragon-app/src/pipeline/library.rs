@@ -2,25 +2,89 @@
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::Ordering;
 
 use tarragon_cache::store::SourceStamp;
+use tarragon_core::entity::FileInfo;
+use tarragon_db::DbError;
 use tarragon_db::repository::LibraryFile;
 
-use super::Failures;
 use super::job::Job;
+use super::{Failures, Opened, Pipeline, PipelineError, new_folder_id};
 
 #[cfg(test)]
 mod tests;
+
+impl Pipeline {
+    /// Queue a job for every stored row, so the whole library renders from
+    /// the cache or from its source. It returns the new generation and the
+    /// files. Jobs of the old open are dropped.
+    ///
+    /// The database reads run on the calling thread, so call it from a
+    /// worker thread and not from the UI. The files have no pixel size.
+    /// It keeps the remembered failures: a file outside the old folder may
+    /// have failed before.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when a database call fails. The old jobs and the
+    /// generation stay as they were in that case.
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "only tests call it until the app opens the library"
+        )
+    )]
+    pub fn open_library(&mut self) -> Result<Opened, PipelineError> {
+        let rows = self.db.library_files()?;
+        // The generation moves only after the jobs are built, so a failed
+        // open does not drop the results of the folder that is still shown.
+        let generation = self.generation.load(Ordering::Acquire) + 1;
+        let mut failed: Option<DbError> = None;
+        let db = &self.db;
+        let jobs = library_jobs(
+            &rows,
+            generation,
+            |parent| {
+                db.get_or_create_folder_uuid(parent, &new_folder_id())
+                    .unwrap_or_else(|error| {
+                        failed.get_or_insert(error);
+                        // The caller drops these jobs: an empty id would
+                        // share one cache folder between same-named folders.
+                        String::new()
+                    })
+            },
+            &self.failures,
+        );
+        if let Some(error) = failed {
+            return Err(error.into());
+        }
+        self.generation.store(generation, Ordering::Release);
+        self.jobs = jobs
+            .iter()
+            .map(|job| (job.path.clone(), job.clone()))
+            .collect();
+        self.queue.replace(jobs);
+        let files = rows
+            .into_iter()
+            .map(|row| FileInfo {
+                path: PathBuf::from(row.path),
+                size: u64::try_from(row.size).unwrap_or(0),
+                mtime: row.mtime,
+                width: 0,
+                height: 0,
+            })
+            .collect();
+        Ok(Opened { generation, files })
+    }
+}
 
 /// Build one job for each stored row, in row order.
 ///
 /// The stamp comes from the row: a `stat` for every file would stall a large
 /// library. `uuid_of` gets the text of a parent folder, once per folder. It
 /// runs with no lock held.
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "only tests call it until the library opens")
-)]
 pub(super) fn library_jobs(
     files: &[LibraryFile],
     generation: u64,

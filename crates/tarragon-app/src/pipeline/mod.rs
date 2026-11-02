@@ -2,9 +2,10 @@
 //! render the rest on a small thread pool.
 //!
 //! `open_folder` scans, stores the scan rows, and queues one job per file.
+//! `open_library` queues one job per stored row, with the stamp from the row.
 //! Workers read the cache or render, and send results on a channel. Workers
 //! never touch the database: one writer thread stores the rows they make.
-//! Each `open_folder` bumps a generation. A job from an older generation is
+//! Each open (folder or library) bumps a generation. A job from an older generation is
 //! skipped when a worker takes it, and the consumer drops an older result.
 //! A render that is already running is not stopped.
 
@@ -160,7 +161,7 @@ pub struct Pipeline {
     queue: Arc<JobQueue>,
     generation: Arc<AtomicU64>,
     failures: Failures,
-    /// The jobs of the open folder, kept so a dropped texture can be asked for again.
+    /// The jobs of the last open (folder or library), kept so a dropped texture can be asked for again.
     jobs: HashMap<PathBuf, Job>,
     rows: Option<Sender<writer::Message>>,
     workers: Vec<JoinHandle<()>>,

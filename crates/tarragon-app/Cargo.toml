@@ -33,6 +33,7 @@ winit = { workspace = true }
 [dev-dependencies]
 egui_dock.workspace = true
 log.workspace = true
+rusqlite.workspace = true
 
 [lints]
 workspace = true

@@ -29,13 +29,6 @@ impl Pipeline {
     ///
     /// Returns an error when a database call fails. The old jobs and the
     /// generation stay as they were in that case.
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "only tests call it until the app opens the library"
-        )
-    )]
     pub fn open_library(&mut self) -> Result<Opened, PipelineError> {
         let rows = self.db.library_files()?;
         // The generation moves only after the jobs are built, so a failed

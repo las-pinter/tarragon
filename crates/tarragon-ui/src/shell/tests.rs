@@ -8,6 +8,7 @@ use egui::{
 };
 use std::path::PathBuf;
 
+mod min_width;
 mod preview_wiring;
 
 /// The headless screen, wide and tall enough for both docks.

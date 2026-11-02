@@ -8,7 +8,9 @@ use tarragon_core::sorting::SortMode;
 
 use crate::gallery::Gallery;
 use crate::grid::GridItem;
-use crate::layout::{Pane, first_dock, from_json, is_visible, set_visible, to_json};
+use crate::layout::{
+    Pane, first_dock, from_json, is_visible, keep_gallery_wide, set_visible, to_json,
+};
 use crate::preview::{Preview, PreviewEvent};
 use crate::sidebar::panel::{Sidebar, SidebarEvent};
 use crate::theme::{dock_title_style, panel_frame};
@@ -244,6 +246,7 @@ impl Shell {
                 FontFamily::Name(crate::fonts::MEDIUM_FAMILY.into()),
             );
             dock_title_style(&mut style, ui.fonts_mut(|f| f.row_height(&title_font)));
+            let separator = style.separator.width;
             let mut panes = dock::Panes {
                 sidebar: &mut self.sidebar,
                 gallery: &mut self.gallery,
@@ -269,6 +272,12 @@ impl Shell {
                 self.apply_tab_menu(action);
                 ui.ctx().request_repaint();
             } else if tab_places(&self.dock) != before {
+                ui.ctx().request_repaint();
+            }
+            // The clamp moves a fraction after the draw, so the panels show the
+            // new width one frame later. The next call finds nothing short and
+            // returns false, so the repaints stop.
+            if keep_gallery_wide(&mut self.dock, tokens::GALLERY_MIN_WIDTH, separator) {
                 ui.ctx().request_repaint();
             }
         });

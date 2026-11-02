@@ -163,11 +163,11 @@ fn enter_applies_the_trimmed_name() {
     let mut preview = preview_with(vec![], &[]);
     let ctx = setup(&mut preview);
     open_input(&ctx, &mut preview);
-    frame(&ctx, &mut preview, vec![Event::Text("  blue  ".into())]);
+    frame(&ctx, &mut preview, vec![Event::Text("  cat  ".into())]);
     frame(&ctx, &mut preview, vec![key(Key::Enter)]);
     assert_eq!(
         preview.take_events(),
-        [PreviewEvent::TagApplied("blue".into())]
+        [PreviewEvent::TagApplied("cat".into())]
     );
     assert!(
         has(&frame(&ctx, &mut preview, vec![]), "+ add"),
@@ -176,14 +176,15 @@ fn enter_applies_the_trimmed_name() {
 }
 
 #[test]
-fn enter_on_a_blank_name_queues_nothing_and_closes_the_input() {
+fn enter_on_a_blank_name_queues_nothing_and_keeps_the_input_open() {
     let mut preview = preview_with(vec![], &[]);
     let ctx = setup(&mut preview);
     open_input(&ctx, &mut preview);
     frame(&ctx, &mut preview, vec![Event::Text("   ".into())]);
     frame(&ctx, &mut preview, vec![key(Key::Enter)]);
     assert_eq!(preview.take_events(), Vec::<PreviewEvent>::new());
-    assert!(has(&frame(&ctx, &mut preview, vec![]), "+ add"));
+    let texts = frame(&ctx, &mut preview, vec![]);
+    assert!(has(&texts, "Enter a tag name") && !has(&texts, "+ add"));
 }
 
 #[test]
@@ -218,3 +219,4 @@ fn the_default_state_is_closed() {
 
 mod layout;
 mod more;
+mod refusal;

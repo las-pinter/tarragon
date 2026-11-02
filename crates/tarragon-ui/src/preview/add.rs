@@ -6,6 +6,8 @@ use egui::{
     Sense, Stroke, StrokeKind, TextEdit, Ui, Vec2, text::LayoutJob, text_edit::TextEditState, vec2,
 };
 
+use tarragon_core::tag_name::{TagNameError, validate_tag_name};
+
 use self::menu_layout::{MENU_ROWS, SEPARATOR, menu_height};
 use super::PreviewEvent;
 use crate::popup::{menu_frame, menu_placement, row_frame, text_width};
@@ -32,6 +34,8 @@ pub enum AddState {
         /// Whether the input has asked for focus yet; losing focus before
         /// that is not a cancel.
         focused: bool,
+        /// Why Enter was refused; it clears when the text changes.
+        error: Option<TagNameError>,
     },
 }
 
@@ -136,6 +140,7 @@ pub fn show_menu(
                         next = Some(AddState::Input {
                             text: String::new(),
                             focused: false,
+                            error: None,
                         });
                     }
                     next
@@ -177,10 +182,16 @@ fn menu_row(ui: &mut Ui, text: &str, width: f32) -> Response {
     response
 }
 
-/// Draw the name input and its hint. Enter applies a non-empty trimmed name.
-/// Enter on a blank name, Escape, and losing focus close it with no event.
+/// Draw the name input and its hint. Enter applies a valid trimmed name. A
+/// refused name keeps the input open, focused, with the reason below it.
+/// Escape and losing focus close it with no event.
 pub fn show_input(ui: &mut Ui, id: Id, state: &mut AddState, events: &mut Vec<PreviewEvent>) {
-    let AddState::Input { text, focused } = state else {
+    let AddState::Input {
+        text,
+        focused,
+        error,
+    } = state
+    else {
         return;
     };
     if !*focused {
@@ -209,23 +220,46 @@ pub fn show_input(ui: &mut Ui, id: Id, state: &mut AddState, events: &mut Vec<Pr
         Stroke::new(tokens::STROKE_WIDTH, tokens::CORAL_STRONG),
         StrokeKind::Inside,
     );
+    // The refusal text takes the hint's place, so the layout does not jump.
+    let (note, color) = match error {
+        Some(error) => (error.to_string(), tokens::TAG_ERROR_TEXT),
+        None => (
+            "Press Enter to add. Escape or focus loss cancels.".to_owned(),
+            tokens::TEXT_MUTED,
+        ),
+    };
     ui.label(
-        egui::RichText::new("Press Enter to add. Escape or focus loss cancels.")
+        egui::RichText::new(note)
             .size(tokens::SIZE_SMALL)
-            .color(tokens::TEXT_MUTED),
+            .color(color),
     );
     if !*focused {
         response.request_focus();
         *focused = true;
         return;
     }
+    if response.changed() {
+        *error = None;
+    }
     if response.lost_focus() {
         let enter = ui.input(|i| i.key_pressed(Key::Enter));
-        let name = text.trim();
-        if enter && !name.is_empty() {
-            events.push(PreviewEvent::TagApplied(name.to_owned()));
+        if !enter {
+            *state = AddState::Closed;
+            return;
         }
-        *state = AddState::Closed;
+        match validate_tag_name(text) {
+            Ok(name) => {
+                events.push(PreviewEvent::TagApplied(name));
+                *state = AddState::Closed;
+            }
+            Err(refusal) => {
+                // Enter took the focus away; keep typing without a click.
+                response.request_focus();
+                *error = Some(refusal);
+                // The note above was drawn before this frame learned the error.
+                ui.ctx().request_repaint();
+            }
+        }
     }
 }
 

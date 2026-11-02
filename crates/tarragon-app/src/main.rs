@@ -11,6 +11,7 @@ mod logview;
 mod pipeline;
 mod run;
 mod sidebar;
+mod tags;
 #[cfg(test)]
 mod test_ui;
 mod thumbs;

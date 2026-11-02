@@ -21,6 +21,7 @@ use crate::logging::ring::LogRing;
 use crate::logview::LogCache;
 use crate::pipeline::{Config, Pipeline, Repaint};
 use crate::sidebar;
+use crate::tags;
 use crate::thumbs::{ExitWait, Thumbs};
 use crate::window;
 
@@ -66,6 +67,8 @@ pub struct App {
     close_when_loaded: bool,
     /// Lets `main` wait for the pipeline after the window closes.
     exit_wait: ExitWait,
+    /// The last selection revision the Preview tags were read for.
+    seen_selection: u64,
 }
 
 impl App {
@@ -129,6 +132,7 @@ impl App {
             repaint_ctx,
             close_when_loaded: startup.close_when_loaded,
             exit_wait: startup.exit_wait,
+            seen_selection: 0,
         })
     }
 
@@ -261,6 +265,12 @@ impl eframe::App for App {
             debug: self.debug,
         };
         let events = self.shell.show_with_log(ui, &view);
+        let revision = self.shell.selection_revision();
+        if tags::selection_changed(&mut self.seen_selection, revision) {
+            tags::refresh_preview(&mut self.shell, &self.db);
+            // The Preview was drawn before the refresh; egui repaints only on input.
+            ctx.request_repaint();
+        }
         // The folder open replaced the items, so a library reload follows it.
         if self.shell.gallery_mut().scope() == Scope::All {
             self.thumbs.show_library();

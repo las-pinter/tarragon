@@ -90,7 +90,7 @@ fn item_path(stored: &str) -> PathBuf {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use std::collections::{BTreeSet, HashSet};
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicU64, Ordering};
@@ -103,7 +103,7 @@ mod tests {
     use super::filter_paths;
 
     /// A temporary folder, unique per call, removed on drop.
-    pub(super) struct TempDir(PathBuf);
+    pub(crate) struct TempDir(PathBuf);
 
     impl Drop for TempDir {
         fn drop(&mut self) {
@@ -115,7 +115,7 @@ mod tests {
     ///
     /// `a`: night, red, transparent. `b`: night, red. `c`: night, blue.
     /// `d`: red, transparent. `e`: none.
-    pub(super) fn seeded() -> (Database, TempDir) {
+    pub(crate) fn seeded() -> (Database, TempDir) {
         static NEXT: AtomicU64 = AtomicU64::new(0);
         let id = NEXT.fetch_add(1, Ordering::Relaxed);
         let dir = TempDir(

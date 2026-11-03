@@ -1,6 +1,6 @@
 //! Tag and file-tag reads and writes.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 
 use rusqlite::{OptionalExtension, params};
@@ -314,5 +314,23 @@ impl Database {
         }
         tx.commit()?;
         Ok(inserted)
+    }
+
+    /// Return every path that has at least one `auto_color` association.
+    ///
+    /// Paths are returned as stored: normalized, with `/` separators. The set
+    /// can hold one entry per library file, so call this off the UI thread.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DbError::Sqlite`] when the statement fails. Returns
+    /// [`DbError::LockPoisoned`] after a panic poisoned the lock.
+    pub fn auto_colored_paths(&self) -> Result<HashSet<String>, DbError> {
+        let conn = self.lock()?;
+        let mut stmt = conn.prepare("SELECT DISTINCT path FROM file_tags WHERE source = ?1")?;
+        let paths = stmt
+            .query_map(params![TagSource::AutoColor.as_str()], |row| row.get(0))?
+            .collect::<Result<HashSet<String>, _>>()?;
+        Ok(paths)
     }
 }

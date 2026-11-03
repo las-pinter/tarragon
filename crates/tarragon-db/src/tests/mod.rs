@@ -3,6 +3,7 @@
 //! Every test uses a temporary database file. WAL needs a file, so the tests
 //! do not use an in-memory database.
 
+mod auto_colored;
 mod favorites;
 mod filter;
 mod folder;

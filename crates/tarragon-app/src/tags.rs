@@ -11,6 +11,8 @@ use tarragon_ui::preview::{ColorState, Preview, TagPill};
 
 mod events;
 pub use events::apply_preview_events;
+mod manager;
+pub use manager::apply_manager_events;
 
 /// What one refresh reads: the tags of the selected paths, then every tag.
 type Read = (HashMap<String, Vec<Tag>>, Vec<TagUsage>);

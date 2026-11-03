@@ -286,6 +286,9 @@ impl eframe::App for App {
         if tags::apply_preview_events(&mut self.shell, &self.db) {
             ctx.request_repaint();
         }
+        if tags::apply_manager_events(&mut self.shell, &self.db) {
+            ctx.request_repaint();
+        }
         if filtering::update(self.shell.gallery_mut(), &self.db) {
             ctx.request_repaint();
         }

@@ -38,6 +38,23 @@ pub fn frame(ctx: &Context, events: Vec<Event>, run: &mut impl FnMut(&mut Ui)) -
     painted
 }
 
+/// Open the Manage tags window from the Filter Tags menu and return the texts
+/// of the settled frame. The filter lists must hold a tag, or the menu is empty.
+pub fn open_manager(ctx: &Context, run: &mut impl FnMut(&mut Ui)) -> Vec<String> {
+    // A menu that is open already must not be toggled shut.
+    let menu_open = frame(ctx, Vec::new(), run)
+        .texts
+        .iter()
+        .any(|t| t.0 == "Manage tags...");
+    if !menu_open {
+        click_text(ctx, "Filter Tags", run);
+    }
+    click_text(ctx, "Manage tags...", run);
+    frame(ctx, Vec::new(), run);
+    let last = frame(ctx, Vec::new(), run);
+    last.texts.into_iter().map(|t| t.0).collect()
+}
+
 /// Click the lowest text with this label, then draw once more. Returns the
 /// texts of that last frame.
 pub fn click_text(ctx: &Context, label: &str, run: &mut impl FnMut(&mut Ui)) -> Vec<String> {

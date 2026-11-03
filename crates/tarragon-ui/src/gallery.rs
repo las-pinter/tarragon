@@ -5,7 +5,6 @@
 //! items; the scope and name filters run when a filter input changes.
 
 use std::collections::{HashMap, HashSet};
-use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
@@ -20,6 +19,7 @@ use crate::tag_manager::TagManager;
 pub use crate::tag_manager::{TagManagerEvent, TagRow};
 use crate::tokens;
 
+mod info;
 mod manager;
 mod selected;
 pub(crate) mod strip;
@@ -440,31 +440,6 @@ impl Gallery {
                 .filter_result
                 .as_ref()
                 .is_none_or(|set| set.contains(&item.path))
-    }
-
-    /// The scope name for the info bar: the folder name, or `All Images`.
-    fn scope_name(&self) -> String {
-        match self.scope {
-            Scope::All => Scope::All.label().to_owned(),
-            Scope::Folder => self
-                .folder
-                .as_deref()
-                .and_then(Path::file_name)
-                .and_then(|name| name.to_str())
-                .map_or_else(|| "No folder".to_owned(), ToOwned::to_owned),
-        }
-    }
-
-    /// The info bar text: scope name, file count, and selection count.
-    fn info_text(&self) -> String {
-        let count = self.visible.len();
-        let noun = if count == 1 { "file" } else { "files" };
-        let mut text = format!("{} - {count} {noun}", self.scope_name());
-        let selected = self.selection.len();
-        if selected > 0 {
-            let _ = write!(text, " - {selected} selected");
-        }
-        text
     }
 
     /// Draw the filtered items through the virtual grid.

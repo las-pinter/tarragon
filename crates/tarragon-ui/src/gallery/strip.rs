@@ -120,7 +120,6 @@ impl Gallery {
     /// Draw the info bar, the filter pill, and the sort pills. Returns the
     /// picked sort mode.
     fn sort_segment(&self, ui: &mut Ui) -> Option<SortMode> {
-        let info = self.info_text();
         let mut picked = None;
         ui.horizontal(|ui| {
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
@@ -146,6 +145,7 @@ impl Gallery {
                 );
                 // The info text takes the width that the controls leave.
                 ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
+                    let info = self.info_text_fitted(ui, ui.available_width());
                     let text = RichText::new(info)
                         .size(tokens::SIZE_CAPTION)
                         .color(tokens::TEXT_MUTED);

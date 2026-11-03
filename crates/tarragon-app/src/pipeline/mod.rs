@@ -11,6 +11,7 @@
 
 mod job;
 mod library;
+mod prune;
 mod queue;
 mod worker;
 mod writer;
@@ -169,6 +170,8 @@ impl Results {
 /// should drop the pipeline on another thread.
 pub struct Pipeline {
     db: Arc<Database>,
+    /// The cache root. A cache file is removed only inside it.
+    cache_root: PathBuf,
     queue: Arc<JobQueue>,
     generation: Arc<AtomicU64>,
     failures: Failures,
@@ -211,6 +214,7 @@ impl Pipeline {
 
         let mut pipeline = Self {
             db: Arc::clone(&db),
+            cache_root: config.cache.root().to_path_buf(),
             queue: Arc::clone(&queue),
             generation: Arc::clone(&generation),
             failures: Arc::clone(&failures),
@@ -256,7 +260,9 @@ impl Pipeline {
     /// It returns the new generation and the files. Jobs of the old folder are
     /// dropped.
     ///
-    /// The scan and the row write run on the calling thread.
+    /// The scan and the row write run on the calling thread. Stored rows and
+    /// cache files of direct-child files that are no longer in the folder are
+    /// deleted; their tags stay. A scan that finds no files deletes nothing.
     ///
     /// # Errors
     ///
@@ -277,6 +283,9 @@ impl Pipeline {
             .into_iter()
             .map(|row| (row.path.clone(), row))
             .collect();
+        // An empty scan prunes nothing: a missing folder and an unmounted
+        // mount point both scan as empty.
+        prune::prune_missing(&self.db, &self.cache_root, folder, &rows, &files);
         let color_state = ColorState::read(&self.db);
         let folder_name = folder.file_name().map_or_else(
             || "root".to_owned(),

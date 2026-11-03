@@ -5,7 +5,7 @@ use egui::{Grid, RichText, Ui, vec2};
 use crate::tokens;
 
 /// The text for a value that is not known.
-const UNKNOWN: &str = "Unknown";
+pub const UNKNOWN: &str = "Unknown";
 
 /// The unit names, each 1024 times the one before.
 const UNITS: [&str; 4] = ["B", "KB", "MB", "GB"];

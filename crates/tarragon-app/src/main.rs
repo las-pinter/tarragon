@@ -15,6 +15,11 @@ mod pipeline;
     expect(dead_code, reason = "no code in the binary calls it")
 )]
 mod preview_loader;
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "no code in the binary calls it")
+)]
+mod preview_source;
 mod run;
 mod sidebar;
 mod storewatch;

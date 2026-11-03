@@ -20,7 +20,7 @@ mod tags;
 mod test_support;
 pub use colors::{ColorState, ColorStates};
 pub use image::PreviewImage;
-pub use meta::Meta;
+pub use meta::{Meta, UNKNOWN};
 pub use tags::TagPill;
 
 /// The hint shown while nothing is selected.

@@ -267,6 +267,13 @@ impl Thumbs {
         self.synced = Some(revision);
     }
 
+    /// The writer's store epoch. A change means new rows or colour tags are
+    /// committed.
+    #[must_use]
+    pub fn store_epoch(&self) -> u64 {
+        self.results.store_epoch()
+    }
+
     /// True when the gallery holds the whole library.
     #[must_use]
     pub fn library_loaded(&self) -> bool {

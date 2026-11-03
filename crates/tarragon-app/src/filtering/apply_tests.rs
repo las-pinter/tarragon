@@ -1,16 +1,18 @@
 //! Tests for applying a filter change to the gallery.
 
-use std::collections::HashSet;
+use std::cell::Cell;
+use std::collections::{BTreeSet, HashSet};
 use std::path::PathBuf;
 
 use eframe::egui::{Context, Ui};
+use tarragon_core::filter_state::{FilterScope, FilterState};
 use tarragon_core::sorting::SortMode;
 use tarragon_db::{Database, DbError};
 use tarragon_ui::gallery::{Gallery, Scope};
 use tarragon_ui::grid::GridItem;
 
 use super::tests::seeded;
-use super::{apply_change, apply_with};
+use super::{apply_change, apply_with, filter_with};
 use crate::logging::ring::{LogRing, RingLayer};
 use crate::test_ui::click_text;
 
@@ -65,6 +67,27 @@ fn the_pill_count_follows_each_change() {
     assert!(on.contains(&"1 filter active".to_owned()));
     let off = toggle_night(&ctx, &mut gallery, &db, false);
     assert!(!off.iter().any(|t| t.ends_with("active")));
+}
+
+#[test]
+fn a_refresh_with_no_filter_runs_no_query_and_with_a_filter_runs_one() {
+    let (_ctx, mut gallery) = setup();
+    let queries = Cell::new(0);
+    let read = |_: &FilterState| {
+        queries.set(queries.get() + 1);
+        Ok(Vec::new())
+    };
+    gallery.refresh_filter();
+    assert!(apply_with(&mut gallery, |s, scope| filter_with(
+        s, scope, read
+    )));
+    assert_eq!(queries.get(), 0);
+    let tagged = FilterState {
+        tags: BTreeSet::from(["night".to_owned()]),
+        ..FilterState::default()
+    };
+    assert!(filter_with(&tagged, FilterScope::Global, read).is_ok());
+    assert_eq!(queries.get(), 1);
 }
 
 #[test]

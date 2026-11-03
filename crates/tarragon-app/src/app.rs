@@ -3,7 +3,7 @@
 use std::error::Error;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use eframe::egui::{Context, Ui, ViewportCommand};
 use tarragon_cache::store::CacheStore;
@@ -21,6 +21,7 @@ use crate::logging::ring::LogRing;
 use crate::logview::LogCache;
 use crate::pipeline::{Config, Pipeline, Repaint};
 use crate::sidebar;
+use crate::storewatch::StoreWatch;
 use crate::tags;
 use crate::thumbs::{ExitWait, Thumbs};
 use crate::window;
@@ -69,6 +70,8 @@ pub struct App {
     exit_wait: ExitWait,
     /// The last selection revision the Preview tags were read for.
     seen_selection: u64,
+    /// Limits how often a changed store epoch makes the app read again.
+    store_watch: StoreWatch,
 }
 
 impl App {
@@ -133,6 +136,7 @@ impl App {
             close_when_loaded: startup.close_when_loaded,
             exit_wait: startup.exit_wait,
             seen_selection: 0,
+            store_watch: StoreWatch::default(),
         })
     }
 
@@ -188,6 +192,22 @@ impl App {
             if let Err(error) = settings.set(SettingKey::DebugMode, SettingValue::Bool(debug)) {
                 tracing::warn!("cannot save the debug setting: {error}");
             }
+        }
+    }
+
+    /// Read the Preview and re-run an active filter when the writer committed
+    /// since the last read, at most once per [`crate::storewatch::INTERVAL`].
+    ///
+    /// A change held back by the throttle schedules a repaint, so the poll
+    /// runs again without input.
+    fn watch_store(&mut self, ctx: &Context, epoch: u64, now: Instant) {
+        if self.store_watch.poll(epoch, now) {
+            tags::refresh_preview(&mut self.shell, &self.db);
+            // An empty filter returns early, so no query runs without one.
+            self.shell.gallery_mut().refresh_filter();
+            ctx.request_repaint();
+        } else if let Some(left) = self.store_watch.wait(epoch, now) {
+            ctx.request_repaint_after(left);
         }
     }
 
@@ -289,6 +309,7 @@ impl eframe::App for App {
         if tags::apply_manager_events(&mut self.shell, &self.db) {
             ctx.request_repaint();
         }
+        self.watch_store(&ctx, self.thumbs.store_epoch(), Instant::now());
         if filtering::update(self.shell.gallery_mut(), &self.db) {
             ctx.request_repaint();
         }
@@ -316,5 +337,7 @@ impl eframe::App for App {
 mod filter_tests;
 #[cfg(test)]
 mod library_tests;
+#[cfg(test)]
+mod store_tests;
 #[cfg(test)]
 mod tests;

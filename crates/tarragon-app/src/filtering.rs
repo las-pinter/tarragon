@@ -4,6 +4,7 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 
 use tarragon_core::filter_state::{FilterScope, FilterState};
+use tarragon_db::repository::Thumbnail;
 use tarragon_db::settings::{SettingKey, SettingValue, Settings};
 use tarragon_db::{Database, DbError};
 use tarragon_ui::gallery::Gallery;
@@ -26,6 +27,16 @@ pub fn filter_paths(
     state: &FilterState,
     scope: FilterScope,
 ) -> Result<Option<HashSet<PathBuf>>, DbError> {
+    filter_with(state, scope, |query| db.filter_thumbnails(query))
+}
+
+/// Like [`filter_paths`], with the database read as a parameter. The read does
+/// not run when no filter is active.
+fn filter_with(
+    state: &FilterState,
+    scope: FilterScope,
+    read: impl FnOnce(&FilterState) -> Result<Vec<Thumbnail>, DbError>,
+) -> Result<Option<HashSet<PathBuf>>, DbError> {
     let mut query = state.clone();
     query.text.clear();
     if scope == FilterScope::Folder {
@@ -34,7 +45,7 @@ pub fn filter_paths(
     if query.is_empty(scope) {
         return Ok(None);
     }
-    let rows = db.filter_thumbnails(&query)?;
+    let rows = read(&query)?;
     Ok(Some(rows.iter().map(|row| item_path(&row.path)).collect()))
 }
 

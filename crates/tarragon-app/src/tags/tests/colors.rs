@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use eframe::egui::{Color32, Context, RawInput, vec2};
+use eframe::egui::{Color32, Context};
 use tarragon_core::color::ColorBucket;
 use tarragon_core::entity::{Tag, TagSource};
 use tarragon_ui::preview::{ColorState, ColorStates, Preview};
@@ -79,28 +79,9 @@ fn an_empty_selection_gives_all_none() {
     assert_eq!(color_states(&HashMap::new(), 0), ColorStates::default());
 }
 
-/// The fill of each bucket square one frame paints.
-///
-/// The transparent square paints smaller checker cells, so 11 squares match,
-/// not 12.
+/// The fill of each bucket square one frame of the Preview paints.
 fn square_fills(ctx: &Context, preview: &mut Preview) -> Vec<Color32> {
-    use eframe::egui::epaint::Shape;
-    fn collect(shape: &Shape, found: &mut Vec<Color32>) {
-        match shape {
-            Shape::Vec(shapes) => shapes.iter().for_each(|s| collect(s, found)),
-            Shape::Rect(r) if r.rect.size() == vec2(swatch::SIZE, swatch::SIZE) => {
-                found.push(r.fill);
-            }
-            _ => {}
-        }
-    }
-    let out = ctx.run_ui(RawInput::default(), |ui| preview.show(ui));
-    let mut found = Vec::new();
-    for clipped in &out.shapes {
-        collect(&clipped.shape, &mut found);
-    }
-    out.drop_without_applying_deltas();
-    found
+    crate::test_ui::square_fills(ctx, &mut |ui| preview.show(ui))
 }
 
 #[test]

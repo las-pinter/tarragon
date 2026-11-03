@@ -12,6 +12,7 @@ mod logview;
 mod pipeline;
 mod run;
 mod sidebar;
+mod storewatch;
 mod tags;
 #[cfg(test)]
 mod test_ui;

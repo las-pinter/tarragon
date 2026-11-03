@@ -1,8 +1,10 @@
 //! Headless frame helpers for tests that drive the gallery UI.
 
 use eframe::egui::epaint::Shape;
-use eframe::egui::{Context, Event, Modifiers, PointerButton, Pos2, RawInput, Rect, Ui, vec2};
-use tarragon_ui::swatch::FILTER_SIZE;
+use eframe::egui::{
+    Color32, Context, Event, Modifiers, PointerButton, Pos2, RawInput, Rect, Ui, vec2,
+};
+use tarragon_ui::swatch::{self, FILTER_SIZE};
 
 /// What one frame painted.
 pub struct Painted {
@@ -36,6 +38,34 @@ pub fn frame(ctx: &Context, events: Vec<Event>, run: &mut impl FnMut(&mut Ui)) -
     }
     out.drop_without_applying_deltas();
     painted
+}
+
+/// The fill of each Preview colour square that one frame paints.
+///
+/// The transparent square paints smaller checker cells, so 11 squares match,
+/// not 12.
+pub fn square_fills(ctx: &Context, run: &mut impl FnMut(&mut Ui)) -> Vec<Color32> {
+    fn collect(shape: &Shape, found: &mut Vec<Color32>) {
+        match shape {
+            Shape::Vec(shapes) => shapes.iter().for_each(|s| collect(s, found)),
+            Shape::Rect(r) if r.rect.size() == vec2(swatch::SIZE, swatch::SIZE) => {
+                found.push(r.fill);
+            }
+            _ => {}
+        }
+    }
+    let screen = Rect::from_min_size(Pos2::ZERO, vec2(1200.0, 800.0));
+    let input = RawInput {
+        screen_rect: Some(screen),
+        ..Default::default()
+    };
+    let out = ctx.run_ui(input, |ui| run(ui));
+    let mut found = Vec::new();
+    for clipped in &out.shapes {
+        collect(&clipped.shape, &mut found);
+    }
+    out.drop_without_applying_deltas();
+    found
 }
 
 /// Open the Manage tags window from the Filter Tags menu and return the texts

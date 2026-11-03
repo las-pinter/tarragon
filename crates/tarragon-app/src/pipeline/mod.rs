@@ -114,14 +114,12 @@ pub struct Opened {
 pub struct Results {
     receiver: Receiver<ThumbResult>,
     generation: Arc<AtomicU64>,
-    #[cfg_attr(not(test), expect(dead_code, reason = "only tests read it"))]
     store_epoch: Arc<AtomicU64>,
 }
 
 impl Results {
     /// A count that goes up after each writer pass that stored data. A change
     /// means new rows or colour tags are committed.
-    #[cfg_attr(not(test), expect(dead_code, reason = "only tests call it"))]
     #[must_use]
     pub fn store_epoch(&self) -> u64 {
         self.store_epoch.load(Ordering::Acquire)

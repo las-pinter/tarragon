@@ -441,3 +441,35 @@ later rescan step removes their rows. The Python application behaves the same.
 
 Reason: the rows give the library without a scan of every folder. A scan of
 100,000 files would be slow.
+
+## Tag manager and tag rules
+
+Before: no mockup shows how to rename or delete a tag.
+`design/mockups/tag-edit.html` shows only "Create new..." and its input.
+
+After: a "Manage tags..." row sits at the bottom of the Filter Tags menu, under
+a separator. A click closes the menu and opens a small window inside the app
+window. The window lists the user tags in name order with their image counts.
+Each row has an inline Rename and Delete. "Create new..." stays in the Preview
+add menu.
+
+- Name rules: a name is trimmed, must not be empty, and may have at most 64
+  characters. Names compare with case, so `Cat` and `cat` are two tags. The
+  eleven colour names and `transparent` are refused for create and rename,
+  in any case. The manager and the Preview "Create new..." input show the
+  reason inline.
+- Rename: Enter commits and the first Escape cancels. A name that another tag
+  uses is refused with "name already used". Tags never merge. The tag keeps its
+  images, and an active filter chip keeps its place with the new name. A rename
+  of a tag that no longer exists drops its row.
+- Delete: the row asks "Delete 'x' from N images?" with Delete and Cancel, or
+  "Delete 'x'?" when the count is 0. The first Escape cancels the question. Delete removes the tag from every file, and
+  its filter chip goes. A failed delete shows a message on its row in place of
+  the count.
+- Only user tags can be renamed or deleted. The colour tags and `transparent`
+  cannot.
+- Escape: with no rename field or delete question open, one Escape closes the
+  window and any open filter menu together.
+
+Reason: the owner asked for rename and delete. A colour name as a user tag
+would clash with the colour tags.

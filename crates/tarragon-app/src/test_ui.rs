@@ -2,7 +2,7 @@
 
 use eframe::egui::epaint::Shape;
 use eframe::egui::{
-    Color32, Context, Event, Modifiers, PointerButton, Pos2, RawInput, Rect, Ui, vec2,
+    Color32, Context, Event, Modifiers, PointerButton, Pos2, RawInput, Rect, TextureId, Ui, vec2,
 };
 use tarragon_ui::swatch::{self, FILTER_SIZE};
 
@@ -12,6 +12,8 @@ pub struct Painted {
     pub texts: Vec<(String, Pos2)>,
     /// How many colour swatches.
     pub swatches: usize,
+    /// How many shapes draw a loaded texture.
+    pub pictures: usize,
 }
 
 /// Draw one frame with `events`.
@@ -26,10 +28,13 @@ pub fn frame(ctx: &Context, events: Vec<Event>, run: &mut impl FnMut(&mut Ui)) -
     let mut painted = Painted {
         texts: Vec::new(),
         swatches: 0,
+        pictures: 0,
     };
     for clipped in &out.shapes {
         match &clipped.shape {
             Shape::Text(t) => painted.texts.push((t.galley.text().to_owned(), t.pos)),
+            Shape::Mesh(m) if m.texture_id != TextureId::default() => painted.pictures += 1,
+            Shape::Rect(r) if r.brush.is_some() => painted.pictures += 1,
             Shape::Rect(r) if r.rect.size() == vec2(FILTER_SIZE, FILTER_SIZE) => {
                 painted.swatches += 1;
             }

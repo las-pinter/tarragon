@@ -10,20 +10,8 @@ mod instance;
 mod logging;
 mod logview;
 mod pipeline;
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "no code in the binary calls it")
-)]
 mod preview_feed;
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "no code in the binary calls it")
-)]
 mod preview_loader;
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "no code in the binary calls it")
-)]
 mod preview_source;
 mod run;
 mod sidebar;

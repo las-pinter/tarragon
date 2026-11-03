@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 
-use eframe::egui::{Context, Ui, ViewportCommand};
+use eframe::egui::{Context, TextureHandle, Ui, ViewportCommand};
 use tarragon_cache::store::CacheStore;
 use tarragon_db::Database;
 use tarragon_db::settings::{SettingKey, SettingValue, Settings, SettingsError, WindowState};
@@ -20,6 +20,9 @@ use crate::logging::LogControl;
 use crate::logging::ring::LogRing;
 use crate::logview::LogCache;
 use crate::pipeline::{Config, Pipeline, Repaint};
+use crate::preview_feed::PreviewFeed;
+use crate::preview_loader::PreviewLoader;
+use crate::preview_source;
 use crate::sidebar;
 use crate::storewatch::StoreWatch;
 use crate::tags;
@@ -29,6 +32,9 @@ use crate::window;
 /// How often the open Log panel looks for new lines. The ring cannot wake the
 /// UI, and egui otherwise repaints only on input.
 const LOG_REFRESH: Duration = Duration::from_millis(250);
+
+/// The mosaic size when the `max_multi_preview` setting cannot be read.
+const DEFAULT_MULTI_PREVIEW: usize = 9;
 
 /// What the command line asked for.
 pub struct Startup {
@@ -72,6 +78,14 @@ pub struct App {
     seen_selection: u64,
     /// Limits how often a changed store epoch makes the app read again.
     store_watch: StoreWatch,
+    /// The Preview textures and the plan for the selection.
+    preview_feed: PreviewFeed<TextureHandle>,
+    /// The thread that decodes Preview pictures. Dropping the app joins it.
+    preview_loader: PreviewLoader,
+    /// How many pictures the Preview mosaic shows at most, read once at start.
+    max_multi_preview: usize,
+    /// How many files the last Preview read selected.
+    preview_total: usize,
 }
 
 impl App {
@@ -122,6 +136,9 @@ impl App {
         sidebar::init(&mut shell, &db, home.as_deref(), folder.as_deref());
         let repaint_ctx = Arc::new(OnceLock::new());
         let thumbs = start_thumbs(path, &db, folder, &repaint_ctx)?;
+        let preview_loader = PreviewLoader::new(repaint_of(&repaint_ctx))?;
+        let max_multi_preview = max_multi_preview(&db);
+        shell.preview_mut().set_max_multi_preview(max_multi_preview);
         Ok(Self {
             db,
             window_state,
@@ -137,6 +154,10 @@ impl App {
             exit_wait: startup.exit_wait,
             seen_selection: 0,
             store_watch: StoreWatch::default(),
+            preview_feed: PreviewFeed::new(),
+            preview_loader,
+            max_multi_preview,
+            preview_total: 0,
         })
     }
 
@@ -203,12 +224,29 @@ impl App {
     fn watch_store(&mut self, ctx: &Context, epoch: u64, now: Instant) {
         if self.store_watch.poll(epoch, now) {
             tags::refresh_preview(&mut self.shell, &self.db);
+            self.feed_preview();
             // An empty filter returns early, so no query runs without one.
             self.shell.gallery_mut().refresh_filter();
             ctx.request_repaint();
         } else if let Some(left) = self.store_watch.wait(epoch, now) {
             ctx.request_repaint_after(left);
         }
+    }
+
+    /// Read the selection from the database and plan its Preview pictures.
+    /// An empty selection clears the details and the pictures.
+    fn feed_preview(&mut self) {
+        let selected = self.shell.selected_paths();
+        if selected.is_empty() {
+            self.preview_total = 0;
+            self.shell.preview_mut().set_meta(None);
+            self.preview_feed.forget_all();
+            return;
+        }
+        let source = preview_source::read(&self.db, &selected, self.max_multi_preview);
+        self.preview_total = source.total;
+        self.shell.preview_mut().set_meta(source.meta.clone());
+        self.preview_feed.select(&source, &self.preview_loader);
     }
 
     /// Write the maximized flag, dock layout, and sort mode to the database.
@@ -236,16 +274,33 @@ fn start_thumbs(
             SettingValue::None
         });
     let cache = CacheStore::new(data_dir::cache_root(db_path, &setting));
-    let ctx = Arc::clone(repaint_ctx);
-    // Before the window exists there is nothing to repaint.
-    let repaint: Repaint = Arc::new(move || {
-        if let Some(ctx) = ctx.get() {
-            ctx.request_repaint();
-        }
-    });
+    let repaint = repaint_of(repaint_ctx);
     let (pipeline, results) =
         Pipeline::new(Config::new(cache), Arc::clone(db), Arc::clone(&repaint))?;
     Ok(Thumbs::new(pipeline, results, folder, repaint))
+}
+
+/// A callback that repaints the window once it exists.
+fn repaint_of(repaint_ctx: &Arc<OnceLock<Context>>) -> Repaint {
+    let ctx = Arc::clone(repaint_ctx);
+    // Before the window exists there is nothing to repaint.
+    Arc::new(move || {
+        if let Some(ctx) = ctx.get() {
+            ctx.request_repaint();
+        }
+    })
+}
+
+/// The `max_multi_preview` setting. A failed read logs and gives the default.
+fn max_multi_preview(db: &Database) -> usize {
+    match Settings::new(db).get(SettingKey::MaxMultiPreview) {
+        Ok(SettingValue::Int(cap)) => usize::try_from(cap).unwrap_or(DEFAULT_MULTI_PREVIEW),
+        Ok(_) => DEFAULT_MULTI_PREVIEW,
+        Err(error) => {
+            tracing::warn!("cannot read the multi preview setting: {error}");
+            DEFAULT_MULTI_PREVIEW
+        }
+    }
 }
 
 /// Raise the window when a second start asked for it.
@@ -288,7 +343,16 @@ impl eframe::App for App {
         let revision = self.shell.selection_revision();
         if tags::selection_changed(&mut self.seen_selection, revision) {
             tags::refresh_preview(&mut self.shell, &self.db);
+            self.feed_preview();
             // The Preview was drawn before the refresh; egui repaints only on input.
+            ctx.request_repaint();
+        }
+        let preview = self.shell.preview_mut();
+        let total = self.preview_total;
+        if self
+            .preview_feed
+            .poll(&ctx, &self.preview_loader, preview, total)
+        {
             ctx.request_repaint();
         }
         // The folder open replaced the items, so a library reload follows it.
@@ -337,6 +401,8 @@ impl eframe::App for App {
 mod filter_tests;
 #[cfg(test)]
 mod library_tests;
+#[cfg(test)]
+mod preview_tests;
 #[cfg(test)]
 mod store_tests;
 #[cfg(test)]

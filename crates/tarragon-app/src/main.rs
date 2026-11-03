@@ -10,6 +10,11 @@ mod instance;
 mod logging;
 mod logview;
 mod pipeline;
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "no code in the binary calls it")
+)]
+mod preview_loader;
 mod run;
 mod sidebar;
 mod storewatch;

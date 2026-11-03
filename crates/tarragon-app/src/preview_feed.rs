@@ -1,14 +1,18 @@
 //! The Preview textures that are held, and which ones a selection must load.
-//! It has no egui calls, so tests run it without a window.
+//! The plan has no egui calls. Only the `impl PreviewFeed<TextureHandle>`
+//! block uploads textures, and it runs on a headless `Context` in tests.
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
+use eframe::egui::{Context, TextureHandle, TextureOptions};
 use tarragon_ui::preview::budget::PreviewTextures;
+use tarragon_ui::preview::{Preview, PreviewImage};
 use tarragon_ui::texture_budget::PREVIEW_BUDGET_BYTES;
 
-use crate::preview_loader::{LoadItem, PreviewLoader};
+use crate::preview_loader::{LoadItem, Loaded, PreviewLoader};
 use crate::preview_source::Source;
+use crate::thumbs::color_image;
 
 /// The held Preview textures and the plan for the current selection.
 /// `T` is the texture handle.
@@ -27,6 +31,8 @@ pub(crate) struct PreviewFeed<T> {
     wanted: Vec<PathBuf>,
     /// The byte budget, kept to build a fresh model in `forget_all`.
     capacity: usize,
+    /// Whether the Preview must be given the held pictures again.
+    dirty: bool,
 }
 
 impl<T> PreviewFeed<T> {
@@ -44,6 +50,7 @@ impl<T> PreviewFeed<T> {
             revision: 0,
             wanted: Vec::new(),
             capacity,
+            dirty: false,
         }
     }
 
@@ -96,6 +103,7 @@ impl<T> PreviewFeed<T> {
             });
         }
         self.wanted = plan.items.into_iter().map(|planned| planned.key).collect();
+        self.dirty = true;
         if !requests.is_empty() {
             self.revision += 1;
             loader.request(self.revision, requests);
@@ -119,8 +127,97 @@ impl<T> PreviewFeed<T> {
         self.held.clear();
         self.pending.clear();
         self.wanted.clear();
+        self.dirty = true;
     }
 }
 
+impl PreviewFeed<TextureHandle> {
+    /// Upload the pictures the loader finished and show the selection in
+    /// `preview`. `total` is the number of selected images. Returns whether
+    /// the Preview was given pictures, so the caller can request a repaint.
+    pub(crate) fn poll(
+        &mut self,
+        ctx: &Context,
+        loader: &PreviewLoader,
+        preview: &mut Preview,
+        total: usize,
+    ) -> bool {
+        for loaded in loader.poll() {
+            self.apply(ctx, loaded);
+        }
+        if !self.dirty {
+            return false;
+        }
+        self.dirty = false;
+        self.show(preview, total);
+        true
+    }
+
+    /// Take one result. Returns whether a texture was stored. A result of the
+    /// current request, good or failed, marks the Preview for a refresh.
+    fn apply(&mut self, ctx: &Context, loaded: Loaded) -> bool {
+        // A result of an older request must not upload or touch the plan.
+        if loaded.revision != self.revision {
+            return false;
+        }
+        let Some(&planned) = self.pending.get(&loaded.key) else {
+            return false;
+        };
+        self.dirty = true;
+        match loaded.image {
+            Ok(image) => {
+                let name = format!("preview:{}", loaded.key.display());
+                let handle = ctx.load_texture(name, color_image(&image), TextureOptions::LINEAR);
+                self.accept(&loaded.key, planned, handle)
+            }
+            Err(error) => {
+                tracing::warn!("cannot show {}: {error}", loaded.key.display());
+                // Left pending, every later select would decode the file again.
+                self.pending.remove(&loaded.key);
+                self.textures.remove(&loaded.key);
+                false
+            }
+        }
+    }
+
+    /// Give `preview` the held pictures of the selection, in order.
+    fn show(&self, preview: &mut Preview, total: usize) {
+        let images: Vec<_> = self
+            .wanted
+            .iter()
+            .filter_map(|key| self.held.get(key))
+            .map(|handle| {
+                let [width, height] = handle.size();
+                PreviewImage {
+                    texture: handle.id(),
+                    size: (
+                        u32::try_from(width).unwrap_or(u32::MAX),
+                        u32::try_from(height).unwrap_or(u32::MAX),
+                    ),
+                }
+            })
+            .collect();
+        let (image, mosaic, total) = route(images, total);
+        preview.set_image(image);
+        preview.set_mosaic(mosaic, total);
+    }
+}
+
+/// Split the ready pictures into what the Preview takes: the single picture,
+/// the mosaic pictures, and the selected count. One image goes to the single
+/// picture, two or more to the mosaic.
+fn route(
+    images: Vec<PreviewImage>,
+    total: usize,
+) -> (Option<PreviewImage>, Vec<PreviewImage>, usize) {
+    match total {
+        0 => (None, Vec::new(), 0),
+        1 => (images.first().copied(), Vec::new(), 1),
+        _ => (None, images, total),
+    }
+}
+
+#[cfg(test)]
+mod poll_tests;
 #[cfg(test)]
 mod tests;

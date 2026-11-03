@@ -476,7 +476,7 @@ impl Thumbs {
 }
 
 /// Convert a thumbnail to an egui image. The pixels are not premultiplied.
-fn color_image(image: &RgbaImage) -> ColorImage {
+pub(crate) fn color_image(image: &RgbaImage) -> ColorImage {
     let size = [image.width() as usize, image.height() as usize];
     ColorImage::from_rgba_unmultiplied(size, image.as_raw())
 }

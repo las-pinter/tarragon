@@ -4,6 +4,7 @@ use tarragon_core::color::TRANSPARENT_TAG;
 use tarragon_db::Database;
 use tarragon_db::settings::{SettingKey, SettingValue, Settings};
 use tarragon_render::color::{ColorTagConfig, ColorTags};
+use tarragon_ui::swatch::Swatch;
 
 use crate::filtering::colors_enabled;
 
@@ -44,6 +45,14 @@ pub fn tag_names(tags: &ColorTags) -> Vec<String> {
         names.push(TRANSPARENT_TAG.to_owned());
     }
     names
+}
+
+/// Return the tag name of one colour square.
+pub fn swatch_name(swatch: Swatch) -> &'static str {
+    match swatch {
+        Swatch::Bucket(bucket) => bucket.as_str(),
+        Swatch::Transparent => TRANSPARENT_TAG,
+    }
 }
 
 /// Read one setting, and log it when it cannot be read.

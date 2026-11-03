@@ -4,7 +4,9 @@ use tarragon_core::color::ColorBucket;
 use tarragon_db::settings::{SettingKey, SettingValue, Settings};
 use tarragon_render::color::{ColorTagConfig, ColorTags};
 
-use super::{read_config, tag_names};
+use tarragon_ui::swatch::Swatch;
+
+use super::{read_config, swatch_name, tag_names};
 use crate::filtering::tests::seeded;
 
 #[test]
@@ -54,6 +56,15 @@ fn tag_names_follow_the_bucket_order_then_transparent() {
         transparent: true,
     };
     assert_eq!(tag_names(&tags), ["red", "blue", "transparent"]);
+}
+
+#[test]
+fn swatch_names_are_the_bucket_names_then_transparent() {
+    let names: Vec<&str> = Swatch::ALL.into_iter().map(swatch_name).collect();
+    assert_eq!(names.len(), 12);
+    assert_eq!(names[0], "red");
+    assert_eq!(names[10], "neutral");
+    assert_eq!(names[11], "transparent");
 }
 
 #[test]

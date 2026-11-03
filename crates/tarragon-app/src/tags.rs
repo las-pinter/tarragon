@@ -7,7 +7,11 @@ use tarragon_core::entity::{Tag, TagSource};
 use tarragon_db::repository::TagUsage;
 use tarragon_db::{Database, DbError};
 use tarragon_ui::Shell;
-use tarragon_ui::preview::{ColorState, Preview, TagPill};
+use tarragon_ui::preview::{ColorState, ColorStates, Preview, TagPill};
+use tarragon_ui::swatch::Swatch;
+
+use crate::colortags::swatch_name;
+use crate::filtering::colors_enabled;
 
 mod events;
 pub use events::apply_preview_events;
@@ -31,23 +35,28 @@ pub fn selection_changed(seen: &mut u64, revision: u64) -> bool {
 /// keeps what it had.
 pub fn refresh_preview(shell: &mut Shell, db: &Database) {
     let paths = shell.selected_paths();
-    refresh_with(shell.preview_mut(), &paths, |stored| {
+    let enabled = colors_enabled(db);
+    refresh_with(shell.preview_mut(), &paths, enabled, |stored| {
         Ok((db.tags_for_files(stored)?, db.all_tags()?))
     });
 }
 
-/// Like [`refresh_preview`], with the read as a parameter.
+/// Like [`refresh_preview`], with the colour setting and the read as
+/// parameters.
 fn refresh_with(
     preview: &mut Preview,
     paths: &[PathBuf],
+    colors_enabled: bool,
     read: impl FnOnce(&[String]) -> Result<Read, DbError>,
 ) {
+    preview.set_colors_enabled(colors_enabled);
     let stored: Vec<String> = paths
         .iter()
         .map(|path| path.to_string_lossy().into_owned())
         .collect();
     match read(&stored) {
         Ok((by_file, all)) => {
+            preview.set_colors(color_states(&by_file, stored.len()));
             preview.set_tags(pills(&by_file, stored.len()));
             preview.set_known_tags(known_tags(all));
         }
@@ -83,6 +92,32 @@ fn pills(by_file: &HashMap<String, Vec<Tag>>, total: usize) -> Vec<TagPill> {
             },
         })
         .collect()
+}
+
+/// How many selected files carry each colour, in `Swatch::ALL` order.
+///
+/// Only `AutoColor` rows count, so a user tag with a colour name changes
+/// nothing. `total` is how many files were asked for.
+fn color_states(by_file: &HashMap<String, Vec<Tag>>, total: usize) -> ColorStates {
+    let mut states = ColorStates::default();
+    for (state, swatch) in states.iter_mut().zip(Swatch::ALL) {
+        let name = swatch_name(swatch);
+        let count = by_file
+            .values()
+            .filter(|tags| {
+                tags.iter()
+                    .any(|tag| tag.source == TagSource::AutoColor && tag.name == name)
+            })
+            .count();
+        *state = if count == 0 {
+            ColorState::None
+        } else if count == total {
+            ColorState::All
+        } else {
+            ColorState::Some
+        };
+    }
+    states
 }
 
 /// The names of the user tags, in name order. Colour tags are not offered.

@@ -11,6 +11,8 @@ use image::{DynamicImage, Rgba, RgbaImage};
 use tarragon_cache::store::CacheStore;
 use tarragon_db::Database;
 use tarragon_db::repository::ThumbnailWrite;
+use tarragon_db::settings::{SettingKey, SettingValue, Settings};
+use tarragon_render::color::{ColorTagConfig, ColorTags};
 
 use super::writer::Message;
 use super::{Config, RESULT_BOUND, RenderFn, Repaint};
@@ -787,6 +789,122 @@ fn a_failed_colors_message_does_not_stop_the_writer() {
     rig.flush();
     assert_eq!(color_names(&db, "/a/two.png"), ["blue"]);
     assert_eq!(rig.epoch(), 1);
+}
+
+/// Write a 10 by 10 red PNG whose first `clear_rows` rows are clear.
+///
+/// The red is not full value, because full value counts as neutral.
+fn write_red(path: &Path, clear_rows: u32) {
+    let image = RgbaImage::from_fn(10, 10, |_, y| {
+        Rgba([200, 20, 20, if y < clear_rows { 0 } else { 255 }])
+    });
+    image.save(path).expect("write a png");
+}
+
+fn set_colors_enabled(db: &Database, enabled: bool) {
+    Settings::new(db)
+        .set(SettingKey::ColorTagEnabled, SettingValue::Bool(enabled))
+        .expect("set the setting");
+}
+
+/// Open `folder`, wait for its one result, and wait for the writer.
+fn open_and_settle(setup: &mut Setup, folder: &Path) {
+    setup.pipeline.open_folder(folder).expect("open");
+    collect(&setup.results, 1);
+    setup.pipeline.flush();
+}
+
+fn path_text(path: &Path) -> String {
+    path.to_string_lossy().into_owned()
+}
+
+#[test]
+fn a_rendered_red_png_gets_the_red_tag() {
+    let dir = TempDir::new();
+    let folder = dir.sub("red");
+    let file = folder.join("red.png");
+    write_red(&file, 0);
+    let mut setup = start(dir, 1, Arc::new(tarragon_render::registry::render));
+    open_and_settle(&mut setup, &folder);
+    assert_eq!(color_names(&setup.db, &path_text(&file)), ["red"]);
+}
+
+#[test]
+fn a_png_with_clear_pixels_gets_the_transparent_tag() {
+    let dir = TempDir::new();
+    let folder = dir.sub("clear");
+    let file = folder.join("clear.png");
+    write_red(&file, 4);
+    let mut setup = start(dir, 1, Arc::new(tarragon_render::registry::render));
+    open_and_settle(&mut setup, &folder);
+    let names = color_names(&setup.db, &path_text(&file));
+    assert!(names.contains(&"transparent".to_owned()), "{names:?}");
+}
+
+#[test]
+fn a_render_with_colours_off_writes_no_auto_color_row() {
+    let dir = TempDir::new();
+    let folder = dir.sub("off");
+    write_red(&folder.join("red.png"), 0);
+    let mut setup = start(dir, 1, Arc::new(tarragon_render::registry::render));
+    set_colors_enabled(&setup.db, false);
+    open_and_settle(&mut setup, &folder);
+    assert!(setup.db.auto_colored_paths().expect("list").is_empty());
+}
+
+#[test]
+fn a_cache_hit_tags_an_untagged_file_once() {
+    let dir = TempDir::new();
+    let folder = dir.sub("hit");
+    let file = folder.join("red.png");
+    write_red(&file, 0);
+    let calls = Arc::default();
+    let mut setup = start(dir, 1, counting_render(&calls));
+    set_colors_enabled(&setup.db, false);
+    open_and_settle(&mut setup, &folder);
+    set_colors_enabled(&setup.db, true);
+
+    open_and_settle(&mut setup, &folder);
+    let text = path_text(&file);
+    assert_eq!(color_names(&setup.db, &text), ["red"]);
+    assert_eq!(
+        calls.lock().expect("calls lock").len(),
+        1,
+        "no second render"
+    );
+
+    // A new tag set shows whether the third open sends a Colors message.
+    setup
+        .db
+        .replace_auto_color_tags(&text, &["blue".to_owned()])
+        .expect("replace");
+    open_and_settle(&mut setup, &folder);
+    assert_eq!(color_names(&setup.db, &text), ["blue"]);
+}
+
+fn panicking_extract(_: &DynamicImage, _: ColorTagConfig) -> ColorTags {
+    panic!("extraction failed on purpose");
+}
+
+#[test]
+fn a_panicking_extraction_still_gives_the_thumbnail() {
+    let dir = TempDir::new();
+    let folder = dir.sub("panic");
+    write_red(&folder.join("red.png"), 0);
+    let db = open_db(&dir, true);
+    let config = Config {
+        cache: CacheStore::new(dir.sub("cache")),
+        workers: 1,
+        render: Arc::new(tarragon_render::registry::render),
+    };
+    let (mut pipeline, results) =
+        Pipeline::with_extract(config, db.clone(), Arc::new(|| {}), panicking_extract)
+            .expect("start the pipeline");
+    pipeline.open_folder(&folder).expect("open");
+    let got = collect(&results, 1);
+    pipeline.flush();
+    assert!(got[0].outcome.is_ok());
+    assert!(db.auto_colored_paths().expect("list").is_empty());
 }
 
 mod library_open;

@@ -1,7 +1,5 @@
 //! Colour tag settings and names for the colour tagging step.
 
-#![cfg_attr(not(test), expect(dead_code, reason = "no caller in the binary yet"))]
-
 use tarragon_core::color::TRANSPARENT_TAG;
 use tarragon_db::Database;
 use tarragon_db::settings::{SettingKey, SettingValue, Settings};

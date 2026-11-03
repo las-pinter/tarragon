@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex};
 use tarragon_cache::store::SourceStamp;
 use tarragon_db::repository::LibraryFile;
 
-use super::library_jobs;
+use super::{ColorState, library_jobs};
 use crate::pipeline::{ErrorKind, Failures, ThumbError};
 
 fn file(path: &str, cached: bool) -> LibraryFile {
@@ -26,7 +26,13 @@ fn no_failures() -> Failures {
 #[test]
 fn one_job_per_row_in_order_with_the_generation() {
     let files = [file("/a/x.png", true), file("/b/y.png", false)];
-    let jobs = library_jobs(&files, 9, |_| "u".to_owned(), &no_failures());
+    let jobs = library_jobs(
+        &files,
+        9,
+        |_| "u".to_owned(),
+        &no_failures(),
+        &ColorState::default(),
+    );
     let paths: Vec<_> = jobs.iter().map(|job| job.path.clone()).collect();
     assert_eq!(
         paths,
@@ -55,6 +61,7 @@ fn uuid_of_runs_once_per_parent_folder() {
             format!("id-{parent}")
         },
         &no_failures(),
+        &ColorState::default(),
     );
     assert_eq!(calls, ["/a", "/b"]);
     assert_eq!(jobs[2].uuid, "id-/a");
@@ -64,7 +71,13 @@ fn uuid_of_runs_once_per_parent_folder() {
 #[test]
 fn only_a_cached_row_has_a_stored_stamp() {
     let files = [file("/a/x.png", true), file("/a/y.png", false)];
-    let jobs = library_jobs(&files, 1, |_| String::new(), &no_failures());
+    let jobs = library_jobs(
+        &files,
+        1,
+        |_| String::new(),
+        &no_failures(),
+        &ColorState::default(),
+    );
     assert_eq!(
         jobs[0].stored,
         Some(SourceStamp {
@@ -78,7 +91,13 @@ fn only_a_cached_row_has_a_stored_stamp() {
 #[test]
 fn folder_is_the_parent_name_or_root() {
     let files = [file("/pics/art/x.png", true), file("/top.png", true)];
-    let jobs = library_jobs(&files, 1, |_| String::new(), &no_failures());
+    let jobs = library_jobs(
+        &files,
+        1,
+        |_| String::new(),
+        &no_failures(),
+        &ColorState::default(),
+    );
     assert_eq!(jobs[0].folder, "art");
     assert_eq!(jobs[1].folder, "root");
 }
@@ -101,7 +120,13 @@ fn a_known_failure_needs_a_matching_stamp() {
         map.insert(PathBuf::from("/a/changed.png"), (old, error.clone()));
     }
     let files = [file("/a/same.png", false), file("/a/changed.png", false)];
-    let jobs = library_jobs(&files, 1, |_| String::new(), &failures);
+    let jobs = library_jobs(
+        &files,
+        1,
+        |_| String::new(),
+        &failures,
+        &ColorState::default(),
+    );
     assert_eq!(jobs[0].known_failure, Some(error));
     assert_eq!(jobs[1].known_failure, None);
 }
@@ -120,6 +145,7 @@ fn edge_rows_get_a_zero_size_and_the_root_folder() {
             String::new()
         },
         &no_failures(),
+        &ColorState::default(),
     );
     assert_eq!(jobs[0].stamp.size, 0);
     assert_eq!(calls, ["/a", "/", ""]);

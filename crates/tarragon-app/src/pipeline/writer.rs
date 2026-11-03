@@ -21,7 +21,6 @@ pub(super) enum Message {
     /// A cache hit: set `last_accessed` for this path.
     Touch(String),
     /// Replace the `auto_color` tags of `path` with `names`.
-    #[cfg_attr(not(test), expect(dead_code, reason = "only tests send it"))]
     Colors { path: String, names: Vec<String> },
     /// Reply on the sender once every earlier row is stored.
     #[cfg_attr(not(test), expect(dead_code, reason = "only tests send it"))]

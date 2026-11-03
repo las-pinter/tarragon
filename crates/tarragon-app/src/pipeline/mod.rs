@@ -33,13 +33,14 @@ use tarragon_cache::store::{CacheStore, SourceStamp};
 use tarragon_core::entity::FileInfo;
 use tarragon_core::error::{RenderError, ScanError};
 use tarragon_db::{Database, DbError};
+use tarragon_render::color::extract_dominant_colors;
 use tarragon_scan::scan::{build_pool, scan_folder, worker_pool_size};
 
 pub use job::{ErrorKind, ThumbError, ThumbResult};
 
-use job::Job;
+use job::{ColorState, Job};
 use queue::JobQueue;
-use worker::Shared;
+use worker::{ColorFn, Shared};
 
 /// The results channel holds this many results. It is small so a UI that
 /// stops reading holds back the workers instead of piling up decoded images
@@ -189,6 +190,16 @@ impl Pipeline {
         db: Arc<Database>,
         repaint: Repaint,
     ) -> Result<(Self, Results), PipelineError> {
+        Self::with_extract(config, db, repaint, extract_dominant_colors)
+    }
+
+    /// Start the threads with a given colour extraction function.
+    fn with_extract(
+        config: Config,
+        db: Arc<Database>,
+        repaint: Repaint,
+        extract: ColorFn,
+    ) -> Result<(Self, Results), PipelineError> {
         let queue = Arc::new(JobQueue::default());
         let generation = Arc::new(AtomicU64::new(0));
         let failures = Failures::default();
@@ -223,6 +234,7 @@ impl Pipeline {
             results: result_tx,
             rows: row_tx,
             repaint,
+            extract,
         });
         for index in 0..config.workers.max(1) {
             let shared = Arc::clone(&shared);
@@ -265,6 +277,7 @@ impl Pipeline {
             .into_iter()
             .map(|row| (row.path.clone(), row))
             .collect();
+        let color_state = ColorState::read(&self.db);
         let folder_name = folder.file_name().map_or_else(
             || "root".to_owned(),
             |name| name.to_string_lossy().into_owned(),
@@ -297,6 +310,7 @@ impl Pipeline {
                     .get(&file.path)
                     .filter(|(failed, _)| *failed == stamp)
                     .map(|(_, error)| error.clone());
+                let (colors, needs_colors) = color_state.for_path(&key);
                 Job {
                     generation,
                     path: file.path.clone(),
@@ -305,6 +319,8 @@ impl Pipeline {
                     folder: folder_name.clone(),
                     uuid: uuid.clone(),
                     known_failure,
+                    colors,
+                    needs_colors,
                 }
             })
             .collect();
@@ -328,6 +344,8 @@ impl Pipeline {
                 // The first render stored the stamp it saw, so the cache check
                 // passes when the files exist and falls back to a render if not.
                 stored: Some(job.stamp),
+                // A request reloads a texture; tagging stays with the open that built the job.
+                needs_colors: false,
                 ..job.clone()
             })
             .collect();

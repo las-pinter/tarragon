@@ -10,11 +10,13 @@ use image::{DynamicImage, RgbaImage};
 use tarragon_cache::store::{CacheEntry, CacheStore};
 use tarragon_cache::thumb_image;
 use tarragon_db::repository::ThumbnailWrite;
+use tarragon_render::color::{ColorTagConfig, ColorTags};
 
 use super::job::{ErrorKind, Job, ThumbError, ThumbResult};
 use super::queue::JobQueue;
 use super::writer::Message;
 use super::{Failures, RenderFn, Repaint};
+use crate::colortags;
 
 /// How long a full channel is waited on before the checks run again.
 const SEND_WAIT: Duration = Duration::from_millis(20);
@@ -29,7 +31,11 @@ pub(super) struct Shared {
     pub(super) results: Sender<ThumbResult>,
     pub(super) rows: Sender<Message>,
     pub(super) repaint: Repaint,
+    pub(super) extract: ColorFn,
 }
+
+/// The colour extraction function. Tests swap it to force a panic.
+pub(super) type ColorFn = fn(&DynamicImage, ColorTagConfig) -> ColorTags;
 
 /// Take jobs until the queue shuts down.
 pub(super) fn run(shared: &Shared) {
@@ -118,7 +124,11 @@ fn process(shared: &Shared, job: &Job) -> Result<RgbaImage, ThumbError> {
         // Eviction orders by this time, so a hit counts as an access.
         let path = job.path.to_string_lossy().replace('\\', "/");
         let _ = shared.rows.send(Message::Touch(path));
-        return Ok(image);
+        let image = DynamicImage::ImageRgba8(image);
+        if job.needs_colors {
+            send_colors(shared, job, &image);
+        }
+        return Ok(image.into_rgba8());
     }
     let image = (shared.render)(&job.path).map_err(|error| ThumbError {
         kind: ErrorKind::from(&error),
@@ -132,7 +142,23 @@ fn process(shared: &Shared, job: &Job) -> Result<RgbaImage, ThumbError> {
         // The image is fine; only the cache failed, so the cell still shows.
         Err(error) => tracing::warn!("cannot cache {}: {error}", job.path.display()),
     }
-    Ok(thumb_image(&image).to_rgba8())
+    let thumb = thumb_image(&image);
+    send_colors(shared, job, &thumb);
+    Ok(thumb.into_rgba8())
+}
+
+/// Extract the colour tags of the 256 tier image and queue them for the
+/// writer. It sends nothing when colour tagging is off or the extraction
+/// panics; the thumbnail is not affected either way.
+fn send_colors(shared: &Shared, job: &Job, thumb: &DynamicImage) {
+    let Some(config) = job.colors else { return };
+    let Ok(tags) = catch_unwind(AssertUnwindSafe(|| (shared.extract)(thumb, config))) else {
+        tracing::warn!("colour extraction panicked for {}", job.path.display());
+        return;
+    };
+    let path = job.path.to_string_lossy().replace('\\', "/");
+    let names = colortags::tag_names(&tags);
+    let _ = shared.rows.send(Message::Colors { path, names });
 }
 
 /// Load the 256 tier when the row and the files are fresh.

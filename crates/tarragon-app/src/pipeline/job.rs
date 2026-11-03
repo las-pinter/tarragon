@@ -1,10 +1,15 @@
 //! The job and result types that cross thread borders.
 
+use std::collections::HashSet;
 use std::path::PathBuf;
 
 use image::RgbaImage;
 use tarragon_cache::store::SourceStamp;
 use tarragon_core::error::RenderError;
+use tarragon_db::Database;
+use tarragon_render::color::ColorTagConfig;
+
+use crate::colortags;
 
 /// Why a file has no thumbnail.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -88,4 +93,37 @@ pub(super) struct Job {
     pub(super) uuid: String,
     /// A failure seen earlier for this exact stamp. It is not rendered again.
     pub(super) known_failure: Option<ThumbError>,
+    /// The colour tag config, or `None` when colour tagging is off.
+    pub(super) colors: Option<ColorTagConfig>,
+    /// True when a cache hit must still extract colours, because the path has
+    /// no `auto_color` tag yet. A render always extracts.
+    pub(super) needs_colors: bool,
+}
+
+/// The colour tag state read once per open.
+#[derive(Debug, Default)]
+pub(super) struct ColorState {
+    config: Option<ColorTagConfig>,
+    colored: HashSet<String>,
+}
+
+impl ColorState {
+    /// Read the config and the paths that already have `auto_color` tags.
+    pub(super) fn read(db: &Database) -> Self {
+        let config = colortags::read_config(db);
+        let colored = if config.is_some() {
+            db.auto_colored_paths().unwrap_or_else(|error| {
+                tracing::warn!("cannot list the coloured paths: {error}");
+                HashSet::new()
+            })
+        } else {
+            HashSet::new()
+        };
+        Self { config, colored }
+    }
+
+    /// The `colors` and `needs_colors` fields for the job of `path`.
+    pub(super) fn for_path(&self, path: &str) -> (Option<ColorTagConfig>, bool) {
+        (self.config, !self.colored.contains(path))
+    }
 }

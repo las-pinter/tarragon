@@ -8,7 +8,7 @@ use tarragon_cache::store::SourceStamp;
 use tarragon_core::entity::FileInfo;
 use tarragon_db::repository::LibraryFile;
 
-use super::job::Job;
+use super::job::{ColorState, Job};
 use super::{Failures, Opened, Pipeline, PipelineError, new_folder_id};
 
 #[cfg(test)]
@@ -50,6 +50,7 @@ impl Pipeline {
             generation,
             |parent| ids.get(parent).cloned().unwrap_or_default(),
             &self.failures,
+            &ColorState::read(&self.db),
         );
         self.generation.store(generation, Ordering::Release);
         self.jobs = jobs
@@ -81,6 +82,7 @@ pub(super) fn library_jobs(
     generation: u64,
     mut uuid_of: impl FnMut(&str) -> String,
     failures: &Failures,
+    color_state: &ColorState,
 ) -> Vec<Job> {
     let mut uuids: HashMap<&str, String> = HashMap::new();
     for file in files {
@@ -108,6 +110,7 @@ pub(super) fn library_jobs(
                 .get(&path)
                 .filter(|(failed, _)| *failed == stamp)
                 .map(|(_, error)| error.clone());
+            let (colors, needs_colors) = color_state.for_path(&file.path);
             Job {
                 generation,
                 path,
@@ -116,6 +119,8 @@ pub(super) fn library_jobs(
                 folder,
                 uuid,
                 known_failure,
+                colors,
+                needs_colors,
             }
         })
         .collect()

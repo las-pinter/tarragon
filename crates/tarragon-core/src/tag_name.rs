@@ -5,6 +5,9 @@ use crate::color::{ColorBucket, TRANSPARENT_TAG};
 /// The most characters a tag name may have.
 pub const MAX_TAG_NAME_CHARS: usize = 64;
 
+/// The text shown when a name is already used by another tag.
+pub const NAME_TAKEN_TEXT: &str = "Name already used";
+
 /// A reason a tag name is refused.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum TagNameError {

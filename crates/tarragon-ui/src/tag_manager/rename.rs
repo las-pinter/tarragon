@@ -2,7 +2,7 @@
 
 use egui::text_edit::TextEditState;
 use egui::{Key, Label, Layout, Modifiers, RichText, ScrollArea, Sense, TextEdit, UiBuilder, vec2};
-use tarragon_core::tag_name::validate_tag_name;
+use tarragon_core::tag_name::{NAME_TAKEN_TEXT, validate_tag_name};
 
 use super::{TagManagerEvent, TagRow, delete};
 use crate::tokens;
@@ -68,7 +68,7 @@ fn judge(rows: &[TagRow], row: &TagRow, text: &str) -> Outcome {
     match validate_tag_name(text) {
         Err(error) => Outcome::Refused(error.to_string()),
         Ok(name) if rows.iter().any(|r| r.id != row.id && r.name == name) => {
-            Outcome::Refused("name already used".to_owned())
+            Outcome::Refused(NAME_TAKEN_TEXT.to_owned())
         }
         Ok(name) => Outcome::Rename(name),
     }

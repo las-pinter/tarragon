@@ -178,7 +178,7 @@ fn a_rename_onto_an_existing_name_changes_nothing_and_shows_the_text() {
     ));
     assert_eq!(names(&db), before);
     gallery_texts(&ctx, &mut shell);
-    assert!(gallery_texts(&ctx, &mut shell).contains(&"name already used".to_owned()));
+    assert!(gallery_texts(&ctx, &mut shell).contains(&"Name already used".to_owned()));
     assert!(shell.gallery_mut().take_filter_change().is_none());
 }
 

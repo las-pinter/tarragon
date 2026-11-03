@@ -459,7 +459,7 @@ add menu.
   in any case. The manager and the Preview "Create new..." input show the
   reason inline.
 - Rename: Enter commits and the first Escape cancels. A name that another tag
-  uses is refused with "name already used". Tags never merge. The tag keeps its
+  uses is refused with "Name already used". Tags never merge. The tag keeps its
   images, and an active filter chip keeps its place with the new name. A rename
   of a tag that no longer exists drops its row.
 - Delete: the row asks "Delete 'x' from N images?" with Delete and Cancel, or

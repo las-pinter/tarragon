@@ -1,6 +1,6 @@
 //! Applying the Manage tags events: the writes and the refreshes after them.
 
-use tarragon_core::tag_name::TagNameError;
+use tarragon_core::tag_name::{NAME_TAKEN_TEXT, TagNameError};
 use tarragon_db::{Database, DbError};
 use tarragon_ui::Shell;
 use tarragon_ui::gallery::{Gallery, TagManagerEvent};
@@ -122,7 +122,7 @@ fn delete_text(error: &DbError) -> &'static str {
 /// The text under the rename field for a refused rename.
 fn rename_text(error: &DbError) -> String {
     match error {
-        DbError::TagNameTaken(_) => "name already used".to_owned(),
+        DbError::TagNameTaken(_) => NAME_TAKEN_TEXT.to_owned(),
         DbError::ReservedTagName(_) => TagNameError::Reserved.to_string(),
         DbError::InvalidTagName(reason) => reason.to_string(),
         DbError::ProtectedTag(_) => PROTECTED.to_owned(),

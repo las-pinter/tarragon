@@ -201,7 +201,7 @@ fn refused_names_show_the_message_and_queue_nothing() {
         (&"a".repeat(65), "Name is longer than 64 characters"),
         ("Red", "Name is reserved"),
         ("transparent", "Name is reserved"),
-        ("b", "name already used"),
+        ("b", "Name already used"),
     ] {
         let (ctx, mut manager) = editing(vec![row(1, "a", 1), row(2, "b", 1)]);
         let texts = submit(&ctx, &mut manager, typed);

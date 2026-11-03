@@ -6,6 +6,7 @@
 mod auto_colored;
 mod favorites;
 mod filter;
+mod filter_folder;
 mod folder;
 mod library;
 mod repository;

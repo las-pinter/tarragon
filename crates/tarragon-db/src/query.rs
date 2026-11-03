@@ -16,7 +16,7 @@ use tarragon_core::color::TRANSPARENT_TAG;
 use tarragon_core::filter_state::FilterState;
 use tarragon_core::sorting::natural_path_cmp;
 
-use crate::like::{escape_like, folder_like};
+use crate::like::{escape_like, folder_range};
 use crate::repository::{THUMBNAIL_COLUMNS, Thumbnail, row_to_thumbnail};
 use crate::{Database, DbError};
 
@@ -52,9 +52,11 @@ fn filter_sql(filters: &FilterState) -> (String, Vec<Value>) {
     if !filters.folders.is_empty() {
         let mut terms: Vec<String> = Vec::new();
         for folder in &filters.folders {
-            terms.push("path LIKE ? ESCAPE '\\'".to_owned());
+            terms.push("(path >= ? AND path < ?)".to_owned());
             let name = folder.to_string_lossy();
-            params.push(Value::Text(folder_like(&name)));
+            let (low, high) = folder_range(&name);
+            params.push(Value::Text(low));
+            params.push(Value::Text(high));
         }
         let mut group = String::from("(");
         group.push_str(&terms.join(" OR "));

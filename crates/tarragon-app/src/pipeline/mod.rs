@@ -112,9 +112,19 @@ pub struct Opened {
 pub struct Results {
     receiver: Receiver<ThumbResult>,
     generation: Arc<AtomicU64>,
+    #[cfg_attr(not(test), expect(dead_code, reason = "only tests read it"))]
+    store_epoch: Arc<AtomicU64>,
 }
 
 impl Results {
+    /// A count that goes up after each writer pass that stored data. A change
+    /// means new rows or colour tags are committed.
+    #[cfg_attr(not(test), expect(dead_code, reason = "only tests call it"))]
+    #[must_use]
+    pub fn store_epoch(&self) -> u64 {
+        self.store_epoch.load(Ordering::Acquire)
+    }
+
     /// The next current result, if one is ready. Stale results are dropped.
     #[must_use]
     pub fn try_recv(&self) -> Option<ThumbResult> {
@@ -184,6 +194,9 @@ impl Pipeline {
         let failures = Failures::default();
         let (result_tx, result_rx) = crossbeam_channel::bounded(RESULT_BOUND);
         let (row_tx, row_rx) = crossbeam_channel::unbounded();
+        let store_epoch = Arc::new(AtomicU64::new(0));
+        let writer_epoch = Arc::clone(&store_epoch);
+        let writer_repaint = Arc::clone(&repaint);
 
         let mut pipeline = Self {
             db: Arc::clone(&db),
@@ -199,7 +212,7 @@ impl Pipeline {
         pipeline.writer = Some(
             std::thread::Builder::new()
                 .name("tarragon-writer".to_owned())
-                .spawn(move || writer::run(&db, &row_rx))?,
+                .spawn(move || writer::run(&db, &row_rx, &writer_epoch, &writer_repaint))?,
         );
         let shared = Arc::new(Shared {
             queue,
@@ -222,6 +235,7 @@ impl Pipeline {
         let results = Results {
             receiver: result_rx,
             generation,
+            store_epoch,
         };
         Ok((pipeline, results))
     }

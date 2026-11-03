@@ -12,7 +12,8 @@ use tarragon_cache::store::CacheStore;
 use tarragon_db::Database;
 use tarragon_db::repository::ThumbnailWrite;
 
-use super::{Config, RESULT_BOUND, RenderFn};
+use super::writer::Message;
+use super::{Config, RESULT_BOUND, RenderFn, Repaint};
 use super::{ErrorKind, Pipeline, Results, ThumbResult, new_folder_id};
 
 /// How long a test waits for one result before it fails.
@@ -408,6 +409,7 @@ fn the_consumer_drops_a_result_of_an_old_generation() {
     let results = Results {
         receiver: rx,
         generation: Arc::new(AtomicU64::new(2)),
+        store_epoch: Arc::default(),
     };
     let make = |generation, name: &str| ThumbResult {
         generation,
@@ -527,6 +529,7 @@ fn drain_returns_at_most_max_current_results() {
     let results = Results {
         receiver: rx,
         generation: Arc::new(AtomicU64::new(1)),
+        store_epoch: Arc::default(),
     };
     for index in 0..5 {
         tx.send(ThumbResult {
@@ -604,6 +607,186 @@ fn a_requested_file_comes_back_from_the_cache_without_a_render() {
             .is_none(),
         "an unknown path queues nothing"
     );
+}
+
+/// A writer thread on its own channel, with a counted repaint callback.
+struct WriterRig {
+    sender: Option<crossbeam_channel::Sender<Message>>,
+    handle: Option<std::thread::JoinHandle<()>>,
+    epoch: Arc<AtomicU64>,
+    repaints: Arc<AtomicU64>,
+}
+
+impl WriterRig {
+    fn new(db: &Arc<Database>) -> Self {
+        let (sender, receiver) = crossbeam_channel::unbounded();
+        let epoch = Arc::new(AtomicU64::new(0));
+        let repaints = Arc::new(AtomicU64::new(0));
+        let (db, thread_epoch, counter) =
+            (Arc::clone(db), Arc::clone(&epoch), Arc::clone(&repaints));
+        let repaint: Repaint = Arc::new(move || {
+            counter.fetch_add(1, Ordering::Relaxed);
+        });
+        let handle = std::thread::spawn(move || {
+            super::writer::run(&db, &receiver, &thread_epoch, &repaint);
+        });
+        Self {
+            sender: Some(sender),
+            handle: Some(handle),
+            epoch,
+            repaints,
+        }
+    }
+
+    fn send(&self, message: Message) {
+        self.sender
+            .as_ref()
+            .expect("the sender")
+            .send(message)
+            .expect("send");
+    }
+
+    /// Wait until the writer has handled every message sent so far.
+    fn flush(&self) {
+        let (ack_tx, ack_rx) = crossbeam_channel::bounded(1);
+        self.send(Message::Flush(ack_tx));
+        ack_rx.recv_timeout(WAIT).expect("the writer answers");
+    }
+
+    fn colors(&self, path: &str, names: &[&str]) {
+        self.send(Message::Colors {
+            path: path.to_owned(),
+            names: names.iter().map(|name| (*name).to_owned()).collect(),
+        });
+    }
+
+    fn epoch(&self) -> u64 {
+        self.epoch.load(Ordering::Acquire)
+    }
+
+    fn repaints(&self) -> u64 {
+        self.repaints.load(Ordering::Relaxed)
+    }
+}
+
+impl Drop for WriterRig {
+    fn drop(&mut self) {
+        self.sender = None;
+        if let Some(handle) = self.handle.take() {
+            let _ = handle.join();
+        }
+    }
+}
+
+fn row_write(path: &str) -> ThumbnailWrite {
+    ThumbnailWrite {
+        path: path.to_owned(),
+        mtime: 1,
+        size: 1,
+        width: 1,
+        height: 1,
+        cache_uuid: "uuid".to_owned(),
+        thumbnail_cache_path: None,
+        preview_cache_path: None,
+        full_cache_path: None,
+        last_accessed: 1,
+    }
+}
+
+fn open_db(dir: &TempDir, initialize: bool) -> Arc<Database> {
+    let db = Arc::new(Database::open(dir.0.join("writer.db")).expect("open the db"));
+    if initialize {
+        db.initialize().expect("initialize the db");
+    }
+    db
+}
+
+fn color_names(db: &Database, path: &str) -> Vec<String> {
+    let tags = db
+        .tags_for_files(&[path.to_owned()])
+        .expect("read the tags");
+    tags.get(path)
+        .map(|list| list.iter().map(|tag| tag.name.clone()).collect())
+        .unwrap_or_default()
+}
+
+#[test]
+fn results_report_the_epoch_after_the_pipeline_stores_a_row() {
+    let dir = TempDir::new();
+    let folder = dir.sub("epoch");
+    write_png(&folder.join("one.png"), 255);
+    let mut setup = start(dir, 1, Arc::new(tarragon_render::registry::render));
+    let before = setup.results.store_epoch();
+    setup.pipeline.open_folder(&folder).expect("open");
+    collect(&setup.results, 1);
+    setup.pipeline.flush();
+    assert!(setup.results.store_epoch() > before);
+}
+
+#[test]
+fn a_colors_message_replaces_the_auto_color_tags_of_a_path() {
+    let dir = TempDir::new();
+    let db = open_db(&dir, true);
+    let rig = WriterRig::new(&db);
+    rig.colors("/a/one.png", &["red"]);
+    rig.flush();
+    assert_eq!(color_names(&db, "/a/one.png"), ["red"]);
+
+    rig.colors("/a/one.png", &["blue"]);
+    rig.flush();
+    assert_eq!(color_names(&db, "/a/one.png"), ["blue"]);
+}
+
+#[test]
+fn the_epoch_goes_up_after_a_stored_row_and_not_after_a_bare_flush() {
+    let dir = TempDir::new();
+    let db = open_db(&dir, true);
+    let rig = WriterRig::new(&db);
+    rig.flush();
+    assert_eq!(rig.epoch(), 0, "a flush stores nothing");
+    assert_eq!(rig.repaints(), 0);
+
+    rig.send(Message::Row(row_write("/a/one.png")));
+    rig.flush();
+    assert!(rig.epoch() > 0);
+}
+
+#[test]
+fn the_repaint_runs_once_per_pass_that_stored_data() {
+    let dir = TempDir::new();
+    let db = open_db(&dir, true);
+    let rig = WriterRig::new(&db);
+    rig.send(Message::Row(row_write("/a/one.png")));
+    rig.flush();
+    assert_eq!(rig.repaints(), 1);
+    assert_eq!(rig.epoch(), 1);
+
+    rig.colors("/a/one.png", &["red"]);
+    rig.flush();
+    assert_eq!(rig.repaints(), 2);
+    assert_eq!(rig.epoch(), 2);
+
+    rig.flush();
+    assert_eq!(rig.repaints(), 2, "a bare flush does not repaint");
+}
+
+#[test]
+fn a_failed_colors_message_does_not_stop_the_writer() {
+    let dir = TempDir::new();
+    // Without the schema every statement fails.
+    let db = open_db(&dir, false);
+    let rig = WriterRig::new(&db);
+    rig.colors("/a/one.png", &["red"]);
+    rig.colors("/a/two.png", &["blue"]);
+    rig.flush();
+    assert_eq!(rig.epoch(), 0, "nothing was stored");
+    assert_eq!(rig.repaints(), 0);
+
+    db.initialize().expect("initialize the db");
+    rig.colors("/a/two.png", &["blue"]);
+    rig.flush();
+    assert_eq!(color_names(&db, "/a/two.png"), ["blue"]);
+    assert_eq!(rig.epoch(), 1);
 }
 
 mod library_open;

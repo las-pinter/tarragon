@@ -130,6 +130,9 @@ pub const BUCKET_NEUTRAL: Color32 = Color32::from_rgb(0x7f, 0x8c, 0x8d);
 /// Error text under a tag name field. No stylesheet row.
 pub const TAG_ERROR_TEXT: Color32 = BUCKET_RED;
 
+/// `.scrim` background: 45% black over the panes behind a modal dialog.
+pub const SCRIM: Color32 = Color32::from_rgba_unmultiplied_const(0, 0, 0, 115);
+
 /// Light cell of the checkerboard in the transparent swatch. No stylesheet row.
 pub const CHECKER_LIGHT: Color32 = Color32::from_rgb(0xb0, 0xb0, 0xb0);
 /// Dark cell of the checkerboard in the transparent swatch. No stylesheet row.

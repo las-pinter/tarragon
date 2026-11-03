@@ -263,7 +263,7 @@ fn the_x_button_closes_the_window() {
     let area = ctx
         .memory(|m| {
             let layers = m.areas().visible_layer_ids();
-            let window = layers.into_iter().find(|l| l.order == Order::Middle)?;
+            let window = layers.into_iter().find(|l| l.order == Order::Foreground)?;
             m.area_rect(window.id)
         })
         .expect("the window area");

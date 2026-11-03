@@ -10,6 +10,7 @@ mod search;
 mod selected;
 mod sort;
 mod tag_manager;
+mod tag_manager_modal;
 mod thumbs;
 
 use std::path::PathBuf;

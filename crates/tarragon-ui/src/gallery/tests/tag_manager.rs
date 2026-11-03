@@ -106,21 +106,21 @@ fn one_footer_click_opens_once_and_asks_for_the_rows() {
 }
 
 #[test]
-fn one_escape_closes_the_window_and_the_open_menu() {
+fn the_filter_menu_stays_shut_under_the_window_and_one_escape_closes_it() {
     let (ctx, mut gallery) = listed();
-    let open = click_button(&ctx, &mut gallery, "Filter Tags");
-    assert!(has_text(&open, "lighting"));
     gallery.tag_manager.open();
     shown(&ctx, &mut gallery, Vec::new());
     shown(&ctx, &mut gallery, Vec::new());
+    let after_click = click_button(&ctx, &mut gallery, "Filter Tags");
+    assert!(!has_text(&after_click, "lighting"), "the menu opened");
+    assert!(gallery.tag_manager.is_open());
     shown(
         &ctx,
         &mut gallery,
         vec![key(egui::Key::Escape, Modifiers::NONE)],
     );
-    let found = shown(&ctx, &mut gallery, Vec::new());
+    shown(&ctx, &mut gallery, Vec::new());
     assert!(!gallery.tag_manager.is_open());
-    assert!(!has(&found, "lighting"));
 }
 
 #[test]

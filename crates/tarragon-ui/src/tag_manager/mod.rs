@@ -1,10 +1,12 @@
 //! The "Manage tags" window: a list of the user tags with their image counts.
 //!
-//! The window floats inside the main window. It is not an OS window. The caller
-//! owns the data and sets the rows.
+//! The window floats inside the main window. It is not an OS window. It is
+//! modal: a dim layer covers the panes and takes their input. The caller owns
+//! the data and sets the rows.
 
 use egui::{Align2, Key, Modifiers, vec2};
 
+mod backdrop;
 mod delete;
 mod rename;
 
@@ -141,8 +143,11 @@ impl TagManager {
         if !self.open {
             return;
         }
+        backdrop::show(ctx);
         let mut open = true;
         egui::Window::new("Manage tags")
+            // Above the dim layer, whatever the click order.
+            .order(egui::Order::Foreground)
             .open(&mut open)
             .collapsible(false)
             .resizable(false)
@@ -170,6 +175,8 @@ impl TagManager {
     }
 }
 
+#[cfg(test)]
+mod backdrop_tests;
 #[cfg(test)]
 mod delete_error_tests;
 #[cfg(test)]

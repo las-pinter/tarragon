@@ -49,17 +49,27 @@ impl Gallery {
     /// A long scope name gives way first, so the counts stay whole. The label
     /// still truncates the text last when even the counts do not fit.
     pub(super) fn info_text_fitted(&self, ui: &Ui, width: f32) -> String {
-        let font = FontId::new(
-            tokens::SIZE_CAPTION,
-            TextStyle::Body.resolve(ui.style()).family,
-        );
-        let measure = |text: &str| {
-            ui.painter()
-                .layout_no_wrap(text.to_owned(), font.clone(), tokens::TEXT_MUTED)
-                .size()
-                .x
-        };
+        let measure = info_measure(ui);
         fit_name(&self.scope_name(), &self.info_counts(), width, measure)
+    }
+
+    /// The narrowest width of the info text: an ellipsis and the counts.
+    pub(super) fn info_min_width(&self, ui: &Ui) -> f32 {
+        info_measure(ui)(&format!("{ELLIPSIS}{}", self.info_counts()))
+    }
+}
+
+/// A function that measures info text in points on one line.
+fn info_measure(ui: &Ui) -> impl Fn(&str) -> f32 + '_ {
+    let font = FontId::new(
+        tokens::SIZE_CAPTION,
+        TextStyle::Body.resolve(ui.style()).family,
+    );
+    move |text: &str| {
+        ui.painter()
+            .layout_no_wrap(text.to_owned(), font.clone(), tokens::TEXT_MUTED)
+            .size()
+            .x
     }
 }
 

@@ -121,39 +121,90 @@ impl Gallery {
     /// picked sort mode.
     fn sort_segment(&self, ui: &mut Ui) -> Option<SortMode> {
         let mut picked = None;
-        ui.horizontal(|ui| {
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                // Right-to-left layout puts the label last on the screen.
-                ui.spacing_mut().item_spacing.x = SORT_GAP;
-                // The pill draws before the bar, so a bar click shows next frame.
-                if let Some(text) =
-                    filter_pill_text(self.bar.state.active_count(self.filter_scope()))
-                {
-                    let style = (tokens::AMBER_DARK, tokens::AMBER_ACCENT, Stroke::NONE);
-                    let pad = vec2(FILTER_PAD_X, FILTER_PAD_Y);
-                    pill_frame(ui, &text, style, pad);
-                }
-                for mode in SortMode::ALL.into_iter().rev() {
-                    if sort_pill(ui, mode, self.sort_mode == mode).clicked() {
-                        picked = Some(mode);
-                    }
-                }
-                ui.label(
-                    RichText::new("Sort")
-                        .size(tokens::SIZE_SMALL)
-                        .color(tokens::TEXT_MUTED),
-                );
-                // The info text takes the width that the controls leave.
-                ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
-                    let info = self.info_text_fitted(ui, ui.available_width());
-                    let text = RichText::new(info)
-                        .size(tokens::SIZE_CAPTION)
-                        .color(tokens::TEXT_MUTED);
-                    ui.add(Label::new(text).truncate());
+        // Measure before drawing, so the layout never waits a frame.
+        // The slack absorbs rounding in the measured widths.
+        let needed = self.info_min_width(ui) + self.controls_width(ui);
+        let stacked = needed > ui.available_width() + 0.5;
+        if stacked {
+            // The info line takes the whole row and the controls drop below.
+            ui.vertical(|ui| {
+                self.info_label(ui);
+                ui.horizontal(|ui| {
+                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        picked = self.sort_controls(ui);
+                    });
                 });
             });
-        });
+        } else {
+            ui.horizontal(|ui| {
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    picked = self.sort_controls(ui);
+                    // The info text takes the width that the controls leave.
+                    ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
+                        self.info_label(ui);
+                    });
+                });
+            });
+        }
         picked
+    }
+
+    /// Draw the info text, cut to the width left in `ui`.
+    fn info_label(&self, ui: &mut Ui) {
+        let info = self.info_text_fitted(ui, ui.available_width());
+        let text = RichText::new(info)
+            .size(tokens::SIZE_CAPTION)
+            .color(tokens::TEXT_MUTED);
+        ui.add(Label::new(text).truncate());
+    }
+
+    /// The filter pill text, or none when no filter is active.
+    fn active_filter_text(&self) -> Option<String> {
+        filter_pill_text(self.bar.state.active_count(self.filter_scope()))
+    }
+
+    /// Draw the filter pill, the sort pills, and the label in a right-to-left
+    /// layout. Returns the picked sort mode.
+    fn sort_controls(&self, ui: &mut Ui) -> Option<SortMode> {
+        let mut picked = None;
+        // Right-to-left layout puts the label last on the screen.
+        ui.spacing_mut().item_spacing.x = SORT_GAP;
+        // The pill draws before the bar, so a bar click shows next frame.
+        if let Some(text) = self.active_filter_text() {
+            let style = (tokens::AMBER_DARK, tokens::AMBER_ACCENT, Stroke::NONE);
+            let pad = vec2(FILTER_PAD_X, FILTER_PAD_Y);
+            pill_frame(ui, &text, style, pad);
+        }
+        for mode in SortMode::ALL.into_iter().rev() {
+            if sort_pill(ui, mode, self.sort_mode == mode).clicked() {
+                picked = Some(mode);
+            }
+        }
+        ui.label(
+            RichText::new("Sort")
+                .size(tokens::SIZE_SMALL)
+                .color(tokens::TEXT_MUTED),
+        );
+        picked
+    }
+
+    /// The width of the controls and the gap after each, in points.
+    fn controls_width(&self, ui: &Ui) -> f32 {
+        let text_width = |text: &str, size: f32| {
+            ui.painter()
+                .layout_no_wrap(text.to_owned(), FontId::proportional(size), Color32::WHITE)
+                .size()
+                .x
+        };
+        let pill = |text: &str, pad_x: f32| text_width(text, tokens::SIZE_CAPTION) + 2.0 * pad_x;
+        let mut widths = vec![text_width("Sort", tokens::SIZE_SMALL)];
+        widths.extend(
+            SortMode::ALL
+                .into_iter()
+                .map(|mode| pill(sort_label(mode), PILL_PAD_X)),
+        );
+        widths.extend(self.active_filter_text().map(|t| pill(&t, FILTER_PAD_X)));
+        widths.iter().map(|width| width + SORT_GAP).sum()
     }
 }
 

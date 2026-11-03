@@ -104,6 +104,7 @@ fn the_pill_and_the_sort_pills_keep_their_slots_at_a_narrow_width() {
             "{width}: the pill overlaps Date"
         );
         assert!(sort.max.x <= name.min.x, "{width}: Sort overlaps Name");
-        assert!(info.max.x <= sort.min.x, "{width}: the info text overlaps");
+        // This y check is for the stacked layout. The controls do not fit beside the info text, so they take a row below.
+        assert!(info.max.y <= sort.min.y, "{width}: the info text overlaps");
     }
 }

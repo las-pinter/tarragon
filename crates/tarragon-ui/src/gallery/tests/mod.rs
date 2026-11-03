@@ -6,6 +6,7 @@ mod filter_pill;
 mod filter_result;
 mod frames;
 mod info_fit;
+mod info_rows;
 mod scope;
 mod search;
 mod selected;

@@ -473,3 +473,76 @@ add menu.
 
 Reason: the owner asked for rename and delete. A colour name as a user tag
 would clash with the colour tags.
+
+## Preview picture source
+
+Before: the mockups show a picture and say nothing about where it comes from or
+how much memory the pictures may use.
+
+After: the picture is decoded from the 1024 tier file. When that file is
+missing, the 256 tier file is used. The picture is drawn inside the box with its
+aspect ratio kept, and it may be scaled up to touch the box. The pictures of
+the selection share a budget of 128 MiB of textures. When a decode fails, the
+Preview shows no picture for that file, and the next read of the selection
+tries it again. A file that is rendered again at the same size keeps its old
+texture until the size changes or the texture is evicted. This is a known limit.
+
+Reason: the 1024 tier is the cache tier made for the preview. The 256 tier is
+the grid thumbnail, which is better than an empty box. The budget caps the
+texture memory.
+
+## Preview colour square click
+
+Before: the mockup shows the colour squares and does not say what a click does.
+
+After: a click on a colour square toggles that colour tag on all selected
+files. When every selected file has the colour, the click removes it from all of
+them. Otherwise the click adds it to all of them. The Python application did the
+same. The next render of a file replaces its colour tags, so a manual change
+does not survive it.
+
+Reason: the squares show the state of the colour tags, so a click that changes
+them is the expected action. The render replaces the colour tags because they
+come from the picture.
+
+## Colour tag timing and settings
+
+Before: nothing says when the colour tags of a file are written, or when a
+change of the colour settings takes effect.
+
+After: the colour tags of a file are written after a render. A file that is
+served from the cache is read once for its colours when it has no colour tag
+yet. The four colour settings (on or off, palette size, minimum share, and
+neutral saturation) are read at each folder open. A change takes effect at the
+next open. A colour counts as neutral when its saturation is at or below the
+neutral setting, or when its HSV value is 0.92 or more, or 0.08 or less. The
+Python application used the same value limits.
+
+Reason: the settings stay fixed while a folder loads. A file cached before
+colour tags existed still gets its tags, and it is not rendered again.
+
+## Folder open removes rows of files that left
+
+Before: the rows and cache files of a file stayed after the file left its
+folder.
+
+After: a folder open deletes the `thumbnails` row and the cache files of each
+file that left the folder. It looks at direct children of the folder only. The
+parent folder must match exactly, with case. The tags of the file stay, so a file
+that comes back keeps its tags. A scan that finds no files deletes nothing,
+because an unmounted folder looks empty. A cache file that is outside the cache
+folder is never deleted.
+
+Reason: old rows and cache files would grow without limit. Keeping the tags
+protects the work of the user when a file is moved away and back.
+
+## Preview format detail
+
+Before: the mockup shows a format in the details of a single image and does not
+say where it comes from.
+
+After: the format is the file extension in capitals. A file with no extension
+shows the unknown mark.
+
+Reason: the file extension is the only format fact the Preview can read
+without opening the file.

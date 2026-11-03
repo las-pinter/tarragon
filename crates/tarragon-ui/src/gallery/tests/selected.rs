@@ -95,12 +95,87 @@ fn the_revision_grows_once_per_real_change() {
     gallery.set_items(items());
     assert_eq!(
         gallery.selection_revision(),
+        start + 4,
+        "the same files stay selected after new items"
+    );
+
+    gallery.set_items(vec![GridItem::new(path("other.png"), 1, None)]);
+    assert_eq!(
+        gallery.selection_revision(),
         start + 5,
-        "clear by new items"
+        "no selected file is left"
     );
 
     gallery.set_items(items());
-    assert_eq!(gallery.selection_revision(), start + 5, "nothing to clear");
+    assert_eq!(gallery.selection_revision(), start + 5, "nothing selected");
+}
+
+/// A file in the test folder.
+fn file(name: &str, mtime: i64) -> GridItem {
+    GridItem::new(path(name), mtime, None)
+}
+
+#[test]
+fn a_rescan_that_adds_and_removes_files_keeps_the_surviving_selection() {
+    let mut gallery = dated_gallery();
+    click_tile(&mut gallery, 0, Modifiers::NONE);
+    click_tile(&mut gallery, 1, Modifiers::CTRL);
+    click_tile(&mut gallery, 3, Modifiers::CTRL);
+    assert_eq!(
+        gallery.selected_paths(),
+        [path("a.png"), path("b.png"), path("a 10.png")]
+    );
+    let revision = gallery.selection_revision();
+
+    // b.png is gone, and two new files shift every index.
+    gallery.set_items(vec![
+        file("new.png", 30),
+        file("a 10.png", 5),
+        file("a.png", 20),
+        file("c.png", 1),
+    ]);
+
+    assert_eq!(gallery.selected_paths(), [path("a.png"), path("a 10.png")]);
+    assert_eq!(gallery.selection_revision(), revision + 1);
+}
+
+#[test]
+fn a_rescan_that_keeps_the_selected_paths_keeps_the_revision() {
+    let mut gallery = dated_gallery();
+    click_tile(&mut gallery, 0, Modifiers::NONE);
+    click_tile(&mut gallery, 2, Modifiers::CTRL);
+    assert_eq!(gallery.selected_paths(), [path("a.png"), path("a 2.png")]);
+    let revision = gallery.selection_revision();
+
+    // b.png is gone, z.png is new, and the selected files change index.
+    gallery.set_items(vec![
+        file("z.png", 30),
+        file("a 2.png", 5),
+        file("a.png", 20),
+    ]);
+
+    assert_eq!(gallery.selected_paths(), [path("a.png"), path("a 2.png")]);
+    assert_eq!(gallery.selection_revision(), revision);
+}
+
+#[test]
+fn a_shift_click_after_a_rescan_extends_from_the_moved_anchor() {
+    let mut gallery = dated_gallery();
+    click_tile(&mut gallery, 1, Modifiers::NONE);
+    assert_eq!(gallery.selected_paths(), [path("b.png")]);
+
+    // b.png moves from index 0 to index 1 and a new file takes index 0.
+    gallery.set_items(vec![
+        file("new.png", 30),
+        file("b.png", 10),
+        file("a.png", 20),
+        file("a 10.png", 5),
+        file("a 2.png", 5),
+    ]);
+    // On screen: new, a, b, a 2, a 10.
+    click_tile(&mut gallery, 3, Modifiers::SHIFT);
+
+    assert_eq!(gallery.selected_paths(), [path("b.png"), path("a 2.png")]);
 }
 
 #[test]

@@ -15,6 +15,21 @@ pub struct Selection {
 }
 
 impl Selection {
+    /// Build a selection from item indices and an anchor index.
+    #[must_use]
+    pub fn from_parts(indices: impl IntoIterator<Item = usize>, anchor: Option<usize>) -> Self {
+        Self {
+            indices: indices.into_iter().collect(),
+            anchor,
+        }
+    }
+
+    /// The anchor of the last plain click, as an item index.
+    #[must_use]
+    pub fn anchor(&self) -> Option<usize> {
+        self.anchor
+    }
+
     /// Drop every selected index.
     pub fn clear(&mut self) {
         self.indices.clear();
@@ -137,6 +152,14 @@ mod tests {
         assert_eq!(selection.len(), 0);
         assert!(!selection.contains(0));
         assert_eq!(selection.iter().count(), 0);
+    }
+
+    #[test]
+    fn from_parts_keeps_the_indices_and_the_anchor() {
+        let selection = Selection::from_parts([5, 2, 5], Some(4));
+        assert_eq!(selection.iter().collect::<Vec<_>>(), [2, 5]);
+        assert_eq!(selection.anchor(), Some(4));
+        assert_eq!(Selection::from_parts([], None), Selection::default());
     }
 
     #[test]

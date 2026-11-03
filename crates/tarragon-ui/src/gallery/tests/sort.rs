@@ -16,13 +16,20 @@ fn set_items_sorts_in_the_current_mode() {
 }
 
 #[test]
-fn set_items_drops_stale_selection_indices() {
+fn set_items_drops_a_selected_path_that_left_the_list() {
     let mut gallery = Gallery::new(SortMode::Natural);
+    gallery.set_scope(Scope::All);
     gallery.set_items(items());
     gallery.selection.select_only(3);
-    let only = GridItem::new(PathBuf::from("/images/a.png"), 1, None);
-    gallery.set_items(vec![only]);
-    assert!(gallery.selection.is_empty(), "index 3 is now stale");
+    let file = |name: &str| GridItem::new(PathBuf::from("/images").join(name), 1, None);
+    // a 2.png is gone, and index 3 now holds c.png.
+    gallery.set_items(vec![
+        file("b.png"),
+        file("a.png"),
+        file("a 10.png"),
+        file("c.png"),
+    ]);
+    assert!(gallery.selection.is_empty(), "a 2.png is not in the list");
 }
 
 #[test]
@@ -71,8 +78,9 @@ fn a_sort_change_rebuilds_the_cached_visible_order() {
 }
 
 #[test]
-fn set_items_clears_the_selection_when_the_new_list_has_the_same_length() {
+fn set_items_does_not_select_another_file_that_takes_the_same_index() {
     let mut gallery = Gallery::new(SortMode::Natural);
+    gallery.set_scope(Scope::All);
     gallery.set_items(items());
     gallery.selection.select_only(1);
 

@@ -177,20 +177,27 @@ impl Gallery {
         }
     }
 
-    /// Replace the items, cache their names, sort them, and clear the selection.
+    /// Replace the items, cache their names, and sort them.
     ///
-    /// The selection holds item indices, so it cannot outlive the old list.
+    /// The selection and its anchor stay by path. A selected path that is not
+    /// in the new list drops out.
     pub fn set_items(&mut self, mut items: Vec<GridItem>) {
         for item in &mut items {
             item.refresh_name();
         }
+        let path_at = |index: usize| self.items.get(index).map(|item| item.path.clone());
+        let kept: Vec<PathBuf> = self.selection.iter().filter_map(path_at).collect();
+        let anchor = self.selection.anchor().and_then(path_at);
         self.index.clear();
         for (position, item) in items.iter().enumerate() {
             // The first item wins when a path repeats.
             self.index.entry(item.path.clone()).or_insert(position);
         }
         self.items = items;
-        self.selection.clear();
+        self.selection = Selection::from_parts(
+            kept.iter().filter_map(|path| self.index.get(path).copied()),
+            anchor.and_then(|path| self.index.get(&path).copied()),
+        );
         self.painted.clear();
         self.visible_revision += 1;
         self.resort();

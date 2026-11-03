@@ -1,5 +1,6 @@
 //! Applying the Preview tag events: the writes and the refreshes after them.
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 use tarragon_core::entity::{Tag, TagSource};
@@ -9,7 +10,7 @@ use tarragon_ui::Shell;
 use tarragon_ui::preview::PreviewEvent;
 
 use super::refresh_preview;
-use crate::filtering;
+use crate::{colortags, filtering};
 
 /// The database calls the tag events need, so a test can make one fail.
 trait Store {
@@ -21,6 +22,12 @@ trait Store {
     fn user_tag_id(&self, name: &str) -> Result<Option<i64>, DbError>;
     /// Take the tag off every path.
     fn detach(&self, paths: &[String], tag_id: i64) -> Result<usize, DbError>;
+    /// The colour tag of this name, made when absent.
+    fn ensure_auto(&self, name: &str) -> Result<Tag, DbError>;
+    /// The id of the colour tag of this name, when there is one.
+    fn auto_tag_id(&self, name: &str) -> Result<Option<i64>, DbError>;
+    /// The tags of each path, keyed by the normalised path.
+    fn file_tags(&self, paths: &[String]) -> Result<HashMap<String, Vec<Tag>>, DbError>;
 }
 
 impl Store for Database {
@@ -42,6 +49,22 @@ impl Store for Database {
 
     fn detach(&self, paths: &[String], tag_id: i64) -> Result<usize, DbError> {
         self.remove_tags_from_files(paths, tag_id)
+    }
+
+    fn ensure_auto(&self, name: &str) -> Result<Tag, DbError> {
+        self.ensure_tag(name, TagSource::AutoColor)
+    }
+
+    fn auto_tag_id(&self, name: &str) -> Result<Option<i64>, DbError> {
+        Ok(self
+            .all_tags()?
+            .into_iter()
+            .find(|usage| usage.tag.source == TagSource::AutoColor && usage.tag.name == name)
+            .map(|usage| usage.tag.id))
+    }
+
+    fn file_tags(&self, paths: &[String]) -> Result<HashMap<String, Vec<Tag>>, DbError> {
+        self.tags_for_files(paths)
     }
 }
 
@@ -81,8 +104,9 @@ fn write_events(store: &impl Store, paths: &[PathBuf], events: Vec<PreviewEvent>
         let result = match event {
             PreviewEvent::TagApplied(name) => apply_tag(store, &name, &stored),
             PreviewEvent::TagRemoved(name) => remove_tag(store, &name, &stored),
-            // The colour tag writes belong to the colour feature, not to this module.
-            PreviewEvent::ColorClicked(_) => Ok(false),
+            PreviewEvent::ColorClicked(swatch) => {
+                toggle_color(store, colortags::swatch_name(swatch), &stored)
+            }
         };
         match result {
             Ok(done) => wrote |= done,
@@ -114,6 +138,35 @@ fn remove_tag(store: &impl Store, name: &str, stored: &[String]) -> Result<bool,
     store
         .detach(stored, id)
         .map_err(|error| error.to_string())?;
+    Ok(true)
+}
+
+/// Toggle the colour tag `name` on the selected files.
+///
+/// When every file holds the colour from the `AutoColor` source, it is taken
+/// off all of them. Otherwise it is put on all of them. Colour names are
+/// reserved, so the tag of this name is always the `AutoColor` tag.
+fn toggle_color(store: &impl Store, name: &str, stored: &[String]) -> Result<bool, String> {
+    let by_file = store.file_tags(stored).map_err(|error| error.to_string())?;
+    let on_all = !by_file.is_empty()
+        && by_file.values().all(|tags| {
+            tags.iter()
+                .any(|tag| tag.source == TagSource::AutoColor && tag.name == name)
+        });
+    if on_all {
+        let id = store.auto_tag_id(name).map_err(|error| error.to_string())?;
+        let Some(id) = id else {
+            return Ok(false);
+        };
+        store
+            .detach(stored, id)
+            .map_err(|error| error.to_string())?;
+    } else {
+        let tag = store.ensure_auto(name).map_err(|error| error.to_string())?;
+        store
+            .attach(stored, tag)
+            .map_err(|error| error.to_string())?;
+    }
     Ok(true)
 }
 

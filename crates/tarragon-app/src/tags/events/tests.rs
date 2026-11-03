@@ -1,5 +1,8 @@
 //! Tests for applying the Preview tag events.
 
+mod color;
+
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 use eframe::egui::{Context, Event, Modifiers, PointerButton, Ui, vec2};
@@ -117,6 +120,8 @@ enum Failing {
     Attach,
     Lookup,
     Detach,
+    EnsureAuto,
+    Read,
 }
 
 fn fail() -> DbError {
@@ -156,6 +161,40 @@ impl Store for Failing {
             Err(fail())
         } else {
             Ok(1)
+        }
+    }
+
+    fn ensure_auto(&self, name: &str) -> Result<Tag, DbError> {
+        if *self == Failing::EnsureAuto {
+            return Err(fail());
+        }
+        Ok(Tag {
+            id: 8,
+            name: name.to_owned(),
+            source: TagSource::AutoColor,
+        })
+    }
+
+    fn auto_tag_id(&self, _name: &str) -> Result<Option<i64>, DbError> {
+        Ok(Some(8))
+    }
+
+    fn file_tags(&self, paths: &[String]) -> Result<HashMap<String, Vec<Tag>>, DbError> {
+        match self {
+            Failing::Read => Err(fail()),
+            // Every file already holds the red colour, so a click detaches it.
+            Failing::Detach => Ok(paths
+                .iter()
+                .map(|path| {
+                    let red = Tag {
+                        id: 8,
+                        name: "red".to_owned(),
+                        source: TagSource::AutoColor,
+                    };
+                    (path.clone(), vec![red])
+                })
+                .collect()),
+            _ => Ok(HashMap::new()),
         }
     }
 }
@@ -304,16 +343,15 @@ fn one_failed_event_does_not_stop_the_next() {
 }
 
 #[test]
-fn an_empty_selection_and_a_colour_click_write_nothing() {
+fn an_empty_selection_writes_nothing() {
     let (db, _dir) = seeded();
     let before = db.all_tags().expect("read").len();
+    let click = PreviewEvent::ColorClicked(Swatch::ALL[0]);
     assert!(!write_events(
         &db,
         &[],
-        vec![applied("cat"), removed("night")]
+        vec![applied("cat"), removed("night"), click]
     ));
-    let click = PreviewEvent::ColorClicked(Swatch::ALL[0]);
-    assert!(!write_events(&db, &[PathBuf::from(A)], vec![click]));
     assert_eq!(db.all_tags().expect("read").len(), before);
     assert_eq!(user_tags(&db, A), ["night"]);
 }

@@ -64,6 +64,24 @@ jobs:
       - name: Build
         run: cargo build --release --workspace
 
+  tests:
+    name: Tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+      - name: Install the pinned toolchain
+        run: rustup toolchain install --profile minimal
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+      - name: Test
+        run: cargo test --workspace
+
   psd-fixtures:
     name: Build the large PSB
     runs-on: ubuntu-24.04

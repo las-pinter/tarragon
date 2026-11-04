@@ -107,6 +107,8 @@ fn write_events(store: &impl Store, paths: &[PathBuf], events: Vec<PreviewEvent>
             PreviewEvent::ColorClicked(swatch) => {
                 toggle_color(store, colortags::swatch_name(swatch), &stored)
             }
+            // These change no tags.
+            PreviewEvent::RetryRender | PreviewEvent::OpenInEditor => Ok(false),
         };
         match result {
             Ok(done) => wrote |= done,

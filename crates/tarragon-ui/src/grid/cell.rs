@@ -21,7 +21,7 @@ const BADGE_PAD_X: f32 = 5.0;
 /// Badge top and bottom padding, in points.
 const BADGE_PAD_Y: f32 = 1.0;
 /// Error mark diameter, in points. The mockup ring is 44 px.
-const ERROR_MARK_SIZE: f32 = 44.0;
+pub(crate) const ERROR_MARK_SIZE: f32 = 44.0;
 /// Error mark text size, in points.
 const ERROR_MARK_FONT: f32 = 24.0;
 /// Check badge diameter, in points.
@@ -196,7 +196,7 @@ fn paint_thumbnail(painter: &Painter, rect: Rect, item: &GridItem, radius: Corne
 
 /// Paint the error placeholder: a coral ring with a bang, as in the error
 /// state mockup (`design/mockups/error-state.html`, `.err-icon`).
-fn paint_error(painter: &Painter, rect: Rect, radius: CornerRadius) {
+pub(crate) fn paint_error(painter: &Painter, rect: Rect, radius: CornerRadius) {
     painter.rect(
         rect,
         radius,

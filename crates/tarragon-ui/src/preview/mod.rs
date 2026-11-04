@@ -8,6 +8,9 @@ use crate::tokens;
 mod add;
 pub mod budget;
 mod colors;
+mod failure;
+#[cfg(test)]
+mod failure_tests;
 #[cfg(test)]
 mod fill_tests;
 mod image;
@@ -19,6 +22,7 @@ mod tags;
 #[cfg(test)]
 mod test_support;
 pub use colors::{ColorState, ColorStates};
+pub use failure::PreviewFailure;
 pub use image::PreviewImage;
 pub use meta::{Meta, UNKNOWN};
 pub use tags::TagPill;
@@ -35,6 +39,10 @@ pub enum PreviewEvent {
     TagRemoved(String),
     /// The user clicked a partial tag: add it to every selected image.
     TagApplied(String),
+    /// The user asked to render the failed file again.
+    RetryRender,
+    /// The user asked to open the failed file in an editor.
+    OpenInEditor,
 }
 
 /// The state of the Preview panel.
@@ -44,6 +52,8 @@ pub struct Preview {
     meta: Option<Meta>,
     /// The picture of that file, when it is ready.
     image: Option<PreviewImage>,
+    /// Why the file has no picture; the card takes the picture's place.
+    failure: Option<PreviewFailure>,
     /// The pictures of a multi-selection that are ready, in display order.
     mosaic: Vec<PreviewImage>,
     /// How many images are selected, which can exceed `mosaic`.
@@ -72,6 +82,7 @@ impl Default for Preview {
         Self {
             meta: None,
             image: None,
+            failure: None,
             mosaic: Vec::new(),
             mosaic_total: 0,
             mosaic_cap: mosaic::DEFAULT_CAP,
@@ -92,13 +103,20 @@ impl Preview {
         self.meta = meta;
     }
 
-    /// Set the picture to show, or `None` for no picture.
+    /// Set the picture to show, or `None` for no picture. It does not clear
+    /// the failure.
     pub fn set_image(&mut self, image: Option<PreviewImage>) {
         if image.is_none() {
             // The next box is sized from a fresh measure.
             self.below_box = 0.0;
         }
         self.image = image;
+    }
+
+    /// Set why the file failed to render, or `None` to show the picture box
+    /// again. The card stays until the app clears it or the selection changes.
+    pub fn set_failure(&mut self, failure: Option<PreviewFailure>) {
+        self.failure = failure;
     }
 
     /// Set the ready pictures of a multi-selection and how many images are
@@ -141,6 +159,7 @@ impl Preview {
     /// changes; `set_tags` must not, because tags refresh after every tag event.
     pub fn selection_changed(&mut self) {
         self.add = add::AddState::default();
+        self.failure = None;
     }
 
     /// Return the queued events and empty the queue.
@@ -158,7 +177,7 @@ impl Preview {
         // mosaic, so the panel does not flip to the single box while it fills.
         let multi = total >= 2 && !mosaic.is_empty();
         match (&self.image, &self.meta) {
-            (None, None) if !multi => {
+            (None, None) if !multi && self.failure.is_none() => {
                 // A hidden input must not come back stale with the next selection.
                 *add = add::AddState::default();
                 show_empty(ui);
@@ -174,7 +193,9 @@ impl Preview {
                         .auto_shrink([false, false])
                         .show_viewport(ui, |ui, viewport| {
                             let mut box_bottom = None;
-                            if multi {
+                            if let Some(failure) = &self.failure {
+                                failure::show_card(ui, failure, events);
+                            } else if multi {
                                 mosaic::show(ui, mosaic, total, cap);
                             } else if let Some(image) = image {
                                 let height = image::box_height(viewport.height(), *below_box);

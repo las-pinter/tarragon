@@ -211,6 +211,16 @@ fn applying_a_new_tag_writes_every_selected_file_and_shows_it_on_all() {
 }
 
 #[test]
+fn the_retry_and_editor_events_write_no_tags() {
+    let (db, _dir) = seeded();
+    let (_ctx, mut shell) = selected_shell();
+    let events = vec![PreviewEvent::RetryRender, PreviewEvent::OpenInEditor];
+    assert!(!apply_events(&mut shell, &db, events));
+    assert_eq!(user_tags(&db, A), ["night"]);
+    assert_eq!(user_tags(&db, B), ["night"]);
+}
+
+#[test]
 fn applying_a_partial_tag_adds_only_the_missing_files() {
     let (db, _dir) = seeded();
     let solo = db.ensure_tag("solo", TagSource::User).expect("tag");

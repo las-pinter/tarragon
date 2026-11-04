@@ -2,8 +2,8 @@
 //! input for a new tag name.
 
 use egui::{
-    Area, CornerRadius, CursorIcon, FontId, Frame, Id, Key, Margin, Order, Response, ScrollArea,
-    Sense, Stroke, StrokeKind, TextEdit, Ui, Vec2, text::LayoutJob, text_edit::TextEditState, vec2,
+    Area, CornerRadius, FontId, Frame, Id, Key, Margin, Order, Response, ScrollArea, Stroke,
+    StrokeKind, TextEdit, Ui, text::LayoutJob, text_edit::TextEditState, vec2,
 };
 
 use tarragon_core::tag_name::{TagNameError, validate_tag_name};
@@ -13,6 +13,7 @@ use super::PreviewEvent;
 use crate::popup::{menu_frame, menu_placement, row_frame, text_width};
 use crate::theme::points;
 use crate::tokens;
+use crate::widgets::ghost_button;
 
 mod menu_layout;
 
@@ -41,34 +42,7 @@ pub enum AddState {
 
 /// Draw the ghost button. A click opens the menu, or closes it when open.
 pub fn show_button(ui: &mut Ui, state: &mut AddState) -> Response {
-    let font = FontId::proportional(tokens::SIZE_CAPTION);
-    let galley = ui
-        .painter()
-        .layout_no_wrap("+ add".to_owned(), font, tokens::TEXT_MUTED);
-    // The stylesheet pads 2 and 8 points inside a 1 point border.
-    let pad = vec2(tokens::SPACING_S, tokens::SPACING_XS / 2.0);
-    let border = Vec2::splat(tokens::STROKE_WIDTH);
-    let (rect, response) =
-        ui.allocate_exact_size(galley.size() + (pad + border) * 2.0, Sense::click());
-    let response = response.on_hover_cursor(CursorIcon::PointingHand);
-    let radius = CornerRadius::same(tokens::RADIUS_XL);
-    let hovered = response.hovered();
-    let painter = ui.painter();
-    if hovered {
-        painter.rect_filled(rect, radius, tokens::SURFACE_HIGHLIGHT);
-    }
-    painter.rect_stroke(
-        rect,
-        radius,
-        Stroke::new(tokens::STROKE_WIDTH, tokens::BORDER_INTERACTIVE),
-        StrokeKind::Inside,
-    );
-    let color = if hovered {
-        tokens::TEXT_SECONDARY
-    } else {
-        tokens::TEXT_MUTED
-    };
-    painter.galley(rect.min + pad + border, galley, color);
+    let response = ghost_button(ui, "+ add");
     if response.clicked() {
         *state = if *state == AddState::Menu {
             AddState::Closed

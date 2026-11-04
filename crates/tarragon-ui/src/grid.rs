@@ -21,6 +21,7 @@ mod selection;
 #[cfg(test)]
 mod tests;
 
+pub(crate) use cell::{ERROR_MARK_SIZE, paint_error};
 pub use items::{GridItem, TileError, items_in_order};
 pub use selection::Selection;
 

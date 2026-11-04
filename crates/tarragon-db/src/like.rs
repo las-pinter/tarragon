@@ -20,18 +20,6 @@ pub(crate) fn escape_like(value: &str) -> String {
         .replace('_', "\\_")
 }
 
-/// Return the LIKE pattern that matches every descendant of a folder.
-///
-/// SQLite `%` also matches `/`, so this includes nested paths. The folder
-/// listing pairs it with [`folder_deep_like`] in a `NOT LIKE` to keep direct
-/// children only. `LIKE` ignores ASCII case, so the filter engine uses
-/// [`folder_range`] instead.
-pub(crate) fn folder_like(folder: &str) -> String {
-    let normalized = normalize_path(folder);
-    let trimmed = normalized.trim_end_matches('/');
-    format!("{}/%", escape_like(trimmed))
-}
-
 /// Return the half-open range `[low, high)` that holds every descendant of a
 /// folder.
 ///
@@ -43,14 +31,4 @@ pub(crate) fn folder_range(folder: &str) -> (String, String) {
     let normalized = normalize_path(folder);
     let prefix = normalized.trim_end_matches('/');
     (format!("{prefix}/"), format!("{prefix}0"))
-}
-
-/// Return the LIKE pattern that matches the deeper descendants of a folder.
-///
-/// SQLite `%` also matches `/`. The extra `/%` tail therefore matches a path
-/// with one more separator, which is a nested child and never a direct child.
-pub(crate) fn folder_deep_like(folder: &str) -> String {
-    let normalized = normalize_path(folder);
-    let trimmed = normalized.trim_end_matches('/');
-    format!("{}/%/%", escape_like(trimmed))
 }

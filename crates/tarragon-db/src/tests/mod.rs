@@ -8,6 +8,7 @@ mod favorites;
 mod filter;
 mod filter_folder;
 mod folder;
+mod folder_listing;
 mod library;
 mod repository;
 mod settings;

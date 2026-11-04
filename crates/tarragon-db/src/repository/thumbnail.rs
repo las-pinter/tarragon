@@ -6,7 +6,7 @@ use rusqlite::{OptionalExtension, params};
 use tarragon_core::entity::FileInfo;
 use tarragon_core::sorting::natural_cmp;
 
-use crate::like::{folder_deep_like, folder_like, normalize_path};
+use crate::like::{folder_range, normalize_path};
 use crate::{Database, DbError};
 
 use super::{LibraryFile, THUMBNAIL_COLUMNS, Thumbnail, ThumbnailWrite, row_to_thumbnail};
@@ -124,21 +124,24 @@ impl Database {
 
     /// List every thumbnail row under `folder`, direct children only.
     ///
+    /// The folder match is a case-sensitive path range. A row is a direct
+    /// child when the path has no `/` after the folder prefix. `length` and
+    /// `substr` count characters, so a non-ASCII folder name is safe.
+    ///
     /// # Errors
     ///
     /// Returns [`DbError::Sqlite`] when the read fails. Returns
     /// [`DbError::LockPoisoned`] after a panic poisoned the lock.
     pub fn thumbnails_for_folder(&self, folder: &str) -> Result<Vec<Thumbnail>, DbError> {
         let conn = self.lock()?;
+        let (low, high) = folder_range(folder);
         let sql = format!(
             "SELECT {THUMBNAIL_COLUMNS} FROM thumbnails \
-             WHERE path LIKE ?1 ESCAPE '\\' AND path NOT LIKE ?2 ESCAPE '\\'"
+             WHERE path >= ?1 AND path < ?2 \
+             AND instr(substr(path, length(?1) + 1), '/') = 0"
         );
         let mut stmt = conn.prepare(&sql)?;
-        let rows = stmt.query_map(
-            [folder_like(folder), folder_deep_like(folder)],
-            row_to_thumbnail,
-        )?;
+        let rows = stmt.query_map([low, high], row_to_thumbnail)?;
         let mut out = Vec::new();
         for row in rows {
             out.push(row?);
@@ -227,7 +230,10 @@ impl Database {
         Ok(changed)
     }
 
-    /// Delete every thumbnail row under `folder`.
+    /// Delete every thumbnail row under `folder`, at any depth.
+    ///
+    /// The folder match is a case-sensitive path range. The method leaves
+    /// the `file_tags` rows alone.
     ///
     /// # Errors
     ///
@@ -235,9 +241,10 @@ impl Database {
     /// [`DbError::LockPoisoned`] after a panic poisoned the lock.
     pub fn delete_thumbnails_by_folder(&self, folder: &str) -> Result<usize, DbError> {
         let conn = self.lock()?;
+        let (low, high) = folder_range(folder);
         let changed = conn.execute(
-            "DELETE FROM thumbnails WHERE path LIKE ?1 ESCAPE '\\'",
-            [folder_like(folder)],
+            "DELETE FROM thumbnails WHERE path >= ?1 AND path < ?2",
+            [low, high],
         )?;
         Ok(changed)
     }

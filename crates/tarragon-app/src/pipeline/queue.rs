@@ -17,6 +17,8 @@ struct State {
     /// The next free sequence number, so a late job sorts after the rest.
     next_seq: u64,
     shutdown: bool,
+    /// The jobs a worker took and has not finished.
+    busy: usize,
 }
 
 /// A blocking queue shared by the workers and the pipeline.
@@ -24,6 +26,8 @@ struct State {
 pub(super) struct JobQueue {
     state: Mutex<State>,
     wake: Condvar,
+    /// Signals that a worker finished a job.
+    idle: Condvar,
 }
 
 impl JobQueue {
@@ -93,6 +97,9 @@ impl JobQueue {
                 .or_else(|| state.rest.pop_first())
                 .map(|(_, job)| job)
             {
+                // Counted under the same lock as the pop, so no gap shows an
+                // empty queue with a job in hand.
+                state.busy += 1;
                 return Some(job);
             }
             state = self
@@ -100,6 +107,32 @@ impl JobQueue {
                 .wait(state)
                 .unwrap_or_else(PoisonError::into_inner);
         }
+    }
+
+    /// Mark one job taken by [`Self::next`] as done.
+    pub(super) fn finish(&self) {
+        let mut state = self.lock();
+        state.busy = state.busy.saturating_sub(1);
+        drop(state);
+        self.idle.notify_all();
+    }
+
+    /// Block until no worker holds a job, or until [`Self::shutdown`].
+    pub(super) fn wait_idle(&self) {
+        let mut state = self.lock();
+        while state.busy > 0 && !state.shutdown {
+            state = self
+                .idle
+                .wait(state)
+                .unwrap_or_else(PoisonError::into_inner);
+        }
+    }
+
+    /// The number of jobs waiting for a worker.
+    #[cfg(test)]
+    fn queued(&self) -> usize {
+        let state = self.lock();
+        state.visible.len() + state.rest.len()
     }
 
     /// True after [`Self::shutdown`].
@@ -111,5 +144,36 @@ impl JobQueue {
     pub(super) fn shutdown(&self) {
         self.lock().shutdown = true;
         self.wake.notify_all();
+        self.idle.notify_all();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use tarragon_cache::store::SourceStamp;
+
+    use super::*;
+
+    fn job(name: &str) -> Job {
+        Job {
+            generation: 1,
+            path: PathBuf::from(name),
+            stamp: SourceStamp { mtime: 0, size: 0 },
+            stored: None,
+            folder: String::new(),
+            uuid: String::new(),
+            known_failure: None,
+            colors: None,
+            needs_colors: false,
+        }
+    }
+
+    #[test]
+    fn replace_with_nothing_leaves_no_queued_job() {
+        let queue = JobQueue::default();
+        queue.replace(vec![job("old-rest")]);
+        queue.request(vec![job("old-visible")]);
+        queue.replace(Vec::new());
+        assert_eq!(queue.queued(), 0);
     }
 }

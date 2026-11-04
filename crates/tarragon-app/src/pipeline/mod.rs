@@ -7,7 +7,8 @@
 //! never touch the database: one writer thread stores the rows they make.
 //! Each open (folder or library) bumps a generation. A job from an older generation is
 //! skipped when a worker takes it, and the consumer drops an older result.
-//! A render that is already running is not stopped.
+//! A render that is already running is not stopped. `drain` drops the queued
+//! jobs and waits for the running ones to end.
 
 mod job;
 mod library;
@@ -363,6 +364,22 @@ impl Pipeline {
     /// scan order behind them.
     pub fn reprioritise(&self, visible: &HashSet<PathBuf>) {
         self.queue.reprioritise(visible);
+    }
+
+    /// Drop every queued job and wait until no worker is rendering.
+    ///
+    /// Results of the current jobs are dropped too. The workers stay alive, so
+    /// a later open works. A running render is not stopped, so the wait can be
+    /// long: call this off the UI thread.
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "only tests call it until the purge uses it")
+    )]
+    pub fn drain(&mut self) {
+        self.generation.fetch_add(1, Ordering::AcqRel);
+        self.queue.replace(Vec::new());
+        self.jobs.clear();
+        self.queue.wait_idle();
     }
 
     /// Wait until the writer has stored every row queued so far.

@@ -37,9 +37,20 @@ pub(super) struct Shared {
 /// The colour extraction function. Tests swap it to force a panic.
 pub(super) type ColorFn = fn(&DynamicImage, ColorTagConfig) -> ColorTags;
 
+/// Releases the queue slot of a taken job when it drops, so every exit from
+/// the loop body (skip, panic, early return) frees the slot.
+struct Slot<'a>(&'a JobQueue);
+
+impl Drop for Slot<'_> {
+    fn drop(&mut self) {
+        self.0.finish();
+    }
+}
+
 /// Take jobs until the queue shuts down.
 pub(super) fn run(shared: &Shared) {
     while let Some(job) = shared.queue.next() {
+        let _slot = Slot(&shared.queue);
         // A job from an older folder is dropped before any work starts.
         if job.generation != shared.generation.load(Ordering::Acquire) {
             continue;

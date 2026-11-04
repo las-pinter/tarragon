@@ -16,11 +16,13 @@ impl Shell {
         }
     }
 
-    /// Draw the File, View, and Settings menus. Only Preferences and Quit act.
+    /// Draw the File, View, and Settings menus. Open Folder, Preferences, and Quit act.
     pub(super) fn menu_bar(&mut self, ui: &mut Ui, ctx: &Context) {
         ui.menu_button("File", |ui| {
-            // The folder picker lands with the scan work.
-            let _ = ui.button("Open Folder...");
+            if ui.button("Open Folder...").clicked() {
+                self.menu_events.push(MenuEvent::OpenFolder);
+                ui.close();
+            }
             if ui.button("Quit").clicked() {
                 ctx.send_viewport_cmd(ViewportCommand::Close);
                 // The menu must close before the window goes away.

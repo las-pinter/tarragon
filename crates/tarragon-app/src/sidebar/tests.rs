@@ -48,11 +48,59 @@ fn the_roots_hold_home_and_an_outside_folder_once() {
     let home = Path::new("/home/u");
     let outside = Path::new("/data/pics");
     let expected = [home.to_path_buf(), outside.to_path_buf()];
-    assert_eq!(roots(Some(home), Some(outside)), expected);
-    assert_eq!(roots(Some(home), Some(Path::new("/home/u/pics"))), [home]);
-    assert_eq!(roots(Some(home), Some(home)), [home]);
-    assert_eq!(roots(Some(home), None), [home]);
-    assert_eq!(roots(None, Some(outside)), [outside]);
+    assert_eq!(roots(Some(home), Some(outside), &[]), expected);
+    let pics = Path::new("/home/u/pics");
+    assert_eq!(roots(Some(home), Some(pics), &[]), [home]);
+    assert_eq!(roots(Some(home), Some(home), &[]), [home]);
+    assert_eq!(roots(Some(home), None, &[]), [home]);
+    assert_eq!(roots(None, Some(outside), &[]), [outside]);
+}
+
+#[test]
+fn saved_roots_follow_home_and_precede_an_outside_folder() {
+    let home = Path::new("/home/u");
+    let art = PathBuf::from("/mnt/art");
+    let saved = [art.clone()];
+    let with = |folder| roots(Some(home), folder, &saved);
+    assert_eq!(with(None), [home.to_path_buf(), art.clone()]);
+    // A folder under a saved root adds no entry.
+    assert_eq!(
+        with(Some(Path::new("/mnt/art/x"))),
+        [home.to_path_buf(), art.clone()]
+    );
+    let other = PathBuf::from("/data/pics");
+    assert_eq!(with(Some(&other)), [home.to_path_buf(), art, other]);
+    // A saved root equal to home is shown once.
+    assert_eq!(
+        roots(Some(home), None, &[home.to_path_buf()]),
+        [home.to_path_buf()]
+    );
+}
+
+#[test]
+fn init_shows_saved_roots_and_skips_one_that_is_gone() {
+    let dir = new_dir();
+    let db = db_with_favorites(&dir);
+    db.add_library_root(&dir.0.join("a").to_string_lossy())
+        .expect("save a root");
+    db.add_library_root(&dir.0.join("gone").to_string_lossy())
+        .expect("save a missing root");
+    let mut shell = Shell::new();
+    init(&mut shell, &db, None, None);
+    assert_eq!(shell.sidebar_mut().roots(), [dir.0.join("a")]);
+}
+
+#[test]
+fn refresh_roots_keeps_the_command_line_folder_last() {
+    let dir = new_dir();
+    let db = db_with_favorites(&dir);
+    let cli = dir.0.join("b");
+    let mut shell = Shell::new();
+    init(&mut shell, &db, None, Some(&cli));
+    db.add_library_root(&dir.0.join("a").to_string_lossy())
+        .expect("save a root");
+    refresh_roots(&mut shell, &db, None);
+    assert_eq!(shell.sidebar_mut().roots(), [dir.0.join("a"), cli]);
 }
 
 #[test]

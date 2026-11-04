@@ -87,6 +87,26 @@ fn choosing_preferences_in_the_settings_menu_queues_one_event() {
 }
 
 #[test]
+fn choosing_open_folder_in_the_file_menu_queues_one_event() {
+    let ctx = test_support::context();
+    let mut shell = Shell::new();
+    frame(&ctx, &mut shell, vec![]);
+    let texts = frame(&ctx, &mut shell, vec![]);
+    frame(
+        &ctx,
+        &mut shell,
+        test_support::click(centre_of(&texts, "File")),
+    );
+    let texts = frame(&ctx, &mut shell, vec![]);
+    frame(
+        &ctx,
+        &mut shell,
+        test_support::click(centre_of(&texts, "Open Folder...")),
+    );
+    assert_eq!(shell.take_menu_events(), vec![MenuEvent::OpenFolder]);
+}
+
+#[test]
 fn the_window_is_not_drawn_until_it_is_opened() {
     let ctx = test_support::context();
     let mut shell = Shell::new();

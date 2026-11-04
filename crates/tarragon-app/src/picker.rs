@@ -4,11 +4,6 @@
 //! wait, so [`Picker`] runs the dialog on a worker thread and the interface
 //! polls for the answer each frame.
 
-#![expect(
-    dead_code,
-    reason = "the window code that asks for a folder comes later"
-)]
-
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, TryRecvError};

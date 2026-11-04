@@ -6,6 +6,8 @@ use crate::prefs::Prefs;
 /// A menu choice that the app acts on.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MenuEvent {
+    /// The user chose File, Open Folder. The app asks for a folder.
+    OpenFolder,
     /// The user chose Settings, Preferences. The app reads the settings and
     /// opens the window with `Shell::prefs_mut`.
     OpenPreferences,

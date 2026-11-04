@@ -8,7 +8,8 @@ use tarragon_ui::shell::MenuEvent;
 
 use super::{App, max_multi_preview};
 use crate::filtering::colors_enabled;
-use crate::{prefs, tags};
+use crate::picker::Purpose;
+use crate::{prefs, sidebar, tags};
 
 /// The Cache Size text until a measure ends, and when a measure fails.
 const CACHE_SIZE_UNKNOWN: &str = "unknown";
@@ -20,6 +21,9 @@ const SETTLE_FRAMES: u8 = 4;
 /// The context key of the settle frames counter.
 pub(super) const SETTLE_ID: &str = "prefs_settle_frames";
 
+mod open;
+#[cfg(test)]
+mod open_tests;
 mod purge;
 #[cfg(test)]
 mod purge_tests;
@@ -32,17 +36,25 @@ impl App {
         for event in self.shell.take_menu_events() {
             match event {
                 MenuEvent::OpenPreferences => self.open_prefs(ctx),
+                MenuEvent::OpenFolder => {
+                    let start = sidebar::home_dir();
+                    open::ask_folder(ctx, Purpose::OpenFolder, start);
+                }
             }
         }
         for event in self.shell.prefs_mut().take_events() {
             match event {
                 PrefsEvent::Ok(values) => self.save_prefs(ctx, values),
                 PrefsEvent::PurgeCache => self.purge_cache(ctx),
-                // A cancel closed the window and stores nothing. The folder
-                // picker has no handler in the app yet.
-                PrefsEvent::Cancel | PrefsEvent::BrowseCacheDir => {}
+                PrefsEvent::BrowseCacheDir => {
+                    let start = Some(self.cache_root.clone());
+                    open::ask_folder(ctx, Purpose::CacheDir, start);
+                }
+                // A cancel closed the window and stores nothing.
+                PrefsEvent::Cancel => {}
             }
         }
+        self.poll_picker(ctx);
         self.poll_cache(ctx);
         let left = ctx.data(|data| data.get_temp::<u8>(settle)).unwrap_or(0);
         if left > 0 {

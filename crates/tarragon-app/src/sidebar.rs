@@ -48,16 +48,58 @@ pub(crate) fn normalize(path: &Path) -> PathBuf {
     out
 }
 
-/// The tree roots: the home directory, plus the command line folder when it is
-/// outside home. No home and no folder gives no roots.
-pub fn roots(home: Option<&Path>, folder: Option<&Path>) -> Vec<PathBuf> {
+/// The tree roots: the home directory, then the saved roots in table order,
+/// then the command line folder when it is under none of them. No home, no
+/// saved root, and no folder gives no roots.
+pub fn roots(home: Option<&Path>, folder: Option<&Path>, saved: &[PathBuf]) -> Vec<PathBuf> {
     let mut roots: Vec<PathBuf> = home.map(Path::to_path_buf).into_iter().collect();
+    for root in saved {
+        if !roots.contains(root) {
+            roots.push(root.clone());
+        }
+    }
     if let Some(folder) = folder
         && !roots.iter().any(|root| folder.starts_with(root))
     {
         roots.push(folder.to_path_buf());
     }
     roots
+}
+
+/// The saved roots that exist on disk. The tree has no way to show a missing
+/// root, so one that is gone stays in the table but out of the tree. A failed
+/// read logs and gives none.
+fn saved_roots(db: &Database) -> Vec<PathBuf> {
+    match db.list_library_roots() {
+        Ok(list) => list
+            .into_iter()
+            .map(PathBuf::from)
+            .filter(|root| {
+                let exists = root.is_dir();
+                if !exists {
+                    tracing::debug!("the saved root {} is missing", root.display());
+                }
+                exists
+            })
+            .collect(),
+        Err(error) => {
+            tracing::error!("cannot load the library roots: {error}");
+            Vec::new()
+        }
+    }
+}
+
+/// Show the saved roots after a new one was stored. A root the tree already
+/// shows that is under none of the new roots, such as the command line
+/// folder, stays last.
+pub fn refresh_roots(shell: &mut Shell, db: &Database, home: Option<&Path>) {
+    let mut all = roots(home, None, &saved_roots(db));
+    for old in shell.sidebar_mut().roots().to_vec() {
+        if !all.iter().any(|root| old.starts_with(root)) {
+            all.push(old);
+        }
+    }
+    shell.sidebar_mut().set_roots(all);
 }
 
 /// Set the roots, load the favorites, and mark the open folder.
@@ -67,7 +109,7 @@ pub fn init(shell: &mut Shell, db: &Database, home: Option<&Path>, folder: Optio
     let folder = folder.map(normalize);
     shell
         .sidebar_mut()
-        .set_roots(roots(home, folder.as_deref()));
+        .set_roots(roots(home, folder.as_deref(), &saved_roots(db)));
     reload_favorites(shell, db, false);
     if let Some(folder) = folder {
         shell.sidebar_mut().set_open_folder(Some(folder));

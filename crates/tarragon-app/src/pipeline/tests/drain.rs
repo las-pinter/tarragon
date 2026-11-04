@@ -7,16 +7,16 @@ use crossbeam_channel::{Receiver, Sender};
 use super::*;
 
 /// How long a drain that must wait is given to show that it does not return.
-const STILL_WAITING: Duration = Duration::from_millis(200);
+pub(super) const STILL_WAITING: Duration = Duration::from_millis(200);
 
 /// How long a drain that must return is given before the test fails.
-const DRAIN_WAIT: Duration = Duration::from_secs(10);
+pub(super) const DRAIN_WAIT: Duration = Duration::from_secs(10);
 
 /// What the test keeps of a render that blocks on its first call.
-struct Gate {
-    entered: Receiver<()>,
-    release: Sender<()>,
-    calls: Arc<AtomicUsize>,
+pub(super) struct Gate {
+    pub(super) entered: Receiver<()>,
+    pub(super) release: Sender<()>,
+    pub(super) calls: Arc<AtomicUsize>,
 }
 
 /// A render function whose first call announces itself and waits for the
@@ -47,7 +47,7 @@ fn gated_render(panic: bool) -> (RenderFn, Gate) {
 
 /// Open a folder of `count` files on a one-worker pipeline whose first render
 /// is held at the gate.
-fn open_held(count: usize, panic: bool) -> (Setup, Gate) {
+pub(super) fn open_held(count: usize, panic: bool) -> (Setup, Gate) {
     let dir = TempDir::new();
     let folder = dir.sub("held");
     for index in 0..count {

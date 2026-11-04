@@ -13,6 +13,7 @@
 mod job;
 mod library;
 mod prune;
+mod purge;
 mod queue;
 mod worker;
 mod writer;
@@ -78,6 +79,9 @@ pub enum PipelineError {
     /// A thread did not start.
     #[error("cannot start a pipeline thread: {0}")]
     Spawn(#[from] std::io::Error),
+    /// A cache call failed, for example a purge of an unsafe root.
+    #[error(transparent)]
+    Cache(#[from] tarragon_cache::CacheError),
 }
 
 /// What the pipeline needs to start.
@@ -371,10 +375,6 @@ impl Pipeline {
     /// Results of the current jobs are dropped too. The workers stay alive, so
     /// a later open works. A running render is not stopped, so the wait can be
     /// long: call this off the UI thread.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "only tests call it until the purge uses it")
-    )]
     pub fn drain(&mut self) {
         self.generation.fetch_add(1, Ordering::AcqRel);
         self.queue.replace(Vec::new());
@@ -383,10 +383,6 @@ impl Pipeline {
     }
 
     /// Wait until the writer has stored every row queued so far.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "only tests wait for stored rows")
-    )]
     pub fn flush(&self) {
         let Some(rows) = &self.rows else { return };
         let (ack_tx, ack_rx) = crossbeam_channel::bounded(1);

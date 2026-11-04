@@ -908,3 +908,4 @@ fn a_panicking_extraction_still_gives_the_thumbnail() {
 mod drain;
 mod library_open;
 mod prune_missing;
+mod purge;

@@ -15,10 +15,6 @@ const PREFIX: &str = "crash-";
 /// The end of a crash file name that nobody has marked yet.
 const SUFFIX: &str = ".txt";
 /// The end of a crash file name after [`mark_crash_report_seen`].
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "read by the crash card at the next start")
-)]
 const SEEN_SUFFIX: &str = ".seen.txt";
 /// How many same-second names to try before giving up.
 const MAX_NAME_TRIES: u32 = 100;
@@ -156,10 +152,6 @@ fn report(dir: &Path, info: &PanicHookInfo<'_>) {
 }
 
 /// The stem of a pending crash file name, or `None` for any other name.
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "read by the crash card at the next start")
-)]
 fn pending_stem(name: &str) -> Option<&str> {
     if name.ends_with(SEEN_SUFFIX) || !name.starts_with(PREFIX) {
         return None;
@@ -172,10 +164,6 @@ fn pending_stem(name: &str) -> Option<&str> {
 /// A missing or unreadable folder gives an empty list. The names sort in time
 /// order, and a same-second repeat sorts after the first file.
 #[must_use]
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "read by the crash card at the next start")
-)]
 pub fn pending_crash_reports(dir: &Path) -> Vec<PathBuf> {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return Vec::new();
@@ -199,10 +187,6 @@ pub fn pending_crash_reports(dir: &Path) -> Vec<PathBuf> {
 ///
 /// Returns an error when the name is not a pending crash file name or the
 /// rename fails.
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "read by the crash card at the next start")
-)]
 pub fn mark_crash_report_seen(path: &Path) -> io::Result<PathBuf> {
     let stem = path
         .file_name()

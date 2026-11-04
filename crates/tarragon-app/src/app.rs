@@ -13,6 +13,7 @@ use tarragon_ui::Shell;
 use tarragon_ui::gallery::Scope;
 use tarragon_ui::shell::{LogPanelEvents, LogView};
 
+use crate::crashcard;
 use crate::data_dir;
 use crate::filtering;
 use crate::instance::Guard;
@@ -49,6 +50,8 @@ pub struct Startup {
     pub close_when_loaded: bool,
     /// Lets `main` wait for the pipeline after the window closes.
     pub exit_wait: ExitWait,
+    /// The folder of the crash reports, or none when it is unknown.
+    pub crash_dir: Option<PathBuf>,
 }
 
 /// The running application: one database, one window state, one shell.
@@ -93,6 +96,10 @@ pub struct App {
     max_multi_preview: usize,
     /// How many files the last Preview read selected.
     preview_total: usize,
+    /// The folder of the crash reports.
+    crash_dir: Option<PathBuf>,
+    /// The report the crash card shows, until the user dismisses it.
+    crash_path: Option<PathBuf>,
 }
 
 impl App {
@@ -148,6 +155,14 @@ impl App {
         let preview_loader = PreviewLoader::new(repaint_of(&repaint_ctx))?;
         let max_multi_preview = max_multi_preview(&db);
         shell.preview_mut().set_max_multi_preview(max_multi_preview);
+        let crash_path = startup
+            .crash_dir
+            .as_deref()
+            .and_then(crashcard::newest_report)
+            .map(|(path, report)| {
+                shell.show_crash_report(report);
+                path
+            });
         Ok(Self {
             db,
             window_state,
@@ -169,6 +184,8 @@ impl App {
             preview_loader,
             max_multi_preview,
             preview_total: 0,
+            crash_dir: startup.crash_dir,
+            crash_path,
         })
     }
 
@@ -394,6 +411,7 @@ impl eframe::App for App {
             debug: self.debug,
         };
         let events = self.shell.show_with_log(ui, &view);
+        self.apply_crash_events();
         let revision = self.shell.selection_revision();
         if tags::selection_changed(&mut self.seen_selection, revision) {
             tags::refresh_preview(&mut self.shell, &self.db);
@@ -456,6 +474,9 @@ impl eframe::App for App {
 }
 
 mod card;
+mod crash;
+#[cfg(test)]
+mod crash_tests;
 #[cfg(test)]
 mod exit_tests;
 #[cfg(test)]

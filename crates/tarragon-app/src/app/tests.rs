@@ -34,6 +34,7 @@ fn app_with_pending_request(dir: &TempDir) -> App {
             folder: None,
             close_when_loaded: false,
             exit_wait: ExitWait::default(),
+            crash_dir: None,
         },
     )
     .expect("open the app");
@@ -64,6 +65,7 @@ fn a_reorder_event_persists_across_a_restart() {
             folder: None,
             close_when_loaded: false,
             exit_wait: ExitWait::default(),
+            crash_dir: None,
         };
         App::open(&db_path, LogRing::new(), control, None, startup).expect("open the app")
     };
@@ -97,6 +99,7 @@ fn app_at(dir: &TempDir, folder: Option<PathBuf>) -> App {
         folder,
         close_when_loaded: false,
         exit_wait: ExitWait::default(),
+        crash_dir: None,
     };
     App::open(&dir.0.join("t.db"), LogRing::new(), control, None, startup).expect("open")
 }

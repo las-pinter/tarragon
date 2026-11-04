@@ -3,6 +3,7 @@
 mod app;
 mod cli;
 mod colortags;
+mod crashcard;
 mod data_dir;
 mod editor;
 mod feed;
@@ -119,6 +120,7 @@ fn main() -> ExitCode {
                 // A test hook: the smoke test closes the window when the grid is done.
                 close_when_loaded: std::env::var_os("TARRAGON_CLOSE_WHEN_LOADED").is_some(),
                 exit_wait: exit_wait.clone(),
+                crash_dir: location.as_ref().ok().map(|l| l.crash_dir.clone()),
             },
         )
     };

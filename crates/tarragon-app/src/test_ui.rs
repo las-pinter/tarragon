@@ -31,18 +31,25 @@ pub fn frame(ctx: &Context, events: Vec<Event>, run: &mut impl FnMut(&mut Ui)) -
         pictures: 0,
     };
     for clipped in &out.shapes {
-        match &clipped.shape {
-            Shape::Text(t) => painted.texts.push((t.galley.text().to_owned(), t.pos)),
-            Shape::Mesh(m) if m.texture_id != TextureId::default() => painted.pictures += 1,
-            Shape::Rect(r) if r.brush.is_some() => painted.pictures += 1,
-            Shape::Rect(r) if r.rect.size() == vec2(FILTER_SIZE, FILTER_SIZE) => {
-                painted.swatches += 1;
-            }
-            _ => {}
-        }
+        tally(&clipped.shape, &mut painted);
     }
     out.drop_without_applying_deltas();
     painted
+}
+
+/// Count one shape into `painted`. A window groups its shapes in a list, so the
+/// walk goes into lists.
+fn tally(shape: &Shape, painted: &mut Painted) {
+    match shape {
+        Shape::Vec(shapes) => shapes.iter().for_each(|s| tally(s, painted)),
+        Shape::Text(t) => painted.texts.push((t.galley.text().to_owned(), t.pos)),
+        Shape::Mesh(m) if m.texture_id != TextureId::default() => painted.pictures += 1,
+        Shape::Rect(r) if r.brush.is_some() => painted.pictures += 1,
+        Shape::Rect(r) if r.rect.size() == vec2(FILTER_SIZE, FILTER_SIZE) => {
+            painted.swatches += 1;
+        }
+        _ => {}
+    }
 }
 
 /// The fill of each Preview colour square that one frame paints.

@@ -116,9 +116,9 @@ pub(super) fn contents(ui: &mut Ui, draft: &mut Draft, view: &View<'_>) -> Optio
             });
         });
     let note = "Colour tagging changes apply at the next folder open. \
-                The cache folder applies at the next start. Max PSD Workers, \
-                Large Canvas Threshold, Tile Grid Size, and Cache Format are \
-                saved, but nothing reads them yet.";
+                The cache size cap and the cache folder apply at the next \
+                start. Max PSD Workers, Large Canvas Threshold, Tile Grid \
+                Size, and Cache Format are saved, but nothing reads them yet.";
     ui.add(
         Label::new(
             RichText::new(note)

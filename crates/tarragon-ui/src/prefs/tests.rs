@@ -269,7 +269,12 @@ fn the_footnote_names_when_changes_apply_and_the_unread_settings() {
         .find(|(t, _, _)| t.starts_with("Colour tagging changes"))
         .expect("the footnote");
     assert!(note.0.contains("next folder open"), "{}", note.0);
-    assert!(note.0.contains("cache folder applies at the next start"));
+    assert!(
+        note.0
+            .contains("cache size cap and the cache folder apply at the next start"),
+        "{}",
+        note.0
+    );
     assert!(note.0.contains("nothing reads them yet"));
 }
 

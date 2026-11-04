@@ -2,8 +2,7 @@
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
-use std::thread::JoinHandle;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crossbeam_channel::{Receiver, TryRecvError};
@@ -15,6 +14,7 @@ use tarragon_ui::texture_budget::GRID_BUDGET_BYTES;
 
 use crate::feed::{Feed, Tiles};
 use crate::pipeline::{Opened, Pipeline, PipelineError, Repaint, Results};
+pub use exit::{ExitClear, ExitWait};
 use work::{Queued, WorkDone};
 pub use work::{Work, WorkOutcome};
 
@@ -100,24 +100,6 @@ enum Slot {
     },
     /// Lost to a failed thread start, or taken at exit.
     Gone,
-}
-
-/// Lets `main` wait for the pipeline to finish after the window is gone.
-#[derive(Clone, Default)]
-pub struct ExitWait(Arc<Mutex<Option<JoinHandle<()>>>>);
-
-impl ExitWait {
-    /// Block until the pipeline has stopped and stored its rows.
-    pub fn wait(&self) {
-        let handle = self
-            .0
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .take();
-        if let Some(handle) = handle {
-            let _ = handle.join();
-        }
-    }
 }
 
 /// The thumbnail side of the app: one pipeline, retargeted to one folder at a time.
@@ -334,31 +316,6 @@ impl Thumbs {
         ))
     }
 
-    /// Hand the pipeline to a thread that stops it, and give `wait` the
-    /// handle. The drop blocks until renders in flight end, and a PSD render
-    /// can take seconds, so the window must not wait for it.
-    pub fn shutdown(&mut self, wait: &ExitWait) {
-        let slot = std::mem::replace(&mut self.slot, Slot::Gone);
-        let spawned = std::thread::Builder::new()
-            .name("tarragon-shutdown".to_owned())
-            .spawn(move || match slot {
-                Slot::Idle(pipeline) => drop(pipeline),
-                // The open thread returns the pipeline; dropping it ends the work.
-                Slot::Opening { done, .. } => drop(done.recv()),
-                Slot::Working { done, .. } => drop(done.recv()),
-                Slot::Gone => {}
-            });
-        match spawned {
-            Ok(handle) => {
-                *wait
-                    .0
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(handle);
-            }
-            Err(error) => tracing::warn!("cannot stop the pipeline in the background: {error}"),
-        }
-    }
-
     /// Move the pipeline into a short-lived thread that loads `target`.
     fn start_open(&mut self, target: Target) {
         let Slot::Idle(mut pipeline) = std::mem::replace(&mut self.slot, Slot::Gone) else {
@@ -499,6 +456,7 @@ pub(crate) fn color_image(image: &RgbaImage) -> ColorImage {
     ColorImage::from_rgba_unmultiplied(size, image.as_raw())
 }
 
+mod exit;
 #[cfg(test)]
 mod library_tests;
 #[cfg(all(test, target_os = "linux"))]

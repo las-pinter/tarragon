@@ -26,7 +26,7 @@ use crate::preview_source;
 use crate::sidebar;
 use crate::storewatch::StoreWatch;
 use crate::tags;
-use crate::thumbs::{ExitWait, Thumbs};
+use crate::thumbs::{ExitClear, ExitWait, Thumbs};
 use crate::window;
 
 /// How often the open Log panel looks for new lines. The ring cannot wake the
@@ -35,6 +35,9 @@ const LOG_REFRESH: Duration = Duration::from_millis(250);
 
 /// The mosaic size when the `max_multi_preview` setting cannot be read.
 const DEFAULT_MULTI_PREVIEW: usize = 9;
+
+/// The cache cap in GiB when the `cache_size_cap_gb` setting cannot be read.
+const DEFAULT_CACHE_CAP_GB: i64 = 20;
 
 /// What the command line asked for.
 pub struct Startup {
@@ -68,6 +71,10 @@ pub struct App {
     guard: Option<Arc<Guard>>,
     /// The folder pipeline. It idles until a folder is opened.
     thumbs: Thumbs,
+    /// The folder of the database file. No cache clear may delete it.
+    data_root: PathBuf,
+    /// The folder of the thumbnail cache.
+    cache_root: PathBuf,
     /// The window context for worker threads, set once the window exists.
     repaint_ctx: Arc<OnceLock<Context>>,
     /// Close the window when the grid is done.
@@ -135,7 +142,9 @@ impl App {
         let home = sidebar::home_dir();
         sidebar::init(&mut shell, &db, home.as_deref(), folder.as_deref());
         let repaint_ctx = Arc::new(OnceLock::new());
-        let thumbs = start_thumbs(path, &db, folder, &repaint_ctx)?;
+        let (mut thumbs, cache_root) = start_thumbs(path, &db, folder, &repaint_ctx)?;
+        // Queued before any folder open, so the open sees the evicted cache.
+        thumbs.evict(cache_cap_gb(&db));
         let preview_loader = PreviewLoader::new(repaint_of(&repaint_ctx))?;
         let max_multi_preview = max_multi_preview(&db);
         shell.preview_mut().set_max_multi_preview(max_multi_preview);
@@ -149,6 +158,8 @@ impl App {
             debug,
             guard,
             thumbs,
+            data_root: data_dir::data_root(path),
+            cache_root,
             repaint_ctx,
             close_when_loaded: startup.close_when_loaded,
             exit_wait: startup.exit_wait,
@@ -249,6 +260,15 @@ impl App {
         self.preview_feed.select(&source, &self.preview_loader);
     }
 
+    /// The `full` tier clear for the exit, when the setting asks for it now.
+    /// An unreadable setting clears nothing, because a delete needs a clear yes.
+    fn exit_clear(&self) -> Option<ExitClear> {
+        clear_flag(Settings::new(&self.db).get(SettingKey::ClearFullResOnExit)).then(|| ExitClear {
+            cache_root: self.cache_root.clone(),
+            data_root: self.data_root.clone(),
+        })
+    }
+
     /// Write the maximized flag, dock layout, and sort mode to the database.
     fn save_window_state(&mut self) {
         self.window_state.layout = Some(self.shell.layout_json());
@@ -259,25 +279,58 @@ impl App {
     }
 }
 
-/// Build the pipeline, and open `folder` on the first frame when there is one. The cache sits where the `cache_dir`
-/// setting says, else beside the database.
+/// Build the pipeline, and open `folder` on the first frame when there is one.
+/// The cache sits where the `cache_dir` setting says, else beside the
+/// database. The cache folder comes back with the pipeline.
 fn start_thumbs(
     db_path: &Path,
     db: &Arc<Database>,
     folder: Option<PathBuf>,
     repaint_ctx: &Arc<OnceLock<Context>>,
-) -> Result<Thumbs, Box<dyn Error>> {
+) -> Result<(Thumbs, PathBuf), Box<dyn Error>> {
     let setting = Settings::new(db)
         .get(SettingKey::CacheDir)
         .unwrap_or_else(|error| {
             tracing::warn!("cannot read the cache folder setting: {error}");
             SettingValue::None
         });
-    let cache = CacheStore::new(data_dir::cache_root(db_path, &setting));
+    let cache_root = data_dir::cache_root(db_path, &setting);
+    let cache = CacheStore::new(cache_root.clone());
     let repaint = repaint_of(repaint_ctx);
     let (pipeline, results) =
         Pipeline::new(Config::new(cache), Arc::clone(db), Arc::clone(&repaint))?;
-    Ok(Thumbs::new(pipeline, results, folder, repaint))
+    Ok((Thumbs::new(pipeline, results, folder, repaint), cache_root))
+}
+
+/// The `cache_size_cap_gb` setting. A failed read logs and gives the default.
+fn cache_cap_gb(db: &Database) -> i64 {
+    cap_or_default(Settings::new(db).get(SettingKey::CacheSizeCapGb))
+}
+
+/// The cap in GiB from a setting read. Any other value or a failed read gives
+/// the default.
+fn cap_or_default<E: std::fmt::Display>(read: Result<SettingValue, E>) -> i64 {
+    match read {
+        Ok(SettingValue::Int(cap)) => cap,
+        Ok(_) => DEFAULT_CACHE_CAP_GB,
+        Err(error) => {
+            tracing::warn!("cannot read the cache size cap: {error}");
+            DEFAULT_CACHE_CAP_GB
+        }
+    }
+}
+
+/// Whether a setting read says to clear the `full` tier. Only a clear true
+/// does; any other value or a failed read clears nothing.
+fn clear_flag<E: std::fmt::Display>(read: Result<SettingValue, E>) -> bool {
+    match read {
+        Ok(SettingValue::Bool(on)) => on,
+        Ok(_) => false,
+        Err(error) => {
+            tracing::warn!("cannot read the clear on exit setting: {error}");
+            false
+        }
+    }
 }
 
 /// A callback that repaints the window once it exists.
@@ -393,10 +446,13 @@ impl eframe::App for App {
     // The argument exists because the eframe `glow` feature is on.
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
         self.save_window_state();
-        self.thumbs.shutdown(&self.exit_wait);
+        let exit = self.exit_clear();
+        self.thumbs.shutdown(&self.exit_wait, exit);
     }
 }
 
+#[cfg(test)]
+mod exit_tests;
 #[cfg(test)]
 mod filter_tests;
 #[cfg(test)]

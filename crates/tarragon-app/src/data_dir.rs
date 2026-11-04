@@ -56,11 +56,15 @@ pub fn cache_root(db_path: &Path, setting: &SettingValue) -> PathBuf {
     {
         return PathBuf::from(text);
     }
-    let root = match db_path.parent() {
-        Some(parent) if !parent.as_os_str().is_empty() => parent,
-        _ => Path::new("."),
-    };
-    DataPaths::new(root).cache()
+    DataPaths::new(data_root(db_path)).cache()
+}
+
+/// The data root: the folder of the database file, or `.` for a bare name.
+pub fn data_root(db_path: &Path) -> PathBuf {
+    match db_path.parent() {
+        Some(parent) if !parent.as_os_str().is_empty() => parent.to_path_buf(),
+        _ => PathBuf::from("."),
+    }
 }
 
 /// Where the log file and the crash files go.

@@ -1,6 +1,7 @@
 //! Tests for the purge and the eviction on the work thread.
 
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::thread::JoinHandle;
 
 use crossbeam_channel::Sender;
 
@@ -274,7 +275,7 @@ fn shutdown_during_work_returns_at_once_and_the_thread_ends_after_the_work() {
         let thumbs = &mut held.rig.thumbs;
         let wait_ref = &wait;
         scope.spawn(move || {
-            thumbs.shutdown(wait_ref);
+            thumbs.shutdown(wait_ref, None);
             let _ = done_tx.send(());
         });
         let returned = done_rx.recv_timeout(STEP_WAIT).is_ok();
@@ -312,4 +313,31 @@ fn shutdown_during_work_returns_at_once_and_the_thread_ends_after_the_work() {
         .is_some_and(JoinHandle::is_finished);
     assert!(finished, "the thread ends after the work");
     wait.wait();
+}
+
+#[test]
+fn a_failed_work_request_logs_a_warning() {
+    use crate::logging::ring::{LogRing, RingLayer};
+
+    let mut rig = Rig::new("logfail", None);
+    let cache = rig.dir.0.join("cache");
+    // A missing cache folder is not refused, so it must exist.
+    std::fs::create_dir_all(&cache).expect("make the cache folder");
+    let Slot::Idle(pipeline) = &mut rig.thumbs.slot else {
+        panic!("the pipeline should be idle");
+    };
+    // A data root equal to the cache root makes the purge fail.
+    let queued = Queued::Purge { data_root: cache };
+    let lines = LogRing::new();
+    let layer = RingLayer::new(lines.clone(), time::UtcOffset::UTC);
+    let subscriber =
+        tracing_subscriber::layer::SubscriberExt::with(tracing_subscriber::registry(), layer);
+    let result = tracing::subscriber::with_default(subscriber, || queued.run(pipeline));
+
+    assert!(result.is_err());
+    assert!(lines.snapshot().iter().any(|line| {
+        line.level == tracing::Level::WARN
+            && line.text.contains("Purge failed")
+            && line.text.contains("unsafe")
+    }));
 }

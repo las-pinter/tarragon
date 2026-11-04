@@ -35,7 +35,7 @@ fn shutdown_during(target: Target, name: &str) {
     thumbs.start_open(target);
     assert!(matches!(thumbs.slot, Slot::Opening { .. }));
     let wait = ExitWait::default();
-    thumbs.shutdown(&wait);
+    thumbs.shutdown(&wait, None);
     assert!(wait.0.lock().expect("lock").is_some(), "no handle to join");
     wait.wait();
     // Nobody owns the database once the pipeline is dropped.

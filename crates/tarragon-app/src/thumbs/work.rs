@@ -60,8 +60,18 @@ impl Queued {
         }
     }
 
-    /// Run the request. Errors are turned into text for the caller to show.
-    fn run(&self, pipeline: &mut Pipeline) -> Result<WorkOutcome, String> {
+    /// Run the request. Errors are turned into text for the caller to show,
+    /// and are logged here too, because nobody has to take the answer.
+    pub(super) fn run(&self, pipeline: &mut Pipeline) -> Result<WorkOutcome, String> {
+        let result = self.run_inner(pipeline);
+        if let Err(message) = &result {
+            tracing::warn!("{:?} failed: {message}", self.work());
+        }
+        result
+    }
+
+    /// Run the request without logging.
+    fn run_inner(&self, pipeline: &mut Pipeline) -> Result<WorkOutcome, String> {
         match self {
             Self::Purge { data_root } => pipeline
                 .purge(data_root)

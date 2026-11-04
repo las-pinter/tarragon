@@ -9,6 +9,7 @@ use egui::{
 use std::path::PathBuf;
 
 mod empty_card;
+mod keys;
 mod min_width;
 mod preview_wiring;
 

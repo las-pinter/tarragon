@@ -19,6 +19,7 @@ use crate::theme::{dock_title_style, panel_frame};
 use crate::tokens;
 
 mod dock;
+mod keys;
 mod log_panel;
 mod menu;
 mod prefs;
@@ -237,6 +238,7 @@ impl Shell {
         let mut events = LogPanelEvents::default();
         let mut menu = None;
         let ctx = ui.ctx().clone();
+        self.handle_shortcuts(&ctx);
 
         // A menu opened for the old selection would act on the wrong images.
         let revision = self.gallery.selection_revision();

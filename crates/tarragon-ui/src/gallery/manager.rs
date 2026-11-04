@@ -8,6 +8,18 @@ impl Gallery {
         self.tag_manager.set_rows(rows);
     }
 
+    /// Whether the "Manage tags" window is open.
+    #[must_use]
+    pub fn manager_open(&self) -> bool {
+        self.tag_manager.is_open()
+    }
+
+    /// Open the "Manage tags" window without a click.
+    #[cfg(test)]
+    pub(crate) fn open_manager(&mut self) {
+        self.tag_manager.open();
+    }
+
     /// Take the tag changes the user asked for since the last call.
     pub fn take_tag_manager_events(&mut self) -> Vec<TagManagerEvent> {
         self.tag_manager.take_events()

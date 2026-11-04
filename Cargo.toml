@@ -80,6 +80,11 @@ log = "=0.4.34"
 # used; no formatting features.
 time = { version = "=0.3.55", default-features = false, features = ["std", "local-offset"] }
 
+# The native folder dialog. `rfd` is MIT licensed. Only the `xdg-portal`
+# backend is on, so the dialog talks to the desktop portal at run time and
+# the build links no GTK. `gtk3` and the other defaults stay off.
+rfd = { version = "=0.17.2", default-features = false, features = ["xdg-portal"] }
+
 # Dependencies build optimized in dev and test, so image decoding and egui
 # code do not run at opt-level 0. The workspace crates keep fast rebuilds.
 [profile.dev.package."*"]

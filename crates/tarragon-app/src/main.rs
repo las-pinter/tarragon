@@ -12,6 +12,7 @@ mod instance;
 mod logging;
 mod logview;
 mod maintenance;
+mod picker;
 mod pipeline;
 mod prefs;
 mod preview_feed;

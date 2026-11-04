@@ -15,6 +15,7 @@ crossbeam-channel = { workspace = true }
 eframe = { workspace = true }
 # The pipeline decodes cached tier files, so it needs the cache codecs.
 image = { workspace = true, features = ["jpeg", "png"] }
+rfd = { workspace = true }
 tarragon-cache = { workspace = true }
 tarragon-core = { workspace = true }
 tarragon-db = { workspace = true }

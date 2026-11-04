@@ -36,7 +36,7 @@ it has no Quit item. The OS draws the window controls, so the mockup title bar
 shows none.
 
 After: the File menu holds Open Folder and Quit. Quit sends a window close
-request, and Open Folder is a placeholder until the folder picker lands.
+request. Open Folder opens the folder dialog, as "Open Folder and roots" says.
 
 Reason: the frame has no close control of its own, so the menu must offer one.
 
@@ -572,3 +572,68 @@ shows the unknown mark.
 
 Reason: the file extension is the only format fact the Preview can read
 without opening the file.
+
+## Preferences dialog
+
+Before: the mockup dialog has a close mark in its title bar and four groups of settings. It
+has no cap row, shows PNG for the cache format, and has no footnote or busy strip.
+
+After: the window is 520 points wide, with the default title bar and no close mark. Cancel and
+Escape close it and discard the input. OK saves all 13 settings in one transaction. The groups
+scroll on a short screen, and the footnote and the buttons stay in view. Purge Cache acts at
+once and shows a busy strip. Cancel, OK, and Escape wait while it runs. A refused purge shows
+`The cache folder is not safe to purge.` and the log has the raw error. The cap row reads
+`Cache size cap (GiB, 0 = off)`. Cache Format offers only `jpeg`. Number fields are text. The
+registry clamps them on save, and OK stays off while one does not parse. The cache size cap and
+the cache folder apply at the next start. Cache format, tile grid size, PSD workers, and large
+canvas threshold are saved and no code reads them yet.
+
+Reason: a purge cannot be undone, so it must not wait for OK. A setting with no reader must
+say so, or the user expects an effect.
+
+## Error card
+
+Before: the hint reads `Retry: reselect the file or use Regenerate Thumbnail. Check the log
+for the full trace.`
+
+After: the hint reads `Retry renders the file again. Check the log for the full trace.` Retry
+renders the file again. Open in editor is a ghost button and follows the editor rule in
+"Editor templates". The details grid and the tag pills stay below the card.
+
+Reason: the app has no Regenerate Thumbnail command, and a hint must name only what works.
+
+## Crash card
+
+Before: no mockup shows a crash report.
+
+After: a modal window with a dim layer, anchored at the centre, shows the newest unseen crash
+report once, at the next start. The colours follow the error card. It shows the report path
+and the first eight lines of the report. Dismiss and Escape mark all unseen reports as seen.
+Open report uses the editor rule and keeps the card open.
+
+Reason: the user must learn that the last run crashed. Marking all reports seen keeps an
+older report from showing at a later start.
+
+## Editor templates
+
+Before: the mockups show no screen to edit editor commands.
+
+After: there is no such screen. The app reads rows of `editor_associations`. The key is the
+lower-case extension without a dot, and `*` is the fallback. The extension row wins over `*`.
+`{file}` in a template is replaced with the path. Without `{file}`, the path is the last
+argument. A missing or blank row is skipped, and with no row left the system opener runs.
+Double-click to open and the Regenerate Thumbnail menu are not built.
+
+Reason: the screen is outside the current scope, and a file can still open in a program.
+
+## Open Folder and roots
+
+Before: the mockup menu has Open Folder... but shows no dialog and no saved root.
+
+After: File > Open Folder... opens the native folder dialog on its own thread, so the window
+stays responsive. On Linux the dialog needs `xdg-desktop-portal` and a portal backend. A
+folder outside the home folder and the saved roots is stored in `library_roots` and stays a
+root. The database trims a trailing slash, except for `/` and a bare drive. No screen removes
+a root.
+
+Reason: the user must reach any folder, and it must stay in the tree after a restart.

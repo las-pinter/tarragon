@@ -2,7 +2,8 @@
 //!
 //! The path is `<root>/<tier>/<folder>_<uuid>/<source_name>.<ext>`, with the
 //! lowercase tiers `256`, `1024`, and `full`. The `full` tier uses the source
-//! size up to the 8192 px cap.
+//! size up to the 8192 px cap. The folder and source names are made portable
+//! first, so a Windows-illegal name gives the same path on every platform.
 //!
 //! Image scaling and encoding live in the private `codec` module.
 //!
@@ -28,6 +29,7 @@ use tarragon_core::tier::Tier;
 
 use crate::CacheError;
 use crate::codec::{encode_tier, fit_to_edge};
+use crate::names::portable;
 
 pub use crate::codec::{JPEG_QUALITY, TierFormat};
 
@@ -147,8 +149,12 @@ impl CacheStore {
     }
 
     /// Return the directory for one tier and one source folder.
+    ///
+    /// The folder name is made portable, so the path agrees with
+    /// [`CacheStore::entry`].
     #[must_use]
-    pub fn tier_dir(&self, tier: Tier, folder: &str, uuid: &str) -> PathBuf {
+    pub(crate) fn tier_dir(&self, tier: Tier, folder: &str, uuid: &str) -> PathBuf {
+        let folder = portable(folder);
         self.tier_root(tier).join(format!("{folder}_{uuid}"))
     }
 
@@ -163,6 +169,15 @@ impl CacheStore {
     /// `file_name` is the source base name. The store appends the payload
     /// extension of `format`, so the cache name never lies about the payload.
     /// An opaque `.png` source yields `photo.png.jpg`.
+    ///
+    /// The folder and the file name are made portable on every platform, so
+    /// the layout is the same everywhere. A name that Windows would refuse is
+    /// cleaned and gains `-` and 8 hex digits before the payload extension.
+    /// A name that is already portable is unchanged.
+    ///
+    /// A changed name gains 9 bytes. A name within 9 bytes of the 255-byte
+    /// file name limit that also changes fails later with [`CacheError::Io`],
+    /// and the caller treats that as a miss or an error.
     ///
     /// # Errors
     ///
@@ -183,7 +198,9 @@ impl CacheStore {
         if file_name == "." || file_name == ".." {
             return Err(CacheError::InvalidName(file_name.to_owned()));
         }
-        let cache_name = cache_name(file_name, format);
+        // Clean the source name first. The hash must come before the payload
+        // extension, or `sibling` would replace it.
+        let cache_name = cache_name(&portable(file_name), format);
         Ok(CacheEntry {
             format,
             thumb256: self
@@ -253,8 +270,9 @@ impl CacheStore {
     /// fails. Returns [`CacheError::Encode`] when an encoder fails.
     ///
     /// `folder` is the source folder name and `uuid` is that folder's stable
-    /// id. Together they key the tier directory. A bad character in either
-    /// gives [`CacheError::InvalidName`].
+    /// id. Together they key the tier directory. A path separator or NUL in
+    /// either gives [`CacheError::InvalidName`]. Other characters that
+    /// Windows refuses are replaced, as [`CacheStore::entry`] describes.
     pub fn write_all(
         &self,
         source: &DynamicImage,

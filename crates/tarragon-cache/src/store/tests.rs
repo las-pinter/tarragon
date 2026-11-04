@@ -66,6 +66,7 @@ fn longest(size: (u32, u32)) -> u32 {
 }
 
 mod format;
+mod names;
 
 #[test]
 fn cache_paths_follow_the_tier_layout() {
@@ -410,6 +411,17 @@ fn a_backslash_is_a_valid_name_byte_on_unix() {
         .write_all(&source(4, 4), "gallery", "abcd", "a\\b.png")
         .expect("a backslash is an ordinary byte here");
     assert!(entry.all_files_exist());
+    let name = entry
+        .full
+        .file_name()
+        .and_then(|n| n.to_str())
+        .expect("name");
+    let hash = name
+        .strip_prefix("a_b.png-")
+        .and_then(|rest| rest.strip_suffix(".jpg"))
+        .expect("cleaned name, hash, then the payload extension");
+    assert_eq!(hash.len(), 8);
+    assert!(hash.bytes().all(|b| b.is_ascii_hexdigit()));
 }
 
 #[test]

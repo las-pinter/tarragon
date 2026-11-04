@@ -11,8 +11,6 @@ use std::path::PathBuf;
 
 mod codec;
 pub mod eviction;
-// No caller yet; only the tests use these names.
-#[cfg_attr(not(test), allow(dead_code))]
 mod names;
 pub mod purge;
 pub mod store;

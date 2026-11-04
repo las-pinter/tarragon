@@ -22,17 +22,17 @@ const LIMIT: Duration = Duration::from_secs(10);
 /// The Dimensions row the Preview shows for the stored rows.
 const DIMENSIONS: &str = "64 x 48";
 
-struct Rig {
-    dir: TempDir,
-    app: App,
-    ctx: Context,
+pub(super) struct Rig {
+    pub(super) dir: TempDir,
+    pub(super) app: App,
+    pub(super) ctx: Context,
     frame: Frame,
 }
 
 impl Rig {
     /// An app over a database that holds a row for each of `names`. A name
     /// listed in `rendered` also gets its tier file.
-    fn new(names: &[&str], rendered: &[&str], cap: i64) -> Self {
+    pub(super) fn new(names: &[&str], rendered: &[&str], cap: i64) -> Self {
         let dir = new_dir();
         let path = dir.0.join("tarragon.db");
         let db = Database::open(&path).expect("open");
@@ -73,7 +73,7 @@ impl Rig {
     }
 
     /// Draw one frame with `events`. Returns the texts and the picture count.
-    fn frame(&mut self, events: Vec<Event>) -> (Vec<String>, usize) {
+    pub(super) fn frame(&mut self, events: Vec<Event>) -> (Vec<String>, usize) {
         let (app, frame) = (&mut self.app, &mut self.frame);
         let painted = test_ui::frame(&self.ctx, events, &mut |ui| app.ui(ui, frame));
         (
@@ -83,7 +83,7 @@ impl Rig {
     }
 
     /// Click the tile `label`, holding the control key when `add` is set.
-    fn click(&mut self, label: &str, add: bool) {
+    pub(super) fn click(&mut self, label: &str, add: bool) {
         let first = test_ui::frame(&self.ctx, Vec::new(), &mut |ui| {
             self.app.ui(ui, &mut self.frame);
         });
@@ -118,7 +118,7 @@ impl Rig {
     }
 
     /// Draw frames until the picture count is `want`, or fail after [`LIMIT`].
-    fn pictures_reach(&mut self, want: usize) {
+    pub(super) fn pictures_reach(&mut self, want: usize) {
         let end = Instant::now() + LIMIT;
         loop {
             let (_, pictures) = self.frame(Vec::new());

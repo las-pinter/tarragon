@@ -13,6 +13,7 @@ mod logging;
 mod logview;
 mod maintenance;
 mod pipeline;
+mod prefs;
 mod preview_feed;
 mod preview_loader;
 mod preview_source;

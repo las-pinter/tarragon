@@ -433,6 +433,7 @@ impl eframe::App for App {
             self.thumbs.show_library();
         }
         self.apply_log_events(events);
+        self.apply_prefs_events(&ctx);
         let handled = sidebar::handle_events(&mut self.shell, &self.db);
         if let Some(path) = handled.navigate {
             self.navigate(&path);
@@ -485,6 +486,9 @@ mod failure_tests;
 mod filter_tests;
 #[cfg(test)]
 mod library_tests;
+mod prefs;
+#[cfg(test)]
+mod prefs_tests;
 #[cfg(test)]
 mod preview_tests;
 #[cfg(test)]

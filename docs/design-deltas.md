@@ -515,8 +515,8 @@ served from the cache is read once for its colours when it has no colour tag
 yet. The four colour settings (on or off, palette size, minimum share, and
 neutral saturation) are read at each folder open. A change takes effect at the
 next open. A colour counts as neutral when its saturation is at or below the
-neutral setting, or when its HSV value is 0.92 or more, or 0.08 or less. The
-Python application used the same value limits.
+neutral setting, or when its HSV value is 0.08 or less. A bright saturated
+colour keeps its hue bucket.
 
 Reason: the settings stay fixed while a folder loads. A file cached before
 colour tags existed still gets its tags, and it is not rendered again.

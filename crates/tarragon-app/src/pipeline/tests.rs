@@ -792,8 +792,6 @@ fn a_failed_colors_message_does_not_stop_the_writer() {
 }
 
 /// Write a 10 by 10 red PNG whose first `clear_rows` rows are clear.
-///
-/// The red is not full value, because full value counts as neutral.
 fn write_red(path: &Path, clear_rows: u32) {
     let image = RgbaImage::from_fn(10, 10, |_, y| {
         Rgba([200, 20, 20, if y < clear_rows { 0 } else { 255 }])

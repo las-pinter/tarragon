@@ -6,9 +6,6 @@
 use image::Rgb;
 use tarragon_core::color::ColorBucket;
 
-/// A very bright color is neutral.
-const VALUE_HIGH: f64 = 0.92;
-
 /// A very dark color is neutral.
 const VALUE_LOW: f64 = 0.08;
 
@@ -27,9 +24,13 @@ const HUE_BUCKETS: [(ColorBucket, &[(f64, f64)]); 10] = [
 ];
 
 /// Map a palette color to its bucket, with the neutral rules.
+///
+/// A color is neutral when its saturation is at or below the threshold, or
+/// when its value is very low. A very bright color is neutral only through the
+/// saturation limit, so a bright saturated color keeps its hue bucket.
 pub(crate) fn classify(color: Rgb<u8>, neutral_s_threshold: f64) -> ColorBucket {
     let (hue, saturation, value) = rgb_to_hsv(color);
-    if saturation <= neutral_s_threshold || value >= VALUE_HIGH || value <= VALUE_LOW {
+    if saturation <= neutral_s_threshold || value <= VALUE_LOW {
         return ColorBucket::Neutral;
     }
     hue_to_bucket(hue).unwrap_or(ColorBucket::Neutral)

@@ -440,9 +440,29 @@ mod tests {
     }
 
     #[test]
-    fn a_very_bright_color_is_neutral() {
-        let tags = buckets_of(&solid(10.0, 0.8, 0.95), ColorTagConfig::default());
+    fn a_very_bright_low_saturation_color_is_neutral() {
+        let tags = buckets_of(&solid(10.0, 0.05, 0.95), ColorTagConfig::default());
         assert_eq!(tags, BTreeSet::from([ColorBucket::Neutral]));
+    }
+
+    #[test]
+    fn full_value_red_yields_red() {
+        let tags = buckets_of(&solid_rgb([255, 0, 0]), ColorTagConfig::default());
+        assert_eq!(tags, BTreeSet::from([ColorBucket::Red]));
+    }
+
+    #[test]
+    fn white_and_near_white_are_neutral() {
+        for color in [[255, 255, 255], [250, 245, 240]] {
+            let tags = buckets_of(&solid_rgb(color), ColorTagConfig::default());
+            assert_eq!(tags, BTreeSet::from([ColorBucket::Neutral]), "{color:?}");
+        }
+    }
+
+    #[test]
+    fn full_value_full_saturation_yellow_is_not_neutral() {
+        let tags = buckets_of(&solid_rgb([255, 240, 0]), ColorTagConfig::default());
+        assert!(!tags.contains(&ColorBucket::Neutral), "neutral: {tags:?}");
     }
 
     #[test]

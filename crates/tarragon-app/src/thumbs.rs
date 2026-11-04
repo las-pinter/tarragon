@@ -176,6 +176,7 @@ impl Thumbs {
                 self.start_open(Target::Library);
             }
         }
+        gallery.set_loading(self.is_opening());
         if matches!(self.slot, Slot::Opening { .. } | Slot::Working { .. }) {
             ctx.request_repaint_after(OPEN_POLL);
             return;
@@ -483,6 +484,9 @@ pub(crate) fn color_image(image: &RgbaImage) -> ColorImage {
 mod exit;
 #[cfg(test)]
 mod library_tests;
+mod opening;
+#[cfg(test)]
+mod opening_tests;
 #[cfg(test)]
 mod retry_tests;
 #[cfg(all(test, target_os = "linux"))]

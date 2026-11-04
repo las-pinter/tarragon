@@ -237,13 +237,14 @@ extraction ignored alpha.
 
 After: there are eleven buckets. `pink` takes a light, soft colour: a hue from
 292 up to 360 or from 0 up to 15, saturation 0.60 or less, and value 0.80 or
-more. Its token is `#ff80ab` (`BUCKET_PINK`, which has no stylesheet row). Colour extraction skips pixels with alpha below 128. An image
-with 25 percent or more of such pixels is flagged transparent. The flag becomes
-the `transparent` tag when the scan pipeline stores it, which it does not do
-yet. `transparent` is a colour-filter value beside the buckets. It follows the
-same AND rule, the tag cannot be deleted, and the filter bar draws a
-checkerboard swatch for it after the eleven bucket swatches. The mockups stay
-frozen, so this file records the difference.
+more. The full rule is in "Colour tag timing and settings". Its token is
+`#ff80ab` (`BUCKET_PINK`, which has no stylesheet row). Colour extraction skips
+pixels with alpha below 128. An image with 25 percent or more of such pixels is
+flagged transparent. The flag becomes the `transparent` tag when the scan
+pipeline stores it, which it does not do yet. `transparent` is a colour-filter
+value beside the buckets. It follows the same AND rule, the tag cannot be
+deleted, and the filter bar draws a checkerboard swatch for it after the eleven
+bucket swatches. The mockups stay frozen, so this file records the difference.
 
 Reason: pink hues were wrongly neutral. Transparent pixels added colours that
 are not visible. Artists need to find images with transparency.
@@ -518,8 +519,33 @@ next open. A colour counts as neutral when its saturation is at or below the
 neutral setting, or when its HSV value is 0.08 or less. A bright saturated
 colour keeps its hue bucket.
 
+The hue buckets use these ranges in degrees. Each range includes its start and
+excludes its end. Red also takes 345 up to 360.
+
+| Bucket  | From | To  |
+| ------- | ---- | --- |
+| Red     | 0    | 15  |
+| Orange  | 15   | 42  |
+| Yellow  | 42   | 70  |
+| Green   | 70   | 150 |
+| Teal    | 150  | 175 |
+| Cyan    | 175  | 198 |
+| Blue    | 198  | 255 |
+| Purple  | 255  | 292 |
+| Magenta | 292  | 345 |
+
+Pink is not a hue range. A colour that is not neutral is pink when its hue is
+292 up to 360 or 0 up to 15, its saturation is 0.60 or less, and its value is
+0.80 or more. A stronger or darker colour with the same hue stays magenta or
+red.
+
 Reason: the settings stay fixed while a folder loads. A file cached before
-colour tags existed still gets its tags, and it is not rendered again.
+colour tags existed still gets its tags, and it is not rendered again. Each hue
+range now holds its pure hue (red 0, orange 30, yellow 60, green 120, cyan 180,
+blue 240, purple 270, magenta 300). The earlier ranges put pure blue in purple,
+pure green in cyan, and pure yellow in green. A very bright saturated colour is
+a real colour, so only low saturation or a very low value makes a colour
+neutral.
 
 ## Folder open removes rows of files that left
 

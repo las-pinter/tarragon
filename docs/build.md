@@ -302,9 +302,62 @@ write cost. The run prints the cache size, a warning when a hard link failed
 and the file was copied instead, and the first cache write error. `--help`
 lists the options.
 
-Not done yet: the reference-machine run with a cold file cache, and the run
-over a corpus of real PSD files. Those come with the corpus generator and the
+Not done yet: the run over a corpus of real PSD files. It comes with the
 download script.
+
+### Cold-cache scan of the 10k corpus
+
+`scan_bench --folder DIR` scans an existing folder, never deletes it, and
+prints PASS or FAIL against 120 s (exit code 1 on FAIL, 2 on a bad folder).
+
+1. Make the corpus: 7,000 PNG, 2,000 JPEG, and 1,000 PSD copies. Each PSD copy
+   has its own inode.
+
+   ```sh
+   cargo run --release --example corpus_gen -p tarragon-scan -- \
+       --out /var/tmp/tarragon-10k \
+       --psd-file tests/fixtures/psd/rgb_8bit.psd --psd-percent 10
+   ```
+
+2. Pick 4 physical cores. List them with `lscpu -p=CPU,CORE`. Take the first
+   logical CPU of each of the first four cores. With SMT these are not `0-3`.
+   `scan_bench` caps its pool at 4 threads anyway.
+3. Cold run, with root. This drops the data, dentry, and inode caches. A stat
+   scan needs the dentry and inode caches to be cold:
+
+   ```sh
+   sync && echo 3 | sudo tee /proc/sys/vm/drop_caches
+   ```
+
+4. Partly cold run, without root. This drops file data only. The dentry and
+   inode caches stay warm. It needs GNU `find`, which accepts `{}` inside
+   `if={}`:
+
+   ```sh
+   find /var/tmp/tarragon-10k -type f -exec dd if={} of=/dev/null iflag=nocache count=0 status=none \;
+   ```
+
+5. Run the scan right after step 3 or 4. Run it a second time to get the warm
+   figure. Use the CPU list from step 2:
+
+   ```sh
+   taskset -c <list> cargo run --release --example scan_bench -p tarragon-scan -- \
+       --folder /var/tmp/tarragon-10k
+   ```
+
+6. Remove the corpus: `rm -r /var/tmp/tarragon-10k`.
+
+Machine: Intel Core i7-12700K, Ubuntu 24.04, kernel 6.17.0-35-generic,
+release build, 2026-11-04. This machine has no SMT (1 thread per core), so
+CPUs 0 to 3 are four cores and the list was `0,1,2,3`.
+
+| Cache state | Scan | Write | Total | Result (120 s) |
+|-------------|------|-------|-------|----------------|
+| Cold | not run: needs root | | | |
+| Partly cold (step 4) | 0.066 s | 0.038 s | 0.104 s | PASS |
+| Warm (next run) | 0.057 s | 0.036 s | 0.093 s | PASS |
+
+Do not read the partly cold row as a cold figure.
 
 ## 60 MB check
 

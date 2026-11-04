@@ -115,7 +115,7 @@ fn supported_paths(
 ///
 /// The function returns `None` for a directory, a broken symlink, or a failed
 /// stat. The scan skips such a path.
-fn stat_file(path: &Path) -> Option<FileInfo> {
+pub fn stat_file(path: &Path) -> Option<FileInfo> {
     let metadata = std::fs::metadata(path).ok()?;
     if !metadata.is_file() {
         return None;

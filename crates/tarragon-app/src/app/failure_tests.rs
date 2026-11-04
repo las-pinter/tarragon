@@ -180,6 +180,26 @@ fn a_retry_that_works_removes_the_card_and_gives_a_texture() {
     assert_eq!(rig.app.shell.selected_paths(), [rig.bad.clone()]);
 }
 
+#[test]
+fn a_retry_that_works_shows_the_size_of_the_new_file() {
+    let mut rig = Rig::new();
+    rig.click("bad.png", false);
+    assert!(rig.card_shown());
+    RgbaImage::new(30, 20)
+        .save(&rig.bad)
+        .expect("fix the bad file");
+    let new_size = std::fs::metadata(&rig.bad).expect("stat").len();
+    // Both files are under 1 KiB, so the row reads as whole bytes.
+    assert!(new_size > 9 && new_size < 1024, "{new_size}");
+    let want = format!("{new_size} B");
+    let old = "9 B".to_owned();
+    rig.press("Retry");
+    rig.until("the size row shows the new size", |rig| {
+        rig.frame(Vec::new()).0.contains(&want)
+    });
+    assert!(!rig.frame(Vec::new()).0.contains(&old));
+}
+
 #[cfg(unix)]
 #[test]
 fn open_in_editor_runs_the_template_and_keeps_the_selection() {

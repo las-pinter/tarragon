@@ -37,7 +37,7 @@ use tarragon_core::entity::FileInfo;
 use tarragon_core::error::{RenderError, ScanError};
 use tarragon_db::{Database, DbError};
 use tarragon_render::color::extract_dominant_colors;
-use tarragon_scan::scan::{build_pool, scan_folder, worker_pool_size};
+use tarragon_scan::scan::{build_pool, scan_folder, stat_file, worker_pool_size};
 
 pub use job::{ErrorKind, ThumbError, ThumbResult};
 
@@ -417,6 +417,14 @@ impl Pipeline {
             };
             failures.remove(key);
             *retried.entry(key.clone()).or_default() += 1;
+            // The user may have replaced the file since the scan. The row of the
+            // retry render must carry the size of the file it renders.
+            if let Some(info) = stat_file(key) {
+                job.stamp = SourceStamp {
+                    mtime: info.mtime,
+                    size: info.size,
+                };
+            }
             // The stored job loses the failure too, so a later request renders.
             job.known_failure = None;
             jobs.push(Job {

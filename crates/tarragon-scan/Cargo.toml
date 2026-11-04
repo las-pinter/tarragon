@@ -19,5 +19,9 @@ tarragon-db = { path = "../tarragon-db", version = "0.2.0" }
 name = "corpus_gen"
 test = true
 
+[[example]]
+name = "scan_bench"
+test = true
+
 [lints]
 workspace = true

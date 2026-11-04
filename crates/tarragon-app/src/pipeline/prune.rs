@@ -12,10 +12,12 @@ use tarragon_db::repository::Thumbnail;
 /// `folder` whose path is not in `files`. It returns the number of rows
 /// deleted.
 ///
-/// It sees stored rows only. A row counts only when its parent is `folder`
-/// exactly: the database match ignores ASCII case, so `rows` can hold rows of
-/// a sibling folder such as `pics` next to `Pics`. The `file_tags` rows stay,
-/// so a file that comes back keeps its tags. A failure is logged and skipped.
+/// It sees stored rows only. The database folder match is case-sensitive, so
+/// `rows` holds rows of this folder only. A row still counts only when its
+/// parent is `folder` exactly. This second guard keeps a delete from reaching
+/// a row of another folder if the caller passes other rows. The `file_tags`
+/// rows stay, so a file that comes back keeps its tags. A failure is logged
+/// and skipped.
 /// A cache file is kept when its row could not be deleted, and when it does
 /// not resolve inside `cache_root`. A cache file that is already gone is not
 /// an error.

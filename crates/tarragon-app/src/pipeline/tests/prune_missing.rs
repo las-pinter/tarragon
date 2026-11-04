@@ -9,7 +9,7 @@ fn stored(db: &Database, folder: &Path) -> Vec<Thumbnail> {
     let mut rows = db
         .thumbnails_for_folder(&path_text(folder))
         .expect("read the rows");
-    // The database match ignores ASCII case; keep the exact folder only.
+    // The database match is case-sensitive; keep the exact parent as a guard.
     rows.retain(|row| Path::new(&row.path).parent() == Some(folder));
     rows.sort_by(|left, right| left.path.cmp(&right.path));
     rows

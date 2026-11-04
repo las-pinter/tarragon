@@ -1,8 +1,10 @@
 //! Path and LIKE-pattern helpers shared by the repository and the filter
 //! engine.
 //!
-//! SQLite `LIKE` has no default escape character. Every pattern that carries
-//! a user value pairs with an explicit `ESCAPE '\'` clause.
+//! `LIKE` serves the text search on the path only. It ignores ASCII case, and it has
+//! no default escape character. Every pattern that carries a user value pairs
+//! with an explicit `ESCAPE '\'` clause. Folder matches use [`folder_range`],
+//! which is case-sensitive.
 
 /// Return `path` with backslashes changed to forward slashes.
 pub(crate) fn normalize_path(path: &str) -> String {

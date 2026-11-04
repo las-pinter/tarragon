@@ -310,6 +310,11 @@ impl Shell {
                 ui.ctx().request_repaint();
             }
         });
+        // The card button opens the same picker as File > Open Folder.
+        if self.gallery.take_open_folder_request() {
+            self.menu_events.push(MenuEvent::OpenFolder);
+            ctx.request_repaint();
+        }
         self.crash_card.show(&ctx);
         self.prefs.show(&ctx);
         events

@@ -48,8 +48,10 @@ fn frame(ctx: &Context, shell: &mut Shell, events: Vec<Event>) -> Vec<(String, R
 }
 
 fn centre_of(texts: &[(String, Rect)], want: &str) -> Pos2 {
+    // A popup paints after the page, so the last match is the one on top.
     let (_, rect) = texts
         .iter()
+        .rev()
         .find(|(t, _)| t == want)
         .unwrap_or_else(|| panic!("no text {want:?}"));
     rect.center()

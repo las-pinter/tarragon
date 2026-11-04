@@ -110,3 +110,116 @@ fn a_visible_item_gives_no_card_in_every_scope() {
     gallery.set_scope(Scope::All);
     assert_eq!(gallery.empty_kind(), None);
 }
+
+/// Run one frame with `events`. Return each painted text with its rect.
+fn texts(
+    ctx: &egui::Context,
+    gallery: &mut Gallery,
+    events: Vec<Event>,
+) -> Vec<(String, egui::Rect)> {
+    let output = frame(ctx, gallery, events);
+    let found = output
+        .shapes
+        .iter()
+        .filter_map(|clipped| match &clipped.shape {
+            egui::epaint::Shape::Text(shape) => {
+                Some((shape.galley.job.text.clone(), shape.visual_bounding_rect()))
+            }
+            _ => None,
+        })
+        .collect();
+    output.drop_without_applying_deltas();
+    found
+}
+
+/// A context with the app fonts and theme.
+fn themed() -> egui::Context {
+    let ctx = crate::test_support::context();
+    crate::theme::apply_theme(&ctx);
+    ctx
+}
+
+/// Whether some painted text equals `wanted`.
+fn has(found: &[(String, egui::Rect)], wanted: &str) -> bool {
+    found.iter().any(|(text, _)| text == wanted)
+}
+
+#[test]
+fn a_new_gallery_paints_the_no_folder_card_with_its_button() {
+    let mut gallery = Gallery::new(SortMode::Natural);
+    let found = texts(&themed(), &mut gallery, Vec::new());
+    assert!(has(&found, "Open a folder to begin"));
+    assert!(
+        found
+            .iter()
+            .any(|(text, _)| text.starts_with("Use File - Open Folder"))
+    );
+    assert!(has(&found, "Open Folder..."));
+}
+
+#[test]
+fn an_empty_folder_lists_the_supported_extensions() {
+    let mut gallery = Gallery::new(SortMode::Natural);
+    gallery.set_folder(Some(PathBuf::from("/images")));
+    let found = texts(&themed(), &mut gallery, Vec::new());
+    assert!(has(&found, "No supported images in this folder"));
+    assert!(has(&found, "Open Another Folder..."));
+    let hint = found
+        .iter()
+        .find_map(|(text, _)| text.strip_prefix("This folder has no file"))
+        .expect("the hint is painted");
+    assert!(hint.ends_with("Supported: JPG, JPEG, PNG, WEBP, TIFF, TIF, PSD, PSB, CLIP, KRA."));
+    assert!(!hint.contains("GIF") && !hint.contains("BMP"));
+}
+
+#[test]
+fn a_no_result_gallery_paints_its_text_and_no_button() {
+    let mut gallery = filled();
+    search(&mut gallery, "zzz");
+    let found = texts(&themed(), &mut gallery, Vec::new());
+    assert!(has(&found, "No images match"));
+    assert!(
+        found
+            .iter()
+            .any(|(text, _)| text.starts_with("Change or clear the search"))
+    );
+    assert!(!found.iter().any(|(text, _)| text.ends_with("...")));
+}
+
+#[test]
+fn a_gallery_with_items_paints_no_empty_text() {
+    let mut gallery = filled();
+    let found = texts(&themed(), &mut gallery, Vec::new());
+    assert!(!has(&found, "Open a folder to begin"));
+    assert!(!has(&found, "No images match"));
+    assert!(!has(&found, "No supported images in this folder"));
+}
+
+#[test]
+fn a_click_on_the_button_sets_the_request_once() {
+    let ctx = themed();
+    let mut gallery = Gallery::new(SortMode::Natural);
+    let found = texts(&ctx, &mut gallery, Vec::new());
+    let (_, rect) = found
+        .iter()
+        .find(|(text, _)| text == "Open Folder...")
+        .expect("the button is painted");
+    assert!(!gallery.take_open_folder_request());
+    for events in crate::test_support::click(rect.center()) {
+        frame(&ctx, &mut gallery, vec![events]).drop_without_applying_deltas();
+    }
+    frame(&ctx, &mut gallery, Vec::new()).drop_without_applying_deltas();
+    assert!(gallery.take_open_folder_request());
+    assert!(!gallery.take_open_folder_request());
+}
+
+#[test]
+fn the_card_replaces_the_painted_tiles() {
+    let ctx = themed();
+    let mut gallery = filled();
+    frame(&ctx, &mut gallery, Vec::new()).drop_without_applying_deltas();
+    assert_eq!(gallery.painted.len(), 4, "the grid painted four tiles");
+    search(&mut gallery, "zzz");
+    frame(&ctx, &mut gallery, Vec::new()).drop_without_applying_deltas();
+    assert_eq!(gallery.painted.len(), 0, "the card left stale tiles");
+}

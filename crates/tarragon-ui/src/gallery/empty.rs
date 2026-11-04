@@ -1,6 +1,19 @@
-//! The rule that picks which empty card the gallery shows.
+//! The rule that picks which empty card the gallery shows, and the card.
 
+mod icon;
+
+use egui::{Align, Label, RichText, Ui, UiBuilder};
+use tarragon_core::format::SUPPORTED_EXTENSIONS;
+
+use self::icon::folder_icon;
 use super::{Gallery, Scope};
+use crate::tokens;
+use crate::widgets::small_button;
+
+/// The width at which the hint wraps.
+const HINT_WIDTH: f32 = 440.0;
+/// The size of the big line.
+const BIG_SIZE: f32 = 15.0;
 
 /// Which empty card the gallery shows.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -41,8 +54,96 @@ impl Gallery {
         })
     }
 
+    /// Return whether the Open Folder button was clicked since the last call.
+    ///
+    /// The flag clears when read.
+    pub fn take_open_folder_request(&mut self) -> bool {
+        std::mem::take(&mut self.open_folder_requested)
+    }
+
+    /// Fill the grid area with the empty card for `kind`.
+    pub(super) fn show_empty(&mut self, ui: &mut Ui, kind: EmptyKind) {
+        let area = ui.available_size();
+        // Measure the column first, so the real pass can centre it.
+        let height = ui
+            .scope_builder(UiBuilder::new().sizing_pass().invisible(), |ui| {
+                column(ui, kind)
+            })
+            .response
+            .rect
+            .height();
+        let clicked = ui
+            .allocate_ui(area, |ui| {
+                ui.add_space(((area.y - height) / 2.0).max(0.0));
+                column(ui, kind)
+            })
+            .inner;
+        self.open_folder_requested |= clicked;
+    }
+
     /// Return whether the search, a chip, or the database result filters.
     fn filter_active(&self) -> bool {
         !self.bar.state.is_empty(self.filter_scope()) || self.filter_result.is_some()
     }
+}
+
+impl EmptyKind {
+    /// The big line, the hint, and the button label if the card has one.
+    fn text(self) -> (&'static str, String, Option<&'static str>) {
+        match self {
+            Self::NoFolder => (
+                "Open a folder to begin",
+                "Use File - Open Folder, or click a folder in the Library tree. \
+                 Tarragon scans the folder, writes the index, and renders thumbnails."
+                    .to_owned(),
+                Some("Open Folder..."),
+            ),
+            Self::EmptyFolder => {
+                let names: Vec<String> = SUPPORTED_EXTENSIONS
+                    .iter()
+                    .map(|extension| extension.trim_start_matches('.').to_uppercase())
+                    .collect();
+                (
+                    "No supported images in this folder",
+                    format!(
+                        "This folder has no file with a supported extension. Supported: {}.",
+                        names.join(", ")
+                    ),
+                    Some("Open Another Folder..."),
+                )
+            }
+            Self::NoResult => (
+                "No images match",
+                "Change or clear the search and the filters to see more images.".to_owned(),
+                None,
+            ),
+        }
+    }
+}
+
+/// Draw the centred column. Return whether the button was clicked.
+fn column(ui: &mut Ui, kind: EmptyKind) -> bool {
+    let (big, hint, button) = kind.text();
+    ui.vertical_centered(|ui| {
+        ui.spacing_mut().item_spacing.y = tokens::SPACING_M;
+        folder_icon(ui);
+        ui.label(
+            RichText::new(big)
+                .size(BIG_SIZE)
+                .color(tokens::TEXT_SECONDARY),
+        );
+        ui.scope(|ui| {
+            ui.set_max_width(HINT_WIDTH.min(ui.available_width()));
+            ui.add(
+                Label::new(
+                    RichText::new(hint)
+                        .size(tokens::SIZE_CAPTION)
+                        .color(tokens::TEXT_MUTED),
+                )
+                .halign(Align::Center),
+            );
+        });
+        button.is_some_and(|label| small_button(ui, label).clicked())
+    })
+    .inner
 }

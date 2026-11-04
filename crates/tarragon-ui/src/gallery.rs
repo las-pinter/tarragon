@@ -93,6 +93,10 @@ impl Debouncer {
 }
 
 /// The gallery panel: the top strip and the virtual grid.
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "each flag is an independent one-shot or switch; none combine into a state"
+)]
 pub struct Gallery {
     /// Every item in the gallery, in no fixed order.
     items: Vec<GridItem>,
@@ -147,6 +151,8 @@ pub struct Gallery {
     visible_revision: u64,
     /// Whether a scan or a query is still running.
     loading: bool,
+    /// Whether the empty card button was clicked since the last take.
+    open_folder_requested: bool,
 }
 
 impl Gallery {
@@ -179,6 +185,7 @@ impl Gallery {
             painted_scratch: Vec::new(),
             visible_revision: 0,
             loading: false,
+            open_folder_requested: false,
         }
     }
 
@@ -456,6 +463,12 @@ impl Gallery {
 
     /// Draw the filtered items through the virtual grid.
     fn grid(&mut self, ui: &mut Ui) {
+        if let Some(kind) = self.empty_kind() {
+            self.painted_scratch.clear();
+            self.record_painted();
+            self.show_empty(ui, kind);
+            return;
+        }
         let grid = VirtualGrid {
             metrics: metrics_for(ui.available_width()),
             item_count: self.visible.len(),

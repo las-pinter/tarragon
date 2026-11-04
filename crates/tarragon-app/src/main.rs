@@ -131,7 +131,9 @@ fn main() -> ExitCode {
         }
     };
     tracing::info!("tarragon {} started", env!("CARGO_PKG_VERSION"));
-    let outcome = run::run(first, &open);
+    // A failed wgpu try drops its app while the pipeline may still be
+    // stopping; the glow app must not open the same database meanwhile.
+    let outcome = run::run(first, &open, &|| exit_wait.wait());
     // The window is gone; let the render threads finish and store their rows.
     exit_wait.wait();
     match outcome {

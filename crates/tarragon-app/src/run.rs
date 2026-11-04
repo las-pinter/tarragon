@@ -108,14 +108,37 @@ fn no_display(
 
 /// Run the window until it closes. `first` is used for the wgpu try. `reopen`
 /// builds a fresh app for the glow try, because a failed try drops its app.
+/// `before_reopen` runs first, so the old app's pipeline has stopped before
+/// the new app opens the same database and cache.
 ///
 /// # Errors
 ///
 /// Returns the error of the glow try when both renderers fail, the display
 /// error when the display cannot be reached, or the error from `reopen` when
 /// the app cannot be built for the second try.
-pub fn run(first: App, reopen: &dyn Fn() -> Result<App, Box<dyn Error>>) -> Result<(), RunError> {
-    let error = match run_with(Renderer::Wgpu, first) {
+pub fn run(
+    first: App,
+    reopen: &dyn Fn() -> Result<App, Box<dyn Error>>,
+    before_reopen: &dyn Fn(),
+) -> Result<(), RunError> {
+    drive(
+        first,
+        |app| run_with(Renderer::Wgpu, app),
+        |app| run_with(Renderer::Glow, app),
+        reopen,
+        before_reopen,
+    )
+}
+
+/// The order of the two tries, apart from the window, so a test can drive it.
+fn drive<A>(
+    first: A,
+    wgpu: impl FnOnce(A) -> eframe::Result<()>,
+    glow: impl FnOnce(A) -> eframe::Result<()>,
+    reopen: &dyn Fn() -> Result<A, Box<dyn Error>>,
+    before_reopen: &dyn Fn(),
+) -> Result<(), RunError> {
+    let error = match wgpu(first) {
         Ok(()) => return Ok(()),
         Err(error) => error,
     };
@@ -128,13 +151,16 @@ pub fn run(first: App, reopen: &dyn Fn() -> Result<App, Box<dyn Error>>) -> Resu
         Next::Report => Err(error.into()),
         Next::Glow => {
             tracing::warn!("cannot start with wgpu, trying glow: {error}");
-            Ok(run_with(Renderer::Glow, reopen().map_err(RunError::Open)?)?)
+            before_reopen();
+            Ok(glow(reopen().map_err(RunError::Open)?)?)
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::cell::RefCell;
+
     use super::*;
     use eframe::egui_wgpu::WgpuError;
 
@@ -163,6 +189,66 @@ mod tests {
     fn an_app_creation_error_is_reported() {
         let error = eframe::Error::AppCreation("broken".into());
         assert_eq!(classify(&error), Next::Report);
+    }
+
+    /// Run `drive` with doubles that log their calls. `first_error` is the
+    /// result of the wgpu try; `reopen_fails` makes the rebuild fail.
+    fn calls(
+        first_error: Option<eframe::Error>,
+        reopen_fails: bool,
+    ) -> (Result<(), RunError>, Vec<&'static str>) {
+        let log = RefCell::new(Vec::new());
+        let result = drive(
+            (),
+            |()| {
+                log.borrow_mut().push("wgpu");
+                first_error.map_or(Ok(()), Err)
+            },
+            |()| {
+                log.borrow_mut().push("glow");
+                Ok(())
+            },
+            &|| {
+                log.borrow_mut().push("reopen");
+                if reopen_fails {
+                    Err("no database".into())
+                } else {
+                    Ok(())
+                }
+            },
+            &|| log.borrow_mut().push("before_reopen"),
+        );
+        (result, log.into_inner())
+    }
+
+    #[test]
+    fn the_old_pipeline_is_awaited_before_the_glow_app_is_built() {
+        let error = eframe::Error::Wgpu(WgpuError::NoSurfaceFormatsAvailable);
+        let (result, log) = calls(Some(error), false);
+        assert!(result.is_ok());
+        assert_eq!(log, ["wgpu", "before_reopen", "reopen", "glow"]);
+    }
+
+    #[test]
+    fn the_wait_runs_even_when_the_glow_app_cannot_be_built() {
+        let error = eframe::Error::Wgpu(WgpuError::NoSurfaceFormatsAvailable);
+        let (result, log) = calls(Some(error), true);
+        assert!(matches!(result, Err(RunError::Open(_))));
+        assert_eq!(log, ["wgpu", "before_reopen", "reopen"]);
+    }
+
+    #[test]
+    fn no_wait_when_the_first_run_succeeds() {
+        let (result, log) = calls(None, false);
+        assert!(result.is_ok());
+        assert_eq!(log, ["wgpu"]);
+    }
+
+    #[test]
+    fn no_wait_when_the_error_is_reported() {
+        let (result, log) = calls(Some(eframe::Error::AppCreation("broken".into())), false);
+        assert!(matches!(result, Err(RunError::Window(_))));
+        assert_eq!(log, ["wgpu"]);
     }
 
     #[test]

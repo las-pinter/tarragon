@@ -35,4 +35,30 @@ impl Database {
         )?;
         Ok(())
     }
+
+    /// Store several raw string settings in one transaction.
+    ///
+    /// Either every pair is stored or none is. A repeated key keeps the last
+    /// value. An empty slice does nothing.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DbError::Sqlite`] when a statement fails. Returns
+    /// [`DbError::LockPoisoned`] after a panic poisoned the lock.
+    pub fn set_settings(&self, pairs: &[(&str, &str)]) -> Result<(), DbError> {
+        if pairs.is_empty() {
+            return Ok(());
+        }
+        let mut conn = self.lock()?;
+        let tx = conn.transaction()?;
+        {
+            let mut stmt =
+                tx.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?1, ?2)")?;
+            for (key, value) in pairs {
+                stmt.execute(params![key, value])?;
+            }
+        }
+        tx.commit()?;
+        Ok(())
+    }
 }

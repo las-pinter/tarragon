@@ -464,3 +464,108 @@ fn window_state_is_not_a_typed_setting() {
     let names: BTreeSet<&str> = SettingKey::ALL.iter().map(|key| key.as_str()).collect();
     assert!(!names.contains(WINDOW_STATE_KEY));
 }
+
+#[test]
+fn set_many_stores_every_valid_pair() {
+    let temp = TempDb::new();
+    let settings = Settings::new(&temp.db);
+    let values = [
+        (SettingKey::DebugMode, SettingValue::Bool(true)),
+        (SettingKey::MaxPsdWorkers, SettingValue::Int(3)),
+        (
+            SettingKey::TileGridSize,
+            SettingValue::Text("2x2".to_owned()),
+        ),
+    ];
+    settings.set_many(&values).expect("set all three");
+    for (key, value) in values {
+        assert_eq!(settings.get(key).expect("read"), value);
+    }
+}
+
+#[test]
+fn set_many_writes_nothing_when_one_pair_is_invalid() {
+    let temp = TempDb::new();
+    let settings = Settings::new(&temp.db);
+    let error = settings
+        .set_many(&[
+            (SettingKey::MaxPsdWorkers, SettingValue::Int(3)),
+            (
+                SettingKey::TileGridSize,
+                SettingValue::Text("5x5".to_owned()),
+            ),
+            (SettingKey::DebugMode, SettingValue::Bool(true)),
+        ])
+        .expect_err("5x5 is not a valid choice");
+    assert!(
+        matches!(error, SettingsError::InvalidChoice { .. }),
+        "{error}"
+    );
+    for key in ["max_psd_workers", "tile_grid_size", "debug_mode"] {
+        assert_eq!(temp.db.setting(key).expect("read raw"), None, "{key}");
+    }
+}
+
+#[test]
+fn set_many_stores_null_for_an_unset_optional_text() {
+    let temp = TempDb::new();
+    let settings = Settings::new(&temp.db);
+    settings
+        .set(
+            SettingKey::CacheDir,
+            SettingValue::Text("/tmp/c".to_owned()),
+        )
+        .expect("store text");
+    settings
+        .set_many(&[(SettingKey::CacheDir, SettingValue::None)])
+        .expect("unset the dir");
+    assert_eq!(
+        temp.db.setting("cache_dir").expect("read raw"),
+        Some("null".to_owned())
+    );
+    assert_eq!(
+        settings.get(SettingKey::CacheDir).expect("read"),
+        SettingValue::None
+    );
+}
+
+#[test]
+fn set_many_keeps_the_last_value_of_a_duplicate_key() {
+    let temp = TempDb::new();
+    let settings = Settings::new(&temp.db);
+    settings
+        .set_many(&[
+            (SettingKey::MaxPsdWorkers, SettingValue::Int(2)),
+            (SettingKey::MaxPsdWorkers, SettingValue::Int(5)),
+        ])
+        .expect("set the duplicate");
+    assert_eq!(
+        settings.get(SettingKey::MaxPsdWorkers).expect("read"),
+        SettingValue::Int(5)
+    );
+}
+
+#[test]
+fn set_many_clamps_an_out_of_range_int() {
+    let temp = TempDb::new();
+    let settings = Settings::new(&temp.db);
+    settings
+        .set_many(&[(SettingKey::MaxPsdWorkers, SettingValue::Int(99))])
+        .expect("clamp, not reject");
+    assert_eq!(
+        temp.db.setting("max_psd_workers").expect("read raw"),
+        Some("8".to_owned())
+    );
+    assert_eq!(
+        settings.get(SettingKey::MaxPsdWorkers).expect("read"),
+        SettingValue::Int(8)
+    );
+}
+
+#[test]
+fn set_many_with_no_pairs_changes_nothing() {
+    let temp = TempDb::new();
+    let settings = Settings::new(&temp.db);
+    settings.set_many(&[]).expect("an empty list is fine");
+    assert_eq!(temp.db.setting("max_psd_workers").expect("read raw"), None);
+}

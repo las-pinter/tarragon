@@ -330,6 +330,34 @@ impl<'a> Settings<'a> {
         Ok(())
     }
 
+    /// Write several typed settings as one all-or-nothing change.
+    ///
+    /// Every pair is validated and encoded first, with the same clamping as
+    /// [`Settings::set`]. The first bad pair is returned and nothing is
+    /// written. An empty slice does nothing. A repeated key keeps the last
+    /// value. The Preferences dialog calls this method; other callers keep
+    /// using [`Settings::set`].
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SettingsError::TypeMismatch`],
+    /// [`SettingsError::InvalidChoice`], or [`SettingsError::NonFinite`] for
+    /// the first bad value. Returns [`SettingsError::Db`] when the write
+    /// fails.
+    pub fn set_many(&self, values: &[(SettingKey, SettingValue)]) -> Result<(), SettingsError> {
+        let mut encoded = Vec::with_capacity(values.len());
+        for (key, value) in values {
+            let stored = validate(*key, key.kind(), value.clone())?;
+            encoded.push((key.as_str(), encode(*key, stored)?));
+        }
+        let pairs: Vec<(&str, &str)> = encoded
+            .iter()
+            .map(|(key, text)| (*key, text.as_str()))
+            .collect();
+        self.db.set_settings(&pairs)?;
+        Ok(())
+    }
+
     /// Read the hidden `window_state` JSON text.
     ///
     /// # Errors

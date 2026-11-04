@@ -214,6 +214,44 @@ fn a_click_on_the_button_sets_the_request_once() {
 }
 
 #[test]
+fn every_card_is_centred_in_its_area() {
+    let area = egui::Rect::from_min_size(egui::pos2(0.0, 100.0), egui::vec2(1200.0, 500.0));
+    for kind in [
+        EmptyKind::NoFolder,
+        EmptyKind::EmptyFolder,
+        EmptyKind::NoResult,
+    ] {
+        let ctx = themed();
+        let mut gallery = Gallery::new(SortMode::Natural);
+        let input = RawInput {
+            screen_rect: Some(screen()),
+            ..Default::default()
+        };
+        let output = ctx.run_ui(input, |ui| {
+            let mut child = ui.new_child(egui::UiBuilder::new().max_rect(area));
+            gallery.show_empty(&mut child, kind);
+        });
+        let mut top = f32::MAX;
+        let mut bottom = f32::MIN;
+        for clipped in &output.shapes {
+            if let egui::epaint::Shape::Text(shape) = &clipped.shape {
+                let rect = shape.visual_bounding_rect();
+                top = top.min(rect.top());
+                bottom = bottom.max(rect.bottom());
+            }
+        }
+        output.drop_without_applying_deltas();
+        // The icon, 44 points high, sits one gap above the first text.
+        let centre = f32::midpoint(top - 44.0 - crate::tokens::SPACING_M, bottom);
+        assert!(
+            (centre - area.center().y).abs() < 6.0,
+            "{kind:?}: card centre {centre}, area centre {}",
+            area.center().y
+        );
+    }
+}
+
+#[test]
 fn the_card_replaces_the_painted_tiles() {
     let ctx = themed();
     let mut gallery = filled();

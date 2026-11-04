@@ -64,14 +64,16 @@ impl Gallery {
     /// Fill the grid area with the empty card for `kind`.
     pub(super) fn show_empty(&mut self, ui: &mut Ui, kind: EmptyKind) {
         let area = ui.available_size();
-        // Measure the column first, so the real pass can centre it.
-        let height = ui
-            .scope_builder(UiBuilder::new().sizing_pass().invisible(), |ui| {
-                column(ui, kind)
-            })
-            .response
-            .rect
-            .height();
+        // Measure the column first, so the real pass can centre it. A child
+        // ui is used because a scope would move the parent cursor down.
+        let mut probe = ui.new_child(
+            UiBuilder::new()
+                .max_rect(ui.available_rect_before_wrap())
+                .sizing_pass()
+                .invisible(),
+        );
+        column(&mut probe, kind);
+        let height = probe.min_rect().height();
         let clicked = ui
             .allocate_ui(area, |ui| {
                 ui.add_space(((area.y - height) / 2.0).max(0.0));

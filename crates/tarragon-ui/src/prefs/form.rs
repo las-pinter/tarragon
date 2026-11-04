@@ -97,13 +97,20 @@ pub(super) fn contents(ui: &mut Ui, draft: &mut Draft, view: &View<'_>) -> Optio
                 );
                 number_row(ui, draft, CAP, "Cache size cap (GiB, 0 = off)");
                 row(ui, "Cache Size", tokens::TEXT_PRIMARY, |ui| {
-                    ui.set_width(FIELD_WIDTH);
-                    ui.label(view.cache_size);
-                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                        ui.add_enabled_ui(!view.purging, |ui| {
-                            if small_button(ui, "Purge Cache").clicked() {
-                                action = Some(Action::Purge);
-                            }
+                    // The width is set on a child ui. Set on the row itself, it
+                    // moves the cursor back to the row start, under the label.
+                    let layout = Layout::left_to_right(Align::Center);
+                    ui.allocate_ui_with_layout(vec2(FIELD_WIDTH, 0.0), layout, |ui| {
+                        // Full width, so the right-to-left Purge button sits at
+                        // the right end of the value side.
+                        ui.set_width(FIELD_WIDTH);
+                        ui.label(view.cache_size);
+                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                            ui.add_enabled_ui(!view.purging, |ui| {
+                                if small_button(ui, "Purge Cache").clicked() {
+                                    action = Some(Action::Purge);
+                                }
+                            });
                         });
                     });
                 });
@@ -131,7 +138,10 @@ pub(super) fn contents(ui: &mut Ui, draft: &mut Draft, view: &View<'_>) -> Optio
         ui.colored_label(tokens::CORAL_STRONG, error);
     }
     ui.separator();
-    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+    // A row as high as the space left centres the buttons in it; the window
+    // then grows when the busy strip shows and does not shrink back.
+    let size = vec2(ui.available_width(), ui.spacing().interact_size.y);
+    ui.allocate_ui_with_layout(size, Layout::right_to_left(Align::Center), |ui| {
         let enabled = !view.purging;
         // The layout runs right to left, so Cancel comes first to sit right of OK.
         if ui.add_enabled(enabled, Button::new("Cancel")).clicked() {

@@ -4,7 +4,7 @@ use super::draft::{CANVAS, CAP, Draft, MULTI, NEUTRAL, PALETTE, SHARE, WORKERS};
 use super::{Prefs, PrefsEvent, PrefsValues};
 use crate::{test_support, tokens};
 use egui::epaint::Shape;
-use egui::{Color32, Context, Event, Key, Modifiers, Pos2, Rect, vec2};
+use egui::{Color32, Context, Event, Id, Key, Modifiers, Pos2, Rect, vec2};
 
 fn values() -> PrefsValues {
     PrefsValues {
@@ -419,4 +419,41 @@ fn on_a_tall_screen_the_dialog_is_not_cut_short() {
     // The last group is in view without a scroll.
     assert!(rect_of(&texts, "Enable Debug Logging").bottom() < 1200.0);
     assert!(rect_of(&texts, "Debug").top() > rect_of(&texts, "Cache Size").top());
+}
+
+#[test]
+fn the_cache_size_value_sits_right_of_its_label_without_overlap() {
+    let (ctx, mut prefs) = open_prefs();
+    let texts = frame(&ctx, &mut prefs, vec![]);
+    let label = rect_of(&texts, "Cache Size");
+    let value = rect_of(&texts, "1.4 GB");
+    assert!(!label.intersects(value), "{label:?} {value:?}");
+    assert!(value.left() >= label.right(), "{label:?} {value:?}");
+}
+
+/// The height of the whole window frame, with the room below the buttons.
+fn window_height(ctx: &Context) -> f32 {
+    // egui hashes the title as an optional string to make the window id.
+    ctx.memory(|m| m.area_rect(Id::new(Some("Preferences"))))
+        .expect("the window is drawn")
+        .height()
+}
+
+#[test]
+fn the_dialog_returns_to_its_height_when_the_purge_ends() {
+    let (ctx, mut prefs) = open_prefs();
+    let before = window_height(&ctx);
+    prefs.set_purging(true);
+    for _ in 0..6 {
+        frame(&ctx, &mut prefs, vec![]);
+    }
+    let during = window_height(&ctx);
+    assert!(during > before, "the strip adds height: {during} {before}");
+    prefs.set_purging(false);
+    for _ in 0..6 {
+        frame(&ctx, &mut prefs, vec![]);
+    }
+    let after = window_height(&ctx);
+    // The slack is for float rounding only.
+    assert!((after - before).abs() < 0.5, "{after} vs {before}");
 }

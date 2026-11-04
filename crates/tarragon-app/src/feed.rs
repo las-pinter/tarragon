@@ -1,14 +1,14 @@
 //! The rules that turn pipeline results into tile state. It has no egui types,
 //! so tests run it without a window.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use image::RgbaImage;
 use tarragon_ui::grid::TileError;
 use tarragon_ui::texture_budget::TextureBudget;
 
-use crate::pipeline::{ErrorKind, ThumbResult};
+use crate::pipeline::{ErrorKind, ThumbError, ThumbResult};
 
 impl From<ErrorKind> for TileError {
     fn from(kind: ErrorKind) -> Self {
@@ -69,8 +69,8 @@ pub struct Feed {
     waiting: HashSet<PathBuf>,
     /// How many tiles the folder has.
     total: usize,
-    /// Tiles that show an error mark.
-    failed: HashSet<PathBuf>,
+    /// Tiles that show an error mark, with the error behind each mark.
+    failed: HashMap<PathBuf, ThumbError>,
     /// The tiles of the last `show` call.
     shown: HashSet<PathBuf>,
     /// A shown tile lost its texture, so `show` must run again.
@@ -89,7 +89,7 @@ impl Feed {
             dropped: HashSet::new(),
             waiting: HashSet::new(),
             total: 0,
-            failed: HashSet::new(),
+            failed: HashMap::new(),
             shown: HashSet::new(),
             resync: false,
             capacity,
@@ -112,6 +112,12 @@ impl Feed {
     #[must_use]
     pub fn counts(&self) -> (usize, usize) {
         (self.total, self.failed.len())
+    }
+
+    /// The error behind the error mark of `key`, if the tile shows one.
+    #[must_use]
+    pub fn failure(&self, key: &Path) -> Option<&ThumbError> {
+        self.failed.get(key)
     }
 
     /// True when every tile has a texture or an error.
@@ -170,7 +176,7 @@ impl Feed {
                 self.waiting.remove(&key);
                 self.dropped.remove(&key);
                 self.budget.remove(&key);
-                self.failed.insert(key);
+                self.failed.insert(key, error);
                 Applied::Failed
             }
         }

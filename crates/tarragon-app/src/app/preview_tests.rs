@@ -58,6 +58,8 @@ impl Rig {
             .collect();
         app.shell.gallery_mut().set_items(items);
         app.shell.gallery_mut().set_scope(Scope::All);
+        // The files have no sources, so a library render would only fail.
+        app.thumbs.skip_library();
         let ctx = Context::default();
         tarragon_ui::install(&ctx);
         tarragon_ui::apply_theme(&ctx);

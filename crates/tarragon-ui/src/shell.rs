@@ -129,6 +129,12 @@ impl Shell {
         self.gallery.selected_paths()
     }
 
+    /// The selected path when exactly one gallery item is selected.
+    #[must_use]
+    pub fn sole_selected(&self) -> Option<&std::path::Path> {
+        self.gallery.sole_selected()
+    }
+
     /// A counter that grows each time `selected_paths` returns another list.
     #[must_use]
     pub fn selection_revision(&self) -> u64 {

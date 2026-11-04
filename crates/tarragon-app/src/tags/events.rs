@@ -68,10 +68,10 @@ impl Store for Database {
     }
 }
 
-/// Take the Preview events and write them. Returns true when a tag write
-/// succeeded, so the caller can repaint: the answer lands after the draw.
-pub fn apply_preview_events(shell: &mut Shell, db: &Database) -> bool {
-    let events = shell.take_preview_events();
+/// Write the Preview `events` that change tags. Returns true when a tag write
+/// succeeded, so the caller can repaint: the answer lands after the draw. The
+/// card events are not tag events and are skipped.
+pub fn apply_preview_events(shell: &mut Shell, db: &Database, events: Vec<PreviewEvent>) -> bool {
     apply_events(shell, db, events)
 }
 

@@ -182,7 +182,6 @@ mod tests {
             folder: String::new(),
             uuid: String::new(),
             known_failure: None,
-            retry: false,
             colors: None,
             needs_colors: false,
         }

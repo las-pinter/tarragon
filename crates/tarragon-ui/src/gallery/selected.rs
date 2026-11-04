@@ -1,6 +1,6 @@
 //! Reading the selection from outside and noticing that it changed.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use super::Gallery;
 use crate::grid::CellClick;
@@ -18,6 +18,17 @@ impl Gallery {
             .filter(|&&index| self.selection.contains(index))
             .map(|&index| self.items[index].path.clone())
             .collect()
+    }
+
+    /// The path of the selected item when exactly one is selected. It copies
+    /// nothing, so a caller can ask every frame.
+    #[must_use]
+    pub fn sole_selected(&self) -> Option<&Path> {
+        if self.selection.len() != 1 {
+            return None;
+        }
+        let index = self.selection.iter().next()?;
+        self.items.get(index).map(|item| item.path.as_path())
     }
 
     /// A counter that grows each time `selected_paths` returns another list.

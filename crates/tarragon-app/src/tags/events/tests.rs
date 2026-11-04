@@ -393,5 +393,6 @@ fn a_working_store_reports_a_write_for_both_events() {
 fn an_empty_queue_writes_nothing() {
     let (db, _dir) = seeded();
     let mut shell = Shell::new();
-    assert!(!super::apply_preview_events(&mut shell, &db));
+    let events = shell.take_preview_events();
+    assert!(!super::apply_preview_events(&mut shell, &db, events));
 }

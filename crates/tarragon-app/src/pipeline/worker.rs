@@ -56,6 +56,7 @@ pub(super) fn run(shared: &Shared) {
         if job.generation != shared.generation.load(Ordering::Acquire) {
             continue;
         }
+        let asked = asked_count(shared, &job);
         let outcome =
             catch_unwind(AssertUnwindSafe(|| process(shared, &job))).unwrap_or_else(|_| {
                 Err(ThumbError {
@@ -64,7 +65,7 @@ pub(super) fn run(shared: &Shared) {
                 })
             });
         // The folder may have changed while the file rendered.
-        if !record(shared, &job, &outcome) {
+        if !record(shared, &job, &outcome, asked) {
             continue;
         }
         let result = ThumbResult {
@@ -84,13 +85,16 @@ pub(super) fn run(shared: &Shared) {
 }
 
 /// Remember a permanent failure of the job, or forget the failure of a file
-/// that now renders. It returns false when the job is from an old generation.
+/// that now renders. It returns false when the result must not be sent: the
+/// job is from an old generation, or it failed while a retry of its file was
+/// asked for.
 ///
 /// The generation check and the edit share the failures lock, so an open
-/// cannot slip between them. A failure of a render that was not asked for
-/// again is skipped when the file was retried since the open: that render may
-/// have started before the retry.
-fn record(shared: &Shared, job: &Job, outcome: &Result<RgbaImage, ThumbError>) -> bool {
+/// cannot slip between them. `asked` is the retry count of the file when the
+/// job was taken. If the count moved, a newer render exists and this error is
+/// dropped, so it cannot show a failure over a newer result that worked. A
+/// later job that fails without a retry in between is kept.
+fn record(shared: &Shared, job: &Job, outcome: &Result<RgbaImage, ThumbError>, asked: u64) -> bool {
     let mut failures = shared
         .failures
         .lock()
@@ -102,20 +106,27 @@ fn record(shared: &Shared, job: &Job, outcome: &Result<RgbaImage, ThumbError>) -
         Ok(_) => {
             failures.remove(&job.path);
         }
-        Err(error) if error.kind.is_permanent() => {
-            let superseded = !job.retry
-                && shared
-                    .retried
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .contains(&job.path);
-            if !superseded {
+        Err(error) => {
+            if asked_count(shared, job) != asked {
+                return false;
+            }
+            if error.kind.is_permanent() {
                 failures.insert(job.path.clone(), (job.stamp, error.clone()));
             }
         }
-        Err(_) => {}
     }
     true
+}
+
+/// How often the file of `job` was asked for again since the last open.
+fn asked_count(shared: &Shared, job: &Job) -> u64 {
+    shared
+        .retried
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .get(&job.path)
+        .copied()
+        .unwrap_or(0)
 }
 
 /// How a send ended.

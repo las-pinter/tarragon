@@ -13,7 +13,7 @@ use tarragon_ui::grid::{GridItem, TileError};
 use tarragon_ui::texture_budget::GRID_BUDGET_BYTES;
 
 use crate::feed::{Feed, Tiles};
-use crate::pipeline::{Opened, Pipeline, PipelineError, Repaint, Results};
+use crate::pipeline::{Opened, Pipeline, PipelineError, Repaint, Results, ThumbError};
 pub use exit::{ExitClear, ExitWait};
 use work::{Queued, WorkDone};
 pub use work::{Work, WorkOutcome};
@@ -266,6 +266,23 @@ impl Thumbs {
         self.synced = Some(revision);
     }
 
+    /// The error behind the error mark of `path`, if its tile shows one.
+    #[must_use]
+    pub fn failure(&self, path: &Path) -> Option<ThumbError> {
+        self.feed.failure(path).cloned()
+    }
+
+    /// Render the failed files again. It waits for an idle pipeline: while an
+    /// open or work runs the pipeline is in another thread, so the call does
+    /// nothing and the user clicks again.
+    pub fn retry(&mut self, paths: &HashSet<PathBuf>) {
+        let Slot::Idle(pipeline) = &mut self.slot else {
+            return;
+        };
+        pipeline.retry(paths);
+        (self.repaint)();
+    }
+
     /// The writer's store epoch. A change means new rows or colour tags are
     /// committed.
     #[must_use]
@@ -300,6 +317,13 @@ impl Thumbs {
         }
         self.library = Library::Wanted;
         (self.repaint)();
+    }
+
+    /// Stop the library from loading. A test that fills the gallery by hand
+    /// uses it, so no render of a file that is not on disk shows an error.
+    #[cfg(test)]
+    pub(crate) fn skip_library(&mut self) {
+        self.library = Library::Failed;
     }
 
     /// Once the folder is open and every tile has a texture or an error,
@@ -459,6 +483,8 @@ pub(crate) fn color_image(image: &RgbaImage) -> ColorImage {
 mod exit;
 #[cfg(test)]
 mod library_tests;
+#[cfg(test)]
+mod retry_tests;
 #[cfg(all(test, target_os = "linux"))]
 mod scale_tests;
 #[cfg(test)]

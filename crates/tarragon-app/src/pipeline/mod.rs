@@ -60,10 +60,11 @@ pub type Repaint = Arc<dyn Fn() + Send + Sync>;
 /// changes. The database has no column for it, so a restart tries again.
 type Failures = Arc<Mutex<HashMap<PathBuf, (SourceStamp, ThumbError)>>>;
 
-/// Files asked for again since the last open. A render of such a file that was
-/// not asked for again may have started before the ask, so its failure is not
-/// remembered. Lock it only while holding the failures lock.
-type Retried = Arc<Mutex<HashSet<PathBuf>>>;
+/// How often each file was asked for again since the last open. A worker
+/// notes the count when it takes a job. If the count moved by the time the
+/// render ends, a newer render exists, so the older result is dropped. Lock it
+/// only while holding the failures lock, except for a plain read.
+type Retried = Arc<Mutex<HashMap<PathBuf, u64>>>;
 
 /// Why the pipeline cannot start or open a folder.
 #[derive(Debug, thiserror::Error)]
@@ -346,7 +347,6 @@ impl Pipeline {
                     folder: folder_name.clone(),
                     uuid: uuid.clone(),
                     known_failure,
-                    retry: false,
                     colors,
                     needs_colors,
                 }
@@ -399,12 +399,8 @@ impl Pipeline {
     ///
     /// A job of the file that is still waiting is replaced by the new one. A
     /// render that is already running is not stopped; the retry queues a second
-    /// render, and a permanent failure of the running one is not remembered.
+    /// render, and an error of the running one is neither sent nor remembered.
     /// Unknown paths are skipped. It returns how many jobs it queued.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "only tests call it until the app does")
-    )]
     pub fn retry(&mut self, keys: &HashSet<PathBuf>) -> usize {
         let mut failures = self
             .failures
@@ -420,12 +416,11 @@ impl Pipeline {
                 continue;
             };
             failures.remove(key);
-            retried.insert(key.clone());
+            *retried.entry(key.clone()).or_default() += 1;
             // The stored job loses the failure too, so a later request renders.
             job.known_failure = None;
             jobs.push(Job {
                 stored: None,
-                retry: true,
                 needs_colors: false,
                 ..job.clone()
             });

@@ -387,6 +387,7 @@ impl eframe::App for App {
         if let Some(folder) = self.thumbs.take_folder_change() {
             self.shell.set_folder(Some(folder));
         }
+        self.show_failure();
         let source = self.logs.source();
         let view = LogView {
             source: &source,
@@ -397,6 +398,7 @@ impl eframe::App for App {
         if tags::selection_changed(&mut self.seen_selection, revision) {
             tags::refresh_preview(&mut self.shell, &self.db);
             self.feed_preview();
+            self.show_failure();
             // The Preview was drawn before the refresh; egui repaints only on input.
             ctx.request_repaint();
         }
@@ -420,7 +422,9 @@ impl eframe::App for App {
         if handled.any {
             ctx.request_repaint();
         }
-        if tags::apply_preview_events(&mut self.shell, &self.db) {
+        let events = self.shell.take_preview_events();
+        self.apply_card_events(&events);
+        if tags::apply_preview_events(&mut self.shell, &self.db, events) {
             ctx.request_repaint();
         }
         if tags::apply_manager_events(&mut self.shell, &self.db) {
@@ -451,8 +455,11 @@ impl eframe::App for App {
     }
 }
 
+mod card;
 #[cfg(test)]
 mod exit_tests;
+#[cfg(test)]
+mod failure_tests;
 #[cfg(test)]
 mod filter_tests;
 #[cfg(test)]

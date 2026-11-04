@@ -131,7 +131,6 @@ pub(super) fn library_jobs(
                 folder,
                 uuid,
                 known_failure,
-                retry: false,
                 colors,
                 needs_colors,
             }

@@ -261,7 +261,7 @@ fn retry_replaces_a_job_that_is_still_waiting() {
 }
 
 #[test]
-fn a_failure_of_a_render_that_began_before_the_retry_is_not_remembered() {
+fn a_failure_of_a_render_that_began_before_the_retry_is_dropped() {
     let dir = TempDir::new();
     let folder = folder_with(&dir, &["b.png"]);
     let file = folder.join("b.png");
@@ -278,8 +278,12 @@ fn a_failure_of_a_render_that_began_before_the_retry_is_not_remembered() {
     held.expect("the first render started");
     assert_eq!(queued, 1);
     assert!(retried.expect("the retry result").outcome.is_ok());
-    let old = collect(&setup.results, 1);
-    assert!(old[0].outcome.is_err(), "the held render failed");
+    // A worker sends before it frees its slot, so an error would be queued now.
+    setup.pipeline.queue.wait_idle();
+    assert!(
+        setup.results.try_recv().is_none(),
+        "the error of the older render is not sent"
+    );
 
     assert!(
         !setup
@@ -296,12 +300,12 @@ fn a_failure_of_a_render_that_began_before_the_retry_is_not_remembered() {
 }
 
 #[test]
-fn a_render_that_works_clears_a_failure_remembered_meanwhile() {
+fn an_older_retry_that_fails_is_dropped_when_a_newer_retry_works() {
     let dir = TempDir::new();
     let folder = folder_with(&dir, &["b.png"]);
     let file = folder.join("b.png");
-    // The open fails. The first retry is held and fails, so it is remembered.
-    // The second retry works and must clear that entry.
+    // The open fails. The first retry is held and fails after the second retry
+    // was asked for. Only the second retry reports.
     let (render, gate) = scripted(&[Step::Fail, Step::HoldThenFail]);
     let mut setup = start(dir, 1, render);
     setup.pipeline.open_folder(&folder).expect("open");
@@ -313,9 +317,9 @@ fn a_render_that_works_clears_a_failure_remembered_meanwhile() {
     gate.release.send(()).expect("release");
     held.expect("the first retry started");
 
-    let results = collect(&setup.results, 2);
-    assert!(results[0].outcome.is_err());
-    assert!(results[1].outcome.is_ok());
+    assert!(collect(&setup.results, 1)[0].outcome.is_ok());
+    setup.pipeline.queue.wait_idle();
+    assert!(setup.results.try_recv().is_none(), "no error after the Ok");
     assert!(
         !setup
             .pipeline
@@ -328,4 +332,34 @@ fn a_render_that_works_clears_a_failure_remembered_meanwhile() {
     setup.pipeline.flush();
     setup.pipeline.open_folder(&folder).expect("open again");
     assert!(collect(&setup.results, 1)[0].outcome.is_ok());
+}
+
+#[test]
+fn a_later_failure_without_a_newer_retry_is_sent_and_remembered() {
+    let dir = TempDir::new();
+    let folder = folder_with(&dir, &["b.png"]);
+    let file = folder.join("b.png");
+    // The open fails and the retry works. The cache is then gone, so a request
+    // renders again, and that render fails.
+    let (render, _gate) = scripted(&[Step::Fail, Step::Ok, Step::Fail]);
+    let mut setup = start(dir, 1, render);
+    setup.pipeline.open_folder(&folder).expect("open");
+    assert!(collect(&setup.results, 1)[0].outcome.is_err());
+    setup.pipeline.retry(&HashSet::from([file.clone()]));
+    assert!(collect(&setup.results, 1)[0].outcome.is_ok());
+    setup.pipeline.flush();
+    std::fs::remove_dir_all(&setup.cache_root).expect("remove the cache");
+
+    setup.pipeline.request(&HashSet::from([file.clone()]));
+    let later = collect(&setup.results, 1);
+    assert!(later[0].outcome.is_err(), "the later error reaches the UI");
+    assert!(
+        setup
+            .pipeline
+            .failures
+            .lock()
+            .expect("lock")
+            .contains_key(&file),
+        "the later failure is remembered"
+    );
 }

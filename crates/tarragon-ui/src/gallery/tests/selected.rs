@@ -63,6 +63,16 @@ fn a_shift_range_lists_its_paths_in_display_order() {
 }
 
 #[test]
+fn the_sole_selected_path_exists_only_for_exactly_one_selected_item() {
+    let mut gallery = dated_gallery();
+    assert_eq!(gallery.sole_selected(), None, "nothing selected");
+    click_tile(&mut gallery, 1, Modifiers::NONE);
+    assert_eq!(gallery.sole_selected(), Some(path("b.png").as_path()));
+    click_tile(&mut gallery, 2, Modifiers::CTRL);
+    assert_eq!(gallery.sole_selected(), None, "two selected");
+}
+
+#[test]
 fn the_revision_grows_once_per_real_change() {
     let mut gallery = dated_gallery();
     let start = gallery.selection_revision();

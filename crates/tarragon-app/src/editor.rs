@@ -1,10 +1,5 @@
 //! Pick the program and arguments that open a file in an editor.
 
-#![cfg_attr(
-    not(test),
-    expect(dead_code, reason = "the error and crash cards call it later")
-)]
-
 use std::ffi::{OsStr, OsString};
 use std::io;
 use std::path::Path;
@@ -97,6 +92,10 @@ fn open_with_path(db: &Database, file: &Path, path: Option<&OsStr>) -> Result<()
 /// # Errors
 ///
 /// Returns the error of the failed process start.
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "`open` starts the child through the path form")
+)]
 pub fn spawn(launch: &Launch) -> io::Result<()> {
     spawn_with_path(launch, None)
 }

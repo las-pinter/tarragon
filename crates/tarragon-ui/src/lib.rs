@@ -11,6 +11,7 @@ pub mod gallery;
 pub mod grid;
 pub mod layout;
 mod popup;
+pub mod prefs;
 pub mod preview;
 pub mod shell;
 pub mod sidebar;

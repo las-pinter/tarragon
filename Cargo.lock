@@ -2698,6 +2698,7 @@ dependencies = [
 name = "tarragon-scan"
 version = "0.2.0"
 dependencies = [
+ "image",
  "notify",
  "rayon",
  "tarragon-core",

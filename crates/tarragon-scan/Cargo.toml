@@ -12,7 +12,12 @@ rayon.workspace = true
 tarragon-core.workspace = true
 
 [dev-dependencies]
+image = { workspace = true, features = ["jpeg", "png"] }
 tarragon-db = { path = "../tarragon-db", version = "0.2.0" }
+
+[[example]]
+name = "corpus_gen"
+test = true
 
 [lints]
 workspace = true

@@ -56,6 +56,13 @@ impl Selection {
         self.anchor = Some(index);
     }
 
+    /// Select every index in `order`. The anchor becomes its first entry, or
+    /// none when `order` is empty.
+    pub fn select_all(&mut self, order: &[usize]) {
+        self.indices = order.iter().copied().collect();
+        self.anchor = order.first().copied();
+    }
+
     /// Select every index from `anchor` to `target`, in either direction.
     ///
     /// The anchor of this selection does not change.

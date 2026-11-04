@@ -87,22 +87,23 @@ impl Gallery {
 
     /// Draw the search field and re-arm the timer on a change.
     fn search_field(&mut self, ui: &mut Ui, now: Instant) {
-        let response = ui.add(
-            TextEdit::singleline(&mut self.search)
-                .id(Id::new("tarragon-gallery-search"))
-                .hint_text("Search file names")
-                .text_color(tokens::TEXT_MUTED)
-                .desired_width(f32::INFINITY)
-                .frame(
-                    Frame::new()
-                        .fill(tokens::BG_SECONDARY)
-                        .corner_radius(CornerRadius::same(tokens::RADIUS_M))
-                        .inner_margin(Margin::symmetric(
-                            points(tokens::SPACING_S),
-                            points(tokens::SPACING_XS),
-                        )),
-                ),
-        );
+        let output = TextEdit::singleline(&mut self.search)
+            .id(Id::new("tarragon-gallery-search"))
+            .hint_text("Search file names")
+            .text_color(tokens::TEXT_MUTED)
+            .desired_width(f32::INFINITY)
+            .frame(
+                Frame::new()
+                    .fill(tokens::BG_SECONDARY)
+                    .corner_radius(CornerRadius::same(tokens::RADIUS_M))
+                    .inner_margin(Margin::symmetric(
+                        points(tokens::SPACING_S),
+                        points(tokens::SPACING_XS),
+                    )),
+            )
+            .show(ui);
+        let response = output.response.clone();
+        self.apply_search_focus(ui, output);
         if response.has_focus() {
             ui.painter().rect_stroke(
                 response.rect,

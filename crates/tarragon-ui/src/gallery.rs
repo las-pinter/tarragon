@@ -22,6 +22,7 @@ pub use empty::EmptyKind;
 
 mod empty;
 mod info;
+mod keys;
 mod manager;
 mod selected;
 pub(crate) mod strip;
@@ -153,6 +154,8 @@ pub struct Gallery {
     loading: bool,
     /// Whether the empty card button was clicked since the last take.
     open_folder_requested: bool,
+    /// Whether the search field should take focus at its next draw.
+    search_focus_requested: bool,
 }
 
 impl Gallery {
@@ -186,6 +189,7 @@ impl Gallery {
             visible_revision: 0,
             loading: false,
             open_folder_requested: false,
+            search_focus_requested: false,
         }
     }
 

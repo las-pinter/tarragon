@@ -4,6 +4,7 @@ use egui::{Button, Context, Ui, ViewportCommand};
 
 use super::Shell;
 use super::dock::{self, TabMenu};
+use super::prefs::MenuEvent;
 use crate::layout::{Pane, is_visible, set_visible};
 
 impl Shell {
@@ -15,7 +16,7 @@ impl Shell {
         }
     }
 
-    /// Draw the File, View, and Settings menus. The items are placeholders.
+    /// Draw the File, View, and Settings menus. Only Preferences and Quit act.
     pub(super) fn menu_bar(&mut self, ui: &mut Ui, ctx: &Context) {
         ui.menu_button("File", |ui| {
             // The folder picker lands with the scan work.
@@ -42,8 +43,9 @@ impl Shell {
             }
         });
         ui.menu_button("Settings", |ui| {
-            // The settings screens land with the settings work.
-            let _ = ui.button("Preferences...");
+            if ui.button("Preferences...").clicked() {
+                self.menu_events.push(MenuEvent::OpenPreferences);
+            }
         });
     }
 }

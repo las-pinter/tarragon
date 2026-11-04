@@ -51,8 +51,13 @@ fn collect(shape: &Shape, found: &mut Texts) {
 
 fn frame(ctx: &Context, prefs: &mut Prefs, events: Vec<Event>) -> Texts {
     // The window is taller than the default test screen.
+    frame_on(ctx, prefs, events, 1200.0)
+}
+
+/// One frame on a screen 800 points wide and `height` points tall.
+fn frame_on(ctx: &Context, prefs: &mut Prefs, events: Vec<Event>, height: f32) -> Texts {
     let mut input = test_support::input(800.0, events);
-    input.screen_rect = Some(Rect::from_min_size(Pos2::ZERO, vec2(800.0, 1200.0)));
+    input.screen_rect = Some(Rect::from_min_size(Pos2::ZERO, vec2(800.0, height)));
     let output = ctx.run_ui(input, |ui| {
         prefs.show(ui.ctx());
     });
@@ -69,8 +74,9 @@ fn open_prefs() -> (Context, Prefs) {
     let ctx = test_support::context();
     let mut prefs = Prefs::default();
     prefs.open(values(), "1.4 GB".to_owned());
-    frame(&ctx, &mut prefs, vec![]);
-    frame(&ctx, &mut prefs, vec![]);
+    for _ in 0..6 {
+        frame(&ctx, &mut prefs, vec![]);
+    }
     (ctx, prefs)
 }
 
@@ -356,11 +362,8 @@ fn an_error_shows_above_the_buttons_and_opening_clears_it() {
     prefs.set_error(Some("could not save".to_owned()));
     let texts = frame(&ctx, &mut prefs, vec![]);
     assert!(has(&texts, "could not save"));
-    let error_y = texts
-        .iter()
-        .find(|t| t.0 == "could not save")
-        .map(|t| t.1.top());
-    let ok_y = texts.iter().find(|t| t.0 == "OK").map(|t| t.1.top());
+    let error_y = rect_of(&texts, "could not save").top();
+    let ok_y = rect_of(&texts, "OK").top();
     assert!(error_y < ok_y, "{error_y:?} {ok_y:?}");
 
     prefs.set_error(None);
@@ -369,4 +372,46 @@ fn an_error_shows_above_the_buttons_and_opening_clears_it() {
     prefs.set_error(Some("old".to_owned()));
     prefs.open(values(), String::new());
     assert!(!has(&frame(&ctx, &mut prefs, vec![]), "old"));
+}
+
+fn rect_of(texts: &Texts, want: &str) -> Rect {
+    texts
+        .iter()
+        .find_map(|(t, rect, _)| (t == want).then_some(*rect))
+        .unwrap_or_else(|| panic!("no text {want:?} in {texts:?}"))
+}
+
+#[test]
+fn ok_sits_left_of_cancel() {
+    let (ctx, mut prefs) = open_prefs();
+    let texts = frame(&ctx, &mut prefs, vec![]);
+    assert!(rect_of(&texts, "OK").center().x < rect_of(&texts, "Cancel").center().x);
+}
+
+#[test]
+fn on_a_short_screen_the_buttons_stay_on_screen_and_ok_still_works() {
+    let ctx = test_support::context();
+    let mut prefs = Prefs::default();
+    prefs.open(values(), "1.4 GB".to_owned());
+    frame_on(&ctx, &mut prefs, vec![], 450.0);
+    let texts = frame_on(&ctx, &mut prefs, vec![], 450.0);
+    for button in ["OK", "Cancel"] {
+        let rect = rect_of(&texts, button);
+        assert!(
+            rect.top() >= 0.0 && rect.bottom() <= 450.0,
+            "{button}: {rect:?}"
+        );
+    }
+    let at = rect_of(&texts, "OK").center();
+    frame_on(&ctx, &mut prefs, test_support::click(at), 450.0);
+    assert_eq!(prefs.take_events(), vec![PrefsEvent::Ok(values())]);
+}
+
+#[test]
+fn on_a_tall_screen_the_dialog_is_not_cut_short() {
+    let (ctx, mut prefs) = open_prefs();
+    let texts = frame(&ctx, &mut prefs, vec![]);
+    // The last group is in view without a scroll.
+    assert!(rect_of(&texts, "Enable Debug Logging").bottom() < 1200.0);
+    assert!(rect_of(&texts, "Debug").top() > rect_of(&texts, "Cache Size").top());
 }

@@ -12,6 +12,7 @@ use crate::grid::GridItem;
 use crate::layout::{
     Pane, first_dock, from_json, is_visible, keep_gallery_wide, set_visible, to_json,
 };
+use crate::prefs::Prefs;
 use crate::preview::{Preview, PreviewEvent};
 use crate::sidebar::panel::{Sidebar, SidebarEvent};
 use crate::theme::{dock_title_style, panel_frame};
@@ -20,7 +21,9 @@ use crate::tokens;
 mod dock;
 mod log_panel;
 mod menu;
+mod prefs;
 pub use log_panel::{LogLevel, LogLine, LogPanelEvents, LogSlice, LogSource, LogView};
+pub use prefs::MenuEvent;
 
 /// The product name shown in the title bar.
 pub const PRODUCT_NAME: &str = "Tarragon";
@@ -53,6 +56,10 @@ pub struct Shell {
     dock: DockState<Pane>,
     /// The window over the dock that reports an earlier crash.
     crash_card: CrashCard,
+    /// The Preferences window over the dock.
+    prefs: Prefs,
+    /// The menu choices that the app has not taken yet.
+    menu_events: Vec<MenuEvent>,
 }
 
 impl Shell {
@@ -67,6 +74,8 @@ impl Shell {
             seen_selection: 0,
             dock: first_dock(),
             crash_card: CrashCard::default(),
+            prefs: Prefs::default(),
+            menu_events: Vec::new(),
         }
     }
 
@@ -302,6 +311,7 @@ impl Shell {
             }
         });
         self.crash_card.show(&ctx);
+        self.prefs.show(&ctx);
         events
     }
 }

@@ -14,11 +14,13 @@ pub(super) const NEUTRAL: usize = 5;
 pub(super) const CAP: usize = 6;
 
 /// The values as the user is editing them. A number keeps its typed text, so
-/// a half-typed value is not lost.
+/// a half-typed value is not lost. The range of a number is not checked here:
+/// the settings registry clamps it when the value is saved.
 #[derive(Debug)]
 pub(super) struct Draft {
     pub(super) numbers: [String; 7],
-    rest: PrefsValues,
+    /// The values that are not typed numbers.
+    pub(super) rest: PrefsValues,
 }
 
 fn number<T: FromStr>(text: &str) -> Option<T> {

@@ -4,13 +4,13 @@
 //! the panes and takes their input. The caller sets the values when it opens
 //! the window. It gets them back only on OK.
 
-use egui::{
-    Align, Align2, Button, FontFamily, Key, Layout, Modifiers, RichText, TextEdit, Ui, Window, vec2,
-};
+use egui::{Align2, FontFamily, Key, Modifiers, RichText, Window, vec2};
 
 mod draft;
+mod form;
 
-use draft::{CANVAS, CAP, Draft, MULTI, NEUTRAL, PALETTE, SHARE, WORKERS};
+use draft::Draft;
+use form::{Action, View};
 
 use crate::{backdrop, fonts, tokens};
 
@@ -61,23 +61,23 @@ pub enum PrefsEvent {
     BrowseCacheDir,
 }
 
-/// A button the user pressed.
-enum Action {
-    Ok,
-    Cancel,
-}
-
 /// The state of the Preferences window.
 #[derive(Debug, Default)]
 pub struct Prefs {
     draft: Option<Draft>,
+    cache_size: String,
+    purging: bool,
+    error: Option<String>,
     events: Vec<PrefsEvent>,
 }
 
 impl Prefs {
     /// Show the window from the next frame, with `values` in the fields.
-    pub fn open(&mut self, values: PrefsValues) {
+    /// `cache_size` is the text for the Cache Size row, such as `1.4 GB`.
+    pub fn open(&mut self, values: PrefsValues, cache_size: String) {
         self.draft = Some(Draft::new(values));
+        self.cache_size = cache_size;
+        self.error = None;
     }
 
     /// Whether the window is shown.
@@ -93,6 +93,21 @@ impl Prefs {
         }
     }
 
+    /// Set the text of the Cache Size row.
+    pub fn set_cache_size(&mut self, size: String) {
+        self.cache_size = size;
+    }
+
+    /// Show the busy strip and disable the buttons while a purge runs.
+    pub fn set_purging(&mut self, purging: bool) {
+        self.purging = purging;
+    }
+
+    /// Show an error above the buttons, or clear it.
+    pub fn set_error(&mut self, error: Option<String>) {
+        self.error = error;
+    }
+
     /// Take the choices the user made since the last call.
     pub fn take_events(&mut self) -> Vec<PrefsEvent> {
         std::mem::take(&mut self.events)
@@ -104,6 +119,11 @@ impl Prefs {
             return;
         };
         backdrop::show(ctx, "prefs_backdrop");
+        let view = View {
+            cache_size: &self.cache_size,
+            purging: self.purging,
+            error: self.error.as_deref(),
+        };
         let title = RichText::new("Preferences")
             .family(FontFamily::Name(fonts::MEDIUM_FAMILY.into()))
             .color(tokens::TEXT_PRIMARY);
@@ -114,11 +134,12 @@ impl Prefs {
             .anchor(Align2::CENTER_CENTER, vec2(0.0, 0.0))
             .show(ctx, |ui| {
                 ui.set_width(WIDTH);
-                body(ui, draft)
+                form::contents(ui, draft, &view)
             });
         let mut action = shown.and_then(|r| r.inner).flatten();
         let escape = ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Escape));
-        if escape {
+        // The purge runs on, so Escape waits like the Cancel button does.
+        if escape && !self.purging {
             action = Some(Action::Cancel);
         }
         match action {
@@ -132,46 +153,11 @@ impl Prefs {
                 self.events.push(PrefsEvent::Cancel);
                 self.draft = None;
             }
+            Some(Action::Purge) => self.events.push(PrefsEvent::PurgeCache),
+            Some(Action::Browse) => self.events.push(PrefsEvent::BrowseCacheDir),
             None => {}
         }
     }
-}
-
-/// The number fields and the OK and Cancel buttons. Returns the button the
-/// user pressed.
-fn body(ui: &mut Ui, draft: &mut Draft) -> Option<Action> {
-    let rows = [
-        (WORKERS, "Max PSD Workers"),
-        (MULTI, "Max Multi-Preview"),
-        (CANVAS, "Large Canvas Threshold (MP)"),
-        (PALETTE, "Color Tag Palette Size"),
-        (SHARE, "Color Tag Minimum Share"),
-        (NEUTRAL, "Neutral Saturation Threshold"),
-        (CAP, "Cache size cap (GiB, 0 = off)"),
-    ];
-    for (index, label) in rows {
-        // A number that does not parse shows in coral.
-        let color = if draft.valid(index) {
-            tokens::TEXT_PRIMARY
-        } else {
-            tokens::CORAL_STRONG
-        };
-        ui.horizontal(|ui| {
-            ui.label(RichText::new(label).color(color));
-            ui.add(TextEdit::singleline(&mut draft.numbers[index]).text_color(color));
-        });
-    }
-    let mut action = None;
-    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-        let ok = Button::new("OK").fill(tokens::CORAL_MUTED);
-        if ui.add_enabled(draft.parse().is_some(), ok).clicked() {
-            action = Some(Action::Ok);
-        }
-        if ui.button("Cancel").clicked() {
-            action = Some(Action::Cancel);
-        }
-    });
-    action
 }
 
 #[cfg(test)]

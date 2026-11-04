@@ -4,7 +4,7 @@ use super::draft::{CANVAS, CAP, Draft, MULTI, NEUTRAL, PALETTE, SHARE, WORKERS};
 use super::{Prefs, PrefsEvent, PrefsValues};
 use crate::{test_support, tokens};
 use egui::epaint::Shape;
-use egui::{Color32, Context, Event, Key, Modifiers, Pos2, Rect};
+use egui::{Color32, Context, Event, Key, Modifiers, Pos2, Rect, vec2};
 
 fn values() -> PrefsValues {
     PrefsValues {
@@ -50,7 +50,10 @@ fn collect(shape: &Shape, found: &mut Texts) {
 }
 
 fn frame(ctx: &Context, prefs: &mut Prefs, events: Vec<Event>) -> Texts {
-    let output = ctx.run_ui(test_support::input(800.0, events), |ui| {
+    // The window is taller than the default test screen.
+    let mut input = test_support::input(800.0, events);
+    input.screen_rect = Some(Rect::from_min_size(Pos2::ZERO, vec2(800.0, 1200.0)));
+    let output = ctx.run_ui(input, |ui| {
         prefs.show(ui.ctx());
     });
     let mut found = Vec::new();
@@ -65,7 +68,7 @@ fn frame(ctx: &Context, prefs: &mut Prefs, events: Vec<Event>) -> Texts {
 fn open_prefs() -> (Context, Prefs) {
     let ctx = test_support::context();
     let mut prefs = Prefs::default();
-    prefs.open(values());
+    prefs.open(values(), "1.4 GB".to_owned());
     frame(&ctx, &mut prefs, vec![]);
     frame(&ctx, &mut prefs, vec![]);
     (ctx, prefs)
@@ -178,7 +181,7 @@ fn cancel_closes_the_window_and_reopening_shows_the_old_values() {
     assert_eq!(prefs.take_events(), vec![PrefsEvent::Cancel]);
     assert!(!prefs.is_open());
 
-    prefs.open(values());
+    prefs.open(values(), "1.4 GB".to_owned());
     let draft = prefs.draft.as_ref().expect("the window is open");
     assert_eq!(draft.numbers[WORKERS], "3");
 }
@@ -214,4 +217,156 @@ fn a_closed_window_draws_nothing_and_ignores_the_picked_folder() {
     assert!(!prefs.is_open());
     assert_eq!(frame(&ctx, &mut prefs, vec![escape()]).len(), 0);
     assert_eq!(prefs.take_events().len(), 0);
+}
+
+fn has(texts: &Texts, want: &str) -> bool {
+    texts.iter().any(|(t, _, _)| t == want)
+}
+
+#[test]
+fn a_frame_shows_the_four_groups_and_the_thirteen_value_rows() {
+    let (ctx, mut prefs) = open_prefs();
+    let texts = frame(&ctx, &mut prefs, vec![]);
+    for group in ["Performance", "Color Tagging", "Cache", "Debug"] {
+        assert!(has(&texts, group), "group {group}");
+    }
+    let rows = [
+        "Max PSD Workers",
+        "Max Multi-Preview",
+        "Large Canvas Threshold (MP)",
+        "Tile Grid Size",
+        "Enable Color Tagging",
+        "Color Tag Palette Size",
+        "Color Tag Minimum Share",
+        "Neutral Saturation Threshold",
+        "Cache Directory",
+        "Cache Format",
+        "Clear Full-Res Cache on Exit",
+        "Cache size cap (GiB, 0 = off)",
+        "Enable Debug Logging",
+    ];
+    for row in rows {
+        assert!(has(&texts, row), "row {row}");
+    }
+    assert!(has(&texts, "Cache Size"));
+    assert!(has(&texts, "1.4 GB"));
+    assert!(has(&texts, "Default cache directory"));
+    assert!(!has(&texts, "Purging cache..."));
+}
+
+#[test]
+fn the_footnote_names_when_changes_apply_and_the_unread_settings() {
+    let (ctx, mut prefs) = open_prefs();
+    let texts = frame(&ctx, &mut prefs, vec![]);
+    let note = texts
+        .iter()
+        .find(|(t, _, _)| t.starts_with("Colour tagging changes"))
+        .expect("the footnote");
+    assert!(note.0.contains("next folder open"), "{}", note.0);
+    assert!(note.0.contains("cache folder applies at the next start"));
+    assert!(note.0.contains("nothing reads them yet"));
+}
+
+#[test]
+fn the_choices_are_the_registry_choices() {
+    assert_eq!(
+        super::form::TILE_GRIDS,
+        tarragon_db::settings::TILE_GRID_SIZES
+    );
+    assert_eq!(
+        super::form::CACHE_FORMATS,
+        tarragon_db::settings::CACHE_FORMATS
+    );
+    assert_eq!(super::form::TILE_GRIDS, ["1x1", "2x2", "3x3", "4x4"]);
+}
+
+#[test]
+fn the_choice_rows_show_the_current_choice() {
+    let (ctx, mut prefs) = open_prefs();
+    let texts = frame(&ctx, &mut prefs, vec![]);
+    assert!(has(&texts, "3x3"));
+    assert!(has(&texts, "jpeg"));
+}
+
+#[test]
+fn a_picked_cache_folder_replaces_the_default_text() {
+    let (ctx, mut prefs) = open_prefs();
+    prefs.set_cache_dir("/data/cache".to_owned());
+    let texts = frame(&ctx, &mut prefs, vec![]);
+    assert!(has(&texts, "/data/cache"));
+    assert!(!has(&texts, "Default cache directory"));
+}
+
+#[test]
+fn browse_queues_an_event_and_keeps_the_window_open() {
+    let (ctx, mut prefs) = open_prefs();
+    click_text(&ctx, &mut prefs, "Browse...");
+    assert_eq!(prefs.take_events(), vec![PrefsEvent::BrowseCacheDir]);
+    assert!(prefs.is_open());
+}
+
+#[test]
+fn purge_queues_an_event_and_keeps_the_window_open() {
+    let (ctx, mut prefs) = open_prefs();
+    click_text(&ctx, &mut prefs, "Purge Cache");
+    assert_eq!(prefs.take_events(), vec![PrefsEvent::PurgeCache]);
+    assert!(prefs.is_open());
+}
+
+#[test]
+fn while_purging_the_strip_shows_and_ok_cancel_purge_and_escape_do_nothing() {
+    let (ctx, mut prefs) = open_prefs();
+    prefs.set_purging(true);
+    let texts = frame(&ctx, &mut prefs, vec![]);
+    assert!(has(&texts, "Purging cache..."));
+    for button in ["OK", "Cancel", "Purge Cache"] {
+        click_text(&ctx, &mut prefs, button);
+    }
+    frame(&ctx, &mut prefs, vec![escape()]);
+    assert_eq!(prefs.take_events().len(), 0);
+    assert!(prefs.is_open());
+}
+
+#[test]
+fn while_purging_browse_still_works_and_the_buttons_work_again_after() {
+    let (ctx, mut prefs) = open_prefs();
+    prefs.set_purging(true);
+    click_text(&ctx, &mut prefs, "Browse...");
+    assert_eq!(prefs.take_events(), vec![PrefsEvent::BrowseCacheDir]);
+
+    prefs.set_purging(false);
+    let texts = frame(&ctx, &mut prefs, vec![]);
+    assert!(!has(&texts, "Purging cache..."));
+    click_text(&ctx, &mut prefs, "Cancel");
+    assert_eq!(prefs.take_events(), vec![PrefsEvent::Cancel]);
+}
+
+#[test]
+fn the_cache_size_text_can_change_while_the_window_is_open() {
+    let (ctx, mut prefs) = open_prefs();
+    prefs.set_cache_size("0 B".to_owned());
+    let texts = frame(&ctx, &mut prefs, vec![]);
+    assert!(has(&texts, "0 B"));
+    assert!(!has(&texts, "1.4 GB"));
+}
+
+#[test]
+fn an_error_shows_above_the_buttons_and_opening_clears_it() {
+    let (ctx, mut prefs) = open_prefs();
+    prefs.set_error(Some("could not save".to_owned()));
+    let texts = frame(&ctx, &mut prefs, vec![]);
+    assert!(has(&texts, "could not save"));
+    let error_y = texts
+        .iter()
+        .find(|t| t.0 == "could not save")
+        .map(|t| t.1.top());
+    let ok_y = texts.iter().find(|t| t.0 == "OK").map(|t| t.1.top());
+    assert!(error_y < ok_y, "{error_y:?} {ok_y:?}");
+
+    prefs.set_error(None);
+    assert!(!has(&frame(&ctx, &mut prefs, vec![]), "could not save"));
+
+    prefs.set_error(Some("old".to_owned()));
+    prefs.open(values(), String::new());
+    assert!(!has(&frame(&ctx, &mut prefs, vec![]), "old"));
 }

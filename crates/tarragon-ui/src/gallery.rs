@@ -18,7 +18,9 @@ use crate::grid::{GridItem, Selection, VirtualGrid, items_in_order, metrics_for}
 use crate::tag_manager::TagManager;
 pub use crate::tag_manager::{TagManagerEvent, TagRow};
 use crate::tokens;
+pub use empty::EmptyKind;
 
+mod empty;
 mod info;
 mod manager;
 mod selected;
@@ -143,6 +145,8 @@ pub struct Gallery {
     painted_scratch: Vec<usize>,
     /// Grows each time the painted set changes.
     visible_revision: u64,
+    /// Whether a scan or a query is still running.
+    loading: bool,
 }
 
 impl Gallery {
@@ -174,6 +178,7 @@ impl Gallery {
             painted: Vec::new(),
             painted_scratch: Vec::new(),
             visible_revision: 0,
+            loading: false,
         }
     }
 

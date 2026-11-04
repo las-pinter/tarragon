@@ -235,9 +235,9 @@ neutral. The frozen mockups show ten swatches in `design/mockups/theme.css`
 lines 67-77, and `design/mockups/filter-colors.html` says "Ten buckets". Colour
 extraction ignored alpha.
 
-After: there are eleven buckets. `pink` takes hues from 310 up to, but not
-including, 345, with the token `#ff80ab` (`BUCKET_PINK`, which has no
-stylesheet row). Colour extraction skips pixels with alpha below 128. An image
+After: there are eleven buckets. `pink` takes a light, soft colour: a hue from
+292 up to 360 or from 0 up to 15, saturation 0.60 or less, and value 0.80 or
+more. Its token is `#ff80ab` (`BUCKET_PINK`, which has no stylesheet row). Colour extraction skips pixels with alpha below 128. An image
 with 25 percent or more of such pixels is flagged transparent. The flag becomes
 the `transparent` tag when the scan pipeline stores it, which it does not do
 yet. `transparent` is a colour-filter value beside the buckets. It follows the

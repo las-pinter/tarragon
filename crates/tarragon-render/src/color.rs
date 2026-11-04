@@ -423,8 +423,53 @@ mod tests {
 
     #[test]
     fn a_solid_blue_image_yields_blue() {
-        let tags = buckets_of(&solid(170.0, 0.8, 0.7), ColorTagConfig::default());
+        let tags = buckets_of(&solid(240.0, 0.8, 0.7), ColorTagConfig::default());
         assert_eq!(tags, BTreeSet::from([ColorBucket::Blue]));
+    }
+
+    #[test]
+    fn pure_colors_yield_their_own_bucket() {
+        let cases = [
+            ([255, 0, 0], ColorBucket::Red),
+            ([255, 128, 0], ColorBucket::Orange),
+            ([255, 255, 0], ColorBucket::Yellow),
+            ([0, 255, 0], ColorBucket::Green),
+            ([0, 255, 255], ColorBucket::Cyan),
+            ([0, 0, 255], ColorBucket::Blue),
+            ([255, 0, 255], ColorBucket::Magenta),
+        ];
+        for (color, expected) in cases {
+            let tags = buckets_of(&solid_rgb(color), ColorTagConfig::default());
+            assert_eq!(tags, BTreeSet::from([expected]), "{color:?}");
+        }
+    }
+
+    #[test]
+    fn a_hue_of_180_yields_cyan() {
+        let tags = buckets_of(&solid_rgb([20, 200, 200]), ColorTagConfig::default());
+        assert_eq!(tags, BTreeSet::from([ColorBucket::Cyan]));
+    }
+
+    #[test]
+    fn pastel_pink_colors_yield_pink() {
+        for color in [[255, 128, 171], [255, 160, 160], [255, 200, 200]] {
+            let tags = buckets_of(&solid_rgb(color), ColorTagConfig::default());
+            assert_eq!(tags, BTreeSet::from([ColorBucket::Pink]), "{color:?}");
+        }
+    }
+
+    #[test]
+    fn strong_pink_hues_yield_magenta_or_red() {
+        let magenta = buckets_of(&solid_rgb([233, 30, 99]), ColorTagConfig::default());
+        assert_eq!(magenta, BTreeSet::from([ColorBucket::Magenta]));
+        let red = buckets_of(&solid_rgb([231, 76, 60]), ColorTagConfig::default());
+        assert_eq!(red, BTreeSet::from([ColorBucket::Red]));
+    }
+
+    #[test]
+    fn a_nearly_white_pink_is_neutral() {
+        let tags = buckets_of(&solid_rgb([255, 235, 235]), ColorTagConfig::default());
+        assert_eq!(tags, BTreeSet::from([ColorBucket::Neutral]));
     }
 
     #[test]
@@ -462,7 +507,7 @@ mod tests {
     #[test]
     fn full_value_full_saturation_yellow_is_not_neutral() {
         let tags = buckets_of(&solid_rgb([255, 240, 0]), ColorTagConfig::default());
-        assert!(!tags.contains(&ColorBucket::Neutral), "neutral: {tags:?}");
+        assert_eq!(tags, BTreeSet::from([ColorBucket::Yellow]));
     }
 
     #[test]
@@ -472,9 +517,9 @@ mod tests {
     }
 
     #[test]
-    fn a_hue_between_magenta_and_red_is_pink() {
+    fn a_strong_hue_between_magenta_and_red_is_magenta() {
         let tags = buckets_of(&solid(320.0, 0.8, 0.7), ColorTagConfig::default());
-        assert_eq!(tags, BTreeSet::from([ColorBucket::Pink]));
+        assert_eq!(tags, BTreeSet::from([ColorBucket::Magenta]));
     }
 
     #[test]
@@ -500,7 +545,11 @@ mod tests {
 
     #[test]
     fn a_green_and_blue_split_yields_two_tags() {
-        let image = split(hsv_to_rgb(70.0, 0.8, 0.7), hsv_to_rgb(170.0, 0.8, 0.7), 0.6);
+        let image = split(
+            hsv_to_rgb(120.0, 0.8, 0.7),
+            hsv_to_rgb(240.0, 0.8, 0.7),
+            0.6,
+        );
         let tags = buckets_of(&image, ColorTagConfig::default());
         assert!(
             tags.contains(&ColorBucket::Green),
@@ -622,19 +671,20 @@ mod tests {
     #[test]
     fn every_chromatic_bucket_is_reachable() {
         let cases = [
-            (10.0, ColorBucket::Red),
-            (24.0, ColorBucket::Orange),
-            (42.0, ColorBucket::Yellow),
-            (68.0, ColorBucket::Green),
-            (95.0, ColorBucket::Teal),
-            (123.0, ColorBucket::Cyan),
-            (170.0, ColorBucket::Blue),
-            (235.0, ColorBucket::Purple),
-            (290.0, ColorBucket::Magenta),
-            (328.0, ColorBucket::Pink),
+            (0.0, 0.8, 0.7, ColorBucket::Red),
+            (30.0, 0.8, 0.7, ColorBucket::Orange),
+            (60.0, 0.8, 0.7, ColorBucket::Yellow),
+            (120.0, 0.8, 0.7, ColorBucket::Green),
+            (165.0, 0.8, 0.7, ColorBucket::Teal),
+            (185.0, 0.8, 0.7, ColorBucket::Cyan),
+            (240.0, 0.8, 0.7, ColorBucket::Blue),
+            (270.0, 0.8, 0.7, ColorBucket::Purple),
+            (300.0, 0.8, 0.7, ColorBucket::Magenta),
+            (340.0, 0.5, 1.0, ColorBucket::Pink),
         ];
-        for (hue, expected) in cases {
-            let tags = buckets_of(&solid(hue, 0.8, 0.7), ColorTagConfig::default());
+        for (hue, saturation, value, expected) in cases {
+            let image = solid(hue, saturation, value);
+            let tags = buckets_of(&image, ColorTagConfig::default());
             assert_eq!(tags, BTreeSet::from([expected]), "hue {hue}");
         }
     }
@@ -643,9 +693,9 @@ mod tests {
     fn a_larger_palette_keeps_more_buckets() {
         let image = quad([
             hsv_to_rgb(10.0, 0.8, 0.7),
-            hsv_to_rgb(70.0, 0.8, 0.7),
-            hsv_to_rgb(170.0, 0.8, 0.7),
-            hsv_to_rgb(290.0, 0.8, 0.7),
+            hsv_to_rgb(120.0, 0.8, 0.7),
+            hsv_to_rgb(240.0, 0.8, 0.7),
+            hsv_to_rgb(300.0, 0.8, 0.7),
         ]);
         let few = buckets_of(
             &image,
@@ -668,7 +718,11 @@ mod tests {
 
     #[test]
     fn min_share_filters_smaller_buckets() {
-        let image = split(hsv_to_rgb(70.0, 0.8, 0.7), hsv_to_rgb(170.0, 0.8, 0.7), 0.7);
+        let image = split(
+            hsv_to_rgb(120.0, 0.8, 0.7),
+            hsv_to_rgb(240.0, 0.8, 0.7),
+            0.7,
+        );
         let low = buckets_of(
             &image,
             ColorTagConfig {

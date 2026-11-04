@@ -9,18 +9,26 @@ use tarragon_core::color::ColorBucket;
 /// A very dark color is neutral.
 const VALUE_LOW: f64 = 0.08;
 
-/// Hue ranges for the chromatic buckets. Together they cover 0..360.
-const HUE_BUCKETS: [(ColorBucket, &[(f64, f64)]); 10] = [
+/// A pastel color is pink only when its saturation is at or below this limit.
+const PINK_MAX_S: f64 = 0.60;
+
+/// A pastel color is pink only when its value is at or above this limit.
+const PINK_MIN_V: f64 = 0.80;
+
+/// Hue ranges (degrees, half-open) for the hue buckets. Together they cover
+/// 0..360. Each range holds its pure hue: red 0, orange 30, yellow 60, green
+/// 120, cyan 180, blue 240, violet 270, magenta 300. Pink has no row: it is a
+/// pastel rule in [`classify`].
+const HUE_BUCKETS: [(ColorBucket, &[(f64, f64)]); 9] = [
     (ColorBucket::Red, &[(345.0, 360.0), (0.0, 15.0)]),
-    (ColorBucket::Orange, &[(15.0, 33.0)]),
-    (ColorBucket::Yellow, &[(33.0, 50.0)]),
-    (ColorBucket::Green, &[(50.0, 85.0)]),
-    (ColorBucket::Teal, &[(85.0, 105.0)]),
-    (ColorBucket::Cyan, &[(105.0, 140.0)]),
-    (ColorBucket::Blue, &[(140.0, 200.0)]),
-    (ColorBucket::Purple, &[(200.0, 270.0)]),
-    (ColorBucket::Magenta, &[(270.0, 310.0)]),
-    (ColorBucket::Pink, &[(310.0, 345.0)]),
+    (ColorBucket::Orange, &[(15.0, 42.0)]),
+    (ColorBucket::Yellow, &[(42.0, 70.0)]),
+    (ColorBucket::Green, &[(70.0, 150.0)]),
+    (ColorBucket::Teal, &[(150.0, 175.0)]),
+    (ColorBucket::Cyan, &[(175.0, 198.0)]),
+    (ColorBucket::Blue, &[(198.0, 255.0)]),
+    (ColorBucket::Purple, &[(255.0, 292.0)]),
+    (ColorBucket::Magenta, &[(292.0, 345.0)]),
 ];
 
 /// Map a palette color to its bucket, with the neutral rules.
@@ -28,10 +36,16 @@ const HUE_BUCKETS: [(ColorBucket, &[(f64, f64)]); 10] = [
 /// A color is neutral when its saturation is at or below the threshold, or
 /// when its value is very low. A very bright color is neutral only through the
 /// saturation limit, so a bright saturated color keeps its hue bucket.
+///
+/// A light, soft color with a hue from 292 up to 360 or from 0 up to 15 is
+/// pink. A stronger or darker color with the same hue stays magenta or red.
 pub(crate) fn classify(color: Rgb<u8>, neutral_s_threshold: f64) -> ColorBucket {
     let (hue, saturation, value) = rgb_to_hsv(color);
     if saturation <= neutral_s_threshold || value <= VALUE_LOW {
         return ColorBucket::Neutral;
+    }
+    if (hue >= 292.0 || hue < 15.0) && saturation <= PINK_MAX_S && value >= PINK_MIN_V {
+        return ColorBucket::Pink;
     }
     hue_to_bucket(hue).unwrap_or(ColorBucket::Neutral)
 }
@@ -75,21 +89,79 @@ fn hue_to_bucket(hue: f64) -> Option<ColorBucket> {
 mod tests {
     use tarragon_core::color::ColorBucket;
 
-    use super::hue_to_bucket;
+    use image::Rgb;
+
+    use super::{classify, hue_to_bucket};
 
     #[test]
-    fn magenta_ends_just_below_310() {
-        assert_eq!(hue_to_bucket(309.9), Some(ColorBucket::Magenta));
+    fn each_hue_edge_belongs_to_the_bucket_it_starts() {
+        let cases = [
+            (14.9, ColorBucket::Red),
+            (15.0, ColorBucket::Orange),
+            (41.9, ColorBucket::Orange),
+            (42.0, ColorBucket::Yellow),
+            (69.9, ColorBucket::Yellow),
+            (70.0, ColorBucket::Green),
+            (149.9, ColorBucket::Green),
+            (150.0, ColorBucket::Teal),
+            (174.9, ColorBucket::Teal),
+            (175.0, ColorBucket::Cyan),
+            (197.9, ColorBucket::Cyan),
+            (198.0, ColorBucket::Blue),
+            (254.9, ColorBucket::Blue),
+            (255.0, ColorBucket::Purple),
+            (291.9, ColorBucket::Purple),
+            (292.0, ColorBucket::Magenta),
+            (344.9, ColorBucket::Magenta),
+            (345.0, ColorBucket::Red),
+        ];
+        for (hue, expected) in cases {
+            assert_eq!(hue_to_bucket(hue), Some(expected), "hue {hue}");
+        }
     }
 
     #[test]
-    fn pink_starts_at_310() {
-        assert_eq!(hue_to_bucket(310.0), Some(ColorBucket::Pink));
+    fn no_hue_row_is_pink() {
+        for tenth in 0_u16..3600 {
+            let hue = f64::from(tenth) / 10.0;
+            assert_ne!(hue_to_bucket(hue), Some(ColorBucket::Pink), "hue {hue}");
+        }
     }
 
     #[test]
-    fn pink_ends_just_below_345() {
-        assert_eq!(hue_to_bucket(344.9), Some(ColorBucket::Pink));
+    fn pastel_colors_with_a_red_or_magenta_hue_are_pink() {
+        for color in [[255, 128, 171], [255, 160, 160], [255, 200, 200]] {
+            assert_eq!(classify(Rgb(color), 0.15), ColorBucket::Pink, "{color:?}");
+        }
+    }
+
+    #[test]
+    fn strong_or_dark_colors_with_a_red_or_magenta_hue_are_not_pink() {
+        let cases = [
+            ([233, 30, 99], ColorBucket::Magenta),
+            ([231, 76, 60], ColorBucket::Red),
+            ([180, 90, 120], ColorBucket::Magenta),
+        ];
+        for (color, expected) in cases {
+            assert_eq!(classify(Rgb(color), 0.15), expected, "{color:?}");
+        }
+    }
+
+    #[test]
+    fn a_nearly_white_pink_is_neutral() {
+        assert_eq!(classify(Rgb([255, 235, 235]), 0.15), ColorBucket::Neutral);
+    }
+
+    #[test]
+    fn the_pink_limits_are_inclusive() {
+        // S 0.60 and V 1.0: the saturation limit itself is pink.
+        assert_eq!(classify(Rgb([255, 102, 102]), 0.15), ColorBucket::Pink);
+        // V 0.80 (204) with S 0.5: the value limit itself is pink.
+        assert_eq!(classify(Rgb([204, 102, 102]), 0.15), ColorBucket::Pink);
+        // S just above 0.60 is red.
+        assert_eq!(classify(Rgb([255, 101, 101]), 0.15), ColorBucket::Red);
+        // V just below 0.80 is red.
+        assert_eq!(classify(Rgb([203, 102, 102]), 0.15), ColorBucket::Red);
     }
 
     #[test]

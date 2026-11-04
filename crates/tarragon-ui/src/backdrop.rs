@@ -1,4 +1,4 @@
-//! The dim layer behind the "Manage tags" window.
+//! The dim layer behind a modal window.
 
 use egui::{Area, Context, Id, Order, Sense};
 
@@ -9,9 +9,9 @@ const BACKDROP_ORDER: Order = Order::Middle;
 
 /// Paint the dim layer over the whole screen and keep pointer and key input
 /// from the layers under it. Call it every frame the window is open, before
-/// the window.
-pub(super) fn show(ctx: &Context) {
-    let area = Area::new(Id::new("tag_manager_backdrop"))
+/// the window. `id` names the layer, so two windows do not share one.
+pub(crate) fn show(ctx: &Context, id: &'static str) {
+    let area = Area::new(Id::new(id))
         .order(BACKDROP_ORDER)
         // The dim layer holds its full colour from the first frame.
         .fade_in(false)

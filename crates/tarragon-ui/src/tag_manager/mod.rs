@@ -6,7 +6,6 @@
 
 use egui::{Align2, Key, Modifiers, vec2};
 
-mod backdrop;
 mod delete;
 mod rename;
 
@@ -143,7 +142,7 @@ impl TagManager {
         if !self.open {
             return;
         }
-        backdrop::show(ctx);
+        crate::backdrop::show(ctx, "tag_manager_backdrop");
         let mut open = true;
         egui::Window::new("Manage tags")
             // Above the dim layer, whatever the click order.

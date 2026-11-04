@@ -6,6 +6,7 @@ use egui::{CentralPanel, FontFamily, FontId, Frame, Margin, MenuBar, Panel, Rich
 use egui_dock::{DockArea, DockState, Style};
 use tarragon_core::sorting::SortMode;
 
+use crate::crash_card::{CrashCard, CrashCardEvent, CrashReport};
 use crate::gallery::Gallery;
 use crate::grid::GridItem;
 use crate::layout::{
@@ -50,6 +51,8 @@ pub struct Shell {
     seen_selection: u64,
     /// Where each panel sits and how big it is. A hidden panel is not in it.
     dock: DockState<Pane>,
+    /// The window over the dock that reports an earlier crash.
+    crash_card: CrashCard,
 }
 
 impl Shell {
@@ -63,7 +66,18 @@ impl Shell {
             preview: Preview::default(),
             seen_selection: 0,
             dock: first_dock(),
+            crash_card: CrashCard::default(),
         }
+    }
+
+    /// Show the crash card for `report` over the dock from the next frame.
+    pub fn show_crash_report(&mut self, report: CrashReport) {
+        self.crash_card.show_report(report);
+    }
+
+    /// Return the crash card choices since the last call, and clear them.
+    pub fn take_crash_events(&mut self) -> Vec<CrashCardEvent> {
+        self.crash_card.take_events()
     }
 
     /// Whether the Library dock is visible.
@@ -287,6 +301,7 @@ impl Shell {
                 ui.ctx().request_repaint();
             }
         });
+        self.crash_card.show(&ctx);
         events
     }
 }

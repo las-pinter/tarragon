@@ -28,10 +28,6 @@ impl Pipeline {
     /// Returns [`PipelineError::Cache`] when the cache root is unsafe or a
     /// file cannot be removed; the rows stay then. Returns
     /// [`PipelineError::Db`] when the row clear fails.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "only tests call it until the app does")
-    )]
     pub fn purge(&mut self, protected: &Path) -> Result<PurgeOutcome, PipelineError> {
         self.drain();
         self.flush();

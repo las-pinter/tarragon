@@ -15,6 +15,8 @@ use tarragon_ui::texture_budget::GRID_BUDGET_BYTES;
 
 use crate::feed::{Feed, Tiles};
 use crate::pipeline::{Opened, Pipeline, PipelineError, Repaint, Results};
+use work::{Queued, WorkDone};
+pub use work::{Work, WorkOutcome};
 
 /// Results applied per frame. Every result is a 256 px image, so each costs
 /// about the same, and a fixed count keeps the frame time steady and testable.
@@ -91,6 +93,11 @@ enum Slot {
         target: Target,
         done: Receiver<Done>,
     },
+    /// Inside the work thread.
+    Working {
+        work: Work,
+        done: Receiver<WorkDone>,
+    },
     /// Lost to a failed thread start, or taken at exit.
     Gone,
 }
@@ -120,6 +127,10 @@ pub struct Thumbs {
     feed: Feed,
     /// The folder to open when the pipeline is idle. A newer request replaces it.
     pending: Option<PathBuf>,
+    /// The purge or eviction to run when the pipeline is idle.
+    queued: Option<Queued>,
+    /// The answer of the last work, until the caller takes it.
+    finished: Option<(Work, Result<WorkOutcome, String>)>,
     /// The folder the gallery shows. A failed open leaves it as it was.
     current: Option<PathBuf>,
     /// True when an open ended and the shell must learn `current`.
@@ -152,6 +163,8 @@ impl Thumbs {
             results,
             feed: Feed::new(GRID_BUDGET_BYTES),
             pending: folder,
+            queued: None,
+            finished: None,
             current: None,
             changed: false,
             library: Library::Absent,
@@ -167,6 +180,9 @@ impl Thumbs {
     /// bounded batch of results.
     pub fn before_draw(&mut self, ctx: &Context, gallery: &mut Gallery) {
         self.finish_open(gallery);
+        self.finish_work();
+        // Work goes before a waiting open, so the open sees the cache as work left it.
+        self.start_work();
         if matches!(self.slot, Slot::Idle(_)) {
             if let Some(folder) = self.pending.take() {
                 if self.library == Library::Wanted {
@@ -178,7 +194,7 @@ impl Thumbs {
                 self.start_open(Target::Library);
             }
         }
-        if matches!(self.slot, Slot::Opening { .. }) {
+        if matches!(self.slot, Slot::Opening { .. } | Slot::Working { .. }) {
             ctx.request_repaint_after(OPEN_POLL);
             return;
         }
@@ -233,7 +249,8 @@ impl Thumbs {
     pub(crate) fn is_idle(&self) -> bool {
         self.pending.is_none()
             && self.library != Library::Wanted
-            && !matches!(self.slot, Slot::Opening { .. })
+            && self.queued.is_none()
+            && !matches!(self.slot, Slot::Opening { .. } | Slot::Working { .. })
     }
 
     /// After an open ended, return the folder the gallery shows, once, so the
@@ -328,6 +345,7 @@ impl Thumbs {
                 Slot::Idle(pipeline) => drop(pipeline),
                 // The open thread returns the pipeline; dropping it ends the work.
                 Slot::Opening { done, .. } => drop(done.recv()),
+                Slot::Working { done, .. } => drop(done.recv()),
                 Slot::Gone => {}
             });
         match spawned {
@@ -489,3 +507,6 @@ mod scale_tests;
 mod target_tests;
 #[cfg(test)]
 mod tests;
+mod work;
+#[cfg(test)]
+mod work_tests;

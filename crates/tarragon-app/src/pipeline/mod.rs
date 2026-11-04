@@ -361,6 +361,18 @@ impl Pipeline {
         Ok(Opened { generation, files })
     }
 
+    /// The cache root the pipeline writes to.
+    #[must_use]
+    pub fn cache_root(&self) -> &Path {
+        &self.cache_root
+    }
+
+    /// The database the pipeline stores its rows in.
+    #[must_use]
+    pub fn database(&self) -> &Database {
+        &self.db
+    }
+
     /// Queue these files again, ahead of the rest. Use it for a visible tile
     /// whose texture was dropped. The render step reads the cache, so this is
     /// cheap when the first render stored its files. Unknown paths are skipped.

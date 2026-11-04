@@ -2,10 +2,6 @@
 //!
 //! The cache crate works in bytes and cannot reach the database, so the size
 //! cap is applied here.
-#![cfg_attr(
-    not(test),
-    expect(dead_code, reason = "only tests call it until the app does")
-)]
 
 use std::collections::HashMap;
 use std::path::Path;

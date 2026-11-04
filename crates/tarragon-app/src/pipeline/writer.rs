@@ -23,7 +23,6 @@ pub(super) enum Message {
     /// Replace the `auto_color` tags of `path` with `names`.
     Colors { path: String, names: Vec<String> },
     /// Reply on the sender once every earlier row is stored.
-    #[cfg_attr(not(test), expect(dead_code, reason = "only tests send it"))]
     Flush(Sender<()>),
 }
 

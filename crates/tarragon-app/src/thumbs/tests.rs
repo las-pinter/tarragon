@@ -74,6 +74,17 @@ pub(super) struct Rig {
 
 impl Rig {
     pub(super) fn new(name: &str, start: Option<&str>) -> Self {
+        let render: crate::pipeline::RenderFn =
+            Arc::new(|_| Ok(DynamicImage::ImageRgba8(RgbaImage::new(8, 8))));
+        Self::with_render(name, start, render)
+    }
+
+    /// Like `new`, with the given render function.
+    pub(super) fn with_render(
+        name: &str,
+        start: Option<&str>,
+        render: crate::pipeline::RenderFn,
+    ) -> Self {
         let dir = TempDir(
             std::env::temp_dir().join(format!("tarragon-thumbs-{name}-{}", std::process::id())),
         );
@@ -83,7 +94,7 @@ impl Rig {
         let config = Config {
             cache: CacheStore::new(dir.0.join("cache")),
             workers: 2,
-            render: Arc::new(|_| Ok(DynamicImage::ImageRgba8(RgbaImage::new(8, 8)))),
+            render,
         };
         let repaint: Repaint = Arc::new(|| {});
         let (pipeline, results) =

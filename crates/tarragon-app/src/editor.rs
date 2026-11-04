@@ -5,8 +5,10 @@
     expect(dead_code, reason = "the error and crash cards call it later")
 )]
 
-use std::ffi::OsString;
+use std::ffi::{OsStr, OsString};
+use std::io;
 use std::path::Path;
+use std::process::{Command, Stdio};
 
 use tarragon_db::{Database, DbError};
 
@@ -49,14 +51,87 @@ pub fn resolve(db: &Database, file: &Path) -> Result<Launch, DbError> {
     Ok(system_opener(file))
 }
 
+/// Why an editor could not be opened.
+#[derive(Debug, thiserror::Error)]
+pub enum OpenError {
+    /// The editor template could not be read.
+    #[error("cannot read the editor command: {0}")]
+    Db(#[from] DbError),
+    /// The program did not start.
+    #[error("cannot start `{program}`: {source}")]
+    Spawn {
+        /// The program that failed to start.
+        program: String,
+        /// The error from the operating system.
+        source: io::Error,
+    },
+}
+
+/// Open `file` in its editor without waiting for the editor to end.
+///
+/// # Errors
+///
+/// Returns [`OpenError::Db`] when the template read fails, and
+/// [`OpenError::Spawn`] when the program does not start.
+pub fn open(db: &Database, file: &Path) -> Result<(), OpenError> {
+    open_with_path(db, file, None)
+}
+
+/// [`open`] with an optional `PATH` for the child, so tests need not change the
+/// environment of the whole process.
+fn open_with_path(db: &Database, file: &Path, path: Option<&OsStr>) -> Result<(), OpenError> {
+    let launch = resolve(db, file)?;
+    spawn_with_path(&launch, path).map_err(|source| OpenError::Spawn {
+        program: launch.program.to_string_lossy().into_owned(),
+        source,
+    })?;
+    let name = file.file_name().unwrap_or(file.as_os_str());
+    tracing::info!("user opened editor for {}", name.to_string_lossy());
+    Ok(())
+}
+
+/// Start the program of `launch` and return at once.
+///
+/// A small thread waits for the child, so it does not stay a zombie.
+///
+/// # Errors
+///
+/// Returns the error of the failed process start.
+pub fn spawn(launch: &Launch) -> io::Result<()> {
+    spawn_with_path(launch, None)
+}
+
+/// [`spawn`] with an optional `PATH` for the child.
+fn spawn_with_path(launch: &Launch, path: Option<&OsStr>) -> io::Result<()> {
+    let mut command = Command::new(&launch.program);
+    command
+        .args(&launch.args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    if let Some(path) = path {
+        command.env("PATH", path);
+    }
+    let mut child = command.spawn()?;
+    let waiter = std::thread::Builder::new()
+        .name("tarragon-editor-wait".into())
+        .spawn(move || {
+            let _ = child.wait();
+        });
+    if let Err(error) = waiter {
+        tracing::warn!("cannot start the editor wait thread: {error}");
+    }
+    Ok(())
+}
+
 /// Build a launch from a template, or `None` when it names no program.
 fn expand(template: &str, file: &Path) -> Option<Launch> {
     let mut parts = split_template(template);
     if parts.first().is_none_or(String::is_empty) {
         return None;
     }
-    let has_placeholder = parts.iter().any(|part| part.contains(PLACEHOLDER));
     let program = OsString::from(parts.remove(0));
+    let has_placeholder = parts.iter().any(|part| part.contains(PLACEHOLDER));
     let mut args: Vec<OsString> = parts.iter().map(|part| substitute(part, file)).collect();
     if !has_placeholder {
         args.push(file.as_os_str().to_owned());

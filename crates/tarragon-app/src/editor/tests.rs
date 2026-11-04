@@ -119,3 +119,92 @@ fn split_handles_quotes_and_white_space() {
 fn split_keeps_the_rest_of_an_unclosed_quote() {
     assert_eq!(split_template("a \"b c d"), ["a", "b c d"]);
 }
+
+#[test]
+fn placeholder_in_the_program_part_does_not_count() {
+    let (_dir, db) = db_with(&[("png", "{file}x viewer")]);
+    let launch = resolve(&db, Path::new("/a/x.png")).expect("resolve");
+    assert_eq!(launch.program, OsString::from("{file}x"));
+    assert_eq!(launch.args, os(&["viewer", "/a/x.png"]));
+}
+
+#[test]
+fn spawn_of_a_missing_program_is_not_found() {
+    let launch = Launch {
+        program: "tarragon-no-such-editor".into(),
+        args: vec![],
+    };
+    let error = spawn(&launch).expect_err("must fail");
+    assert_eq!(error.kind(), io::ErrorKind::NotFound);
+}
+
+#[test]
+fn open_of_a_missing_program_names_it() {
+    let (_dir, db) = db_with(&[("*", "tarragon-no-such-editor {file}")]);
+    let error = open(&db, Path::new("/a/x.png")).expect_err("must fail");
+    assert!(matches!(error, OpenError::Spawn { .. }));
+    assert!(error.to_string().contains("tarragon-no-such-editor"));
+}
+
+/// Wait up to three seconds for `path` to hold a full line.
+#[cfg(unix)]
+fn wait_for_text(path: &Path) -> Option<String> {
+    for _ in 0..60 {
+        if let Ok(text) = std::fs::read_to_string(path)
+            && text.ends_with('\n')
+        {
+            return Some(text);
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    None
+}
+
+#[cfg(unix)]
+#[test]
+fn spawn_returns_before_the_child_ends() {
+    let launch = Launch {
+        program: "sh".into(),
+        args: os(&["-c", "sleep 1"]),
+    };
+    let start = std::time::Instant::now();
+    spawn(&launch).expect("spawn");
+    assert!(start.elapsed() < std::time::Duration::from_millis(500));
+    let launch = Launch {
+        program: "true".into(),
+        args: vec![],
+    };
+    spawn(&launch).expect("spawn true");
+}
+
+#[cfg(unix)]
+#[test]
+fn open_runs_the_fallback_template() {
+    let (dir, db) = db_with(&[]);
+    let out = dir.0.join("out.txt");
+    let template = format!("sh -c \"echo $0 > {}\" {{file}}", out.display());
+    db.upsert_editor_association("*", &template)
+        .expect("upsert");
+    open(&db, Path::new("/a/x.png")).expect("open");
+    assert_eq!(wait_for_text(&out).as_deref(), Some("/a/x.png\n"));
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn open_without_template_runs_the_system_opener() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let (dir, db) = db_with(&[]);
+    let out = dir.0.join("arg.txt");
+    let bin = dir.0.join("bin");
+    std::fs::create_dir_all(&bin).expect("create bin");
+    let script = bin.join("xdg-open");
+    std::fs::write(
+        &script,
+        format!("#!/bin/sh\necho \"$1\" > {}\n", out.display()),
+    )
+    .expect("write script");
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).expect("chmod");
+    open_with_path(&db, Path::new("/a/x.png"), Some(bin.as_os_str())).expect("open");
+    assert_eq!(wait_for_text(&out).as_deref(), Some("/a/x.png\n"));
+}

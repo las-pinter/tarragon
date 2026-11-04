@@ -68,6 +68,29 @@ fn swatch_names_are_the_bucket_names_then_transparent() {
 }
 
 #[test]
+fn each_bucket_swatch_classifies_to_its_own_bucket() {
+    use image::{DynamicImage, Rgba, RgbaImage};
+    use tarragon_render::color::extract_dominant_colors;
+    use tarragon_ui::swatch::bucket_color;
+
+    // The swatch tokens are the design colours; the classifier ranges are
+    // fitted to them, so each one must land in its own bucket.
+    for bucket in ColorBucket::ALL {
+        let c = bucket_color(bucket);
+        let solid = RgbaImage::from_pixel(100, 100, Rgba([c.r(), c.g(), c.b(), 255]));
+        let tags =
+            extract_dominant_colors(&DynamicImage::ImageRgba8(solid), ColorTagConfig::default());
+        assert_eq!(
+            tags.buckets,
+            BTreeSet::from([bucket]),
+            "the {} swatch {:?} left its bucket",
+            bucket.as_str(),
+            (c.r(), c.g(), c.b()),
+        );
+    }
+}
+
+#[test]
 fn tag_names_leave_out_transparent_when_it_is_not_set() {
     let red = ColorTags {
         buckets: BTreeSet::from([ColorBucket::Red]),

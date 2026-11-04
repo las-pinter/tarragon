@@ -637,3 +637,36 @@ root. The database trims a trailing slash, except for `/` and a bare drive. No s
 a root.
 
 Reason: the user must reach any folder, and it must stay in the tree after a restart.
+
+## Empty states
+
+Before: the mockups show one empty card for a folder with no supported file. It lists GIF and
+BMP, and it opens with "Tarragon found files". The mockups show no card for a filter with no
+result. They also show a status bar line: "No folder open" and "Folder scanned - 0 supported
+files".
+
+After: the grid area shows one of three cards when it has no cell. Each card has a folder icon,
+a big line, and a hint.
+
+| Card         | When                                            | Big line                           | Button                 |
+| ------------ | ----------------------------------------------- | ---------------------------------- | ---------------------- |
+| First run    | No filter, and nothing to list                  | Open a folder to begin             | Open Folder...         |
+| Empty folder | No filter, and something to list, but no cell   | No supported images in this folder | Open Another Folder... |
+| No result    | A search, a chip, or a filter result hides all  | No images match                    | none                   |
+
+- First run hint: `Use File - Open Folder, or click a folder in the Library tree. Tarragon scans
+  the folder, writes the index, and renders thumbnails.`
+- Empty folder hint: `This folder has no file with a supported extension. Supported: JPG,
+  JPEG, PNG, WEBP, TIFF, TIF, PSD, PSB, CLIP, KRA.` The list holds the ten extensions that the
+  scanner indexes, not GIF and BMP. A folder with no file at all reads the same hint.
+- No result hint: `Change or clear the search and the filters to see more images.` The card has
+  no button. It follows the same scope rule as the filter pill: a folder chip counts only in
+  the All scope. In the Folder scope, a stale folder chip does not change the card.
+- Nothing to list means no open folder in the Folder scope, and no image in the library in the
+  All scope. So the All scope with no image shows the first run card.
+- The Open Folder buttons do the same as File > Open Folder...
+- No card shows while a folder opens, so the empty card does not flash before the first cell.
+- The status bar line is not built. The app has no status bar.
+
+Reason: the empty card must name only the formats the scanner indexes. A filter with no result
+needs its own text, and a button there would not help.

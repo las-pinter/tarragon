@@ -670,3 +670,32 @@ a big line, and a hint.
 
 Reason: the empty card must name only the formats the scanner indexes. A filter with no result
 needs its own text, and a button there would not help.
+
+## Keyboard shortcuts
+
+Before: the mockup menu bar shows no shortcut text and no Quit item. The Python application
+had mnemonics only, such as `&File`.
+
+After: four shortcuts exist. The command key is Ctrl on Linux and Windows, and Cmd on macOS.
+A chord with an extra Shift or Alt does not act.
+
+| Shortcut | Action                                        | Off when                                       |
+| -------- | --------------------------------------------- | ---------------------------------------------- |
+| Ctrl+O   | Open Folder, as File > Open Folder...         | A dialog window is open                        |
+| Ctrl+,   | Preferences, as Settings > Preferences...     | A dialog window is open                        |
+| Ctrl+F   | Focus the search field and select its text    | A dialog window is open                        |
+| Ctrl+A   | Select every visible image                    | A dialog window is open, or a text field has focus |
+
+- The windows are the crash card, Preferences, and Manage tags. While one is open, no
+  shortcut acts.
+- Ctrl+A leaves a focused text field its own select all. Focus on a tile or a button does
+  not block it. An image that the search hides is not selected.
+- No menu shows these shortcuts, because the mockup shows none. This list is the only place
+  that names them.
+- Not built: Escape to clear the selection, arrow keys, Enter to open in the editor, Delete,
+  Ctrl+Q, and F5 to rescan. The File menu has a Quit item, which the mockup lacks. Each
+  other key needs its own decision.
+- egui has no mnemonics, so Alt+F is not supported.
+
+Reason: the shortcuts save a trip to the menu. The mockup wins on looks, so the menus stay
+free of shortcut text.

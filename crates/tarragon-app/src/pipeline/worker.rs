@@ -15,7 +15,7 @@ use tarragon_render::color::{ColorTagConfig, ColorTags};
 use super::job::{ErrorKind, Job, ThumbError, ThumbResult};
 use super::queue::JobQueue;
 use super::writer::Message;
-use super::{Failures, RenderFn, Repaint};
+use super::{Failures, RenderFn, Repaint, Retried};
 use crate::colortags;
 
 /// How long a full channel is waited on before the checks run again.
@@ -28,6 +28,7 @@ pub(super) struct Shared {
     pub(super) cache: CacheStore,
     pub(super) render: RenderFn,
     pub(super) failures: Failures,
+    pub(super) retried: Retried,
     pub(super) results: Sender<ThumbResult>,
     pub(super) rows: Sender<Message>,
     pub(super) repaint: Repaint,
@@ -62,15 +63,8 @@ pub(super) fn run(shared: &Shared) {
                     message: "the worker panicked".to_owned(),
                 })
             });
-        if let Some(error) = outcome.as_ref().err().filter(|e| e.kind.is_permanent()) {
-            shared
-                .failures
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .insert(job.path.clone(), (job.stamp, error.clone()));
-        }
         // The folder may have changed while the file rendered.
-        if job.generation != shared.generation.load(Ordering::Acquire) {
+        if !record(shared, &job, &outcome) {
             continue;
         }
         let result = ThumbResult {
@@ -87,6 +81,41 @@ pub(super) fn run(shared: &Shared) {
             Sent::Gone => return,
         }
     }
+}
+
+/// Remember a permanent failure of the job, or forget the failure of a file
+/// that now renders. It returns false when the job is from an old generation.
+///
+/// The generation check and the edit share the failures lock, so an open
+/// cannot slip between them. A failure of a render that was not asked for
+/// again is skipped when the file was retried since the open: that render may
+/// have started before the retry.
+fn record(shared: &Shared, job: &Job, outcome: &Result<RgbaImage, ThumbError>) -> bool {
+    let mut failures = shared
+        .failures
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if job.generation != shared.generation.load(Ordering::Acquire) {
+        return false;
+    }
+    match outcome {
+        Ok(_) => {
+            failures.remove(&job.path);
+        }
+        Err(error) if error.kind.is_permanent() => {
+            let superseded = !job.retry
+                && shared
+                    .retried
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .contains(&job.path);
+            if !superseded {
+                failures.insert(job.path.clone(), (job.stamp, error.clone()));
+            }
+        }
+        Err(_) => {}
+    }
+    true
 }
 
 /// How a send ended.

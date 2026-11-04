@@ -60,6 +60,11 @@ pub type Repaint = Arc<dyn Fn() + Send + Sync>;
 /// changes. The database has no column for it, so a restart tries again.
 type Failures = Arc<Mutex<HashMap<PathBuf, (SourceStamp, ThumbError)>>>;
 
+/// Files asked for again since the last open. A render of such a file that was
+/// not asked for again may have started before the ask, so its failure is not
+/// remembered. Lock it only while holding the failures lock.
+type Retried = Arc<Mutex<HashSet<PathBuf>>>;
+
 /// Why the pipeline cannot start or open a folder.
 #[derive(Debug, thiserror::Error)]
 pub enum PipelineError {
@@ -178,6 +183,7 @@ pub struct Pipeline {
     queue: Arc<JobQueue>,
     generation: Arc<AtomicU64>,
     failures: Failures,
+    retried: Retried,
     /// The jobs of the last open (folder or library), kept so a dropped texture can be asked for again.
     jobs: HashMap<PathBuf, Job>,
     rows: Option<Sender<writer::Message>>,
@@ -209,6 +215,7 @@ impl Pipeline {
         let queue = Arc::new(JobQueue::default());
         let generation = Arc::new(AtomicU64::new(0));
         let failures = Failures::default();
+        let retried = Retried::default();
         let (result_tx, result_rx) = crossbeam_channel::bounded(RESULT_BOUND);
         let (row_tx, row_rx) = crossbeam_channel::unbounded();
         let store_epoch = Arc::new(AtomicU64::new(0));
@@ -221,6 +228,7 @@ impl Pipeline {
             queue: Arc::clone(&queue),
             generation: Arc::clone(&generation),
             failures: Arc::clone(&failures),
+            retried: Arc::clone(&retried),
             jobs: HashMap::new(),
             rows: Some(row_tx.clone()),
             workers: Vec::new(),
@@ -238,6 +246,7 @@ impl Pipeline {
             cache: config.cache,
             render: config.render,
             failures,
+            retried,
             results: result_tx,
             rows: row_tx,
             repaint,
@@ -295,11 +304,17 @@ impl Pipeline {
             |name| name.to_string_lossy().into_owned(),
         );
 
-        let generation = self.generation.fetch_add(1, Ordering::AcqRel) + 1;
         let mut failures = self
             .failures
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
+        // The generation moves under the failures lock, so a worker never
+        // records a failure of an old job after the retried set is reset.
+        let generation = self.generation.fetch_add(1, Ordering::AcqRel) + 1;
+        self.retried
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clear();
         // Drop failures of files that are not in this folder.
         let present: HashSet<&PathBuf> = files.iter().map(|file| &file.path).collect();
         failures.retain(|path, _| present.contains(path));
@@ -331,6 +346,7 @@ impl Pipeline {
                     folder: folder_name.clone(),
                     uuid: uuid.clone(),
                     known_failure,
+                    retry: false,
                     colors,
                     needs_colors,
                 }
@@ -362,6 +378,49 @@ impl Pipeline {
             })
             .collect();
         self.queue.request(jobs);
+    }
+
+    /// Render these files again, ahead of the rest, and forget their failures.
+    /// Use it when the user asks to retry a failed file. A plain
+    /// [`Self::request`] would return the remembered failure and the cache
+    /// check could serve an old file, so the retry skips both.
+    ///
+    /// A job of the file that is still waiting is replaced by the new one. A
+    /// render that is already running is not stopped; the retry queues a second
+    /// render, and a permanent failure of the running one is not remembered.
+    /// Unknown paths are skipped. It returns how many jobs it queued.
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "only tests call it until the app does")
+    )]
+    pub fn retry(&mut self, keys: &HashSet<PathBuf>) -> usize {
+        let mut failures = self
+            .failures
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut retried = self
+            .retried
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut jobs = Vec::new();
+        for key in keys {
+            let Some(job) = self.jobs.get_mut(key) else {
+                continue;
+            };
+            failures.remove(key);
+            retried.insert(key.clone());
+            // The stored job loses the failure too, so a later request renders.
+            job.known_failure = None;
+            jobs.push(Job {
+                stored: None,
+                retry: true,
+                needs_colors: false,
+                ..job.clone()
+            });
+        }
+        drop(retried);
+        drop(failures);
+        self.queue.retry(jobs)
     }
 
     /// Queue the jobs for these visible items first. Other jobs keep their

@@ -84,6 +84,25 @@ impl JobQueue {
         self.wake.notify_all();
     }
 
+    /// Queue `jobs` for the visible set. A job still waiting for the same path
+    /// is dropped, so the new one runs instead of it. A running job is not
+    /// touched. It returns how many jobs it queued.
+    pub(super) fn retry(&self, jobs: Vec<Job>) -> usize {
+        let mut state = self.lock();
+        let paths: HashSet<PathBuf> = jobs.iter().map(|job| job.path.clone()).collect();
+        state.visible.retain(|_, job| !paths.contains(&job.path));
+        state.rest.retain(|_, job| !paths.contains(&job.path));
+        let queued = jobs.len();
+        for job in jobs {
+            let seq = state.next_seq;
+            state.next_seq += 1;
+            state.visible.insert(seq, job);
+        }
+        drop(state);
+        self.wake.notify_all();
+        queued
+    }
+
     /// Wait for the next job. It returns `None` after [`Self::shutdown`].
     pub(super) fn next(&self) -> Option<Job> {
         let mut state = self.lock();
@@ -163,6 +182,7 @@ mod tests {
             folder: String::new(),
             uuid: String::new(),
             known_failure: None,
+            retry: false,
             colors: None,
             needs_colors: false,
         }

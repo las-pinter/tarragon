@@ -52,7 +52,19 @@ impl Pipeline {
             &self.failures,
             &ColorState::read(&self.db),
         );
-        self.generation.store(generation, Ordering::Release);
+        {
+            // Under the failures lock, like `open_folder`, so a worker never
+            // records a failure of an old job after the retried set is reset.
+            let _failures = self
+                .failures
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            self.generation.store(generation, Ordering::Release);
+            self.retried
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clear();
+        }
         self.jobs = jobs
             .iter()
             .map(|job| (job.path.clone(), job.clone()))
@@ -119,6 +131,7 @@ pub(super) fn library_jobs(
                 folder,
                 uuid,
                 known_failure,
+                retry: false,
                 colors,
                 needs_colors,
             }

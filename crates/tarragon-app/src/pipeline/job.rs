@@ -93,6 +93,9 @@ pub(super) struct Job {
     pub(super) uuid: String,
     /// A failure seen earlier for this exact stamp. It is not rendered again.
     pub(super) known_failure: Option<ThumbError>,
+    /// True for a render the user asked for again. Its failure is remembered
+    /// even while an older render of the same file may still end.
+    pub(super) retry: bool,
     /// The colour tag config, or `None` when colour tagging is off.
     pub(super) colors: Option<ColorTagConfig>,
     /// True when a cache hit must still extract colours, because the path has

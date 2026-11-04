@@ -1,9 +1,10 @@
 //! Cache size cap and LRU eviction.
 //!
-//! The cap is a total disk-size limit with a default of 20 GB. When the total
-//! exceeds the cap, eviction deletes the three tier files of the
-//! least-recently-accessed source first, until the total is at or under the
-//! cap. A cap of zero bytes disables the cap.
+//! The cap is a total disk-size limit with a default of 20 GiB (2^30 bytes per
+//! GiB). The setting counts in GiB and this API counts in bytes, so the caller
+//! converts. When the total exceeds the cap, eviction deletes the three tier
+//! files of the least-recently-accessed source first, until the total is at or
+//! under the cap. A cap of zero bytes disables the cap.
 //!
 //! The cache crate cannot reach the database, so the caller supplies the
 //! eviction order from `thumbnails.last_accessed`.

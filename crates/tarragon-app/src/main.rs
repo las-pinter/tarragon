@@ -10,6 +10,7 @@ mod filtering;
 mod instance;
 mod logging;
 mod logview;
+mod maintenance;
 mod pipeline;
 mod preview_feed;
 mod preview_loader;

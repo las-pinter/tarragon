@@ -4,6 +4,7 @@ mod app;
 mod cli;
 mod colortags;
 mod data_dir;
+mod editor;
 mod feed;
 mod filtering;
 mod instance;

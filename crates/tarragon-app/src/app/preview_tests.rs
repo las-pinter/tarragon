@@ -82,6 +82,12 @@ impl Rig {
         )
     }
 
+    /// Draw one frame and return how many colour swatches it paints.
+    pub(super) fn swatches(&mut self) -> usize {
+        let (app, frame) = (&mut self.app, &mut self.frame);
+        test_ui::frame(&self.ctx, Vec::new(), &mut |ui| app.ui(ui, frame)).swatches
+    }
+
     /// Click the tile `label`, holding the control key when `add` is set.
     pub(super) fn click(&mut self, label: &str, add: bool) {
         let first = test_ui::frame(&self.ctx, Vec::new(), &mut |ui| {

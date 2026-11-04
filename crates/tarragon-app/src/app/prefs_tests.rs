@@ -85,8 +85,8 @@ fn ok_with_changed_values_stores_them() {
         tile_grid: "2x2".to_owned(),
         color_tag_enabled: false,
         palette_size: 6,
-        min_share: 0.25,
-        neutral_s: 0.5,
+        min_share: 0.3,
+        neutral_s: 0.1,
         cache_dir: Some("/somewhere".to_owned()),
         cache_format: "jpeg".to_owned(),
         clear_full_res: false,
@@ -97,6 +97,24 @@ fn ok_with_changed_values_stores_them() {
     rig.click("OK", false);
     assert!(!rig.app.shell.prefs_mut().is_open());
     assert_eq!(prefs::load(&rig.app.db), changed);
+    // The stored number is the short decimal, not the widened `f32`.
+    let stored = Settings::new(&rig.app.db).get(SettingKey::ColorTagMinShare);
+    assert_eq!(stored.expect("read"), SettingValue::Float(0.3));
+}
+
+#[test]
+fn ok_with_colour_tags_off_removes_the_swatch_row_at_once() {
+    let mut rig = Rig::new(&[], &[], 9);
+    assert!(rig.swatches() > 0);
+    open_with(
+        &mut rig,
+        PrefsValues {
+            color_tag_enabled: false,
+            ..defaults()
+        },
+    );
+    rig.click("OK", false);
+    assert_eq!(rig.swatches(), 0);
 }
 
 #[test]
@@ -211,7 +229,7 @@ fn choosing_preferences_in_the_menu_opens_the_window_and_asks_for_frames() {
     // The counter starts at open and runs out, so the repaints stop.
     let left = |rig: &Rig| {
         rig.ctx
-            .data(|d| d.get_temp::<u8>(Id::new("prefs_settle_frames")))
+            .data(|d| d.get_temp::<u8>(Id::new(super::prefs::SETTLE_ID)))
     };
     assert!(left(&rig).is_some_and(|n| n > 0));
     for _ in 0..8 {

@@ -40,10 +40,6 @@ pub(super) struct WorkDone {
 }
 
 /// A request that waits for an idle pipeline.
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "only tests queue it until the app does")
-)]
 pub(super) enum Queued {
     /// Purge the cache. `data_root` is the directory the purge must never delete.
     Purge { data_root: PathBuf },
@@ -87,10 +83,6 @@ impl Queued {
     }
 }
 
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "only tests call these until the app does")
-)]
 impl Thumbs {
     /// Ask for a purge of the cache. It waits for an idle pipeline and runs
     /// before any waiting folder open. A newer work request replaces a waiting
@@ -122,6 +114,13 @@ impl Thumbs {
 }
 
 impl Thumbs {
+    /// True when a purge or an eviction waits for an idle pipeline.
+    #[cfg(test)]
+    #[must_use]
+    pub(crate) fn has_queued_work(&self) -> bool {
+        self.queued.is_some()
+    }
+
     /// Move the pipeline into a thread that runs the waiting request.
     pub(super) fn start_work(&mut self) {
         if !matches!(self.slot, Slot::Idle(_)) {

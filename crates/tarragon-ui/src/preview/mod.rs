@@ -24,7 +24,7 @@ mod test_support;
 pub use colors::{ColorState, ColorStates};
 pub use failure::PreviewFailure;
 pub use image::PreviewImage;
-pub use meta::{Meta, UNKNOWN};
+pub use meta::{Meta, UNKNOWN, size_text};
 pub use tags::TagPill;
 
 /// The hint shown while nothing is selected.

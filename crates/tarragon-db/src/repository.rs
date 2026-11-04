@@ -1,4 +1,4 @@
-//! Repository methods for the eight stored tables.
+//! Repository methods for the nine stored tables.
 //!
 //! Paths are stored with forward slashes on every platform. Reads and writes
 //! run on the shared connection. Every batched write uses one transaction.
@@ -12,6 +12,7 @@ use crate::DbError;
 mod editor;
 mod favorites;
 mod folder;
+mod roots;
 mod settings;
 mod tags;
 mod thumbnail;

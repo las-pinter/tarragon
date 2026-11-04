@@ -11,6 +11,7 @@ mod folder;
 mod folder_listing;
 mod library;
 mod repository;
+mod roots;
 mod settings;
 mod support;
 mod tag_rename;

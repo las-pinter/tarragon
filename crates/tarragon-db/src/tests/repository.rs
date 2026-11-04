@@ -8,10 +8,10 @@ use super::support::{TempDb, file, sized_file};
 #[test]
 fn schema_creation_is_idempotent() {
     let temp = TempDb::new();
-    assert_eq!(temp.db.schema_version().expect("read marker"), 2);
+    assert_eq!(temp.db.schema_version().expect("read marker"), 3);
 
     temp.db.initialize().expect("second create is fine");
-    assert_eq!(temp.db.schema_version().expect("read marker"), 2);
+    assert_eq!(temp.db.schema_version().expect("read marker"), 3);
 
     let conn = temp.db.lock().expect("lock");
     let tables: i64 = conn
@@ -22,7 +22,7 @@ fn schema_creation_is_idempotent() {
             |row| row.get(0),
         )
         .expect("count tables");
-    assert_eq!(tables, 8, "the schema must hold eight tables");
+    assert_eq!(tables, 9, "the schema must hold nine tables");
     let marker_rows: i64 = conn
         .query_row("SELECT COUNT(*) FROM schema_version", [], |row| row.get(0))
         .expect("count marker rows");
@@ -43,34 +43,34 @@ fn initialize_with_marker(marker: i64) -> (TempDb, crate::DbError) {
 
 #[test]
 fn initialize_refuses_an_older_marker_and_keeps_it() {
-    let (temp, error) = initialize_with_marker(1);
+    let (temp, error) = initialize_with_marker(2);
     assert!(
         matches!(
             error,
             crate::DbError::SchemaVersion {
-                found: 1,
-                expected: 2
+                found: 2,
+                expected: 3
             }
         ),
         "got {error:?}"
     );
-    assert_eq!(temp.db.schema_version().expect("read marker"), 1);
+    assert_eq!(temp.db.schema_version().expect("read marker"), 2);
 }
 
 #[test]
 fn initialize_refuses_a_newer_marker_and_keeps_it() {
-    let (temp, error) = initialize_with_marker(3);
+    let (temp, error) = initialize_with_marker(4);
     assert!(
         matches!(
             error,
             crate::DbError::SchemaVersion {
-                found: 3,
-                expected: 2
+                found: 4,
+                expected: 3
             }
         ),
         "got {error:?}"
     );
-    assert_eq!(temp.db.schema_version().expect("read marker"), 3);
+    assert_eq!(temp.db.schema_version().expect("read marker"), 4);
 }
 
 #[test]

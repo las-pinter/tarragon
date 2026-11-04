@@ -1,4 +1,4 @@
-//! Database schema: the eight tables, the generation marker, and creation.
+//! Database schema: the nine tables, the generation marker, and creation.
 //!
 //! The schema is one generation, not a migration chain. The marker gates
 //! creation: a new database is created and stamped, a matching one is left
@@ -11,11 +11,11 @@ use crate::DbError;
 
 /// The current schema generation.
 ///
-/// The schema generation is `2`. The table shape adds
-/// `thumbnails.last_accessed`.
-pub const SCHEMA_VERSION: i64 = 2;
+/// The schema generation is `3`. The table shape adds
+/// `thumbnails.last_accessed` and the `library_roots` table.
+pub const SCHEMA_VERSION: i64 = 3;
 
-/// The `CREATE TABLE IF NOT EXISTS` statements for the eight tables.
+/// The `CREATE TABLE IF NOT EXISTS` statements for the nine tables.
 ///
 /// `file_tags.tag_id` carries the only foreign key. It cascades a tag delete
 /// (`ON DELETE CASCADE`). `thumbnails.last_accessed` holds epoch seconds for
@@ -66,9 +66,13 @@ CREATE TABLE IF NOT EXISTS folder_cache_uuids (
     folder_path TEXT PRIMARY KEY,
     cache_uuid TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS library_roots (
+    path TEXT PRIMARY KEY,
+    sort_order INTEGER NOT NULL DEFAULT 0
+);
 ";
 
-/// Create the eight tables and stamp the generation marker.
+/// Create the nine tables and stamp the generation marker.
 ///
 /// The marker is read in the same transaction as the create. A marker of `0`
 /// means a new database, so the tables are created and the marker is stamped.

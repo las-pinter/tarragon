@@ -15,6 +15,7 @@ use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
+use notify::event::ModifyKind;
 use notify::{EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use tarragon_core::error::ScanError;
 
@@ -56,7 +57,7 @@ impl FolderWatcher {
             notify::recommended_watcher(move |event: notify::Result<notify::Event>| {
                 // A backend error can mean lost events, so it asks for a
                 // rescan like a change does.
-                if event.map_or(true, |event| is_change(event.kind)) {
+                if event.map_or(true, |event| is_change(&event)) {
                     // A send fault means the debounce thread already stopped.
                     let _ = sender.send(());
                 }
@@ -116,12 +117,22 @@ fn watch_error(folder: &Path, reason: impl std::fmt::Display) -> ScanError {
     }
 }
 
-/// Return true when the event kind can change the folder contents.
+/// Return true when the event can change the folder contents.
 ///
-/// Only access events are dropped, because our own rescan reads the folder.
+/// Access events are dropped, because our own rescan reads the folder. A
+/// content or metadata change on a subfolder is dropped too: some backends
+/// report it when a file deeper down changes, and the rescan lists only image
+/// files. Create, remove, and rename of a subfolder still count.
 /// Keep `Other` and `Any`, because they can carry the rescan-on-drop signal.
-fn is_change(kind: EventKind) -> bool {
-    !matches!(kind, EventKind::Access(_))
+fn is_change(event: &notify::Event) -> bool {
+    match event.kind {
+        EventKind::Access(_) => false,
+        EventKind::Modify(ModifyKind::Name(_)) => true,
+        EventKind::Modify(_) => {
+            event.paths.is_empty() || !event.paths.iter().all(|path| path.is_dir())
+        }
+        _ => true,
+    }
 }
 
 /// Coalesce events and call `on_rescan` once per quiet window.
@@ -167,7 +178,7 @@ mod tests {
     use super::{DEBOUNCE, FolderWatcher, is_change};
     use crate::scan::scan_folder;
     use notify::EventKind;
-    use notify::event::{AccessKind, CreateKind, ModifyKind, RemoveKind};
+    use notify::event::{AccessKind, CreateKind, ModifyKind, RemoveKind, RenameMode};
 
     /// The longest a test waits for a debounced callback.
     const WAIT_TIMEOUT: Duration = Duration::from_secs(10);
@@ -383,26 +394,64 @@ mod tests {
         assert_eq!(DEBOUNCE, Duration::from_millis(500));
     }
 
+    /// Build an event of `kind` for `path`.
+    fn event(kind: EventKind, path: &Path) -> notify::Event {
+        notify::Event::new(kind).add_path(path.to_path_buf())
+    }
+
     #[test]
     fn only_access_events_are_dropped() {
+        let temp = TempDir::new("kinds");
+        let file = temp.path().join("art.png");
         assert!(
-            !is_change(EventKind::Access(AccessKind::Any)),
+            !is_change(&event(EventKind::Access(AccessKind::Any), &file)),
             "an access event must be dropped"
         );
         assert!(
-            is_change(EventKind::Create(CreateKind::Any)),
+            is_change(&event(EventKind::Create(CreateKind::Any), &file)),
             "a create event must rescan"
         );
         assert!(
-            is_change(EventKind::Modify(ModifyKind::Any)),
+            is_change(&event(EventKind::Modify(ModifyKind::Any), &file)),
             "a modify event must rescan"
         );
         assert!(
-            is_change(EventKind::Remove(RemoveKind::Any)),
+            is_change(&event(EventKind::Remove(RemoveKind::Any), &file)),
             "a remove event must rescan"
         );
-        assert!(is_change(EventKind::Other), "an other event must rescan");
-        assert!(is_change(EventKind::Any), "an any event must rescan");
+        assert!(
+            is_change(&event(EventKind::Other, &file)),
+            "an other event must rescan"
+        );
+        assert!(
+            is_change(&event(EventKind::Any, &file)),
+            "an any event must rescan"
+        );
+    }
+
+    #[test]
+    fn a_subfolder_modify_is_dropped_but_its_other_changes_count() {
+        let temp = TempDir::new("dirkinds");
+        let dir = temp.path();
+        assert!(
+            !is_change(&event(EventKind::Modify(ModifyKind::Any), dir)),
+            "a subfolder modify must be dropped"
+        );
+        assert!(
+            is_change(&event(
+                EventKind::Modify(ModifyKind::Name(RenameMode::To)),
+                dir
+            )),
+            "a subfolder rename must rescan"
+        );
+        assert!(
+            is_change(&event(EventKind::Create(CreateKind::Folder), dir)),
+            "a subfolder create must rescan"
+        );
+        assert!(
+            is_change(&event(EventKind::Remove(RemoveKind::Folder), dir)),
+            "a subfolder remove must rescan"
+        );
     }
 
     #[test]

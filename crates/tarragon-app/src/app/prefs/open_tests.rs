@@ -10,7 +10,7 @@ use eframe::egui::Id;
 use tarragon_db::settings::{SettingKey, SettingValue, Settings};
 
 use super::super::preview_tests::Rig;
-use super::open::{PICKER_ID, Shared};
+use super::open::{HOME_ID, PICKER_ID, Shared};
 use crate::app::{App, Startup};
 use crate::logging::ring::LogRing;
 use crate::picker::{FolderDialog, Picker};
@@ -88,6 +88,10 @@ fn a_folder_outside_home_is_stored_shown_and_opened() {
     let mut rig = Rig::new(&[], &[], 9);
     let art = rig.dir.0.join("art").join("sketches");
     make_folder(&art);
+    // The temp folder can sit under the real home, so name a home that does not hold it.
+    let home = rig.dir.0.join("elsewhere").join("home");
+    rig.ctx
+        .data_mut(|data| data.insert_temp(Id::new(HOME_ID), home));
     let answered = install(&rig, Some(art.clone()));
     choose_open_folder(&mut rig);
     take_answer(&mut rig, &answered);

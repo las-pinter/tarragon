@@ -16,8 +16,22 @@ use crate::sidebar;
 /// The context key of the picker.
 pub(super) const PICKER_ID: &str = "folder_picker";
 
+/// The context key of a home folder that replaces the real one. Tests set it.
+#[cfg(test)]
+pub(super) const HOME_ID: &str = "home_override";
+
 /// The picker as the context holds it.
 pub(super) type Shared = Arc<Mutex<Picker>>;
+
+/// The home folder to compare a picked folder with.
+fn home(ctx: &Context) -> Option<PathBuf> {
+    #[cfg(test)]
+    if let Some(fake) = ctx.data(|data| data.get_temp::<PathBuf>(Id::new(HOME_ID))) {
+        return Some(fake);
+    }
+    let _ = ctx;
+    sidebar::home_dir()
+}
 
 /// The picker of this context. It is built on first use.
 fn shared(ctx: &Context) -> Shared {
@@ -51,7 +65,7 @@ impl App {
         };
         match (purpose, picked) {
             (Purpose::OpenFolder, Some(path)) => {
-                self.open_picked(&path, sidebar::home_dir().as_deref());
+                self.open_picked(&path, home(ctx).as_deref());
             }
             (Purpose::CacheDir, Some(path)) => self
                 .shell

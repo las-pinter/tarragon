@@ -10,7 +10,8 @@
 //!
 //! The committed fixture in `tests/fixtures/kra/` is this builder's output. A
 //! check test keeps the two in step. Every archive field is pinned, so a second
-//! run writes byte-identical bytes.
+//! run writes byte-identical bytes. The host system field is pinned to Unix,
+//! because the zip crate otherwise writes DOS on Windows.
 
 #![allow(clippy::cast_possible_truncation)]
 
@@ -20,7 +21,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use image::{DynamicImage, ImageFormat, RgbaImage};
 use zip::write::SimpleFileOptions;
-use zip::{CompressionMethod, DateTime, ZipWriter};
+use zip::{CompressionMethod, DateTime, System, ZipWriter};
 
 /// The flattened canvas member name.
 pub const MERGED_MEMBER: &str = "mergedimage.png";
@@ -394,7 +395,8 @@ fn build_archive_with(method: CompressionMethod, entries: &[(&str, &[u8])]) -> V
     let options = SimpleFileOptions::default()
         .compression_method(method)
         .last_modified_time(DateTime::default())
-        .unix_permissions(0o644);
+        .unix_permissions(0o644)
+        .system(System::Unix);
     for (name, bytes) in entries {
         writer
             .start_file(*name, options)

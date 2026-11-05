@@ -813,7 +813,7 @@ fn open_and_settle(setup: &mut Setup, folder: &Path) {
 }
 
 fn path_text(path: &Path) -> String {
-    path.to_string_lossy().into_owned()
+    path.to_string_lossy().replace('\\', "/")
 }
 
 #[test]

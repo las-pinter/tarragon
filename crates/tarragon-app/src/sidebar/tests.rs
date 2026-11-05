@@ -208,10 +208,15 @@ fn a_dot_dot_folder_is_normalized_for_the_roots_and_the_open_folder() {
 #[test]
 fn home_comes_from_the_first_absolute_value() {
     let os = |s: &str| Some(OsString::from(s));
-    assert_eq!(home_from(os("/h"), os("/p")), Some(PathBuf::from("/h")));
-    assert_eq!(home_from(os(""), os("/p")), Some(PathBuf::from("/p")));
-    assert_eq!(home_from(os("rel"), os("/p")), Some(PathBuf::from("/p")));
-    assert_eq!(home_from(None, os("/p")), Some(PathBuf::from("/p")));
+    let (h, p) = if cfg!(windows) {
+        ("C:\\h", "C:\\p")
+    } else {
+        ("/h", "/p")
+    };
+    assert_eq!(home_from(os(h), os(p)), Some(PathBuf::from(h)));
+    assert_eq!(home_from(os(""), os(p)), Some(PathBuf::from(p)));
+    assert_eq!(home_from(os("rel"), os(p)), Some(PathBuf::from(p)));
+    assert_eq!(home_from(None, os(p)), Some(PathBuf::from(p)));
     assert_eq!(home_from(os(""), None), None);
     assert_eq!(home_from(os("rel"), os("")), None);
 }
@@ -309,11 +314,9 @@ fn add_current_orders_after_the_largest_order() {
     let last = dir.0.join("last");
     shell.sidebar_mut().set_open_folder(Some(last.clone()));
     apply(&mut shell, &db, vec![SidebarEvent::AddCurrent]);
-    let stored = db.list_favorites().unwrap();
-    let added = stored
-        .iter()
-        .find(|f| f.path == last.to_string_lossy())
-        .unwrap();
+    let stored_favorites = db.list_favorites().unwrap();
+    let stored = last.to_string_lossy().replace('\\', "/");
+    let added = stored_favorites.iter().find(|f| f.path == stored).unwrap();
     assert_eq!(added.sort_order, 8);
 }
 

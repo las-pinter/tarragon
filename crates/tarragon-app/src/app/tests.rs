@@ -48,8 +48,21 @@ fn app_with_pending_request(dir: &TempDir) -> App {
 pub(super) fn new_dir() -> TempDir {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let id = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let dir = std::env::temp_dir().join(format!("tarragon-app-raise-{}-{id}", std::process::id()));
+    let base = std::fs::canonicalize(std::env::temp_dir()).expect("resolve the temp dir");
+    let dir = base.join(format!("tarragon-app-raise-{}-{id}", std::process::id()));
     std::fs::create_dir_all(&dir).expect("create the temp dir");
+    TempDir(dir)
+}
+
+/// Like `new_dir`, with a short path on unix so a socket path fits in it.
+fn short_dir() -> TempDir {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    if !cfg!(unix) {
+        return new_dir();
+    }
+    let id = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let dir = std::path::PathBuf::from(format!("/tmp/ta-{}-{id}", std::process::id()));
+    std::fs::create_dir_all(&dir).expect("create the short dir");
     TempDir(dir)
 }
 
@@ -252,7 +265,7 @@ fn a_failed_navigate_keeps_the_old_folder_and_restores_the_highlight() {
 
 #[test]
 fn logic_pass_sends_the_raise_commands_after_an_activate_request() {
-    let dir = new_dir();
+    let dir = short_dir();
     let mut app = app_with_pending_request(&dir);
     let ctx = Context::default();
     let mut frame = Frame::_new_kittest();
@@ -277,7 +290,7 @@ fn logic_pass_sends_the_raise_commands_after_an_activate_request() {
 
 #[test]
 fn ui_pass_does_not_take_the_activate_request() {
-    let dir = new_dir();
+    let dir = short_dir();
     let mut app = app_with_pending_request(&dir);
     let ctx = Context::default();
     tarragon_ui::install(&ctx);

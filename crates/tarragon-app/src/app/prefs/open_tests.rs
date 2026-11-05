@@ -74,6 +74,11 @@ fn choose_open_folder(rig: &mut Rig) {
     rig.click("Open Folder...", false);
 }
 
+/// The text of `path` as the database stores it.
+fn stored_text(path: &Path) -> String {
+    path.to_string_lossy().replace('\\', "/")
+}
+
 fn roots_in_db(rig: &Rig) -> Vec<String> {
     rig.app.db.list_library_roots().expect("list the roots")
 }
@@ -86,7 +91,7 @@ fn a_folder_outside_home_is_stored_shown_and_opened() {
     let answered = install(&rig, Some(art.clone()));
     choose_open_folder(&mut rig);
     take_answer(&mut rig, &answered);
-    assert_eq!(roots_in_db(&rig), [art.to_string_lossy()]);
+    assert_eq!(roots_in_db(&rig), [stored_text(&art)]);
     assert!(rig.app.shell.sidebar_mut().roots().contains(&art));
     frames_until(&mut rig, "the folder never opened", |app| {
         app.shell.sidebar_mut().open_folder() == Some(art.as_path())
@@ -119,7 +124,7 @@ fn a_folder_under_a_saved_root_adds_nothing_and_opens() {
         .add_library_root(&art.to_string_lossy())
         .expect("save the root");
     rig.app.open_picked(&sub, None);
-    assert_eq!(roots_in_db(&rig), [art.to_string_lossy()]);
+    assert_eq!(roots_in_db(&rig), [stored_text(&art)]);
     frames_until(&mut rig, "the folder never opened", |app| {
         app.shell.sidebar_mut().open_folder() == Some(sub.as_path())
     });

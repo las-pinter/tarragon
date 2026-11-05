@@ -85,9 +85,8 @@ impl Rig {
         start: Option<&str>,
         render: crate::pipeline::RenderFn,
     ) -> Self {
-        let dir = TempDir(
-            std::env::temp_dir().join(format!("tarragon-thumbs-{name}-{}", std::process::id())),
-        );
+        let base = std::fs::canonicalize(std::env::temp_dir()).expect("resolve the temp dir");
+        let dir = TempDir(base.join(format!("tarragon-thumbs-{name}-{}", std::process::id())));
         std::fs::create_dir_all(&dir.0).expect("make the temp dir");
         let db = Arc::new(Database::open(dir.0.join("t.db")).expect("open the db"));
         db.initialize().expect("initialize the db");

@@ -32,6 +32,7 @@ tracing-subscriber = { workspace = true }
 winit = { workspace = true }
 
 [dev-dependencies]
+dunce = "=1.0.5"
 egui_dock.workspace = true
 log.workspace = true
 rusqlite.workspace = true

@@ -48,7 +48,7 @@ fn app_with_pending_request(dir: &TempDir) -> App {
 pub(super) fn new_dir() -> TempDir {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let id = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let base = std::fs::canonicalize(std::env::temp_dir()).expect("resolve the temp dir");
+    let base = dunce::canonicalize(std::env::temp_dir()).expect("resolve the temp dir");
     let dir = base.join(format!("tarragon-app-raise-{}-{id}", std::process::id()));
     std::fs::create_dir_all(&dir).expect("create the temp dir");
     TempDir(dir)

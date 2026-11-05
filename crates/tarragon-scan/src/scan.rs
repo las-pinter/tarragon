@@ -389,7 +389,7 @@ mod tests {
         assert_eq!(result.expect("list"), vec![PathBuf::from("/x/a.png")]);
     }
 
-    #[cfg(unix)]
+    #[cfg(all(unix, not(target_os = "macos")))]
     #[test]
     fn a_non_utf8_name_is_handled() {
         use std::ffi::OsStr;

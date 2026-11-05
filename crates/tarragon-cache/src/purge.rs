@@ -152,7 +152,7 @@ impl CacheStore {
         // The canonical tier directory must be exactly `<root>/<tier>`, so a
         // link cannot redirect the clear.
         let expected = resolved_root.join(tier.as_str());
-        match std::fs::canonicalize(&tier_dir) {
+        match dunce::canonicalize(&tier_dir) {
             Ok(canonical) if canonical == expected => {}
             Ok(_) => return Ok(PurgeOutcome::default()),
             Err(source) if source.kind() == std::io::ErrorKind::NotFound => {
@@ -175,7 +175,7 @@ impl CacheStore {
     /// Resolve the cache root to an absolute path. A missing root gives
     /// `None`.
     fn resolve_root(&self) -> Result<Option<PathBuf>, CacheError> {
-        match std::fs::canonicalize(self.root()) {
+        match dunce::canonicalize(self.root()) {
             Ok(resolved) => Ok(Some(resolved)),
             Err(source) if source.kind() == std::io::ErrorKind::NotFound => Ok(None),
             Err(source) => Err(CacheError::Io {
@@ -204,15 +204,14 @@ fn is_safe_with_home(resolved: &Path, protected: Option<&Path>, home: Option<&Pa
     if resolved.parent().is_none() {
         return false;
     }
-    if let Some(home) = home.and_then(|home| std::fs::canonicalize(home).ok()) {
+    if let Some(home) = home.and_then(|home| dunce::canonicalize(home).ok()) {
         // home.starts_with(resolved) is true when resolved is an ancestor.
         if home.starts_with(resolved) {
             return false;
         }
     }
     if let Some(protected) = protected {
-        let protected =
-            std::fs::canonicalize(protected).unwrap_or_else(|_| protected.to_path_buf());
+        let protected = dunce::canonicalize(protected).unwrap_or_else(|_| protected.to_path_buf());
         // protected.starts_with(resolved) is true when resolved is an
         // ancestor of the data directory, or equal to it.
         if protected.starts_with(resolved) {
@@ -249,7 +248,7 @@ fn home_dir() -> Option<PathBuf> {
 ///
 /// Returns [`CacheError::Io`] when a directory read or file remove fails.
 fn remove_tree_contents(root: &Path) -> Result<(u64, u64), CacheError> {
-    let canonical_root = std::fs::canonicalize(root).ok();
+    let canonical_root = dunce::canonicalize(root).ok();
     let mut files_removed = 0u64;
     let mut bytes_removed = 0u64;
     let mut first_error: Option<CacheError> = None;

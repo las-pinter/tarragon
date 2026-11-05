@@ -139,7 +139,7 @@ struct Removed {
 /// Returns [`CacheError::Io`] when a remove fails for a reason other than a
 /// missing file.
 fn remove_entry_files(entry: &CacheEntry, root: &Path) -> Result<Removed, CacheError> {
-    let canonical_root = std::fs::canonicalize(root).ok();
+    let canonical_root = dunce::canonicalize(root).ok();
     let mut result = Removed::default();
     let mut first_error: Option<CacheError> = None;
     let sibling = entry.sibling();
@@ -191,7 +191,7 @@ pub(crate) fn is_within_root(canonical_root: Option<&Path>, path: &Path) -> bool
     let Some(root) = canonical_root else {
         return false;
     };
-    std::fs::canonicalize(path).is_ok_and(|canonical| canonical.starts_with(root))
+    dunce::canonicalize(path).is_ok_and(|canonical| canonical.starts_with(root))
 }
 
 /// Sum the regular file sizes under `root`.

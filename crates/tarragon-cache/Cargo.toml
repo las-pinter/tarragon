@@ -7,6 +7,7 @@ publish = false
 license.workspace = true
 
 [dependencies]
+dunce.workspace = true
 # The workspace pins the version and turns off the default codecs. This crate
 # adds the JPEG and PNG codecs only.
 image = { workspace = true, features = ["jpeg", "png"] }

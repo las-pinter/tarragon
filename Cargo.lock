@@ -2655,6 +2655,7 @@ dependencies = [
 name = "tarragon-cache"
 version = "0.2.0"
 dependencies = [
+ "dunce",
  "image",
  "tarragon-core",
  "tarragon-render",
@@ -2716,6 +2717,7 @@ dependencies = [
 name = "tarragon-ui"
 version = "0.2.0"
 dependencies = [
+ "dunce",
  "egui",
  "egui_dock",
  "rayon",

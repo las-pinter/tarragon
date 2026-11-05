@@ -216,9 +216,7 @@ fn data_root(db_path: &Path) -> PathBuf {
         .parent()
         .filter(|parent| !parent.as_os_str().is_empty())
         .unwrap_or_else(|| Path::new("."));
-    parent
-        .canonicalize()
-        .unwrap_or_else(|_| parent.to_path_buf())
+    dunce::canonicalize(parent).unwrap_or_else(|_| parent.to_path_buf())
 }
 
 /// Check the folder, then take the guard.

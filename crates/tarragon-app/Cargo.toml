@@ -12,6 +12,7 @@ path = "src/main.rs"
 
 [dependencies]
 crossbeam-channel = { workspace = true }
+dunce.workspace = true
 eframe = { workspace = true }
 # The pipeline decodes cached tier files, so it needs the cache codecs.
 image = { workspace = true, features = ["jpeg", "png"] }
@@ -32,7 +33,6 @@ tracing-subscriber = { workspace = true }
 winit = { workspace = true }
 
 [dev-dependencies]
-dunce = "=1.0.5"
 egui_dock.workspace = true
 log.workspace = true
 rusqlite.workspace = true

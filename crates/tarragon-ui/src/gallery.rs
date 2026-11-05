@@ -227,7 +227,7 @@ impl Gallery {
     pub fn set_folder(&mut self, folder: Option<PathBuf>) {
         self.folder = folder
             .as_ref()
-            .map(|path| path.canonicalize().unwrap_or_else(|_| path.clone()));
+            .map(|path| dunce::canonicalize(path).unwrap_or_else(|_| path.clone()));
         self.raw_folder = folder;
         self.refresh_view();
     }

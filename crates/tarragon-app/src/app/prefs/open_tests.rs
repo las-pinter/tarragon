@@ -97,7 +97,7 @@ fn a_folder_outside_home_is_stored_shown_and_opened() {
         app.shell.sidebar_mut().open_folder() == Some(art.as_path())
     });
     let shown = rig.app.shell.gallery_mut().folder().map(Path::to_path_buf);
-    assert_eq!(shown, art.canonicalize().ok());
+    assert_eq!(shown, dunce::canonicalize(&art).ok());
 }
 
 #[test]

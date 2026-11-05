@@ -121,7 +121,7 @@ fn override_path(value: Option<OsString>) -> Option<PathBuf> {
 /// plain path to avoid verbatim `\\?\` prefixes.
 fn real_exe_path(exe: PathBuf) -> PathBuf {
     if cfg!(unix) {
-        exe.canonicalize().unwrap_or(exe)
+        dunce::canonicalize(&exe).unwrap_or(exe)
     } else {
         exe
     }

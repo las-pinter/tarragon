@@ -45,7 +45,7 @@ fn source(width: u32, height: u32) -> DynamicImage {
 
 /// Return the canonical form of `path`, which must exist.
 fn canonical(path: &Path) -> PathBuf {
-    std::fs::canonicalize(path).expect("canonicalize the path")
+    dunce::canonicalize(path).expect("canonicalize the path")
 }
 
 #[test]

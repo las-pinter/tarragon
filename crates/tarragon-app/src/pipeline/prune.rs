@@ -38,7 +38,7 @@ pub(super) fn prune_missing(
         .iter()
         .map(|file| file.path.to_string_lossy().replace('\\', "/"))
         .collect();
-    let canonical_root = std::fs::canonicalize(cache_root).ok();
+    let canonical_root = dunce::canonicalize(cache_root).ok();
     let mut pruned = 0;
     let stale = rows
         .iter()
@@ -70,7 +70,7 @@ pub(super) fn prune_missing(
 /// Remove one cache file when it resolves inside `canonical_root`. A missing
 /// file is fine; other errors and a path outside the root are logged.
 fn remove_cache_file(canonical_root: Option<&Path>, path: &Path) {
-    let canonical = match std::fs::canonicalize(path) {
+    let canonical = match dunce::canonicalize(path) {
         Ok(canonical) => canonical,
         Err(error) if error.kind() == ErrorKind::NotFound => return,
         Err(error) => {

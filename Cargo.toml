@@ -38,6 +38,8 @@ egui = { version = "=0.36.2", default-features = false }
 # `default_fonts` would bring the OFL-1.1 and Ubuntu-font-1.0 fonts.
 eframe = { version = "=0.36.2", default-features = false, features = ["glow", "wgpu", "x11", "wayland"] }
 egui_dock = "=0.21.1"
+# Paths from canonicalize without the Windows verbatim prefix.
+dunce = "=1.0.5"
 # The app matches the winit errors that eframe returns. This is the version
 # eframe already uses; no features are added.
 winit = { version = "=0.30.13", default-features = false }

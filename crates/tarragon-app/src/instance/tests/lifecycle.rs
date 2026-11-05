@@ -170,7 +170,7 @@ fn unreadable_lock_path_gives_unguarded() {
 fn data_root_is_the_parent_of_the_db_file() {
     let dir = TempDir::new();
     let root = data_root(&dir.0.join("a.db"));
-    assert_eq!(root, dir.0.canonicalize().expect("canonical"));
+    assert_eq!(root, dunce::canonicalize(&dir.0).expect("canonical"));
     assert_eq!(data_root(&dir.0.join("b.db")), root);
     assert!(data_root(Path::new("x.db")).is_absolute());
 }

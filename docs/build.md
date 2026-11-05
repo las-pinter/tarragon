@@ -105,6 +105,12 @@ Note: `tarragon-db` will use `rusqlite` with `bundled`. A bundled C build
 for musl needs a musl C toolchain, such as `musl-gcc`. That toolchain is absent
 here. The `tarragon-db` crate has no dependency yet.
 
+## Grid thumbnail tier
+
+The grid tier is 320 px on the longest edge, and its cache folder is `320`. A
+grid cell of 160 pt at a display scale of 2.0 needs 320 px. The thumbnail is
+sharp up to scale 2.0, and soft above it.
+
 ## Measured sizes
 
 Host release, glibc (`cargo build --release`):

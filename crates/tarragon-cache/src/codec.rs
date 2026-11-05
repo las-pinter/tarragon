@@ -29,13 +29,13 @@ pub(crate) fn fit_to_edge(source: &DynamicImage, edge: u32) -> Cow<'_, DynamicIm
     }
 }
 
-/// Return `source` scaled for the 256 px tier.
+/// Return `source` scaled for the 320 px tier.
 ///
 /// The result is the image the thumb tier encodes. A small source is not
 /// upscaled.
 #[must_use]
 pub fn thumb_image(source: &DynamicImage) -> DynamicImage {
-    let edge = Tier::Thumb256.max_edge().unwrap_or(256);
+    let edge = Tier::Thumb320.max_edge().unwrap_or(320);
     fit_to_edge(source, edge).into_owned()
 }
 
@@ -320,7 +320,7 @@ mod tests {
     }
 
     #[test]
-    fn the_thumb_helper_matches_the_256_tier_file() {
+    fn the_thumb_helper_matches_the_320_tier_file() {
         let large = synthetic_rgba(600, 300);
         let dir = std::env::temp_dir().join(format!("tarragon-thumb-{}", std::process::id()));
         let store = CacheStore::new(&dir);
@@ -332,16 +332,16 @@ mod tests {
             TierFormat::Png,
             "alpha keeps the tier lossless"
         );
-        let decoded = image::open(&entry.thumb256).expect("decode the 256 tier");
+        let decoded = image::open(&entry.thumb320).expect("decode the 320 tier");
         let _ = std::fs::remove_dir_all(&dir);
 
         let thumb = thumb_image(&large);
-        assert_eq!((thumb.width(), thumb.height()), (256, 128));
+        assert_eq!((thumb.width(), thumb.height()), (320, 160));
         assert_eq!(decoded.to_rgba8(), thumb.to_rgba8());
 
         let tall = thumb_image(&synthetic_rgba(100, 900));
-        assert_eq!(tall.height(), 256);
-        assert!(tall.width() <= 256);
+        assert_eq!(tall.height(), 320);
+        assert!(tall.width() <= 320);
         let small = synthetic_rgba(40, 30);
         assert_eq!(thumb_image(&small), small);
     }

@@ -122,7 +122,7 @@ fn purge_skips_a_link_that_points_outside_the_root() {
     let outside = TempDir::new("outside");
     let victim = outside.path().join("victim.jpg");
     std::fs::write(&victim, b"keep me").expect("write the victim");
-    let link = temp.path().join("256").join("escape.jpg");
+    let link = temp.path().join("320").join("escape.jpg");
     symlink(&victim, &link).expect("make the escape link");
 
     store.purge(None).expect("purge");
@@ -144,7 +144,7 @@ fn purge_unlinks_a_broken_symlink() {
 
     let temp = TempDir::new("broken-link");
     let store = CacheStore::new(temp.path());
-    let tier = temp.path().join("256");
+    let tier = temp.path().join("320");
     std::fs::create_dir_all(&tier).expect("make the tier folder");
     let link = tier.join("broken.jpg");
     symlink(temp.path().join("does-not-exist.jpg"), &link).expect("make the broken link");
@@ -169,7 +169,7 @@ fn purge_unlinks_a_directory_symlink_to_an_outside_directory() {
     std::fs::create_dir_all(&victim_dir).expect("make the outside directory");
     let victim_file = victim_dir.join("keep.jpg");
     std::fs::write(&victim_file, b"keep me").expect("write the outside file");
-    let tier = temp.path().join("256");
+    let tier = temp.path().join("320");
     std::fs::create_dir_all(&tier).expect("make the tier folder");
     let link = tier.join("dir-link");
     symlink(&victim_dir, &link).expect("make the directory link");
@@ -193,7 +193,7 @@ fn purge_unlinks_a_directory_symlink_to_an_outside_directory() {
 #[test]
 fn is_within_root_accepts_only_a_path_inside_the_root() {
     let temp = TempDir::new("within");
-    let inside_file = temp.path().join("256").join("art.jpg");
+    let inside_file = temp.path().join("320").join("art.jpg");
     std::fs::create_dir_all(inside_file.parent().expect("parent")).expect("make the dir");
     std::fs::write(&inside_file, b"inside").expect("write the inside file");
     let root = canonical(temp.path());
@@ -217,7 +217,7 @@ fn is_within_root_accepts_only_a_path_inside_the_root() {
     #[cfg(unix)]
     {
         use std::os::unix::fs::symlink;
-        let link = temp.path().join("256").join("escape.jpg");
+        let link = temp.path().join("320").join("escape.jpg");
         symlink(&outside_file, &link).expect("make the escape link");
         assert!(
             !super::is_within_root(Some(&root), &link),
@@ -236,10 +236,10 @@ fn clear_tier_refuses_a_symlinked_tier_directory() {
     let entry = store
         .write_all(&source(40, 30), "gallery", "abcd1234", "art.jpg")
         .expect("write the tiers");
-    let before_256 = std::fs::read(&entry.thumb256).expect("read the 256 tier");
-    // Replace the real `full` directory with a link to `256`.
+    let before_320 = std::fs::read(&entry.thumb320).expect("read the 320 tier");
+    // Replace the real `full` directory with a link to `320`.
     std::fs::remove_dir_all(temp.path().join("full")).expect("remove the real full dir");
-    symlink(temp.path().join("256"), temp.path().join("full")).expect("make the tier link");
+    symlink(temp.path().join("320"), temp.path().join("full")).expect("make the tier link");
 
     let outcome = store.clear_tier(Tier::Full, None).expect("clear full");
 
@@ -249,11 +249,11 @@ fn clear_tier_refuses_a_symlinked_tier_directory() {
         "a symlinked tier must be refused"
     );
     assert_eq!(
-        std::fs::read(&entry.thumb256).expect("read the 256 tier again"),
-        before_256,
-        "the 256 tier must stay byte-identical"
+        std::fs::read(&entry.thumb320).expect("read the 320 tier again"),
+        before_320,
+        "the 320 tier must stay byte-identical"
     );
-    assert!(entry.thumb256.is_file(), "the 256 tier must survive");
+    assert!(entry.thumb320.is_file(), "the 320 tier must survive");
 }
 
 #[test]
@@ -383,7 +383,7 @@ fn clear_full_res_on_exit_true_removes_only_the_full_tier() {
     let entry = store
         .write_all(&source(40, 30), "gallery", "abcd1234", "art.jpg")
         .expect("write the tiers");
-    let before_256 = std::fs::read(&entry.thumb256).expect("read the 256 tier");
+    let before_320 = std::fs::read(&entry.thumb320).expect("read the 320 tier");
     let before_1024 = std::fs::read(&entry.preview1024).expect("read the 1024 tier");
 
     let outcome = store
@@ -395,7 +395,7 @@ fn clear_full_res_on_exit_true_removes_only_the_full_tier() {
         !store.marker_path(Tier::Full).exists(),
         "the full tier marker must be removed"
     );
-    for tier in [Tier::Thumb256, Tier::Preview1024] {
+    for tier in [Tier::Thumb320, Tier::Preview1024] {
         assert!(
             entry.path(tier).is_file(),
             "tier {} must stay",
@@ -408,9 +408,9 @@ fn clear_full_res_on_exit_true_removes_only_the_full_tier() {
         );
     }
     assert_eq!(
-        std::fs::read(&entry.thumb256).expect("read the 256 tier again"),
-        before_256,
-        "the 256 tier must stay byte-identical"
+        std::fs::read(&entry.thumb320).expect("read the 320 tier again"),
+        before_320,
+        "the 320 tier must stay byte-identical"
     );
     assert_eq!(
         std::fs::read(&entry.preview1024).expect("read the 1024 tier again"),
@@ -480,5 +480,5 @@ fn clear_full_leaves_foreign_entries_in_the_root() {
     assert!(file.is_file(), "a foreign file must survive the clear");
     assert!(nested.is_file(), "a foreign folder must survive the clear");
     assert!(!entry.full.exists());
-    assert!(entry.thumb256.is_file(), "the other tiers stay");
+    assert!(entry.thumb320.is_file(), "the other tiers stay");
 }

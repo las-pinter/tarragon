@@ -4,7 +4,7 @@ use crate::repository::{LibraryFile, ThumbnailWrite};
 
 use super::support::{TempDb, file};
 
-/// Store a rendered row with a 256 px cache path.
+/// Store a rendered row with a 320 px cache path.
 fn render(temp: &TempDb, path: &str, mtime: i64, size: i64) {
     temp.db
         .upsert_thumbnail(&ThumbnailWrite {

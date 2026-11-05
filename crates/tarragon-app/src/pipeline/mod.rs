@@ -47,7 +47,7 @@ use worker::{ColorFn, Shared};
 
 /// The results channel holds this many results. It is small so a UI that
 /// stops reading holds back the workers instead of piling up decoded images
-/// in memory; 64 thumbs of 256 px are about 16 MiB.
+/// in memory; 64 thumbs of 320 px are about 25 MiB.
 const RESULT_BOUND: usize = 64;
 
 /// A render function. Tests swap it to count renders or to block.

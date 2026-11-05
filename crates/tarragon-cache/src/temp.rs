@@ -100,7 +100,7 @@ mod tests {
     #[test]
     fn the_sweep_removes_old_temps_and_keeps_real_files() {
         let root = root("sweep");
-        let folder = root.join("256").join("gallery_abcd");
+        let folder = root.join("320").join("gallery_abcd");
         std::fs::create_dir_all(&folder).expect("make the folder");
         let orphan = folder.join(".tmp-1-0");
         let real = folder.join("art.jpg.jpg");

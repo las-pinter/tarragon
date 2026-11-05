@@ -77,9 +77,9 @@ fn cache_paths_follow_the_tier_layout() {
         .expect("valid names");
 
     assert_eq!(
-        entry.thumb256,
+        entry.thumb320,
         temp.path()
-            .join("256")
+            .join("320")
             .join("gallery_abcd1234")
             .join("art.jpg.jpg")
     );
@@ -139,14 +139,14 @@ fn same_stem_sources_get_distinct_cache_names() {
         .expect("valid names");
 
     assert_eq!(
-        jpg.thumb256.file_name().and_then(|name| name.to_str()),
+        jpg.thumb320.file_name().and_then(|name| name.to_str()),
         Some("photo.jpg.jpg")
     );
     assert_eq!(
-        png.thumb256.file_name().and_then(|name| name.to_str()),
+        png.thumb320.file_name().and_then(|name| name.to_str()),
         Some("photo.png.jpg")
     );
-    assert_ne!(jpg.thumb256, png.thumb256);
+    assert_ne!(jpg.thumb320, png.thumb320);
 }
 
 #[test]
@@ -157,7 +157,7 @@ fn each_tier_is_written_at_its_own_size() {
         .write_all(&source(1200, 800), "gallery", "abcd1234", "art.jpg")
         .expect("write the tiers");
 
-    assert_eq!(longest(decoded_size(&entry.thumb256)), 256);
+    assert_eq!(longest(decoded_size(&entry.thumb320)), 320);
     assert_eq!(longest(decoded_size(&entry.preview1024)), 1024);
     assert_eq!(longest(decoded_size(&entry.full)), 1200);
 }

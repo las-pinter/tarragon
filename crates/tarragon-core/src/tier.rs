@@ -11,8 +11,8 @@ use crate::error::CoreError;
 /// directory name.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Tier {
-    /// The 256 px grid thumbnail.
-    Thumb256,
+    /// The 320 px grid thumbnail.
+    Thumb320,
     /// The 1024 px preview.
     Preview1024,
     /// The full-resolution render.
@@ -21,13 +21,13 @@ pub enum Tier {
 
 impl Tier {
     /// Every tier, from smallest to largest.
-    pub const ALL: [Self; 3] = [Self::Thumb256, Self::Preview1024, Self::Full];
+    pub const ALL: [Self; 3] = [Self::Thumb320, Self::Preview1024, Self::Full];
 
-    /// Return the cache key, for example `256` or `full`.
+    /// Return the cache key, for example `320` or `full`.
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
-            Self::Thumb256 => "256",
+            Self::Thumb320 => "320",
             Self::Preview1024 => "1024",
             Self::Full => "full",
         }
@@ -40,7 +40,7 @@ impl Tier {
     #[must_use]
     pub const fn max_edge(self) -> Option<u32> {
         match self {
-            Self::Thumb256 => Some(256),
+            Self::Thumb320 => Some(320),
             Self::Preview1024 => Some(1024),
             Self::Full => None,
         }
@@ -58,15 +58,15 @@ impl FromStr for Tier {
 
     /// Parse a cache key. The compare ignores case and outer space.
     ///
-    /// The aliases `thumb256` and `preview1024` are accepted. The canonical
-    /// keys stay `256`, `1024`, and `full`.
+    /// The aliases `thumb320` and `preview1024` are accepted. The canonical
+    /// keys stay `320`, `1024`, and `full`.
     ///
     /// # Errors
     ///
     /// Returns [`CoreError::UnknownTier`] when the key is not a known tier.
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         match value.trim().to_ascii_lowercase().as_str() {
-            "256" | "thumb256" => Ok(Self::Thumb256),
+            "320" | "thumb320" => Ok(Self::Thumb320),
             "1024" | "preview1024" => Ok(Self::Preview1024),
             "full" => Ok(Self::Full),
             other => Err(CoreError::UnknownTier(other.to_owned())),
@@ -82,8 +82,8 @@ mod tests {
 
     #[test]
     fn tier_maps_to_its_cache_key_and_pixel_limit() {
-        assert_eq!(Tier::Thumb256.as_str(), "256");
-        assert_eq!(Tier::Thumb256.max_edge(), Some(256));
+        assert_eq!(Tier::Thumb320.as_str(), "320");
+        assert_eq!(Tier::Thumb320.max_edge(), Some(320));
         assert_eq!(Tier::Preview1024.as_str(), "1024");
         assert_eq!(Tier::Preview1024.max_edge(), Some(1024));
         assert_eq!(Tier::Full.as_str(), "full");
@@ -112,8 +112,8 @@ mod tests {
     #[test]
     fn tier_aliases_map_to_their_tier() {
         assert_eq!(
-            Tier::from_str("thumb256").expect("thumb256 parses"),
-            Tier::Thumb256
+            Tier::from_str("thumb320").expect("thumb320 parses"),
+            Tier::Thumb320
         );
         assert_eq!(
             Tier::from_str("preview1024").expect("preview1024 parses"),

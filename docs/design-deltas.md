@@ -481,14 +481,14 @@ Before: the mockups show a picture and say nothing about where it comes from or
 how much memory the pictures may use.
 
 After: the picture is decoded from the 1024 tier file. When that file is
-missing, the 256 tier file is used. The picture is drawn inside the box with its
+missing, the 320 tier file is used. The picture is drawn inside the box with its
 aspect ratio kept, and it may be scaled up to touch the box. The pictures of
 the selection share a budget of 128 MiB of textures. When a decode fails, the
 Preview shows no picture for that file, and the next read of the selection
 tries it again. A file that is rendered again at the same size keeps its old
 texture until the size changes or the texture is evicted. This is a known limit.
 
-Reason: the 1024 tier is the cache tier made for the preview. The 256 tier is
+Reason: the 1024 tier is the cache tier made for the preview. The 320 tier is
 the grid thumbnail, which is better than an empty box. The budget caps the
 texture memory.
 

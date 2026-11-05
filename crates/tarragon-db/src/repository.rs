@@ -36,7 +36,7 @@ pub struct Thumbnail {
     pub created_at: String,
     /// Cache folder UUID for the source folder.
     pub cache_uuid: Option<String>,
-    /// Path of the 256 px tier file.
+    /// Path of the 320 px tier file.
     pub thumbnail_cache_path: Option<String>,
     /// Path of the 1024 px tier file.
     pub preview_cache_path: Option<String>,
@@ -55,7 +55,7 @@ pub struct LibraryFile {
     pub mtime: i64,
     /// Source file size in bytes.
     pub size: i64,
-    /// True when the row holds a 256 px tier cache path.
+    /// True when the row holds a 320 px tier cache path.
     pub cached: bool,
 }
 
@@ -74,7 +74,7 @@ pub struct ThumbnailWrite {
     pub height: u32,
     /// Cache folder UUID for the source folder.
     pub cache_uuid: String,
-    /// Path of the 256 px tier file.
+    /// Path of the 320 px tier file.
     pub thumbnail_cache_path: Option<String>,
     /// Path of the 1024 px tier file.
     pub preview_cache_path: Option<String>,

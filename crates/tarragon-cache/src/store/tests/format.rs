@@ -99,7 +99,7 @@ fn png_tiers_have_their_own_size_and_never_upscale() {
             "b.png",
         )
         .expect("write the tiers");
-    assert_eq!(longest(decoded_size(&entry.thumb256)), 256);
+    assert_eq!(longest(decoded_size(&entry.thumb320)), 320);
     assert_eq!(longest(decoded_size(&entry.preview1024)), 1024);
     assert_eq!(longest(decoded_size(&entry.full)), 1200);
 

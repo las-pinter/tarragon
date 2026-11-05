@@ -28,7 +28,7 @@ fn illegal_characters_never_reach_the_disk_and_find_entry_agrees() {
     let entry = store
         .write_all(&source(4, 4), "my:dir", "abcd", "a:b?.png")
         .expect("write");
-    for path in [&entry.thumb256, &entry.preview1024, &entry.full] {
+    for path in [&entry.thumb320, &entry.preview1024, &entry.full] {
         assert!(path.is_file());
         let names = format!("{}{}", dir_name(path), file_name(path));
         assert!(!names.contains([':', '?']), "{names}");

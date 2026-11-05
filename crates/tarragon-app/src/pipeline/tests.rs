@@ -192,7 +192,7 @@ fn every_format_gives_an_ok_result_and_alpha_caches_png() {
     for result in &results {
         assert_eq!(result.generation, generation);
         let thumb = result.outcome.as_ref().expect("an ok result");
-        assert!(thumb.width().max(thumb.height()) <= 256);
+        assert!(thumb.width().max(thumb.height()) <= 320);
     }
     assert!(setup.repaints.load(Ordering::Relaxed) >= 7);
 
@@ -202,7 +202,7 @@ fn every_format_gives_an_ok_result_and_alpha_caches_png() {
         .folder_uuid(&folder.to_string_lossy())
         .expect("read the uuid")
         .expect("a uuid");
-    for tier in ["256", "1024", "full"] {
+    for tier in ["320", "1024", "full"] {
         let tier_file = setup
             .cache_root
             .join(tier)
@@ -244,7 +244,7 @@ fn second_open_uses_the_cache_and_a_corrupt_tier_renders_again() {
         .expect("a uuid");
     let tier_file = setup
         .cache_root
-        .join("256")
+        .join("320")
         .join(format!("mixed_{uuid}"))
         .join("plain.png.jpg");
     assert!(tier_file.is_file(), "an opaque png caches as jpeg");

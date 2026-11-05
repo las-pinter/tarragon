@@ -18,7 +18,7 @@ pub use exit::{ExitClear, ExitWait};
 use work::{Queued, WorkDone};
 pub use work::{Work, WorkOutcome};
 
-/// Results applied per frame. Every result is a 256 px image, so each costs
+/// Results applied per frame. Every result is a 320 px image, so each costs
 /// about the same, and a fixed count keeps the frame time steady and testable.
 const RESULTS_PER_FRAME: usize = 16;
 

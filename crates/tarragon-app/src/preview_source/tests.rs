@@ -67,11 +67,11 @@ fn store(db: &Database, path: &Path, small: Option<&Path>, big: Option<&Path>) {
     db.upsert_thumbnail(&record).expect("store the row");
 }
 
-/// A rendered file: the source, a 256 tier, and a 1024 tier.
+/// A rendered file: the source, a 320 tier, and a 1024 tier.
 fn rendered(dir: &TempDir, db: &Database, name: &str) -> PathBuf {
     let source = dir.0.join(name);
     std::fs::write(&source, b"x").expect("write the source");
-    let small = dir.png(&format!("s-{name}"), (256, 128));
+    let small = dir.png(&format!("s-{name}"), (320, 160));
     let big = dir.png(&format!("b-{name}"), (1024, 512));
     store(db, &source, Some(&small), Some(&big));
     source
@@ -133,11 +133,11 @@ fn a_path_with_no_row_gives_a_meta_from_the_file_and_no_item() {
 }
 
 #[test]
-fn a_missing_preview_tier_falls_back_to_the_256_file() {
+fn a_missing_preview_tier_falls_back_to_the_320_file() {
     let dir = TempDir::new();
     let db = dir.db();
     let path = dir.0.join("c.png");
-    let small = dir.png("small.png", (256, 128));
+    let small = dir.png("small.png", (320, 160));
     store(&db, &path, Some(&small), Some(&dir.0.join("gone.png")));
     let source = read(&db, std::slice::from_ref(&path), 4);
     assert_eq!(source.items.len(), 1);
@@ -158,7 +158,7 @@ fn a_zero_size_row_takes_the_size_of_the_tier_file() {
     let dir = TempDir::new();
     let db = dir.db();
     let path = dir.0.join("e.png");
-    let small = dir.png("e-small.png", (256, 100));
+    let small = dir.png("e-small.png", (320, 100));
     let record = ThumbnailWrite {
         path: path.to_string_lossy().into_owned(),
         mtime: 1,
@@ -173,6 +173,6 @@ fn a_zero_size_row_takes_the_size_of_the_tier_file() {
     };
     db.upsert_thumbnail(&record).expect("store the row");
     let source = read(&db, std::slice::from_ref(&path), 4);
-    assert_eq!(source.items[0].size, (256, 100));
+    assert_eq!(source.items[0].size, (320, 100));
     assert_eq!(source.meta.expect("meta").dimensions, None);
 }

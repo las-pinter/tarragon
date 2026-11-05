@@ -74,7 +74,7 @@ pub struct ThumbResult {
     pub generation: u64,
     /// The item key: the source path.
     pub key: PathBuf,
-    /// The 256 px thumbnail as RGBA8, or the failure.
+    /// The 320 px thumbnail as RGBA8, or the failure.
     pub outcome: Result<RgbaImage, ThumbError>,
 }
 

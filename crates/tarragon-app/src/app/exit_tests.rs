@@ -18,7 +18,7 @@ const STEP_WAIT: Duration = Duration::from_secs(10);
 
 /// The three tier files of the source `name` below `root`.
 fn tier_paths(root: &Path, name: &str) -> [PathBuf; 3] {
-    ["256", "1024", "full"].map(|tier| root.join(tier).join("x").join(format!("{name}.jpg")))
+    ["320", "1024", "full"].map(|tier| root.join(tier).join("x").join(format!("{name}.jpg")))
 }
 
 /// Write the tier files of `name` with `len` bytes each.

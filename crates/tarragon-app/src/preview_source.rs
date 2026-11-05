@@ -68,7 +68,7 @@ fn lookup(db: &Database, path: &Path) -> Option<Thumbnail> {
     }
 }
 
-/// The item for `path`: the 1024 tier file if it exists, else the 256 one.
+/// The item for `path`: the 1024 tier file if it exists, else the 320 one.
 fn item_of(path: &Path, row: &Thumbnail) -> Option<SourceItem> {
     let tier = [&row.preview_cache_path, &row.thumbnail_cache_path]
         .into_iter()

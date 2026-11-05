@@ -1,7 +1,7 @@
 //! Tier directory layout, cache keys, atomic writes, and format markers.
 //!
 //! The path is `<root>/<tier>/<folder>_<uuid>/<source_name>.<ext>`, with the
-//! lowercase tiers `256`, `1024`, and `full`. The `full` tier uses the source
+//! lowercase tiers `320`, `1024`, and `full`. The `full` tier uses the source
 //! size up to the 8192 px cap. The folder and source names are made portable
 //! first, so a Windows-illegal name gives the same path on every platform.
 //!
@@ -70,8 +70,8 @@ pub fn is_stale(stored: SourceStamp, source: SourceStamp) -> bool {
 pub struct CacheEntry {
     /// The format of the three tier files.
     pub format: TierFormat,
-    /// The `256` tier file.
-    pub thumb256: PathBuf,
+    /// The `320` tier file.
+    pub thumb320: PathBuf,
     /// The `1024` tier file.
     pub preview1024: PathBuf,
     /// The `full` tier file.
@@ -83,7 +83,7 @@ impl CacheEntry {
     #[must_use]
     pub fn path(&self, tier: Tier) -> &Path {
         match tier {
-            Tier::Thumb256 => &self.thumb256,
+            Tier::Thumb320 => &self.thumb320,
             Tier::Preview1024 => &self.preview1024,
             Tier::Full => &self.full,
         }
@@ -99,7 +99,7 @@ impl CacheEntry {
         let swap = |path: &Path| path.with_extension(other.extension());
         Self {
             format: other,
-            thumb256: swap(&self.thumb256),
+            thumb320: swap(&self.thumb320),
             preview1024: swap(&self.preview1024),
             full: swap(&self.full),
         }
@@ -203,8 +203,8 @@ impl CacheStore {
         let cache_name = cache_name(&portable(file_name), format);
         Ok(CacheEntry {
             format,
-            thumb256: self
-                .tier_dir(Tier::Thumb256, folder, uuid)
+            thumb320: self
+                .tier_dir(Tier::Thumb320, folder, uuid)
                 .join(&cache_name),
             preview1024: self
                 .tier_dir(Tier::Preview1024, folder, uuid)

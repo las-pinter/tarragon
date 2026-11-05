@@ -216,7 +216,7 @@ fn total_size_counts_a_partial_tier_set() {
         .entry("gallery", "part", "two.jpg", TierFormat::Jpeg)
         .expect("valid names");
     seed(&full, 100);
-    seed_tier(&partial, Tier::Thumb256, 50);
+    seed_tier(&partial, Tier::Thumb320, 50);
     seed_tier(&partial, Tier::Full, 25);
 
     assert_eq!(
@@ -320,7 +320,7 @@ fn remove_entry_files_skips_a_path_outside_the_root() {
     std::fs::write(&victim, b"do not delete").expect("write the outside file");
     let entry = CacheEntry {
         format: TierFormat::Jpeg,
-        thumb256: victim.clone(),
+        thumb320: victim.clone(),
         preview1024: victim.clone(),
         full: victim.clone(),
     };
@@ -354,7 +354,7 @@ fn total_size_does_not_count_a_symlink() {
         .expect("valid names");
     seed(&entry, 100);
     let link = temp.path().join("link.jpg");
-    symlink(entry.path(Tier::Thumb256), &link).expect("create the symlink");
+    symlink(entry.path(Tier::Thumb320), &link).expect("create the symlink");
 
     assert_eq!(
         store.total_size().expect("total"),

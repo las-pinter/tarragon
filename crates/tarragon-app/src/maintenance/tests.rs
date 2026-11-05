@@ -60,7 +60,7 @@ fn setup() -> Setup {
 
 /// The three tier file paths of the source `name`.
 fn tier_paths(root: &Path, name: &str) -> [PathBuf; 3] {
-    ["256", "1024", "full"].map(|tier| root.join(tier).join("folder_x").join(format!("{name}.jpg")))
+    ["320", "1024", "full"].map(|tier| root.join(tier).join("folder_x").join(format!("{name}.jpg")))
 }
 
 /// Write the three tier files of `name` and a row with `last_accessed`.

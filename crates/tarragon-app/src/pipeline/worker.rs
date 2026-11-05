@@ -198,7 +198,7 @@ fn process(shared: &Shared, job: &Job) -> Result<RgbaImage, ThumbError> {
     Ok(thumb.into_rgba8())
 }
 
-/// Extract the colour tags of the 256 tier image and queue them for the
+/// Extract the colour tags of the 320 tier image and queue them for the
 /// writer. It sends nothing when colour tagging is off or the extraction
 /// panics; the thumbnail is not affected either way.
 fn send_colors(shared: &Shared, job: &Job, thumb: &DynamicImage) {
@@ -212,7 +212,7 @@ fn send_colors(shared: &Shared, job: &Job, thumb: &DynamicImage) {
     let _ = shared.rows.send(Message::Colors { path, names });
 }
 
-/// Load the 256 tier when the row and the files are fresh.
+/// Load the 320 tier when the row and the files are fresh.
 ///
 /// A file that does not decode is a miss, because a power loss can leave a
 /// partial file that is not empty.
@@ -225,10 +225,10 @@ fn from_cache(shared: &Shared, job: &Job, name: &str) -> Option<RgbaImage> {
     if !entry.is_fresh(stored, job.stamp) {
         return None;
     }
-    match image::open(&entry.thumb256) {
+    match image::open(&entry.thumb320) {
         Ok(image) => Some(image.to_rgba8()),
         Err(error) => {
-            tracing::warn!("bad cache file {}: {error}", entry.thumb256.display());
+            tracing::warn!("bad cache file {}: {error}", entry.thumb320.display());
             None
         }
     }
@@ -248,7 +248,7 @@ fn row_for(job: &Job, image: &DynamicImage, entry: &CacheEntry) -> ThumbnailWrit
         width: image.width(),
         height: image.height(),
         cache_uuid: job.uuid.clone(),
-        thumbnail_cache_path: text(&entry.thumb256),
+        thumbnail_cache_path: text(&entry.thumb320),
         preview_cache_path: text(&entry.preview1024),
         full_cache_path: text(&entry.full),
         last_accessed: super::writer::now(),

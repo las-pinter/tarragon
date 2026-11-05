@@ -88,7 +88,7 @@ fn evict_bytes(
             } else {
                 TierFormat::Jpeg
             },
-            thumb256: small.into(),
+            thumb320: small.into(),
             preview1024: medium.into(),
             full: full.into(),
         };
@@ -98,7 +98,7 @@ fn evict_bytes(
     let outcome = cache.evict_to_cap(cap_bytes, &order)?;
     let mut deleted = 0;
     for entry in &outcome.evicted {
-        let Some(path) = row_of.get(entry.thumb256.as_path()) else {
+        let Some(path) = row_of.get(entry.thumb320.as_path()) else {
             continue;
         };
         match db.delete_thumbnail(path) {

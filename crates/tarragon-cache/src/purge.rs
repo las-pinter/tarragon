@@ -7,7 +7,7 @@
 //! separate call, because the cache crate cannot reach the database.
 //!
 //! The shutdown rule clears only the `full` tier when the setting is true. The
-//! `256` and `1024` tiers always stay. A false setting deletes nothing.
+//! `320` and `1024` tiers always stay. A false setting deletes nothing.
 //!
 //! Every delete reuses the [`is_within_root`] guard, so a path that resolves
 //! outside the cache root is never removed. The walk never follows a symlink.
@@ -37,7 +37,7 @@ pub struct PurgeOutcome {
 }
 
 impl CacheStore {
-    /// Delete the cache tiers (`256`, `1024`, `full`) and their markers, and
+    /// Delete the cache tiers (`320`, `1024`, `full`) and their markers, and
     /// prune the empty directories. The cache root itself stays.
     ///
     /// Anything else in the cache root is left untouched. The user can point
@@ -82,7 +82,7 @@ impl CacheStore {
     ///
     /// A missing tier gives a zero outcome. A tier directory that resolves
     /// outside the cache root deletes nothing. A tier directory that is a
-    /// symlink is refused, so `full -> 256` cannot empty the `256` tier. The
+    /// symlink is refused, so `full -> 320` cannot empty the `320` tier. The
     /// canonical tier directory must be exactly `<root>/<tier>`.
     ///
     /// A cache root that is `protected`, or an ancestor of it, is refused.
@@ -109,7 +109,7 @@ impl CacheStore {
     /// Clear the `full` tier when `enabled` is true. A false value deletes
     /// nothing.
     ///
-    /// This is the shutdown rule. The `256` and `1024` tiers always stay.
+    /// This is the shutdown rule. The `320` and `1024` tiers always stay.
     /// The caller drains the worker pool first, as [`CacheStore::purge`] does.
     /// The caller passes the application data directory as `protected`, so the
     /// clear cannot touch `tarragon.db`.

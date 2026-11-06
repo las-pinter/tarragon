@@ -120,19 +120,15 @@ mod tests {
     fn natural_order_follows_the_path() {
         let items = items();
         let order = items_in_order(&items, SortMode::Natural);
-        let names: Vec<String> = order
+        let paths: Vec<PathBuf> = order
             .iter()
-            .map(|&index| items[index].path.display().to_string())
+            .map(|&index| items[index].path.clone())
             .collect();
-        assert_eq!(
-            names,
-            [
-                "/images/a 2.png",
-                "/images/a 10.png",
-                "/images/a.png",
-                "/images/b.png"
-            ]
-        );
+        let expected: Vec<PathBuf> = ["a 2.png", "a 10.png", "a.png", "b.png"]
+            .iter()
+            .map(|name| PathBuf::from("/images").join(name))
+            .collect();
+        assert_eq!(paths, expected);
     }
 
     #[test]

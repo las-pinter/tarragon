@@ -33,8 +33,9 @@ fn names(paths: &[PathBuf]) -> Vec<String> {
         .collect()
 }
 
-// A case-insensitive file system cannot hold names that differ only in case.
-#[cfg(not(target_os = "macos"))]
+// The macOS and Windows file systems are case-insensitive. They cannot hold
+// names that differ only in case.
+#[cfg(not(any(target_os = "macos", windows)))]
 #[test]
 fn sorts_case_insensitively_with_exact_name_tie_break() {
     let temp = TempDir::new();

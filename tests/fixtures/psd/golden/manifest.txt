@@ -9,3 +9,4 @@ layer_groups
 clipping_mask
 layer_mask
 psb_8bit
+fill_layers

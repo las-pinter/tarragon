@@ -71,6 +71,11 @@ fn the_psb_8bit_fixture_matches_its_golden() {
 }
 
 #[test]
+fn the_fill_layers_fixture_matches_its_golden() {
+    check("fill_layers");
+}
+
+#[test]
 fn every_golden_in_the_set_exists() {
     let stems = golden_stems();
     assert!(!stems.is_empty(), "the golden manifest is empty");

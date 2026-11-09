@@ -31,7 +31,7 @@ writes byte-identical files.
 
 ## Golden set
 
-`golden/manifest.txt` lists the eight golden stems, one per line. The generator
+`golden/manifest.txt` lists the nine golden stems, one per line. The generator
 and the Rust test read that one file, so a stem cannot be added to one side
 only. The corpus file for a stem is `<stem>.psd`, or `<stem>.psb` for the one
 PSB fixture.
@@ -46,6 +46,11 @@ PSB fixture.
 | `clipping_mask.png` | `clipping_mask.psd` | 96x96 |
 | `layer_mask.png` | `layer_mask.psd` | 64x64 |
 | `psb_8bit.png` | `psb_8bit.psb` | 64x64 |
+| `fill_layers.png` | `fill_layers.psd` | 64x64 |
+
+The `fill_layers.psd` file holds solid, gradient, and pattern fills, which
+psd-tools renders. psd-tools skips adjustment layers, so
+`adjustment_blocks.psd` has no golden.
 
 Note: the CMYK golden pixel is pending an independent oracle reading, because
 the current expectation comes from the same formula the code uses.

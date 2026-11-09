@@ -19,6 +19,8 @@ mod items;
 mod selection;
 
 #[cfg(test)]
+mod scale_tests;
+#[cfg(test)]
 mod tests;
 
 pub(crate) use cell::{ERROR_MARK_SIZE, paint_error};

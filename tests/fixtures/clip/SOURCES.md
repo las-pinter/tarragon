@@ -33,7 +33,7 @@ opaque pixels are both present.
 - **Regenerate:** `cargo test -p tarragon-render --test clip_render
   rewrite_the_committed_fixture -- --ignored`
 - **Verify with SQLite:** `cargo test -p tarragon-db --test clip_fixture` opens
-  the embedded database with `rusqlite` 0.40 (bundled SQLite 3.53.2), runs
+  the embedded database with `rusqlite` 0.41 (bundled SQLite 3.54.1), runs
   `PRAGMA integrity_check`, and reads the preview blob.
 
 The builder and the reader share the local-payload formula. That shared formula

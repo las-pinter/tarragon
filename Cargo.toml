@@ -51,10 +51,10 @@ crossbeam-channel = "=0.5.17"
 # Shared error types. `tarragon-core` owns the error enums; the other crates
 # depend on them through core.
 thiserror = "2"
-# SQLite access uses `rusqlite` 0.40 with the `bundled` feature. The
+# SQLite access uses `rusqlite` 0.41 with the `bundled` feature. The
 # bundled SQLite keeps the build self-contained. `tarragon-db` is the only
 # crate that links SQLite.
-rusqlite = { version = "0.40", features = ["bundled"] }
+rusqlite = { version = "0.41", features = ["bundled"] }
 # Settings values store as JSON text, and the hidden `window_state` key
 # holds a JSON blob. Only `tarragon-db` parses them.
 serde = { version = "1", features = ["derive"] }

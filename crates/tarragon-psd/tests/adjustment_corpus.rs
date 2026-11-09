@@ -9,22 +9,8 @@
 
 mod common;
 
-use common::{GOLDEN_TOLERANCE, assert_matches_golden};
+use common::{GOLDEN_TOLERANCE, assert_matches_golden, premultiply};
 use tarragon_psd::{LayerContent, ParseOptions, PsdDocument, Viewport};
-
-/// Premultiply the color of every pixel by its alpha, in place.
-///
-/// The reference PNG was stored from 8-bit premultiplied data, so its color
-/// carries no information where alpha is small. Both sides are compared
-/// premultiplied.
-fn premultiply(rgba: &mut [u8]) {
-    for pixel in rgba.as_chunks_mut::<4>().0.iter_mut() {
-        let alpha = u32::from(pixel[3]);
-        for channel in &mut pixel[..3] {
-            *channel = u8::try_from((u32::from(*channel) * alpha + 127) / 255).unwrap_or(u8::MAX);
-        }
-    }
-}
 
 /// The sample bytes and its reference image, or `None` after a skip line.
 fn load() -> Option<(Vec<u8>, image::RgbaImage)> {

@@ -6,18 +6,8 @@
 
 mod common;
 
-use common::{GOLDEN_TOLERANCE, assert_matches_golden};
+use common::{GOLDEN_TOLERANCE, assert_matches_golden, premultiply};
 use tarragon_psd::{LayerContent, ParseOptions, PsdDocument, Viewport};
-
-/// Premultiply the color of every pixel by its alpha, in place.
-fn premultiply(rgba: &mut [u8]) {
-    for pixel in rgba.as_chunks_mut::<4>().0.iter_mut() {
-        let alpha = u32::from(pixel[3]);
-        for channel in &mut pixel[..3] {
-            *channel = u8::try_from((u32::from(*channel) * alpha + 127) / 255).unwrap_or(u8::MAX);
-        }
-    }
-}
 
 #[test]
 fn the_pattern_fill_sample_matches_its_merged_image() {

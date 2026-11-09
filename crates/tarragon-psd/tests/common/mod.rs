@@ -218,6 +218,20 @@ pub fn assert_matches_golden(
     }
 }
 
+/// Premultiply the color of every pixel by its alpha, in place.
+///
+/// The reference PNG was stored from 8-bit premultiplied data, so its color
+/// carries no information where alpha is small. Both sides are compared
+/// premultiplied.
+pub fn premultiply(rgba: &mut [u8]) {
+    for pixel in rgba.as_chunks_mut::<4>().0.iter_mut() {
+        let alpha = u32::from(pixel[3]);
+        for channel in &mut pixel[..3] {
+            *channel = u8::try_from((u32::from(*channel) * alpha + 127) / 255).unwrap_or(u8::MAX);
+        }
+    }
+}
+
 /// Composite a fixture over its full canvas.
 pub fn composite_fixture(name: &str) -> CompositeRegion {
     let document = PsdDocument::open(&fixture(name)).unwrap_or_else(|e| panic!("{name}: {e}"));

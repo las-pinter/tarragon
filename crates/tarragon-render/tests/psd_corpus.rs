@@ -5,9 +5,14 @@
 //! the variable the test prints one skip line and passes. With the variable, a
 //! missing listed file fails the test.
 
+#[path = "../../tarragon-psd/tests/common/mod.rs"]
+mod psd_builder;
+
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
+use image::{DynamicImage, RgbaImage};
+use psd_builder::{GOLDEN_TOLERANCE, assert_matches_golden};
 use tarragon_core::error::RenderError;
 use tarragon_psd::limits::PARSE_DEADLINE_SECS;
 use tarragon_psd::{ParseOptions, PsdDocument};
@@ -126,22 +131,11 @@ fn check_file(directory: &Path, name: &str, expected: Outcome) -> Option<String>
 /// Render every corpus file and check the outcome, the size and the deadline.
 #[test]
 fn every_corpus_file_renders_inside_the_deadline_without_a_panic() {
-    let Some(directory) = std::env::var_os("TARRAGON_PSD_CORPUS") else {
-        println!("skip: TARRAGON_PSD_CORPUS is not set");
+    let Some(directory) = corpus_directory() else {
         return;
     };
-    let directory = PathBuf::from(directory);
-
-    let missing: Vec<&str> = FILES
-        .iter()
-        .map(|(name, _)| *name)
-        .filter(|name| !directory.join(name).is_file())
-        .collect();
-    assert!(
-        missing.is_empty(),
-        "missing in {}: {missing:?}; run tests/psd-corpus/fetch.sh to download the corpus",
-        directory.display()
-    );
+    let names: Vec<&str> = FILES.iter().map(|(name, _)| *name).collect();
+    require_files(&directory, &names);
 
     let failures: Vec<String> = FILES
         .iter()
@@ -194,4 +188,167 @@ fn judge_fails_each_broken_rule_and_passes_a_good_render() {
         message: "boom".to_owned(),
     };
     assert!(expect_error(Err(panicked)).is_some(), "a panic fails");
+}
+
+/// Pairs of a corpus file and the reference PNG that can be trusted.
+///
+/// The references of `16bits.psd` and `32bits.psd` are blank white, so they
+/// prove nothing. `cmyk.png` differs by colour conversion and has its own log
+/// test.
+const TRUSTED_REFERENCES: [(&str, &str); 4] = [
+    ("psb.psb", "psb.png"),
+    ("masks.psd", "masks.png"),
+    ("adjustment-layers.psd", "adjustment-layers.png"),
+    ("effects.psd", "effects.png"),
+];
+
+/// Premultiply the colour of every pixel by its alpha, in place.
+///
+/// The reference PNGs come from premultiplied 8-bit data, so their colour is
+/// noise where alpha is small. Both sides are compared premultiplied.
+fn premultiply(rgba: &mut [u8]) {
+    for pixel in rgba.as_chunks_mut::<4>().0.iter_mut() {
+        let alpha = u32::from(pixel[3]);
+        for channel in &mut pixel[..3] {
+            *channel = u8::try_from((u32::from(*channel) * alpha + 127) / 255).unwrap_or(u8::MAX);
+        }
+    }
+}
+
+/// The premultiplied RGBA8 copy of an image.
+fn premultiplied(image: &DynamicImage) -> RgbaImage {
+    let rgba = image.to_rgba8();
+    let (width, height) = rgba.dimensions();
+    let mut raw = rgba.into_raw();
+    premultiply(&mut raw);
+    RgbaImage::from_raw(width, height, raw).expect("the size is kept")
+}
+
+/// The corpus folder, or `None` after one skip line when the variable is unset.
+fn corpus_directory() -> Option<PathBuf> {
+    let Some(directory) = std::env::var_os("TARRAGON_PSD_CORPUS") else {
+        println!("skip: TARRAGON_PSD_CORPUS is not set");
+        return None;
+    };
+    Some(PathBuf::from(directory))
+}
+
+/// Fail with the fetch hint when a listed file is missing from the corpus folder.
+fn require_files(directory: &Path, names: &[&str]) {
+    let missing: Vec<&str> = names
+        .iter()
+        .copied()
+        .filter(|name| !directory.join(name).is_file())
+        .collect();
+    assert!(
+        missing.is_empty(),
+        "missing in {}: {missing:?}; run tests/psd-corpus/fetch.sh to download the corpus",
+        directory.display()
+    );
+}
+
+/// Render a corpus file through the registry. A failure here is a test failure.
+fn render_premultiplied(directory: &Path, name: &str) -> RgbaImage {
+    let image = registry::render(&directory.join(name))
+        .unwrap_or_else(|error| panic!("{name}: the render failed: {error}"));
+    premultiplied(&image)
+}
+
+/// The largest colour-channel delta and the count of channels over `tolerance`.
+///
+/// Alpha is left out, as in `assert_matches_golden`.
+fn channel_deltas(got: &[u8], want: &[u8], tolerance: u8) -> (u8, usize) {
+    let mut max = 0u8;
+    let mut over = 0usize;
+    for (a, b) in got.as_chunks::<4>().0.iter().zip(want.as_chunks::<4>().0) {
+        for (x, y) in a[..3].iter().zip(&b[..3]) {
+            let delta = x.abs_diff(*y);
+            max = max.max(delta);
+            over += usize::from(delta > tolerance);
+        }
+    }
+    (max, over)
+}
+
+/// Where a reference PNG can be trusted, the render matches it at the golden tolerance.
+#[test]
+fn the_trusted_references_match_the_render() {
+    let Some(directory) = corpus_directory() else {
+        return;
+    };
+    let names: Vec<&str> = TRUSTED_REFERENCES
+        .iter()
+        .flat_map(|(name, reference)| [*name, *reference])
+        .collect();
+    require_files(&directory, &names);
+    for (name, reference_name) in TRUSTED_REFERENCES {
+        let reference_path = directory.join(reference_name);
+        let reference = image::open(&reference_path)
+            .unwrap_or_else(|error| panic!("{}: {error}", reference_path.display()));
+        let reference = premultiplied(&reference);
+        let rendered = render_premultiplied(&directory, name);
+        let (width, height) = rendered.dimensions();
+        assert_matches_golden(
+            rendered.as_raw(),
+            width,
+            height,
+            &reference,
+            GOLDEN_TOLERANCE,
+            name,
+        );
+    }
+}
+
+/// The CMYK render differs from its reference by colour conversion. The test
+/// logs the size of the gap and asserts only that the sizes agree.
+#[test]
+fn the_cmyk_render_is_compared_for_the_log() {
+    let Some(directory) = corpus_directory() else {
+        return;
+    };
+    require_files(&directory, &["cmyk.psd", "cmyk.png"]);
+    let reference_path = directory.join("cmyk.png");
+    let reference = image::open(&reference_path)
+        .unwrap_or_else(|error| panic!("{}: {error}", reference_path.display()));
+    let reference = premultiplied(&reference);
+    let rendered = render_premultiplied(&directory, "cmyk.psd");
+    assert_eq!(rendered.dimensions(), reference.dimensions(), "cmyk size");
+    let (max, over) = channel_deltas(rendered.as_raw(), reference.as_raw(), GOLDEN_TOLERANCE);
+    println!(
+        "cmyk.psd: max delta {max}; {over} of {} channels over {GOLDEN_TOLERANCE}",
+        rendered.as_raw().len()
+    );
+}
+
+/// A real 16-bit file must draw something. It does not, so the test is ignored.
+#[test]
+#[ignore = "defect: 16bits.psd renders fully transparent through the layer compositor; psd-tools draws it"]
+fn the_16bit_sample_is_not_blank() {
+    let Some(directory) = corpus_directory() else {
+        return;
+    };
+    require_files(&directory, &["16bits.psd"]);
+    let rendered = render_premultiplied(&directory, "16bits.psd");
+    let visible = rendered
+        .as_raw()
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .any(|pixel| pixel[3] > 0);
+    assert!(visible, "16bits.psd: every pixel has alpha 0");
+}
+
+/// `premultiply` and `channel_deltas` hold their rules with synthetic pixels.
+#[test]
+fn premultiply_and_channel_deltas_follow_their_rules() {
+    let mut pixels = [200, 100, 50, 0, 200, 100, 50, 255, 255, 255, 255, 128];
+    premultiply(&mut pixels);
+    assert_eq!(pixels[..4], [0, 0, 0, 0], "alpha 0 clears the colour");
+    assert_eq!(pixels[4..8], [200, 100, 50, 255], "alpha 255 keeps it");
+    assert_eq!(pixels[8..], [128, 128, 128, 128], "alpha 128 halves it");
+
+    let got = [10, 20, 30, 255, 0, 0, 0, 0];
+    let want = [10, 23, 30, 0, 1, 0, 0, 255];
+    assert_eq!(channel_deltas(&got, &want, 2), (3, 1), "alpha is ignored");
+    assert_eq!(channel_deltas(&got, &want, 0), (3, 2));
 }

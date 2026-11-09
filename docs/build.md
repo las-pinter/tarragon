@@ -325,21 +325,26 @@ lists the options.
 Run over real PSD files, 2026-11-09, release build, Intel Core i7-12700K (10
 logical CPUs, no SMT, in a KVM guest), Ubuntu. The command used the 9 corpus files of
 [`docs/psd-corpus.md`](psd-corpus.md) and the 9 committed fixtures, 18 sources
-in all, with `--files 10000 --psd-percent 10`:
+in all, with `--files 10000 --psd-percent 10 --source-dir DIR`. This run came
+after ZIP layer channels were decoded. The earlier run, before ZIP decoding,
+skipped the layers of `16bits.psd`. Its results are in the last column:
 
-| Measure | Result |
-| --- | --- |
-| Files scanned, rendered | 10,000, 9,945 |
-| Formats | 4,500 `.jpg`, 4,500 `.png`, 889 `.psd`, 111 `.psb` |
-| Errors | 55, all of kind `Decode` |
-| Scan time | 0.26 s |
-| Render plus write, wall time | 1.98 s, 2.24 s |
-| Render, summed over workers | 1.06 s |
-| `VmHWM` (peak) | 29.7 MiB |
-| `VmRSS` (current) | 20.5 MiB |
-| Verdict | `FAIL` |
+| Measure | Result | Before ZIP decoding |
+| --- | --- | --- |
+| Files scanned, rendered | 10,000, 9,945 | 10,000, 9,945 |
+| Formats | 4,500 `.jpg`, 4,500 `.png`, 889 `.psd`, 111 `.psb` | the same |
+| Errors | 55, all of kind `Decode` | the same |
+| Scan time | 0.10 s | 0.26 s |
+| `render+write` | 2.92 s | 1.98 s |
+| `wall time` | 3.02 s | 2.24 s |
+| Render, summed over workers | 1.81 s | 1.06 s |
+| `VmHWM` (peak) | 35.3 MiB | 29.7 MiB |
+| `VmRSS` (current) | 18.4 MiB | 20.5 MiB |
+| Verdict | `FAIL` | `FAIL` |
 
-The peak is 29.7 MiB against the limit of 2,048 MiB. The FAIL verdict is not a
+The peak is 35.3 MiB against the limit of 2,048 MiB. It rose by 5.6 MiB. The run
+did not measure the cause of the change in the memory figures or in the time
+figures. The FAIL verdict is not a
 memory failure. It follows from the 55 errors, because PASS needs zero errors.
 `32bits.psd` is the only corpus file that gives a `Decode` error: the decoder
 does not support 32-bit RGB. The bench reports errors by kind only. It cycles

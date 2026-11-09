@@ -44,6 +44,11 @@ dunce = "=1.0.5"
 # font file. This is the version egui's epaint already uses. Change it with
 # eframe, so that `cargo tree -i skrifa` shows one version.
 skrifa = { version = "=0.44.0", default-features = false, features = ["std"] }
+# Finds system fallback fonts (CJK and symbols). `std`, `fs` and `memmap`
+# scan the fixed font folders and read a face without copying the file twice.
+# `fontconfig` is off: it only adds folders from config files and pulls an
+# XML parser.
+fontdb = { version = "=0.24.0", default-features = false, features = ["std", "fs", "memmap"] }
 # The app matches the winit errors that eframe returns. This is the version
 # eframe already uses; no features are added.
 winit = { version = "=0.30.13", default-features = false }

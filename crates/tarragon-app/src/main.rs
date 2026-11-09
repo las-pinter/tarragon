@@ -21,6 +21,9 @@ mod preview_source;
 mod run;
 mod sidebar;
 mod storewatch;
+// Nothing calls the discovery yet. Remove this when startup uses it.
+#[expect(dead_code)]
+mod sysfonts;
 mod tags;
 #[cfg(test)]
 mod test_ui;

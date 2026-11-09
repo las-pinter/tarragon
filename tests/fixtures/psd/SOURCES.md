@@ -56,7 +56,7 @@ bytes. These descriptor and record fields differ:
 
 ## Cases
 
-The corpus has eleven fixtures.
+The corpus has twelve fixtures.
 
 | # | File | Case | Bytes |
 |---|------|------|-------|
@@ -71,6 +71,7 @@ The corpus has eleven fixtures.
 | 9 | `psb_8bit.psb` | One PSB (version 2, 8-bit RGB) | 10682 |
 | 10 | `truncated.psd` | One truncated file | 200 |
 | 11 | `adjustment_blocks.psd` | Ten adjustment block kinds | 40410 |
+| 12 | `fill_layers.psd` | Solid, gradient, and pattern fill layers | 30476 |
 
 Each file is under 5 MB.
 
@@ -119,6 +120,14 @@ Each file is under 5 MB.
    the generator does not write it. psd-tools skips every adjustment layer when
    it composites, so it cannot render these blocks. The file is not a golden
    image: no test compares it with a Photoshop render.
+12. `fill_layers.psd` — 64x64, RGB, depth 8. One `Base` layer, then four fill
+   layers with no pixels of their own, one per horizontal band of 16 rows: a
+   `SoCo` solid color, a `SoCo` solid color at opacity 128, a `GdFl` linear
+   gradient from black to white, and a `PtFl` pattern fill. A layer mask limits
+   each fill to its band. The document pattern table holds one 4x4 tile. The
+   Rust builder in `crates/tarragon-psd/tests/fill_fixture.rs` owns the file;
+   the generator does not write it. psd-tools renders this file, and a golden
+   image of its render exists.
 
 ### Determinism
 
@@ -136,6 +145,7 @@ b709cc81933ecdc65e64e2a9b8e5103e16ec4cd8f3e15a6991633042948ad9a7  layer_effects.
 cd0fc6fa3354a59d5b51f1a9aee9fff653c93168c391553ea5fcb61cd002edeb  truncated.psd
 6f7ceb42e790c725bf84303c4cf25a6f7cd25f9b84b20f08ecaf4d4ca40dcb09  psb_8bit.psb
 469834d340a8eb89326d1ef8078857ebdf71fafc70172d53a9d132ef76d6627b  adjustment_blocks.psd
+a9bba00d075c74438f57823284ba59dcb894c88541128216a2ca38dabe294468  fill_layers.psd
 ```
 
 ## Large PSB

@@ -47,7 +47,7 @@ pub use encoders::{
 #[allow(unused_imports)]
 pub use patterns::{
     PatternSpec, PtflSpec, packbits_row, packbits_rows, pattern_body, pattern_record, ptfl_block,
-    tagged_block,
+    tagged_block, tile4,
 };
 #[allow(unused_imports)]
 pub use raw_bytes::{layered_psd, raw_psd, read_fixture, rle_merged_section, section_offset};

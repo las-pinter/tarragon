@@ -149,9 +149,23 @@ pub fn gdfl_black_to_white_midpoint(angle: f64, ending_midpoint: i32) -> Vec<u8>
             ],
         ))
     };
+    let opacity_stop = |location: i32| {
+        value_descriptor(&descriptor_body(
+            b"TrnS",
+            &[
+                descriptor_item(b"Opct", &value_unit_float(*b"#Prc", 100.0)),
+                descriptor_item(b"Lctn", &value_integer(location)),
+                descriptor_item(b"Mdpn", &value_integer(50)),
+            ],
+        ))
+    };
     let grad = descriptor_body(
         b"Grdn",
         &[
+            // The form and the smoothness keys are part of a full record. A
+            // reader that renders the gradient needs the form to pick a ramp.
+            descriptor_item(b"GrdF", &value_enum(b"GrdF", b"CstS")),
+            descriptor_item(b"Intr", &value_double(4096.0)),
             descriptor_item(
                 b"Clrs",
                 &value_list(&[
@@ -159,7 +173,9 @@ pub fn gdfl_black_to_white_midpoint(angle: f64, ending_midpoint: i32) -> Vec<u8>
                     stop(4096, ending_midpoint, 255.0, 255.0, 255.0),
                 ]),
             ),
-            descriptor_item(b"Trns", &value_list(&[])),
+            // Two opaque stops. A reader that renders the gradient rejects an
+            // empty transparency list.
+            descriptor_item(b"Trns", &value_list(&[opacity_stop(0), opacity_stop(4096)])),
         ],
     );
     versioned(&descriptor_body(

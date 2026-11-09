@@ -4,20 +4,9 @@ mod common;
 
 use common::{
     DocumentSpec, LayerSpec, PatternSpec, PtflSpec, build_psd, composite_bytes, pattern_record,
-    ptfl_block, sample_rgba8, tagged_block,
+    ptfl_block, sample_rgba8, tagged_block, tile4,
 };
 use tarragon_psd::{LayerContent, ParseOptions, PsdDocument, Viewport};
-
-/// A 4x4 RGB tile where every pixel is distinct.
-fn tile4(id: &str) -> PatternSpec {
-    let pixels: Vec<[u8; 3]> = (0..16u8)
-        .map(|index| {
-            let (x, y) = (index % 4, index / 4);
-            [index * 10 + 5, x * 60 + 3, y * 60 + 7]
-        })
-        .collect();
-    PatternSpec::rgb8(id, 4, 4, &pixels)
-}
 
 /// The expected tile pixel at `(column, row)` of [`tile4`].
 fn tile4_pixel(column: i64, row: i64) -> [u8; 3] {
@@ -71,6 +60,26 @@ fn a_tile_at_one_hundred_percent_repeats_exactly() {
                 "({x}, {y})"
             );
             assert_eq!(sample_rgba8(&region, x, y)[3], 255);
+        }
+    }
+}
+
+/// Files can carry a NUL-terminated pattern id in the record. The parser must
+/// still match it to the id that the fill block names without a NUL. The fill
+/// name differs from the record name, so only the id can match.
+#[test]
+fn a_nul_terminated_record_id_still_matches_the_fill() {
+    let mut fill = PtflSpec::new("tile");
+    fill.name = "other".to_owned();
+    let spec = document(&[tile4("tile\0")], &fill, (0, 0, 8, 8));
+    let region = render(&spec);
+    for y in 0..8u32 {
+        for x in 0..8u32 {
+            assert_eq!(
+                rgb(&region, x, y),
+                tile4_pixel(i64::from(x), i64::from(y)),
+                "({x}, {y})"
+            );
         }
     }
 }

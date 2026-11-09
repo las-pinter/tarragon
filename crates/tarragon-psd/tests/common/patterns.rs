@@ -159,6 +159,17 @@ fn channel_array(spec: &PatternSpec, samples: &[u16], rect: (i32, i32, i32, i32)
     array
 }
 
+/// A 4x4 RGB tile where every pixel is distinct.
+pub fn tile4(id: &str) -> PatternSpec {
+    let pixels: Vec<[u8; 3]> = (0..16u8)
+        .map(|index| {
+            let (x, y) = (index % 4, index / 4);
+            [index * 10 + 5, x * 60 + 3, y * 60 + 7]
+        })
+        .collect();
+    PatternSpec::rgb8(id, 4, 4, &pixels)
+}
+
 /// Encode one pattern record body (without the length prefix).
 pub fn pattern_body(spec: &PatternSpec) -> Vec<u8> {
     let mut body = Vec::new();
@@ -167,9 +178,10 @@ pub fn pattern_body(spec: &PatternSpec) -> Vec<u8> {
     push_u16(&mut body, u16::try_from(spec.height).expect("height"));
     push_u16(&mut body, u16::try_from(spec.width).expect("width"));
     push_unicode(&mut body, &format!("{}\0", spec.name));
-    let id = format!("{}\0", spec.id);
-    body.push(u8::try_from(id.len()).expect("id length"));
-    body.extend_from_slice(id.as_bytes());
+    // The record id carries no NUL. A reader that matches the id as written
+    // would miss a NUL-terminated id.
+    body.push(u8::try_from(spec.id.len()).expect("id length"));
+    body.extend_from_slice(spec.id.as_bytes());
     if let Some(palette) = &spec.palette {
         body.extend_from_slice(palette);
         // A writer that adds four bytes after the palette.

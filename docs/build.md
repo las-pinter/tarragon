@@ -322,8 +322,31 @@ write cost. The run prints the cache size, a warning when a hard link failed
 and the file was copied instead, and the first cache write error. `--help`
 lists the options.
 
-Not done yet: the run over a corpus of real PSD files. It comes with the
-download script.
+Run over real PSD files, 2026-11-09, release build, Intel Core i7-12700K (10
+logical CPUs, no SMT, in a KVM guest), Ubuntu. The command used the 9 corpus files of
+[`docs/psd-corpus.md`](psd-corpus.md) and the 9 committed fixtures, 18 sources
+in all, with `--files 10000 --psd-percent 10`:
+
+| Measure | Result |
+| --- | --- |
+| Files scanned, rendered | 10,000, 9,945 |
+| Formats | 4,500 `.jpg`, 4,500 `.png`, 889 `.psd`, 111 `.psb` |
+| Errors | 55, all of kind `Decode` |
+| Scan time | 0.26 s |
+| Render plus write, wall time | 1.98 s, 2.24 s |
+| Render, summed over workers | 1.06 s |
+| `VmHWM` (peak) | 29.7 MiB |
+| `VmRSS` (current) | 20.5 MiB |
+| Verdict | `FAIL` |
+
+The peak is 29.7 MiB against the limit of 2,048 MiB. The FAIL verdict is not a
+memory failure. It follows from the 55 errors, because PASS needs zero errors.
+`32bits.psd` is the only corpus file that gives a `Decode` error: the decoder
+does not support 32-bit RGB. The bench reports errors by kind only. It cycles
+through its 18 sources, so 1,000 PSD and PSB files hold 55 copies of that file.
+This matches the 55 decode errors. The link is an inference, not a per-file
+count. The files and their outcomes are in
+[`docs/psd-corpus.md`](psd-corpus.md).
 
 ### Cold-cache scan of the 10k corpus
 

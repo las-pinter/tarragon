@@ -50,8 +50,39 @@ proportional family, Roboto Medium draws the panel titles, and Roboto Bold
 draws the title bar. Those two weights come through named egui font families,
 because egui 0.36.2 has no weight selection.
 
+Roboto has no CJK or symbol glyphs. The mockup stack used system fonts, so it
+could show them. The app keeps Roboto as the first face and adds system fonts
+as the last choice. The window opens with Roboto. A thread then scans the
+system font folders, and the fonts apply after one repaint. Each font joins
+all four families: Proportional, Monospace, Roboto Medium, and Roboto Bold. A
+fallback face draws only a char that Roboto and the faces before it lack.
+
+The app keeps up to 3 CJK faces and up to 2 symbol faces. It matches a family
+name exactly, in this order, and keeps one face for each font file. The list
+below is a copy. `crates/tarragon-app/src/sysfonts.rs` owns the list.
+
+- Linux CJK: Noto Sans CJK SC, Noto Sans CJK JP, Noto Sans CJK KR, Source Han
+  Sans SC, WenQuanYi Micro Hei, WenQuanYi Zen Hei, Droid Sans Fallback.
+- Linux symbols: Noto Sans Symbols, Noto Sans Symbols 2, Noto Sans Symbols2,
+  DejaVu Sans.
+- Windows CJK: Microsoft YaHei, Yu Gothic, Malgun Gothic. Symbols: Segoe UI
+  Symbol.
+- macOS CJK: PingFang SC, Hiragino Sans, Apple SD Gothic Neo. Symbols: Apple
+  Symbols.
+- Other systems: no names, so no fallback.
+
+The Windows and macOS names were not checked on real machines.
+
+The CJK order is the same for every locale: SC, then JP, then KR. The app does
+not read the locale. A Han character that the three languages share shows the
+Simplified Chinese form. A Noto Sans CJK `.ttc` file holds all three
+languages. Only the SC face is kept, so the JP and KR forms never show. A
+machine with none of the listed CJK fonts shows boxes for CJK text.
+
 Reason: Segoe UI is a system font and no license permits shipping it. Roboto is
-embedded in the crate under Apache-2.0.
+embedded in the crate under Apache-2.0. Roboto cannot draw CJK text. The OFL
+license of the usual CJK fonts is off the license allowlist, so no CJK font
+ships with the app. System fonts fill the gap.
 
 ## Monospace face
 

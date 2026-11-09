@@ -73,6 +73,20 @@ The app window renders Roboto: `apply_theme` installs the fonts, and the app
 calls it when the window is created. The `grid_bench` example calls `tarragon_ui::install`
 and measures that shipped text path.
 
+No CJK font is bundled, because the OFL license of the usual CJK fonts is off
+the allowlist. Fonts the app reads from the system are not shipped, so the
+allowlist does not apply to them. After the window opens, a thread scans the
+OS font folders with `fontdb`, without fontconfig. On Linux the folders are
+`/usr/share/fonts`, `/usr/local/share/fonts`, `~/.fonts`, and
+`~/.local/share/fonts`. The log line `system fallback fonts:` lists the kept
+faces. When no CJK face is found, the app logs the warning
+`no system CJK font found; CJK file names may show as boxes`. The app skips a
+face that it cannot parse and logs the skipped names. A panic on the thread is
+caught and logged, and the app keeps Roboto. A kept face is read whole into
+memory. A Noto Sans CJK `.ttc` file costs about 20 MB. The app keeps one face
+for each file, so a .ttc file costs its size once. On Arch, a user can install
+`noto-fonts-cjk`.
+
 ## Quality gates
 
 ```sh

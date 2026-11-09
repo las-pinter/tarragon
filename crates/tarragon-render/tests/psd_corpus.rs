@@ -320,10 +320,25 @@ fn the_cmyk_render_is_compared_for_the_log() {
     );
 }
 
-/// A real 16-bit file must draw something. It does not, so the test is ignored.
+/// Pixels of `16bits.psd` measured with a reference decoder on 2026-11-09, as
+/// canvas position and RGBA8. Alpha is 0 or 255, so premultiplied equals straight.
+const SAMPLE_16BIT_PIXELS: [((u32, u32), [u8; 4]); 5] = [
+    ((0, 0), [0, 0, 0, 0]),
+    ((499, 499), [0, 0, 0, 0]),
+    ((250, 250), [95, 39, 2, 255]),
+    ((100, 100), [33, 35, 20, 255]),
+    ((400, 300), [60, 70, 13, 255]),
+];
+
+/// The count of pixels with alpha above 0 in `16bits.psd`, from the same measurement.
+const SAMPLE_16BIT_VISIBLE: usize = 180_972;
+
+/// The real 16-bit file draws the measured pixels and about the measured area.
+///
+/// A blank-only check cannot catch wrong channel data, so the colours and the
+/// covered area are pinned.
 #[test]
-#[ignore = "defect: 16bits.psd renders fully transparent through the layer compositor; psd-tools draws it"]
-fn the_16bit_sample_is_not_blank() {
+fn the_16bit_sample_matches_the_measured_pixels() {
     let Some(directory) = corpus_directory() else {
         return;
     };
@@ -334,8 +349,26 @@ fn the_16bit_sample_is_not_blank() {
         .as_chunks::<4>()
         .0
         .iter()
-        .any(|pixel| pixel[3] > 0);
-    assert!(visible, "16bits.psd: every pixel has alpha 0");
+        .filter(|pixel| pixel[3] > 0)
+        .count();
+    assert!(visible > 0, "16bits.psd: every pixel has alpha 0");
+
+    for ((x, y), want) in SAMPLE_16BIT_PIXELS {
+        let got = rendered.get_pixel(x, y).0;
+        assert_eq!(got[3], want[3], "16bits.psd ({x}, {y}): alpha {got:?}");
+        for (channel, (g, w)) in got[..3].iter().zip(&want[..3]).enumerate() {
+            assert!(
+                g.abs_diff(*w) <= GOLDEN_TOLERANCE,
+                "16bits.psd ({x}, {y}): channel {channel} is {g}, expected {w}; got {got:?}"
+            );
+        }
+    }
+
+    let slack = SAMPLE_16BIT_VISIBLE / 1000;
+    assert!(
+        visible.abs_diff(SAMPLE_16BIT_VISIBLE) <= slack,
+        "16bits.psd: {visible} pixels have alpha above 0, expected {SAMPLE_16BIT_VISIBLE} within {slack}"
+    );
 }
 
 /// `premultiply` and `channel_deltas` hold their rules with synthetic pixels.

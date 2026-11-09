@@ -5,9 +5,13 @@
 //! form. Only the fixed system font folders are scanned.
 
 use std::collections::HashSet;
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::PathBuf;
+use std::thread;
 
+use eframe::egui::Context;
 use fontdb::{Database, Family, ID, Query, Source, Style, Weight};
+use tarragon_core::render_scope::RenderGuardScope;
 use tarragon_ui::FallbackFont;
 
 /// The most CJK faces that `pick` keeps.
@@ -151,5 +155,66 @@ pub(crate) fn discover() -> Found {
     pick(&db, CJK, SYMBOLS)
 }
 
+/// The warning for a box with no CJK font.
+const NO_CJK: &str = "no system CJK font found; CJK file names may show as boxes";
+
+/// Log the kept faces, and return a warning text when no CJK face was found.
+pub(crate) fn report(found: &Found) -> Option<String> {
+    let names: Vec<&str> = found.fonts.iter().map(|font| font.name.as_str()).collect();
+    tracing::info!("system fallback fonts: {}", names.join(", "));
+    if found.cjk {
+        return None;
+    }
+    tracing::warn!("{NO_CJK}");
+    Some(NO_CJK.to_owned())
+}
+
+/// Report what was found, add the faces to `ctx`, and ask for a repaint.
+///
+/// A face that egui cannot parse is skipped by `add_fallbacks`, so one bad
+/// font file never stops the others.
+fn apply(ctx: &Context, found: Found) {
+    // The report runs first, so a rejected CJK face still counts as found.
+    // The rejected-names line below is then the only sign of it.
+    report(&found);
+    let rejected = tarragon_ui::add_fallbacks(ctx, found.fonts);
+    if !rejected.is_empty() {
+        tracing::warn!(
+            "skipped system fonts that egui cannot parse: {}",
+            rejected.join(", ")
+        );
+    }
+    // The new faces apply at the start of the next pass, and an idle window
+    // would not start one.
+    ctx.request_repaint();
+}
+
+/// Find the fonts with `find` and apply them, and keep a panic from spreading.
+///
+/// A lost font is not a crash, so the panic is caught and the render guard
+/// mark keeps the panic hook from writing a crash file for it.
+fn load(ctx: &Context, find: impl FnOnce() -> Found) {
+    let _scope = RenderGuardScope::enter();
+    if catch_unwind(AssertUnwindSafe(|| apply(ctx, find()))).is_err() {
+        tracing::warn!("the system font loader panicked, using Roboto only");
+    }
+}
+
+/// Load the system fallback fonts on a thread, so the window opens at once.
+///
+/// The window shows Roboto first. The fallbacks arrive after one repaint. The
+/// thread is not joined: a failed start only costs the fallbacks.
+pub(crate) fn spawn(ctx: &Context) {
+    let ctx = ctx.clone();
+    let started = thread::Builder::new()
+        .name("sysfonts".to_owned())
+        .spawn(move || load(&ctx, discover));
+    if let Err(error) = started {
+        tracing::warn!("cannot start the system font thread, using Roboto only: {error}");
+    }
+}
+
+#[cfg(test)]
+mod start_tests;
 #[cfg(test)]
 mod tests;

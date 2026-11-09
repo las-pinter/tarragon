@@ -8,7 +8,7 @@ use tarragon_ui::shell::PRODUCT_NAME;
 use winit::error::EventLoopError;
 
 use crate::app::App;
-use crate::window;
+use crate::{sysfonts, window};
 
 /// Run the window with one renderer until it closes.
 fn run_with(renderer: Renderer, app: App) -> eframe::Result<()> {
@@ -23,6 +23,7 @@ fn run_with(renderer: Renderer, app: App) -> eframe::Result<()> {
         options,
         Box::new(move |cc| {
             tarragon_ui::apply_theme(&cc.egui_ctx);
+            sysfonts::spawn(&cc.egui_ctx);
             app.install_waker(&cc.egui_ctx);
             Ok(Box::new(app))
         }),

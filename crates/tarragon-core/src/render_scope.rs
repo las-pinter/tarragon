@@ -3,7 +3,8 @@
 //! The panic hook runs before `catch_unwind` returns. The hook asks this mark
 //! whether the panic will be caught, so it can skip the crash file for a panic
 //! that the render guard turns into a normal error. The mark lives here because
-//! both the render crate and the app crate already depend on this crate.
+//! both the render crate and the app crate already depend on this crate. The
+//! system font loader also uses the mark, because a lost font is not a crash.
 //!
 //! The mark is per thread. It does not cover a thread that a renderer spawns:
 //! a panic on such a worker still writes a crash file, while a panic that is

@@ -7,8 +7,8 @@
 mod common;
 
 use common::{
-    DocumentSpec, LayerSpec, blnc_block, build_psd, composite_bytes, expa_block, hue2_block,
-    mixr_block, phfl_block, sample_rgba8, scaled, selc_block,
+    DocumentSpec, LayerSpec, NO_EDITS, blnc_block, build_psd, composite_bytes, expa_block,
+    hue2_block, mixr_block, phfl_block, sample_rgba8, scaled, selc_block,
 };
 
 /// Composite one adjustment block over one pixel, as RGB8.
@@ -32,8 +32,6 @@ fn run8(pixel: [u8; 3], key: &[u8], block: Vec<u8>) -> [u8; 3] {
 fn linear(level: u8) -> f32 {
     (f32::from(level) / 255.0).powf(2.2)
 }
-
-const NO_EDITS: [[i16; 3]; 6] = [[0; 3]; 6];
 
 #[test]
 fn exposure_minus_one_halves_linear_light() {

@@ -7,6 +7,7 @@
 //! Each test binary uses only part of this module.
 #![allow(dead_code)]
 
+mod adjust_blocks;
 mod builder;
 mod effects;
 mod encoders;
@@ -18,6 +19,8 @@ mod zipped;
 
 // Each test binary uses only part of this module, so the re-exports can look
 // unused to one binary even when another uses them.
+#[allow(unused_imports)]
+pub use adjust_blocks::{DEFAULT_WEIGHTS, NO_EDITS, black_to_white, blwh, cube, grdm, items, viba};
 #[allow(unused_imports)]
 pub use builder::{
     DocumentSpec, LayerSpec, MaskSpec, build_psd, layer_extra, layer_record, push_i32, push_length,

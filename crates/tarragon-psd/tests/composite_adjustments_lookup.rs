@@ -2,25 +2,9 @@
 
 mod common;
 
-use std::fmt::Write;
-
 use common::{
-    DocumentSpec, LayerSpec, build_psd, clrl_block, composite_bytes, sample_rgba8, scaled,
+    DocumentSpec, LayerSpec, build_psd, clrl_block, composite_bytes, cube, sample_rgba8, scaled,
 };
-
-/// A 2x2x2 cube text; `map` turns the (r, g, b) corner into its output.
-fn cube(map: impl Fn([f32; 3]) -> [f32; 3]) -> Vec<u8> {
-    let mut text = String::from("TITLE \"t\"\nLUT_3D_SIZE 2\n");
-    for b in [0.0f32, 1.0] {
-        for g in [0.0f32, 1.0] {
-            for r in [0.0f32, 1.0] {
-                let out = map([r, g, b]);
-                let _ = writeln!(text, "{} {} {}", out[0], out[1], out[2]);
-            }
-        }
-    }
-    text.into_bytes()
-}
 
 /// Composite one `clrL` block over one pixel, as RGB8.
 fn run(depth: u16, pixel: [u8; 3], block: Vec<u8>) -> [u8; 3] {

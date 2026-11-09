@@ -49,8 +49,8 @@ pub fn blwh(weights: [i32; 6], tint: Option<[f64; 3]>) -> Vec<u8> {
 /// The Photoshop default `blwh` weights.
 pub const DEFAULT_WEIGHTS: [i32; 6] = [40, 60, 40, 60, 20, 80];
 
-/// A `grdm` block. Each stop is a location out of 4096, a midpoint percent
-/// and an 8-bit color.
+/// A `grdm` block with the full gradient record. Each stop is a location out
+/// of 4096, a midpoint percent and an 8-bit color.
 pub fn grdm(reverse: bool, stops: &[(u32, u32, [u8; 3])]) -> Vec<u8> {
     let mut data = 1u16.to_be_bytes().to_vec();
     data.extend_from_slice(&[u8::from(reverse), 0]);
@@ -66,15 +66,27 @@ pub fn grdm(reverse: bool, stops: &[(u32, u32, [u8; 3])]) -> Vec<u8> {
         // The fourth component and the pad.
         data.extend_from_slice(&[0; 4]);
     }
-    // Two transparency stops, then the expansion count and smoothness.
+    // Two transparency stops.
     data.extend_from_slice(&2u16.to_be_bytes());
     for location in [0u32, 4096] {
         data.extend_from_slice(&location.to_be_bytes());
         data.extend_from_slice(&50u32.to_be_bytes());
         data.extend_from_slice(&0x7fffu16.to_be_bytes());
     }
-    data.extend_from_slice(&2u16.to_be_bytes());
-    data.extend_from_slice(&4096u16.to_be_bytes());
+    // The expansion count, the smoothness, the stop length and the mode.
+    for value in [2u16, 4096, 32, 0] {
+        data.extend_from_slice(&value.to_be_bytes());
+    }
+    // The noise-gradient tail with neutral values: random seed, show
+    // transparency, use vector color, roughness, color model, minimum and
+    // maximum color, and two pad bytes. Photoshop writes the tail for every
+    // gradient, and other readers fail on a block that ends before it.
+    data.extend_from_slice(&0u32.to_be_bytes());
+    data.extend_from_slice(&[0; 4]);
+    data.extend_from_slice(&0u32.to_be_bytes());
+    data.extend_from_slice(&0u16.to_be_bytes());
+    data.extend_from_slice(&[0; 16]);
+    data.extend_from_slice(&[0; 2]);
     data
 }
 

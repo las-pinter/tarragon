@@ -56,7 +56,7 @@ bytes. These descriptor and record fields differ:
 
 ## Cases
 
-The corpus has ten fixtures.
+The corpus has eleven fixtures.
 
 | # | File | Case | Bytes |
 |---|------|------|-------|
@@ -70,6 +70,7 @@ The corpus has ten fixtures.
 | 8 | `layer_effects.psd` | Layer effects | 263499 |
 | 9 | `psb_8bit.psb` | One PSB (version 2, 8-bit RGB) | 10682 |
 | 10 | `truncated.psd` | One truncated file | 200 |
+| 11 | `adjustment_blocks.psd` | Ten adjustment block kinds | 40410 |
 
 Each file is under 5 MB.
 
@@ -110,6 +111,14 @@ Each file is under 5 MB.
 10. `truncated.psd` — the first 200 bytes of `layered_blend_modes.psd`. The
    `8BPS` signature and the header stay valid. The layer and mask section is
    cut, so a full read fails. This file tests the error path.
+11. `adjustment_blocks.psd` — 104x44, RGB, depth 8. One `Base` layer, then ten
+   cells. Each cell has a `Patch i` pixel layer and an `Adjustment i` layer
+   with one block: `expA`, `vibA`, `blwh`, `grdm`, `clrL`, `hue2`, `blnc`,
+   `mixr`, `selc`, `phfl`. A layer mask limits each block to its cell. The Rust
+   builder in `crates/tarragon-psd/tests/adjustment_fixture.rs` owns the file;
+   the generator does not write it. psd-tools skips every adjustment layer when
+   it composites, so it cannot render these blocks. The file is not a golden
+   image: no test compares it with a Photoshop render.
 
 ### Determinism
 
@@ -126,6 +135,7 @@ b709cc81933ecdc65e64e2a9b8e5103e16ec4cd8f3e15a6991633042948ad9a7  layer_effects.
 27cb2f35adc7f351c791bd0042aeb5fb5f768cbf560ff18da3aebe9f6bdddf03  rgb_8bit.psd
 cd0fc6fa3354a59d5b51f1a9aee9fff653c93168c391553ea5fcb61cd002edeb  truncated.psd
 6f7ceb42e790c725bf84303c4cf25a6f7cd25f9b84b20f08ecaf4d4ca40dcb09  psb_8bit.psb
+469834d340a8eb89326d1ef8078857ebdf71fafc70172d53a9d132ef76d6627b  adjustment_blocks.psd
 ```
 
 ## Large PSB

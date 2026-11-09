@@ -2,6 +2,12 @@
 [profile.default]
 fail-fast = true
 
+# The corpus test prints a skip line when its folder variable is unset. Nextest
+# hides the output of a passing test, so show it for this binary only.
+[[profile.default.overrides]]
+filter = "binary(psd_corpus)"
+success-output = "final"
+
 # A CI run reports every failure, not only the first.
 [profile.ci]
 fail-fast = false

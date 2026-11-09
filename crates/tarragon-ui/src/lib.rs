@@ -24,6 +24,6 @@ pub mod theme;
 pub mod tokens;
 pub mod widgets;
 
-pub use fonts::{definitions, install};
+pub use fonts::{FallbackFont, add_fallbacks, definitions, install};
 pub use shell::Shell;
 pub use theme::apply_theme;

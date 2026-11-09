@@ -4,9 +4,12 @@
 //! allowlist. This crate embeds the Roboto files, so no file is read at run
 //! time. See `SOURCES.md` next to the font files for provenance.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
+use egui::epaint::text::{FontInsert, FontPriority, InsertFontFamily};
 use egui::{FontData, FontDefinitions, FontFamily};
+use skrifa::FontRef;
 
 /// The Roboto Regular font file.
 pub const REGULAR: &[u8] = include_bytes!("../assets/fonts/Roboto-Regular.ttf");
@@ -83,6 +86,69 @@ pub fn install(ctx: &egui::Context) {
     ctx.set_fonts(definitions());
     ctx.data_mut(|data| data.insert_temp(id, true));
 }
+
+/// One fallback font face, such as a system font read from disk.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FallbackFont {
+    /// The unique name of the face in the font definitions.
+    pub name: String,
+    /// The bytes of the `.ttf`, `.otf` or `.ttc` file.
+    pub data: Vec<u8>,
+    /// The face inside the file. Use `0` for a single-face file.
+    pub index: u32,
+}
+
+/// Add fallback faces to all four families, after every face already there.
+///
+/// Roboto keeps its place, so a glyph that Roboto has never changes. A face
+/// is used only for a char that the earlier faces lack. The faces apply at the
+/// start of the next frame. A repeated name in one call is added once, because
+/// egui queues two calls with one name in the same frame and both would join
+/// the family lists. Call this once for each name. Two calls with one name are
+/// not supported.
+///
+/// A face that cannot be parsed at its index is skipped, because egui panics
+/// on the next frame for a bad font file. The result lists the names of the
+/// skipped faces, in call order. A good face in the same call is still added.
+#[must_use]
+pub fn add_fallbacks(ctx: &egui::Context, fonts: Vec<FallbackFont>) -> Vec<String> {
+    let mut seen = HashSet::new();
+    let mut rejected = Vec::new();
+    for font in fonts {
+        if !seen.insert(font.name.clone()) {
+            continue;
+        }
+        if FontRef::from_index(&font.data, font.index).is_err() {
+            rejected.push(font.name);
+            continue;
+        }
+        let data = FontData {
+            index: font.index,
+            ..FontData::from_owned(font.data)
+        };
+        ctx.add_font(FontInsert::new(&font.name, data, fallback_families()));
+    }
+    rejected
+}
+
+/// The four families that receive each fallback face at the lowest priority.
+fn fallback_families() -> Vec<InsertFontFamily> {
+    [
+        FontFamily::Proportional,
+        FontFamily::Monospace,
+        FontFamily::Name(MEDIUM_FAMILY.into()),
+        FontFamily::Name(BOLD_FAMILY.into()),
+    ]
+    .into_iter()
+    .map(|family| InsertFontFamily {
+        family,
+        priority: FontPriority::Lowest,
+    })
+    .collect()
+}
+
+#[cfg(test)]
+mod fallback_tests;
 
 #[cfg(test)]
 mod tests {

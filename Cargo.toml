@@ -40,6 +40,10 @@ eframe = { version = "=0.36.2", default-features = false, features = ["glow", "w
 egui_dock = "=0.21.1"
 # Paths from canonicalize without the Windows verbatim prefix.
 dunce = "=1.0.5"
+# Checks a fallback font before egui sees it, because egui panics on a bad
+# font file. This is the version egui's epaint already uses. Change it with
+# eframe, so that `cargo tree -i skrifa` shows one version.
+skrifa = { version = "=0.44.0", default-features = false, features = ["std"] }
 # The app matches the winit errors that eframe returns. This is the version
 # eframe already uses; no features are added.
 winit = { version = "=0.30.13", default-features = false }

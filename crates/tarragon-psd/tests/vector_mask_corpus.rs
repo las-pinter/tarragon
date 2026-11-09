@@ -1,14 +1,28 @@
 //! The `vector_mask.psd` sample against its own merged image.
 //!
+//! The reference is the production merged path, `read_merged_pixels`. This
+//! file stores its merged color matted over white, so the raw samples differ
+//! from the straight color of the composite where alpha is below one. Both
+//! sides are compared premultiplied, where the two agree. The golden compare
+//! ignores alpha, so alpha is checked in a separate loop. Both sides share the
+//! sample decoding (`rgb_color`, `channel_samples`), so this test does not
+//! check decoding.
+//!
+//! The merged alpha comes from the raster mask alone. The sample shows that the
+//! vector coverage does not clip where the file has content. It does not show
+//! that the vector shape is right.
+//!
 //! The file is not in the repository. The `TARRAGON_PSD_CORPUS` environment
 //! variable names the directory that holds it. Without the variable or the
 //! file the test prints one skip line and passes.
 
 mod common;
 
-use common::{GOLDEN_TOLERANCE, assert_matches_golden};
+use common::{GOLDEN_TOLERANCE, assert_matches_golden, premultiply};
 use tarragon_psd::{ParseOptions, PsdDocument, Viewport};
 
+/// The composite of the sample matches its merged image in alpha and in
+/// premultiplied color.
 #[test]
 fn the_vector_mask_sample_matches_its_merged_image() {
     let Some(directory) = std::env::var_os("TARRAGON_PSD_CORPUS") else {
@@ -26,30 +40,42 @@ fn the_vector_mask_sample_matches_its_merged_image() {
     let viewport = Viewport::full(width, height);
     let options = ParseOptions::none();
 
-    let merged = document
-        .read_merged_region(viewport, &options)
-        .expect("the merged image decodes");
-    let to_byte = |sample: u16| {
-        if merged.depth >= 16 {
-            u8::try_from((u32::from(sample) + 128) / 257).unwrap_or(u8::MAX)
-        } else {
-            u8::try_from(sample).unwrap_or(u8::MAX)
-        }
-    };
-    let mut reference = image::RgbaImage::new(width, height);
-    for (x, y, pixel) in reference.enumerate_pixels_mut() {
-        let channel = |id: i16| to_byte(merged.sample(id, x, y).unwrap_or(0));
-        *pixel = image::Rgba([channel(0), channel(1), channel(2), 255]);
-    }
-
+    let reference = document
+        .read_merged_pixels(viewport, 1, &options)
+        .expect("the merged image decodes")
+        .rgba8();
     let composited = document
         .composite_region(viewport, &options)
-        .expect("the layers composite");
+        .expect("the layers composite")
+        .rgba8();
+
+    let columns = usize::try_from(width).expect("width");
+    for (index, (got, want)) in composited
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .zip(reference.as_chunks::<4>().0.iter())
+        .enumerate()
+    {
+        assert!(
+            got[3].abs_diff(want[3]) <= GOLDEN_TOLERANCE,
+            "vector_mask.psd: alpha {} against merged alpha {} at ({}, {})",
+            got[3],
+            want[3],
+            index % columns,
+            index / columns
+        );
+    }
+
+    let (mut got, mut want) = (composited, reference);
+    premultiply(&mut got);
+    premultiply(&mut want);
+    let want = image::RgbaImage::from_raw(width, height, want).expect("the reference size");
     assert_matches_golden(
-        &composited.rgba8(),
+        &got,
         width,
         height,
-        &reference,
+        &want,
         GOLDEN_TOLERANCE,
         "vector_mask.psd",
     );

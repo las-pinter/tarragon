@@ -6,10 +6,13 @@
 
 use std::fmt::Write;
 
+use tarragon_psd::composite::CompositeRegion;
+
 use super::encoders::{
     descriptor_body, descriptor_item, rgbc, value_boolean, value_descriptor, value_integer,
     versioned,
 };
+use super::sample_rgba8;
 
 /// Encode each key and value pair as one descriptor item.
 pub fn items(entries: &[(&[u8], Vec<u8>)]) -> Vec<Vec<u8>> {
@@ -111,3 +114,17 @@ pub fn cube(map: impl Fn([f32; 3]) -> [f32; 3]) -> Vec<u8> {
 
 /// Hue, saturation and lightness edits for six color ranges, all zero.
 pub const NO_EDITS: [[i16; 3]; 6] = [[0; 3]; 6];
+
+/// The RGB8 pixel at the centre of fixture cell `index`. The fixture lays out
+/// 16 x 16 cells on a pitch of 20 px with a 4 px margin, five cells per row, so
+/// the centre sits 8 px in from the cell corner.
+pub fn adjustment_cell(region: &CompositeRegion, index: usize) -> [u8; 3] {
+    let x = 4 + 20 * (index % 5) + 8;
+    let y = 4 + 20 * (index / 5) + 8;
+    let pixel = sample_rgba8(
+        region,
+        u32::try_from(x).expect("x"),
+        u32::try_from(y).expect("y"),
+    );
+    [pixel[0], pixel[1], pixel[2]]
+}

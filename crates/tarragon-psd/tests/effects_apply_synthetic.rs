@@ -252,6 +252,23 @@ fn a_gradient_stroke_spans_the_stroke_extent() {
 }
 
 #[test]
+fn a_gradient_stroke_puts_its_end_rows_on_the_end_stops() {
+    // The stroke band covers rows 16..48, so the frame is 32 rows tall and
+    // the first and last band rows hold the end stop colors. The edge rows
+    // have half coverage over the 200 backdrop: row 16 is white, so
+    // 200 + 0.5 * 55 = 228, and row 47 is black, so 0.5 * 200 = 100. Row 17
+    // sits 1/31 of the way in: t = 30/31, so 255 * 30 / 31 = 247. A frame one
+    // row shorter would put rows 17 and 46 on the end colors, 255 and 0.
+    let stroke = gradient_stroke_effect(90.0, 8.0, false, 100.0);
+    let bytes = square_document_with_opacity(*b"lfx2", lfx2(&[stroke]), [128, 128, 128], 255);
+    let region = composite(bytes, Viewport::full(64, 64));
+    let row = |y| i32::from(sample_rgba8(&region, 32, y)[0]);
+    for (y, want) in [(16, 228), (17, 247), (46, 8), (47, 100)] {
+        assert!((row(y) - want).abs() <= 1, "row {y}: {} vs {want}", row(y));
+    }
+}
+
+#[test]
 fn the_layer_opacity_applies_to_the_whole_stack() {
     let shadow = shadow_effect(false, [0.0; 3], 120.0, 6.0, 4.0, 0.0, 100.0, true);
     let opaque = composite(

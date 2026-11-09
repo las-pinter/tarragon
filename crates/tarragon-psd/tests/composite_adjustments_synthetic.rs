@@ -58,19 +58,21 @@ fn a_gradient_fill_layer_ramps_across_the_canvas() {
 
 #[test]
 fn a_gradient_midpoint_moves_the_halfway_color() {
-    let mut spec = DocumentSpec::new(16, 1, 8, 3);
+    // The canvas is 17 pixels wide, so the end pixels sit on t = 0 and t = 1
+    // and pixel x holds t = x / 16.
+    let mut spec = DocumentSpec::new(17, 1, 8, 3);
     spec.layers.push(
-        LayerSpec::content((0, 0, 1, 16))
+        LayerSpec::content((0, 0, 1, 17))
             .with_block(*b"GdFl", gdfl_black_to_white_midpoint(0.0, 25)),
     );
     let region = composite_bytes(build_psd(&spec));
     // The ending stop carries Mdpn 25, so the ramp is half-way at t = 0.25
     // (x = 4). A midpoint is stored on the stop that ends its segment.
     let early = sample_rgba8(&region, 4, 0);
-    assert!((i32::from(early[0]) - 128).abs() <= 2, "{early:?}");
+    assert!((i32::from(early[0]) - 128).abs() <= 1, "{early:?}");
     // At t = 0.5 (x = 8) the ramp then sits two-thirds of the way up the segment.
     let middle = sample_rgba8(&region, 8, 0);
-    assert!((i32::from(middle[0]) - 170).abs() <= 2, "{middle:?}");
+    assert!((i32::from(middle[0]) - 170).abs() <= 1, "{middle:?}");
 }
 
 #[test]

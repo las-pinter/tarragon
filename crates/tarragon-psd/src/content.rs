@@ -95,7 +95,15 @@ impl GradientFill {
         let height = height.max(1.0);
         let center_x = x0 + width / 2.0 + self.offset.0 * width;
         let center_y = y0 + height / 2.0 + self.offset.1 * height;
-        let (dx, dy) = (x - center_x, y - center_y);
+        // The first and last pixel centers sit on the ends of the frame, so the
+        // end pixels hold the end stop colors. This is the psd-tools mapping:
+        // a frame `n` pixels wide spans `n - 1` steps between pixel centers.
+        // The guard keeps a one pixel frame at a factor of one. It assumes
+        // integer frame sizes.
+        let (dx, dy) = (
+            (x - center_x) * (width / (width - 1.0).max(1.0)),
+            (y - center_y) * (height / (height - 1.0).max(1.0)),
+        );
         let (sin, cos) = self.angle.to_radians().sin_cos();
         let along = dx * cos - dy * sin;
         let across = dx * sin + dy * cos;
@@ -103,11 +111,9 @@ impl GradientFill {
         let scale = self.scale.max(1e-3);
         let chord = chord * scale;
         let length = length * scale;
-        // Linear and Reflected sample a pixel corner, half a step before its center.
-        let corner = 0.5 * (cos - sin);
         let mut t = match self.style {
-            GradientStyle::Linear => (along - corner) / chord + 0.5,
-            GradientStyle::Reflected => ((along - corner) / (chord / 2.0)).abs(),
+            GradientStyle::Linear => along / chord + 0.5,
+            GradientStyle::Reflected => (along / (chord / 2.0)).abs(),
             GradientStyle::Radial => (dx * dx + dy * dy).sqrt() / (length / 2.0),
             GradientStyle::Diamond => (along.abs() + across.abs()) / (length / 2.0),
             GradientStyle::Angle => ((self.angle.to_radians() - (-dy).atan2(dx))
@@ -499,6 +505,92 @@ mod tests {
         let right = fill.parameter_at(frame, 9.5, 0.5);
         assert!(left < right, "{left} vs {right}");
         assert!((fill.sample(0.5)[0] - 0.5).abs() < 1e-6);
+    }
+
+    /// A black-to-white ramp of one style, at angle 0 and scale 100 %.
+    fn ramp(style: GradientStyle) -> GradientFill {
+        GradientFill {
+            stops: vec![(0.0, [0.0, 0.0, 0.0, 1.0]), (1.0, [1.0, 1.0, 1.0, 1.0])],
+            midpoints: Vec::new(),
+            opacity_stops: Vec::new(),
+            angle: 0.0,
+            scale: 1.0,
+            style,
+            reverse: false,
+            offset: (0.0, 0.0),
+            dither: false,
+            align: true,
+        }
+    }
+
+    /// The parameter at pixel `(x, y)`, sampled at the pixel center.
+    fn at(fill: &GradientFill, frame: (f32, f32, f32, f32), x: u16, y: u16) -> f32 {
+        fill.parameter_at(frame, f32::from(x) + 0.5, f32::from(y) + 0.5)
+    }
+
+    #[test]
+    fn a_linear_gradient_puts_its_end_pixels_on_the_end_stops() {
+        let fill = ramp(GradientStyle::Linear);
+        let frame = (0.0, 0.0, 10.0, 1.0);
+        assert!(at(&fill, frame, 0, 0).abs() < 1e-6);
+        assert!((at(&fill, frame, 9, 0) - 1.0).abs() < 1e-6);
+        assert!((at(&fill, frame, 4, 0) - 4.0 / 9.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn a_vertical_linear_gradient_puts_its_end_pixels_on_the_end_stops() {
+        let mut fill = ramp(GradientStyle::Linear);
+        fill.angle = 90.0;
+        let frame = (0.0, 0.0, 1.0, 10.0);
+        // At angle 90 the ramp runs from the bottom to the top.
+        assert!((at(&fill, frame, 0, 0) - 1.0).abs() < 1e-5);
+        assert!(at(&fill, frame, 0, 9).abs() < 1e-5);
+        assert!((at(&fill, frame, 0, 4) - 5.0 / 9.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn a_reflected_gradient_puts_its_end_pixels_on_the_end_stop() {
+        let fill = ramp(GradientStyle::Reflected);
+        let frame = (0.0, 0.0, 11.0, 1.0);
+        assert!((at(&fill, frame, 0, 0) - 1.0).abs() < 1e-6);
+        assert!((at(&fill, frame, 10, 0) - 1.0).abs() < 1e-6);
+        assert!(at(&fill, frame, 5, 0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn a_radial_gradient_reaches_the_end_stop_on_the_edge_pixels() {
+        let fill = ramp(GradientStyle::Radial);
+        let frame = (0.0, 0.0, 11.0, 11.0);
+        assert!((at(&fill, frame, 0, 5) - 1.0).abs() < 1e-6);
+        assert!((at(&fill, frame, 5, 10) - 1.0).abs() < 1e-6);
+        assert!(at(&fill, frame, 5, 5).abs() < 1e-6);
+    }
+
+    #[test]
+    fn a_diamond_gradient_reaches_the_end_stop_on_the_edge_pixels() {
+        let fill = ramp(GradientStyle::Diamond);
+        let frame = (0.0, 0.0, 11.0, 11.0);
+        assert!((at(&fill, frame, 10, 5) - 1.0).abs() < 1e-6);
+        assert!((at(&fill, frame, 5, 0) - 1.0).abs() < 1e-6);
+        assert!(at(&fill, frame, 5, 5).abs() < 1e-6);
+    }
+
+    #[test]
+    fn an_angle_gradient_measures_the_angle_between_end_pixel_positions() {
+        // In a 11 by 21 frame the end pixels sit at 5.5 and 10.5 from the
+        // center once the end pixels are placed on the frame edges.
+        let fill = ramp(GradientStyle::Angle);
+        let frame = (0.0, 0.0, 11.0, 21.0);
+        let want = 10.5f32.atan2(5.5) / std::f32::consts::TAU;
+        assert!((at(&fill, frame, 10, 20) - want).abs() < 1e-5);
+        assert!((at(&fill, frame, 0, 10) - 0.5).abs() < 1e-6);
+    }
+
+    #[test]
+    fn a_one_pixel_frame_keeps_the_parameter_finite() {
+        let fill = ramp(GradientStyle::Linear);
+        let t = at(&fill, (0.0, 0.0, 1.0, 1.0), 0, 0);
+        assert!((t - 0.5).abs() < 1e-6, "{t}");
     }
 
     #[test]

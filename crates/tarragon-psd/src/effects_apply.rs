@@ -73,13 +73,13 @@ impl PaintContext {
     }
 
     /// The frame of a gradient stroke: the layer bounds grown by the outside
-    /// pixel span, less one for the pixel centers, so the ramp spans the
-    /// stroke's own extent.
+    /// pixel span, so the ramp spans the stroke's own extent. The gradient
+    /// mapping puts the first and last pixel centers on the ends of the frame.
     ///
-    /// The growth is the stroke's pixel extent: `out_w` rounded up, less one.
+    /// The growth is the stroke's pixel extent: `out_w` rounded up.
     pub(crate) fn stroke_frame(self, out_w: f32) -> Frame {
         let grow = if out_w.is_finite() {
-            (out_w.min(crate::effects::MAX_EFFECT_SIZE).ceil() - 1.0).max(0.0)
+            out_w.min(crate::effects::MAX_EFFECT_SIZE).ceil().max(0.0)
         } else {
             0.0
         };

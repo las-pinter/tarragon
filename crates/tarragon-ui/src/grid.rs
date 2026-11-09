@@ -19,6 +19,8 @@ mod items;
 mod selection;
 
 #[cfg(test)]
+mod edge_tests;
+#[cfg(test)]
 mod scale_tests;
 #[cfg(test)]
 mod tests;
@@ -134,6 +136,15 @@ impl GridMetrics {
     }
 }
 
+/// The scroll bar style of the grid: a solid bar with a gap between the tiles
+/// and the bar.
+fn scroll_style() -> egui::style::ScrollStyle {
+    egui::style::ScrollStyle {
+        bar_inner_margin: tokens::SPACING_S,
+        ..egui::style::ScrollStyle::solid()
+    }
+}
+
 /// The size of one grid cell.
 #[must_use]
 pub fn cell_size() -> Vec2 {
@@ -233,28 +244,34 @@ impl VirtualGrid {
             Some(scroll_y) => area.scroll_offset(vec2(0.0, scroll_y)),
             None => area,
         };
-        area.show_viewport(ui, |ui, viewport| {
-            // The inner width excludes the scrollbar, so the columns fit.
-            let metrics = self.metrics.stretched(ui.available_width());
-            let content = metrics.content_size(self.item_count);
-            let row_count = metrics.row_count(self.item_count);
-            ui.set_min_size(content);
-            let origin = ui.max_rect().min;
-            let cols = metrics.visible_cols(viewport);
-            for row in metrics.visible_rows(viewport) {
-                if row >= row_count {
-                    break;
-                }
-                for col in cols.clone() {
-                    let index = row * metrics.columns + col;
-                    if index >= self.item_count {
+        // A floating bar paints over the last column. A solid bar takes its own
+        // width from the viewport, so the tiles end before the bar. The scope
+        // keeps the solid style from leaking to the caller's ui.
+        ui.scope(|ui| {
+            ui.spacing_mut().scroll = scroll_style();
+            area.show_viewport(ui, |ui, viewport| {
+                // The inner width excludes the scrollbar, so the columns fit.
+                let metrics = self.metrics.stretched(ui.available_width());
+                let content = metrics.content_size(self.item_count);
+                let row_count = metrics.row_count(self.item_count);
+                ui.set_min_size(content);
+                let origin = ui.max_rect().min;
+                let cols = metrics.visible_cols(viewport);
+                for row in metrics.visible_rows(viewport) {
+                    if row >= row_count {
                         break;
                     }
-                    let rect = metrics.cell_rect(row, col).translate(origin.to_vec2());
-                    cell_ui(ui, rect, index);
-                    painted += 1;
+                    for col in cols.clone() {
+                        let index = row * metrics.columns + col;
+                        if index >= self.item_count {
+                            break;
+                        }
+                        let rect = metrics.cell_rect(row, col).translate(origin.to_vec2());
+                        cell_ui(ui, rect, index);
+                        painted += 1;
+                    }
                 }
-            }
+            });
         });
 
         painted

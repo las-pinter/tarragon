@@ -2697,6 +2697,7 @@ dependencies = [
 name = "tarragon-psd"
 version = "0.2.0"
 dependencies = [
+ "flate2",
  "image",
  "tarragon-core",
  "thiserror 2.0.21",
@@ -2706,6 +2707,7 @@ dependencies = [
 name = "tarragon-render"
 version = "0.2.0"
 dependencies = [
+ "flate2",
  "image",
  "rayon",
  "tarragon-cache",

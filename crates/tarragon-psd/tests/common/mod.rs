@@ -14,6 +14,7 @@ mod patterns;
 mod raw_bytes;
 mod tiles;
 mod vector;
+mod zipped;
 
 // Each test binary uses only part of this module, so the re-exports can look
 // unused to one binary even when another uses them.
@@ -47,6 +48,8 @@ pub use patterns::{
 pub use raw_bytes::{layered_psd, raw_psd, read_fixture, rle_merged_section, section_offset};
 #[allow(unused_imports)]
 pub use tiles::{assert_suggested_edge_fits, crop_rgba8, peak_resident_bytes, stitched_rgba8};
+#[allow(unused_imports)]
+pub use zipped::{channel_bytes, deflate, padded_stream};
 
 #[allow(unused_imports)]
 pub use vector::{

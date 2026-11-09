@@ -76,6 +76,10 @@ image = { version = "=0.25.10", default-features = false }
 # features stay off so the dependency tree stays small. `deflate-zopfli` stays
 # off: zopfli only compresses on write and the renderer only reads.
 zip = { version = "=9.2.2", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+# The PSD layer decoder inflates ZIP channels with `flate2`. Default features
+# are off and `zlib-rs` is on, the same backend `zip` already uses, so the
+# lockfile gains no new crate. The pin is the version already locked.
+flate2 = { version = "=1.1.10", default-features = false, features = ["zlib-rs"] }
 
 # Logging. `tracing` matches the version already in the lockfile.
 # `tracing-subscriber` keeps default features off: no ANSI codes reach the

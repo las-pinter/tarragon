@@ -19,6 +19,8 @@ zip.workspace = true
 # folder it builds. The cache crate has this crate as a dev-dependency too,
 # which cargo accepts because neither edge is a runtime edge.
 rayon.workspace = true
+# The render tests include the PSD test builder, which writes zlib channels.
+flate2.workspace = true
 tarragon-cache = { path = "../tarragon-cache", version = "0.2.0" }
 tarragon-scan = { path = "../tarragon-scan", version = "0.2.0" }
 

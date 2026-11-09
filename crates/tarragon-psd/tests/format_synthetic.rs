@@ -184,9 +184,9 @@ fn a_layer_with_unsupported_compression_is_skipped() {
     let mut spec = DocumentSpec::new(2, 2, 8, 3);
     spec.layers
         .push(LayerSpec::opaque((0, 0, 2, 2), [200, 100, 50]));
-    let mut zipped = LayerSpec::opaque((0, 0, 2, 2), [0, 0, 0]);
-    zipped.compression = 2;
-    spec.layers.push(zipped);
+    let mut unknown = LayerSpec::opaque((0, 0, 2, 2), [0, 0, 0]);
+    unknown.compression = 4;
+    spec.layers.push(unknown);
     let region = composite_bytes(build_psd(&spec));
     assert_eq!(sample_rgba8(&region, 0, 0), [200, 100, 50, 255]);
     assert_eq!(region.skipped_layers(), 1);

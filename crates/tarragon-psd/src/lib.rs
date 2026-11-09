@@ -29,6 +29,7 @@ mod composite_region;
 pub mod content;
 pub mod decode;
 mod decode_rows;
+mod decode_zip;
 mod descriptor;
 pub mod document;
 pub mod effects;

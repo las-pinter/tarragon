@@ -99,14 +99,14 @@ fn a_zero_length_channel_decodes_to_zeros() {
 #[test]
 fn a_zero_length_channel_with_unsupported_compression_is_rejected() {
     // The two-byte block is a compression field with no sample data. A code
-    // outside raw and RLE must error, not return zeros. Check the compression
-    // code before the empty-block return, or the test returns Ok.
-    let data = layered_psd(1, 1, &[(0, 2, vec![0, 2])]);
+    // outside raw, RLE and ZIP must error, not return zeros. Check the
+    // compression code before the empty-block return, or the test returns Ok.
+    let data = layered_psd(1, 1, &[(0, 2, vec![0, 4])]);
     let file = read_bytes(&data).expect("the two-byte channel parses");
     let error = file
         .read_layer_region(&data, 0, Viewport::full(1, 1), &ParseOptions::none())
         .expect_err("the unsupported compression is rejected");
-    assert!(matches!(error, PsdError::UnsupportedCompression(2)));
+    assert!(matches!(error, PsdError::UnsupportedCompression(4)));
 }
 
 #[test]

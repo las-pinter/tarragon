@@ -6,6 +6,9 @@
 #[path = "../tests/common/builder.rs"]
 #[allow(dead_code, missing_docs)]
 mod builder;
+#[path = "../tests/common/zipped.rs"]
+#[allow(dead_code, missing_docs)]
+mod zipped;
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};

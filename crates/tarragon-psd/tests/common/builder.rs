@@ -1,5 +1,7 @@
 //! The synthetic PSD builder: the document and layer specs and the file writer.
 
+use super::zipped::channel_payload;
+
 // --------------------------------------------------------------------------
 // Synthetic PSD builder
 // --------------------------------------------------------------------------
@@ -40,9 +42,13 @@ pub struct LayerSpec {
     pub blocks: Vec<([u8; 4], Vec<u8>)>,
     /// The layer mask block, when present.
     pub mask: Option<MaskSpec>,
-    /// The compression code written before each channel block. The samples stay
-    /// raw, so a code other than 0 makes the layer undecodable.
+    /// The compression code written before each channel block. Codes 2 and 3
+    /// write a zlib stream. Any other code keeps the samples raw, so a code
+    /// other than 0, 2 and 3 makes the layer undecodable.
     pub compression: u16,
+    /// Bytes written after the compression code of every channel, in place of
+    /// the encoded samples.
+    pub raw_payload: Option<Vec<u8>>,
 }
 
 impl LayerSpec {
@@ -73,6 +79,7 @@ impl LayerSpec {
             blocks: Vec::new(),
             mask: None,
             compression: 0,
+            raw_payload: None,
         }
     }
 
@@ -105,6 +112,7 @@ impl LayerSpec {
             blocks: Vec::new(),
             mask: None,
             compression: 0,
+            raw_payload: None,
         }
     }
 
@@ -123,6 +131,7 @@ impl LayerSpec {
             blocks: Vec::new(),
             mask: None,
             compression: 0,
+            raw_payload: None,
         }
     }
 
@@ -178,6 +187,7 @@ impl LayerSpec {
             blocks: Vec::new(),
             mask: None,
             compression: 0,
+            raw_payload: None,
         }
     }
 }
@@ -346,9 +356,6 @@ pub fn layer_extra(spec: &LayerSpec, name: &str, psb: bool) -> Vec<u8> {
 /// Build one layer record with its section divider inside the extra data.
 pub fn layer_record(spec: &LayerSpec, depth: u16, name: &str, psb: bool) -> Vec<u8> {
     let (top, left, bottom, right) = spec.rect;
-    let width = usize::try_from(right - left).expect("width");
-    let height = usize::try_from(bottom - top).expect("height");
-    let bytes = sample_bytes(depth);
     let mut record = Vec::new();
     push_i32(&mut record, top);
     push_i32(&mut record, left);
@@ -358,9 +365,9 @@ pub fn layer_record(spec: &LayerSpec, depth: u16, name: &str, psb: bool) -> Vec<
         &mut record,
         u16::try_from(spec.channels.len()).expect("channel count"),
     );
-    for (id, _) in &spec.channels {
+    for (id, samples) in &spec.channels {
         record.extend_from_slice(&id.to_be_bytes());
-        let data_length = width * height * bytes;
+        let data_length = channel_payload(spec, samples, depth).len();
         push_length(&mut record, data_length + 2, psb);
     }
     record.extend_from_slice(b"8BIM");
@@ -433,7 +440,7 @@ pub fn build_psd(spec: &DocumentSpec) -> Vec<u8> {
     for layer in &spec.layers {
         for (_, samples) in &layer.channels {
             push_u16(&mut info, layer.compression);
-            push_samples(&mut info, samples, spec.depth);
+            info.extend_from_slice(&channel_payload(layer, samples, spec.depth));
         }
     }
 

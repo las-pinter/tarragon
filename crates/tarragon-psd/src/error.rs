@@ -94,9 +94,17 @@ pub enum PsdError {
         /// The bit depth per channel.
         depth: u16,
     },
-    /// The channel compression code is not raw nor RLE.
+    /// The channel compression code is not raw, RLE, ZIP, nor ZIP with
+    /// prediction.
     #[error("unsupported PSD channel compression: {0}")]
     UnsupportedCompression(u16),
+    /// A ZIP channel holds bad zlib data, ends before its rows are full, or
+    /// inflates past its size.
+    #[error("corrupt PSD channel data with compression code {code}")]
+    CorruptChannelData {
+        /// The channel compression code.
+        code: u16,
+    },
     /// The requested viewport is empty or outside the canvas.
     #[error("invalid viewport ({left}, {top})-({right}, {bottom}) for {width}x{height}")]
     InvalidViewport {
@@ -195,6 +203,16 @@ mod tests {
             matches!(&rendered, RenderError::Decode { path, .. } if path == Path::new("deep.psb"))
         );
         assert!(rendered.to_string().contains("version"));
+    }
+
+    #[test]
+    fn a_corrupt_channel_becomes_a_decode_error_with_the_path() {
+        let rendered =
+            PsdError::CorruptChannelData { code: 3 }.into_render_error(Path::new("bad.psd"));
+        assert!(
+            matches!(&rendered, RenderError::Decode { path, .. } if path == Path::new("bad.psd"))
+        );
+        assert!(rendered.to_string().contains("corrupt"));
     }
 
     #[test]

@@ -13,6 +13,9 @@ tarragon-core.workspace = true
 # One error derive. Its license is allowed in deny.toml and it is already in
 # the workspace.
 thiserror.workspace = true
+# Inflates ZIP layer channels. It reads untrusted data, so the decoder bounds
+# every output by the channel size.
+flate2.workspace = true
 
 [dev-dependencies]
 # The golden image tests decode committed PNG files. Only the PNG codec is on.

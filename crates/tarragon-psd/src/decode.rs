@@ -6,6 +6,7 @@
 //! error.
 
 use crate::decode_rows::{RegionGeometry, decode_raw_rows, decode_rle_rows};
+use crate::decode_zip::decode_zip_rows;
 use crate::error::PsdError;
 use crate::limits::ParseOptions;
 use crate::parse::{ChannelInfo, ColorMode, PsdVersion};
@@ -126,7 +127,7 @@ pub(crate) fn decode_channel(
     // and a block of empty channels costs nothing. Check the compression code
     // first, so an unsupported code still errors.
     if channel.data_len == 0 {
-        if channel.compression != 0 && channel.compression != 1 {
+        if channel.compression > 3 {
             return Err(PsdError::UnsupportedCompression(channel.compression));
         }
         return Ok(ChannelRegion {
@@ -202,6 +203,14 @@ pub(crate) fn decode_channel(
             channel,
             version.rle_entry_bytes(),
             &geometry,
+            options,
+            &mut samples,
+        )?,
+        2 | 3 => decode_zip_rows(
+            source,
+            channel,
+            &geometry,
+            channel.compression == 3,
             options,
             &mut samples,
         )?,

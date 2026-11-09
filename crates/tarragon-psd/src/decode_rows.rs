@@ -13,7 +13,7 @@ use crate::source::Source;
 ///
 /// A real row is at most about twice its sample bytes. A declared length above
 /// this is corrupt and is refused before any allocation.
-const MAX_ROW_READ: usize = 16 * 1024 * 1024;
+pub(crate) const MAX_ROW_READ: usize = 16 * 1024 * 1024;
 
 /// The row geometry of one channel decode.
 pub(crate) struct RegionGeometry {
@@ -136,7 +136,12 @@ pub(crate) fn decode_rle_rows(
 }
 
 /// Copy the needed columns of one decoded row into the output.
-fn copy_row(row: &[u16], geometry: &RegionGeometry, samples: &mut [u16], output_row: usize) {
+pub(crate) fn copy_row(
+    row: &[u16],
+    geometry: &RegionGeometry,
+    samples: &mut [u16],
+    output_row: usize,
+) {
     let Some(source) = row.get(geometry.source_col..) else {
         return;
     };
@@ -156,7 +161,7 @@ fn copy_row(row: &[u16], geometry: &RegionGeometry, samples: &mut [u16], output_
 }
 
 /// Convert one raw row of bytes into samples.
-fn read_samples(bytes: &[u8], bytes_per_sample: usize, row: &mut [u16]) {
+pub(crate) fn read_samples(bytes: &[u8], bytes_per_sample: usize, row: &mut [u16]) {
     if bytes_per_sample == 1 {
         for (slot, value) in row.iter_mut().zip(bytes.iter()) {
             *slot = u16::from(*value);
@@ -225,7 +230,7 @@ fn row_length(table: &[u8], index: usize, entry: usize) -> Result<u64, PsdError>
 ///
 /// The read is bounded to `[data_start, data_start + data_len)`. A short or
 /// corrupt channel block cannot read a neighbour's bytes.
-fn read_block(
+pub(crate) fn read_block(
     source: &Source,
     channel: &ChannelInfo,
     offset: u64,

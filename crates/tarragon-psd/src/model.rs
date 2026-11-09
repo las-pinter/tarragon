@@ -106,9 +106,11 @@ pub enum Compression {
     Raw,
     /// Apple `PackBits` run-length encoding.
     Rle,
-    /// zlib without prediction. The parser does not decode it.
+    /// zlib without prediction. Layer channels decode it; the merged image
+    /// section does not.
     Zip,
-    /// zlib with prediction. The parser does not decode it.
+    /// zlib with a per-row delta. Layer channels decode it at 8 and 16 bit; the
+    /// merged image section does not.
     ZipPrediction,
     /// Any other code.
     Other(u16),

@@ -14,6 +14,34 @@ files over https. Each file is pinned to one commit and checked against a
 sha256. The files are never committed. The ignore rule in `.gitignore` covers
 the folder `tests/psd-corpus/` except the script.
 
+## Committed adjustment and fill fixtures
+
+Two small fixtures are committed in `tests/fixtures/psd/`. They run in CI with
+no download.
+
+- `adjustment_blocks.psd` holds ten adjustment blocks, one per cell. A layer
+  mask limits each block to its cell.
+- `fill_layers.psd` holds four fills: solid, solid with opacity, gradient, and
+  pattern.
+
+How each is checked:
+
+- `fill_layers.psd` has a golden image from psd-tools, `golden/fill_layers.png`,
+  with a tolerance of 2 per channel.
+- `adjustment_blocks.psd` has rule tests: order, sign, identity, and exact
+  channel moves. psd-tools skips adjustment layers, and no Photoshop render is
+  committed, so no golden image exists.
+
+The one real oracle for the adjustment blocks is the ag-psd `adjustment-layers`
+sample in the uncommitted corpus. It covers only the end of the layer stack.
+
+The Rust test builders write both files, not `generate.py`. To rewrite a file
+after a builder change, run `cargo test -p tarragon-psd --test <name> --
+--ignored`, with `<name>` set to `adjustment_fixture` or `fill_fixture`.
+
+The tests do not check the recorded approximations in `hue2`, `blnc`, `selc`,
+`blwh`, and `phfl` against Photoshop.
+
 ## Commands
 
 1. Download the files into a folder:

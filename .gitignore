@@ -16,3 +16,7 @@ __pycache__/
 *.egg-info/
 /dist/
 *.log
+
+# The downloaded PSD corpus is never committed; only its fetch script is.
+/tests/psd-corpus/*
+!/tests/psd-corpus/fetch.sh

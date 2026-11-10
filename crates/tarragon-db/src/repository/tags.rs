@@ -3,7 +3,7 @@
 use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 
-use rusqlite::{OptionalExtension, params};
+use rusqlite::{Connection, OptionalExtension, params};
 use tarragon_core::entity::{Tag, TagSource};
 use tarragon_core::tag_name::{TagNameError, validate_tag_name};
 
@@ -11,6 +11,29 @@ use crate::like::normalize_path;
 use crate::{Database, DbError};
 
 use super::{PATH_CHUNK, TagUsage, ensure_tag_conn, placeholders};
+
+/// Replace the `auto_color` associations of one path on a connection or an
+/// open transaction. It returns the number of new association rows.
+pub(super) fn replace_auto_colors(
+    conn: &Connection,
+    path: &str,
+    names: &[String],
+) -> Result<usize, DbError> {
+    let normalized = normalize_path(path);
+    conn.execute(
+        "DELETE FROM file_tags WHERE path = ?1 AND source = ?2",
+        params![normalized, TagSource::AutoColor.as_str()],
+    )?;
+    let mut inserted = 0;
+    for name in names {
+        let tag = ensure_tag_conn(conn, name, TagSource::AutoColor)?;
+        inserted += conn.execute(
+            "INSERT OR IGNORE INTO file_tags (path, tag_id, source) VALUES (?1, ?2, ?3)",
+            params![normalized, tag.id, TagSource::AutoColor.as_str()],
+        )?;
+    }
+    Ok(inserted)
+}
 
 impl Database {
     /// Insert a tag if absent and return it.
@@ -297,21 +320,9 @@ impl Database {
     /// Returns [`DbError::Sqlite`] when a statement fails. Returns
     /// [`DbError::LockPoisoned`] after a panic poisoned the lock.
     pub fn replace_auto_color_tags(&self, path: &str, names: &[String]) -> Result<usize, DbError> {
-        let normalized = normalize_path(path);
         let mut conn = self.lock()?;
         let tx = conn.transaction()?;
-        tx.execute(
-            "DELETE FROM file_tags WHERE path = ?1 AND source = ?2",
-            params![normalized, TagSource::AutoColor.as_str()],
-        )?;
-        let mut inserted = 0;
-        for name in names {
-            let tag = ensure_tag_conn(&tx, name, TagSource::AutoColor)?;
-            inserted += tx.execute(
-                "INSERT OR IGNORE INTO file_tags (path, tag_id, source) VALUES (?1, ?2, ?3)",
-                params![normalized, tag.id, TagSource::AutoColor.as_str()],
-            )?;
-        }
+        let inserted = replace_auto_colors(&tx, path, names)?;
         tx.commit()?;
         Ok(inserted)
     }

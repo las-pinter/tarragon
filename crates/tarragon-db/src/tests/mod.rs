@@ -4,6 +4,7 @@
 //! do not use an in-memory database.
 
 mod auto_colored;
+mod batch;
 mod favorites;
 mod filter;
 mod filter_folder;

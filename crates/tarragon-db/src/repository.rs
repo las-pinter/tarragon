@@ -9,6 +9,9 @@ use tarragon_core::tag_name::is_reserved_tag_name;
 
 use crate::DbError;
 
+pub use batch::{WriteBatch, WriteReport};
+
+mod batch;
 mod editor;
 mod favorites;
 mod folder;

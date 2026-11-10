@@ -2,7 +2,7 @@
 
 use std::collections::HashSet;
 
-use rusqlite::{OptionalExtension, params};
+use rusqlite::{Connection, OptionalExtension, params};
 use tarragon_core::entity::FileInfo;
 use tarragon_core::sorting::natural_cmp;
 
@@ -18,6 +18,43 @@ INSERT INTO thumbnails (path, mtime, size, width, height, cache_uuid, thumbnail_
 VALUES (?1, ?2, ?3, ?4, ?5, NULL, NULL, NULL, NULL, 0)
 ON CONFLICT(path) DO UPDATE SET mtime = thumbnails.mtime, size = thumbnails.size";
 
+/// Upsert one rendered row on a connection or an open transaction.
+pub(super) fn write_thumbnail(conn: &Connection, record: &ThumbnailWrite) -> Result<(), DbError> {
+    conn.prepare_cached(
+        "INSERT INTO thumbnails (path, mtime, size, width, height, cache_uuid, \
+         thumbnail_cache_path, preview_cache_path, full_cache_path, last_accessed) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10) \
+         ON CONFLICT(path) DO UPDATE SET \
+         mtime = excluded.mtime, size = excluded.size, width = excluded.width, \
+         height = excluded.height, cache_uuid = excluded.cache_uuid, \
+         thumbnail_cache_path = excluded.thumbnail_cache_path, \
+         preview_cache_path = excluded.preview_cache_path, \
+         full_cache_path = excluded.full_cache_path, \
+         last_accessed = excluded.last_accessed",
+    )?
+    .execute(params![
+        normalize_path(&record.path),
+        record.mtime,
+        record.size,
+        record.width,
+        record.height,
+        record.cache_uuid,
+        record.thumbnail_cache_path,
+        record.preview_cache_path,
+        record.full_cache_path,
+        record.last_accessed,
+    ])?;
+    Ok(())
+}
+
+/// Set `last_accessed` on one path and return the number of rows changed.
+pub(super) fn touch_path(conn: &Connection, path: &str, at: i64) -> Result<usize, DbError> {
+    let changed = conn
+        .prepare_cached("UPDATE thumbnails SET last_accessed = ?1 WHERE path = ?2")?
+        .execute(params![at, normalize_path(path)])?;
+    Ok(changed)
+}
+
 impl Database {
     /// Insert or update a full thumbnail row after a render completes.
     ///
@@ -27,31 +64,7 @@ impl Database {
     /// [`DbError::LockPoisoned`] after a panic poisoned the lock.
     pub fn upsert_thumbnail(&self, record: &ThumbnailWrite) -> Result<(), DbError> {
         let conn = self.lock()?;
-        conn.execute(
-            "INSERT INTO thumbnails (path, mtime, size, width, height, cache_uuid, \
-             thumbnail_cache_path, preview_cache_path, full_cache_path, last_accessed) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10) \
-             ON CONFLICT(path) DO UPDATE SET \
-             mtime = excluded.mtime, size = excluded.size, width = excluded.width, \
-             height = excluded.height, cache_uuid = excluded.cache_uuid, \
-             thumbnail_cache_path = excluded.thumbnail_cache_path, \
-             preview_cache_path = excluded.preview_cache_path, \
-             full_cache_path = excluded.full_cache_path, \
-             last_accessed = excluded.last_accessed",
-            params![
-                normalize_path(&record.path),
-                record.mtime,
-                record.size,
-                record.width,
-                record.height,
-                record.cache_uuid,
-                record.thumbnail_cache_path,
-                record.preview_cache_path,
-                record.full_cache_path,
-                record.last_accessed,
-            ],
-        )?;
-        Ok(())
+        write_thumbnail(&conn, record)
     }
 
     /// Read one thumbnail row by path.
@@ -204,12 +217,8 @@ impl Database {
         let mut conn = self.lock()?;
         let tx = conn.transaction()?;
         let mut changed = 0;
-        {
-            let mut stmt =
-                tx.prepare("UPDATE thumbnails SET last_accessed = ?1 WHERE path = ?2")?;
-            for path in paths {
-                changed += stmt.execute(params![at, normalize_path(path)])?;
-            }
+        for path in paths {
+            changed += touch_path(&tx, path, at)?;
         }
         tx.commit()?;
         Ok(changed)

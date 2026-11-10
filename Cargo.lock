@@ -2691,6 +2691,7 @@ dependencies = [
  "serde_json",
  "tarragon-core",
  "thiserror 2.0.21",
+ "tracing",
 ]
 
 [[package]]

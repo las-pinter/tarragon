@@ -443,6 +443,7 @@ impl eframe::App for App {
         }
         let events = self.shell.take_preview_events();
         self.apply_card_events(&events);
+        self.apply_open_request();
         if tags::apply_preview_events(&mut self.shell, &self.db, events) {
             ctx.request_repaint();
         }
@@ -486,6 +487,7 @@ mod failure_tests;
 mod filter_tests;
 #[cfg(test)]
 mod library_tests;
+mod open;
 mod prefs;
 #[cfg(test)]
 mod prefs_tests;

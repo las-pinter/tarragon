@@ -36,7 +36,7 @@ fn frame(ctx: &Context, shell: &mut Shell, events: Vec<Event>) -> Vec<Key> {
     let mut left = Vec::new();
     ctx.run_ui(input, |ui| {
         shell.show(ui);
-        for key in [Key::O, Key::Comma, Key::F, Key::A] {
+        for key in [Key::O, Key::Comma, Key::F, Key::A, Key::Enter] {
             if ui.input(|input| input.key_pressed(key)) {
                 left.push(key);
             }
@@ -149,10 +149,9 @@ fn the_crash_card_blocks_the_shortcuts() {
     assert_shortcuts_blocked(&ctx, &mut shell);
 }
 
-#[test]
-fn the_preferences_window_blocks_the_shortcuts() {
-    let (ctx, mut shell) = setup();
-    let values = PrefsValues {
+/// Preferences values for a window that only has to open.
+fn prefs_values() -> PrefsValues {
+    PrefsValues {
         max_psd_workers: 3,
         max_multi_preview: 9,
         large_canvas_mp: 20.0,
@@ -166,8 +165,13 @@ fn the_preferences_window_blocks_the_shortcuts() {
         clear_full_res: true,
         cache_cap_gb: 20,
         debug: false,
-    };
-    shell.prefs_mut().open(values, "1.4 GB".to_owned());
+    }
+}
+
+#[test]
+fn the_preferences_window_blocks_the_shortcuts() {
+    let (ctx, mut shell) = setup();
+    shell.prefs_mut().open(prefs_values(), "1.4 GB".to_owned());
     frame(&ctx, &mut shell, vec![]);
     assert_shortcuts_blocked(&ctx, &mut shell);
 }
@@ -198,5 +202,138 @@ fn other_chords_do_nothing() {
         assert_eq!(shell.take_menu_events(), vec![], "{modifiers:?}");
         assert!(shell.selected_paths().is_empty(), "{modifiers:?}");
         assert!(!ctx.memory(|m| m.has_focus(search_id())), "{modifiers:?}");
+    }
+}
+
+/// Click the tile of item `index` so it becomes the only selected image.
+fn select_one(ctx: &Context, shell: &mut Shell, index: usize) {
+    let tile = Id::new(("tarragon-grid-tile", index));
+    let at = ctx
+        .read_response(tile)
+        .expect("the tile was painted")
+        .rect
+        .center();
+    frame(ctx, shell, test_support::click(at));
+    frame(ctx, shell, vec![]);
+    assert_eq!(shell.selected_paths().len(), 1, "one tile is selected");
+}
+
+#[test]
+fn enter_queues_the_one_selected_image_and_consumes_the_press() {
+    let (ctx, mut shell) = setup();
+    select_one(&ctx, &mut shell, 1);
+
+    let left = frame(&ctx, &mut shell, vec![press(Key::Enter, Modifiers::NONE)]);
+
+    assert_eq!(
+        shell.take_open_request(),
+        Some(PathBuf::from("/images/b.png"))
+    );
+    assert!(left.is_empty(), "the press was consumed");
+    assert_eq!(shell.take_open_request(), None, "the request is taken");
+}
+
+#[test]
+fn enter_queues_nothing_for_no_or_two_selected_images() {
+    let (ctx, mut shell) = setup();
+    let left = frame(&ctx, &mut shell, vec![press(Key::Enter, Modifiers::NONE)]);
+    assert_eq!(shell.take_open_request(), None, "none selected");
+    assert_eq!(left, [Key::Enter], "none selected: the press was kept");
+
+    shell.gallery_mut().select_all_visible();
+    let left = frame(&ctx, &mut shell, vec![press(Key::Enter, Modifiers::NONE)]);
+    assert_eq!(shell.take_open_request(), None, "four selected");
+    assert_eq!(left, [Key::Enter], "four selected: the press was kept");
+}
+
+#[test]
+fn enter_with_a_focused_button_queues_nothing_and_stays_for_the_button() {
+    let (ctx, mut shell) = setup();
+    select_one(&ctx, &mut shell, 1);
+    let tab = Id::new(("tarragon-scope-tab", "All Images"));
+    ctx.memory_mut(|m| m.request_focus(tab));
+    frame(&ctx, &mut shell, vec![]);
+    assert!(ctx.memory(|m| m.has_focus(tab)), "the tab holds focus");
+
+    assert_enter_blocked(&ctx, &mut shell);
+}
+
+#[test]
+fn enter_with_a_focused_tile_opens_the_selected_image() {
+    let (ctx, mut shell) = setup();
+    select_one(&ctx, &mut shell, 1);
+    ctx.memory_mut(|m| m.request_focus(crate::grid::tile_id(2)));
+    frame(&ctx, &mut shell, vec![]);
+    assert!(ctx.memory(|m| m.has_focus(crate::grid::tile_id(2))));
+
+    frame(&ctx, &mut shell, vec![press(Key::Enter, Modifiers::NONE)]);
+
+    assert_eq!(
+        shell.take_open_request(),
+        Some(PathBuf::from("/images/b.png"))
+    );
+}
+
+/// Assert that Enter queued nothing and stayed in the input.
+fn assert_enter_blocked(ctx: &Context, shell: &mut Shell) {
+    let left = frame(ctx, shell, vec![press(Key::Enter, Modifiers::NONE)]);
+    assert_eq!(shell.take_open_request(), None, "nothing queued");
+    assert_eq!(left, [Key::Enter], "the press was kept");
+}
+
+#[test]
+fn enter_in_a_focused_text_field_queues_nothing() {
+    let (ctx, mut shell) = setup();
+    select_one(&ctx, &mut shell, 1);
+    frame(&ctx, &mut shell, vec![press(Key::F, ctrl())]);
+    frame(&ctx, &mut shell, vec![]);
+    assert!(ctx.memory(|m| m.has_focus(search_id())));
+
+    assert_enter_blocked(&ctx, &mut shell);
+}
+
+#[test]
+fn enter_while_the_crash_card_is_open_queues_nothing() {
+    let (ctx, mut shell) = setup();
+    select_one(&ctx, &mut shell, 1);
+    shell.show_crash_report(CrashReport {
+        file_name: "crash.txt".to_owned(),
+        path: "/data/crash.txt".to_owned(),
+        summary: "message".to_owned(),
+    });
+    frame(&ctx, &mut shell, vec![]);
+    assert_enter_blocked(&ctx, &mut shell);
+}
+
+#[test]
+fn enter_while_the_preferences_window_is_open_queues_nothing() {
+    let (ctx, mut shell) = setup();
+    select_one(&ctx, &mut shell, 1);
+    shell.prefs_mut().open(prefs_values(), "1.4 GB".to_owned());
+    frame(&ctx, &mut shell, vec![]);
+    assert_enter_blocked(&ctx, &mut shell);
+}
+
+#[test]
+fn enter_while_the_manage_tags_window_is_open_queues_nothing() {
+    let (ctx, mut shell) = setup();
+    select_one(&ctx, &mut shell, 1);
+    shell.gallery_mut().open_manager();
+    frame(&ctx, &mut shell, vec![]);
+    assert_enter_blocked(&ctx, &mut shell);
+}
+
+#[test]
+fn shift_enter_and_ctrl_enter_queue_nothing() {
+    let (ctx, mut shell) = setup();
+    select_one(&ctx, &mut shell, 1);
+    for modifiers in [
+        Modifiers::SHIFT,
+        ctrl(),
+        ctrl() | Modifiers::SHIFT,
+        Modifiers::ALT,
+    ] {
+        frame(&ctx, &mut shell, vec![press(Key::Enter, modifiers)]);
+        assert_eq!(shell.take_open_request(), None, "{modifiers:?}");
     }
 }

@@ -18,9 +18,22 @@ pub struct Painted {
 
 /// Draw one frame with `events`.
 pub fn frame(ctx: &Context, events: Vec<Event>, run: &mut impl FnMut(&mut Ui)) -> Painted {
+    frame_at(ctx, None, events, run)
+}
+
+/// Draw one frame with `events` at input `time` in seconds. With `None`, egui
+/// moves its clock on by one predicted frame, so two clicks in a row fall inside
+/// the double-click window. A later `time` lets a test keep them apart.
+pub fn frame_at(
+    ctx: &Context,
+    time: Option<f64>,
+    events: Vec<Event>,
+    run: &mut impl FnMut(&mut Ui),
+) -> Painted {
     let screen = Rect::from_min_size(Pos2::ZERO, vec2(1200.0, 800.0));
     let input = RawInput {
         screen_rect: Some(screen),
+        time,
         events,
         ..Default::default()
     };

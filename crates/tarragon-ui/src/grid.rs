@@ -15,6 +15,7 @@ use egui::{Modifiers, Rect, ScrollArea, Ui, Vec2, pos2, vec2};
 use crate::tokens;
 
 mod cell;
+pub(crate) use cell::tile_id;
 mod items;
 mod selection;
 
@@ -183,6 +184,8 @@ pub struct GridResponse {
     pub painted: usize,
     /// The cell clicked this frame, if any.
     pub click: Option<CellClick>,
+    /// The tile that got a double-click this frame, if any.
+    pub double_click: Option<CellClick>,
 }
 
 /// A grid over `item_count` items with a fixed cell geometry.
@@ -331,6 +334,7 @@ impl VirtualGrid {
         mut painted_items: Option<&mut Vec<usize>>,
     ) -> GridResponse {
         let mut click = None;
+        let mut double_click = None;
         let grid = Self {
             metrics: self.metrics,
             item_count: order.len(),
@@ -346,15 +350,23 @@ impl VirtualGrid {
                 painted.push(index);
             }
             let response = cell::show_cell(ui, rect, item, index, selection);
+            let hit = || CellClick {
+                index,
+                position,
+                modifiers: ui.input(|input| input.modifiers),
+            };
             if response.clicked() {
-                click = Some(CellClick {
-                    index,
-                    position,
-                    modifiers: ui.input(|input| input.modifiers),
-                });
+                click = Some(hit());
+            }
+            if response.double_clicked() {
+                double_click = Some(hit());
             }
         });
-        GridResponse { painted, click }
+        GridResponse {
+            painted,
+            click,
+            double_click,
+        }
     }
 }
 

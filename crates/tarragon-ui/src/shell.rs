@@ -182,6 +182,12 @@ impl Shell {
         self.gallery.take_sort_changed()
     }
 
+    /// Return the image path to open once after a double-click or Enter, and
+    /// clear the request.
+    pub fn take_open_request(&mut self) -> Option<std::path::PathBuf> {
+        self.gallery.take_open_request()
+    }
+
     /// Show or hide the Log panel. Returns the new state.
     pub fn toggle_log(&mut self) -> bool {
         self.toggle(Pane::Log)

@@ -9,6 +9,7 @@ mod frames;
 mod info_fit;
 mod info_rows;
 mod keys;
+mod open;
 mod scope;
 mod search;
 mod selected;

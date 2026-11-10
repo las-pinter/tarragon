@@ -40,6 +40,11 @@ struct TileState {
     multi: bool,
 }
 
+/// The widget id of the tile for item `index`.
+pub(crate) fn tile_id(index: usize) -> Id {
+    Id::new(("tarragon-grid-tile", index))
+}
+
 /// Paint one tile and return its interaction response.
 ///
 /// The tile id comes from `index`, so the id stays stable across frames.
@@ -50,7 +55,7 @@ pub(crate) fn show_cell(
     index: usize,
     selection: &Selection,
 ) -> Response {
-    let id = Id::new(("tarragon-grid-tile", index));
+    let id = tile_id(index);
     let response = ui.interact(rect, id, Sense::click());
     let hover = ui.ctx().animate_bool_with_time(
         id.with("hover"),

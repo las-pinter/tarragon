@@ -90,7 +90,10 @@ impl Rig {
 
     /// Click the tile `label`, holding the control key when `add` is set.
     pub(super) fn click(&mut self, label: &str, add: bool) {
-        let first = test_ui::frame(&self.ctx, Vec::new(), &mut |ui| {
+        // A click soon after another on the same tile is a double-click, which
+        // opens the image. Jumping the clock keeps each click single.
+        let later = self.ctx.input(|input| input.time) + 10.0;
+        let first = test_ui::frame_at(&self.ctx, Some(later), Vec::new(), &mut |ui| {
             self.app.ui(ui, &mut self.frame);
         });
         let at = first

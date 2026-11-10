@@ -24,6 +24,7 @@ mod empty;
 mod info;
 mod keys;
 mod manager;
+mod open;
 mod selected;
 pub(crate) mod strip;
 mod thumbs;
@@ -156,6 +157,8 @@ pub struct Gallery {
     open_folder_requested: bool,
     /// Whether the search field should take focus at its next draw.
     search_focus_requested: bool,
+    /// The image path that waits for the app to open it, or none.
+    open_request: Option<PathBuf>,
 }
 
 impl Gallery {
@@ -190,6 +193,7 @@ impl Gallery {
             loading: false,
             open_folder_requested: false,
             search_focus_requested: false,
+            open_request: None,
         }
     }
 
@@ -488,6 +492,9 @@ impl Gallery {
         self.record_painted();
         if let Some(click) = response.click {
             self.apply_grid_click(click);
+        }
+        if let Some(click) = response.double_click {
+            self.apply_grid_double_click(click);
         }
     }
 }

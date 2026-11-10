@@ -67,6 +67,7 @@ impl Gallery {
                 ui.add_space(tokens::SPACING_XS);
                 self.search_field(ui, now);
                 let picked = self.sort_segment(ui);
+                self.show_busy(ui);
                 if let Some(mode) = picked {
                     self.pick_sort_mode(mode);
                 }

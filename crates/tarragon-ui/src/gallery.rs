@@ -19,7 +19,9 @@ use crate::tag_manager::TagManager;
 pub use crate::tag_manager::{TagManagerEvent, TagRow};
 use crate::tokens;
 pub use empty::EmptyKind;
+use keys::Debouncer;
 
+mod busy;
 mod empty;
 mod info;
 mod keys;
@@ -59,38 +61,6 @@ impl Scope {
             Self::Folder => "Folder",
             Self::All => "All Images",
         }
-    }
-}
-
-/// A timer that applies a change after a quiet window.
-#[derive(Clone, Copy, Debug, Default)]
-struct Debouncer {
-    /// The instant when the quiet window ends, or none.
-    deadline: Option<Instant>,
-}
-
-impl Debouncer {
-    /// Start the quiet window at `now`.
-    fn arm(&mut self, now: Instant) {
-        self.deadline = Some(now + SEARCH_DEBOUNCE);
-    }
-
-    /// The time left before the quiet window ends, or none when no window runs.
-    fn remaining(&self, now: Instant) -> Option<Duration> {
-        self.deadline
-            .map(|deadline| deadline.saturating_duration_since(now))
-    }
-
-    /// Return whether the quiet window has passed, and clear the timer.
-    fn is_ready(&mut self, now: Instant) -> bool {
-        let Some(deadline) = self.deadline else {
-            return false;
-        };
-        if now >= deadline {
-            self.deadline = None;
-            return true;
-        }
-        false
     }
 }
 
@@ -159,6 +129,8 @@ pub struct Gallery {
     search_focus_requested: bool,
     /// The image path that waits for the app to open it, or none.
     open_request: Option<PathBuf>,
+    /// Whether the busy strip shows under the info bar.
+    busy: busy::Busy,
 }
 
 impl Gallery {
@@ -194,6 +166,7 @@ impl Gallery {
             open_folder_requested: false,
             search_focus_requested: false,
             open_request: None,
+            busy: busy::Busy::default(),
         }
     }
 

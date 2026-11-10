@@ -604,15 +604,38 @@ shows the unknown mark.
 Reason: the file extension is the only format fact the Preview can read
 without opening the file.
 
+## Busy strip
+
+Before: the mockups `scanning-busy.html` and `busy-states.html` show a strip with
+`Working...` for a scan, a purge, and a decode. It is hidden when idle. The
+mockup stylesheet lists it between the info bar and the filters.
+
+After: the gallery shows the strip while a folder or the library opens, and while
+a purge waits or runs. It stays until the last one ends. It is the last block of
+the top panel, below the filter bar, so only the grid moves down by the strip
+height while it shows. The filter buttons stay still. The strip takes no space when
+idle. The cache clean-up at start does not show it. The Preferences purge strip
+uses the same painter. No decode strip exists. The strip ends when the file list is
+ready, not when the tiles render. Each tile shows its own loading cell. While a
+folder opens, the info bar names that folder. The count still belongs to the files
+on screen, so a switch from one folder to another shows the new name with the old
+count, and a first open shows 0. The mockup shows the count of the new folder. All
+Images keeps its own name. When an open fails, the info bar shows the old folder again.
+
+Reason: one state machine runs all the thumbnail work, so one flag is enough. Below
+the filter bar, the strip does not move the controls under the pointer. A decode
+strip would need a count of tile renders, and the tile cells show that already.
+
 ## Preferences dialog
 
 Before: the mockup dialog has a close mark in its title bar and four groups of settings. It
-has no cap row, shows PNG for the cache format, and has no footnote or busy strip.
+has no cap row, shows PNG for the cache format, and has no footnote.
 
 After: the window is 520 points wide, with the default title bar and no close mark. Cancel and
 Escape close it and discard the input. OK saves all 13 settings in one transaction. The groups
 scroll on a short screen, and the footnote and the buttons stay in view. Purge Cache acts at
-once and shows a busy strip. Cancel, OK, and Escape wait while it runs. A refused purge shows
+once and shows a busy strip in the dialog with the label `Purging cache...`. The gallery strip
+shows too (see "Busy strip"). Cancel, OK, and Escape wait while it runs. A refused purge shows
 `The cache folder is not safe to purge.` and the log has the raw error. The cap row reads
 `Cache size cap (GiB, 0 = off)`. Cache Format offers only `jpeg`. Number fields are text. The
 registry clamps them on save, and OK stays off while one does not parse. The cache size cap and

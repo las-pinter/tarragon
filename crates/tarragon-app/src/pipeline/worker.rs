@@ -1,6 +1,7 @@
 //! The worker loop and the per-file flow.
 
 use std::panic::{AssertUnwindSafe, catch_unwind};
+use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
@@ -167,9 +168,13 @@ fn process(shared: &Shared, job: &Job) -> Result<RgbaImage, ThumbError> {
         .path
         .file_name()
         .and_then(|name| name.to_str())
-        .ok_or_else(|| ThumbError {
-            kind: ErrorKind::InvalidName,
-            message: "the file name is not UTF-8".to_owned(),
+        .ok_or_else(|| {
+            let error = ThumbError {
+                kind: ErrorKind::InvalidName,
+                message: "the file name is not UTF-8".to_owned(),
+            };
+            log_failure(&job.path, &error);
+            error
         })?;
     if let Some(image) = from_cache(shared, job, name) {
         // Eviction orders by this time, so a hit counts as an access.
@@ -181,9 +186,13 @@ fn process(shared: &Shared, job: &Job) -> Result<RgbaImage, ThumbError> {
         }
         return Ok(image.into_rgba8());
     }
-    let image = (shared.render)(&job.path).map_err(|error| ThumbError {
-        kind: ErrorKind::from(&error),
-        message: error.to_string(),
+    let image = (shared.render)(&job.path).map_err(|error| {
+        let error = ThumbError {
+            kind: ErrorKind::from(&error),
+            message: error.to_string(),
+        };
+        log_failure(&job.path, &error);
+        error
     })?;
     match shared.cache.write_all(&image, &job.folder, &job.uuid, name) {
         Ok(entry) => {
@@ -196,6 +205,14 @@ fn process(shared: &Shared, job: &Job) -> Result<RgbaImage, ThumbError> {
     let thumb = thumb_image(&image);
     send_colors(shared, job, &thumb);
     Ok(thumb.into_rgba8())
+}
+
+/// Write the log line the error card points to. A stopped render is not a
+/// failure of the file, so it writes nothing.
+fn log_failure(path: &Path, error: &ThumbError) {
+    if error.kind != ErrorKind::Cancelled {
+        tracing::error!("cannot render {}: {}", path.display(), error.message);
+    }
 }
 
 /// Extract the colour tags of the 320 tier image and queue them for the

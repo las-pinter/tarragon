@@ -253,12 +253,18 @@ impl Pipeline {
             repaint,
             extract,
         });
+        // A thread does not inherit a scoped subscriber, so the workers get
+        // the one of the caller. It is the global one in the app.
+        let dispatch = tracing::dispatcher::get_default(Clone::clone);
         for index in 0..config.workers.max(1) {
             let shared = Arc::clone(&shared);
+            let dispatch = dispatch.clone();
             pipeline.workers.push(
                 std::thread::Builder::new()
                     .name(format!("tarragon-render-{index}"))
-                    .spawn(move || worker::run(&shared))?,
+                    .spawn(move || {
+                        tracing::dispatcher::with_default(&dispatch, || worker::run(&shared));
+                    })?,
             );
         }
         let results = Results {

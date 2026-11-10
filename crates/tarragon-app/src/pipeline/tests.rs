@@ -906,6 +906,7 @@ fn a_panicking_extraction_still_gives_the_thumbnail() {
 }
 
 mod drain;
+mod failure_log;
 mod library_open;
 mod prune_missing;
 mod purge;

@@ -17,7 +17,7 @@ The owner checks the app against each mockup in `design/mockups/index.html`.
 | D4 | library.html | Check the folder tree, the selected-folder tint, and favorite labels (deltas, Library sidebar layout, Favorite labels and roots). | delta: Library sidebar layout | | | |
 | D5 | favorites-reorder.html | Drag a favorite between two rows: the new order stays; the grip shows on every row, no hint line (delta, section Favorites drag). | delta: Favorites drag | | | |
 | D6 | empty-no-folder.html | No folder open: the Open a folder card matches; Preview says "Select an image to preview it" (delta, Preview empty state and picture box). | diff: filter bar shows with no folder; card button smaller than mockup | | | |
-| D7 | scanning-busy.html | Open `$SEED/big`: the indeterminate busy bar and the loading cells show (a small folder ends too fast to see). | diff: no scan busy bar or Working... line; label reads No folder - 0 files | | | |
+| D7 | scanning-busy.html | Open `$SEED/big`: the indeterminate busy bar and the loading cells show (a small folder ends too fast to see). | diff: info bar count has no thousands separator (10000 files) | | | |
 | D8 | grid-single-select.html | Click one tile: it shows as selected and Preview shows its metadata; double-click on a tile opens the image in the editor. | ok | | | |
 | D9 | grid-multi-select.html | Ctrl-click several tiles: the count matches; the check mark is painted (delta, Selection check glyph); Enter with several opens nothing. | diff: multi-select Preview lacks Metadata block and Tags (union) head | | | |
 | D10 | grid-hover.html | Hover a tile: the fill, border, and shadow fade, but it does not scale (delta, Grid hover scale); Enter with one tile selected opens it. | delta: Grid hover scale | | | |
@@ -35,9 +35,9 @@ The owner checks the app against each mockup in `design/mockups/index.html`.
 | D22 | settings-cache.html | Preferences, Cache: the cap row, jpeg-only format, Purge Cache busy strip, OK, Cancel (delta, Preferences dialog). | diff: Purge Cache button grey, mockup coral; inputs #0a0a0a | | | |
 | D23 | log-panel.html | Open the Log dock: lines by level, Debug toggle; no critical level, not monospace (deltas, Log levels and toolbar, Monospace face). | diff: Debug checkbox grey not coral; WARNING text column not aligned | | | |
 | D24 | empty-folder.html | Open `$SEED/empty`: the empty-folder card and button match; the hint lists ten extensions (delta, section Empty states). | diff: card button 18 px high, mockup 30 px | | | |
-| D25 | busy-states.html | Check the busy strip. Scan: `$SEED/big`. Purge: Purge Cache with a filled cache. Decode: `$SEED/formats` and the large PSB. | diff: no scan or decode busy strip; only the purge strip exists | | | |
+| D25 | busy-states.html | Check the busy strip. Scan: `$SEED/big`. Purge: Purge Cache with a filled cache. Decode: `$SEED/formats` and the large PSB. | delta: Busy strip | | | |
 | D26 | preview-formats.html | Open `$SEED/formats` and select the PSD, CLIP, and KRA: the Format line shows the extension, such as PSD (delta, Preview format detail). | diff: no file-type badge on the Preview image | | | |
-| D27 | error-state.html | Open `$SEED/broken`, select `broken.png`: the card, Retry, Open in editor; the hint text differs (delta, section Error card). | diff: no ERROR line in Log after the render failure; mockup shows one | | | |
+| D27 | error-state.html | Open `$SEED/broken`, select `broken.png`: the card, Retry, Open in editor; the hint text differs (delta, section Error card). | ok | | | |
 
 ## Sittings
 

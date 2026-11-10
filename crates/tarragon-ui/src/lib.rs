@@ -4,6 +4,7 @@
 //! owns the eframe window and the repaint loop.
 
 mod backdrop;
+pub(crate) mod busy;
 pub mod crash_card;
 pub mod filter_bar;
 mod fonts;

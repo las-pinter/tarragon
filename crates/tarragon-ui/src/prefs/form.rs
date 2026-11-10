@@ -2,26 +2,18 @@
 
 use egui::{
     Align, Button, Color32, ComboBox, FontFamily, FontId, Frame, Label, Layout, Margin, Rect,
-    RichText, ScrollArea, Sense, Stroke, TextEdit, Ui, pos2, vec2,
+    RichText, ScrollArea, Stroke, TextEdit, Ui, vec2,
 };
 
 use super::draft::{CANVAS, CAP, Draft, MULTI, NEUTRAL, PALETTE, SHARE, WORKERS};
 use crate::theme::points;
 use crate::widgets::small_button;
-use crate::{fonts, tokens};
+use crate::{busy, fonts, tokens};
 
 /// Width of the value side of a row, in points.
 const FIELD_WIDTH: f32 = 220.0;
 /// Width of the cache folder field, so the Browse button fits beside it.
 const CACHE_FIELD_WIDTH: f32 = 140.0;
-/// Height of the busy bar, in points.
-const BUSY_BAR_HEIGHT: f32 = 6.0;
-/// The block of the busy bar is this share of the track wide.
-const BUSY_BLOCK_SHARE: f32 = 0.45;
-/// The block runs this many track widths, so it starts and ends off the track.
-const BUSY_RUN_SHARE: f32 = 1.5;
-/// Seconds the block takes to cross the track.
-const BUSY_PERIOD: f64 = 1.2;
 /// The height of the dialog outside the scroll area: title, footnote, error,
 /// and buttons, with room for the window frame and the screen edge.
 const NON_SCROLL_HEIGHT: f32 = 220.0;
@@ -115,7 +107,7 @@ pub(super) fn contents(ui: &mut Ui, draft: &mut Draft, view: &View<'_>) -> Optio
                     });
                 });
                 if view.purging {
-                    busy_strip(ui);
+                    busy::strip(ui, "Purging cache...");
                 }
             });
             group(ui, "Debug", |ui| {
@@ -251,32 +243,4 @@ fn cache_dir_field(ui: &mut Ui, dir: Option<&str>) -> bool {
             ui.add(label.truncate()).on_hover_text(text);
         });
     small_button(ui, "Browse...").clicked()
-}
-
-/// How far the busy block has run, from 0 to 1, after `time` seconds.
-#[expect(
-    clippy::cast_possible_truncation,
-    reason = "the fraction is in 0 to 1, so f32 holds it"
-)]
-fn busy_phase(time: f64) -> f32 {
-    (time / BUSY_PERIOD).fract() as f32
-}
-
-/// The "Purging cache..." label and a track with a block sliding across it.
-fn busy_strip(ui: &mut Ui) {
-    ui.horizontal(|ui| {
-        let label = RichText::new("Purging cache...").size(tokens::SIZE_CAPTION);
-        ui.label(label.color(tokens::TEXT_MUTED));
-        let size = vec2(ui.available_width(), BUSY_BAR_HEIGHT);
-        let (track, _) = ui.allocate_exact_size(size, Sense::hover());
-        let painter = ui.painter().with_clip_rect(track);
-        painter.rect_filled(track, tokens::RADIUS_XS, tokens::BG_TERTIARY);
-        // The block runs from off the left edge to off the right edge.
-        let phase = busy_phase(ui.input(|i| i.time));
-        let width = track.width() * BUSY_BLOCK_SHARE;
-        let left = track.left() + track.width() * BUSY_RUN_SHARE * phase - width;
-        let block = Rect::from_min_size(pos2(left, track.top()), vec2(width, track.height()));
-        painter.rect_filled(block, tokens::RADIUS_XS, tokens::AMBER_ACCENT);
-        ui.request_repaint();
-    });
 }

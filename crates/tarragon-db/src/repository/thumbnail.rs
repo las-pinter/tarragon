@@ -261,6 +261,33 @@ impl Database {
         Ok(changed)
     }
 
+    /// Reset every row that holds a cache link to the scan state.
+    ///
+    /// The method sets `thumb_hash`, `cache_uuid`, the three cache paths to
+    /// NULL and `last_accessed` to 0. The file rows stay: `path`, `mtime`,
+    /// `size`, `width`, `height`, and `created_at` do not change. The method
+    /// returns the number of rows that had a link.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DbError::Sqlite`] when the statement fails. Returns
+    /// [`DbError::LockPoisoned`] after a panic poisoned the lock.
+    pub fn clear_cache_links(&self) -> Result<usize, DbError> {
+        let conn = self.lock()?;
+        // The WHERE clause skips rows that have no link, so a repeat call
+        // reports no change.
+        let changed = conn.execute(
+            "UPDATE thumbnails SET thumb_hash = NULL, cache_uuid = NULL, \
+             thumbnail_cache_path = NULL, preview_cache_path = NULL, \
+             full_cache_path = NULL, last_accessed = 0 \
+             WHERE thumb_hash IS NOT NULL OR cache_uuid IS NOT NULL \
+             OR thumbnail_cache_path IS NOT NULL OR preview_cache_path IS NOT NULL \
+             OR full_cache_path IS NOT NULL",
+            [],
+        )?;
+        Ok(changed)
+    }
+
     /// Write one folder group of scan results in a single transaction.
     ///
     /// Each file becomes a row with the scanned width and height and no

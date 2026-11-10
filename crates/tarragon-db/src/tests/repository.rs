@@ -494,6 +494,122 @@ fn clear_thumbnails_on_an_empty_table_removes_nothing() {
     );
 }
 
+/// Write a row with full cache links and a legacy hash.
+fn linked_row(temp: &TempDb, path: &str, mtime: i64) {
+    temp.db
+        .upsert_thumbnail(&crate::repository::ThumbnailWrite {
+            path: path.to_owned(),
+            mtime,
+            size: 500 + mtime,
+            width: 40,
+            height: 30,
+            cache_uuid: "uuid-1".to_owned(),
+            thumbnail_cache_path: Some(format!("{path}.t")),
+            preview_cache_path: Some(format!("{path}.p")),
+            full_cache_path: Some(format!("{path}.f")),
+            last_accessed: 900,
+        })
+        .expect("write the linked row");
+    let conn = temp.db.lock().expect("lock");
+    conn.execute(
+        "UPDATE thumbnails SET thumb_hash = 'h' WHERE path = ?1",
+        [path],
+    )
+    .expect("set the hash");
+}
+
+fn table_count(temp: &TempDb, table: &str) -> i64 {
+    let conn = temp.db.lock().expect("lock");
+    conn.query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| {
+        row.get(0)
+    })
+    .expect("count rows")
+}
+
+#[test]
+fn clear_cache_links_resets_links_and_keeps_file_rows() {
+    let temp = TempDb::new();
+    let paths = ["/refs/a.png", "/refs/b.png", "/refs/c.png"];
+    for (mtime, path) in (1..).zip(paths) {
+        linked_row(&temp, path, mtime);
+    }
+    let before: Vec<_> = paths
+        .iter()
+        .map(|p| temp.db.thumbnail(p).expect("read").expect("row"))
+        .collect();
+
+    let changed = temp.db.clear_cache_links().expect("clear the links");
+
+    assert_eq!(changed, 3, "every linked row must count");
+    assert_eq!(temp.db.count_thumbnails().expect("count"), 3);
+    for old in before {
+        let row = temp.db.thumbnail(&old.path).expect("read").expect("row");
+        assert_eq!(row.thumb_hash, None);
+        assert_eq!(row.cache_uuid, None);
+        assert_eq!(row.thumbnail_cache_path, None);
+        assert_eq!(row.preview_cache_path, None);
+        assert_eq!(row.full_cache_path, None);
+        assert_eq!(row.last_accessed, 0);
+        assert_eq!(row.mtime, old.mtime);
+        assert_eq!(row.size, old.size);
+        assert_eq!(row.width, old.width);
+        assert_eq!(row.height, old.height);
+        assert_eq!(row.created_at, old.created_at);
+    }
+}
+
+#[test]
+fn clear_cache_links_twice_changes_nothing_the_second_time() {
+    let temp = TempDb::new();
+    linked_row(&temp, "/refs/a.png", 1);
+    temp.db
+        .write_scan_group(&[sized_file("/refs", "stub.png", 2, 20, 8, 6)])
+        .expect("write the stub");
+    assert_eq!(temp.db.clear_cache_links().expect("first clear"), 1);
+    let after_first: Vec<_> = ["/refs/a.png", "/refs/stub.png"]
+        .iter()
+        .map(|p| temp.db.thumbnail(p).expect("read").expect("row"))
+        .collect();
+
+    let changed = temp.db.clear_cache_links().expect("second clear");
+
+    assert_eq!(changed, 0, "rows at the scan state must not count");
+    let after_second: Vec<_> = ["/refs/a.png", "/refs/stub.png"]
+        .iter()
+        .map(|p| temp.db.thumbnail(p).expect("read").expect("row"))
+        .collect();
+    assert_eq!(after_first, after_second);
+}
+
+#[test]
+fn clear_cache_links_leaves_tags_and_folder_uuids() {
+    let temp = TempDb::new();
+    linked_row(&temp, "/refs/a.png", 1);
+    let tag = temp
+        .db
+        .ensure_tag("sketch", TagSource::User)
+        .expect("make the tag");
+    temp.db
+        .add_tags_to_files_batch(&["/refs/a.png".to_owned()], &[tag])
+        .expect("tag the file");
+    temp.db
+        .upsert_folder_uuid("/refs", "uuid-1")
+        .expect("store the folder uuid");
+    let counts = |t: &TempDb| {
+        (
+            table_count(t, "file_tags"),
+            table_count(t, "tags"),
+            table_count(t, "folder_cache_uuids"),
+        )
+    };
+    let before = counts(&temp);
+    assert_eq!(before, (1, 1, 1));
+
+    temp.db.clear_cache_links().expect("clear the links");
+
+    assert_eq!(counts(&temp), before);
+}
+
 #[test]
 fn distinct_folders_lists_every_parent_folder() {
     let temp = TempDb::new();

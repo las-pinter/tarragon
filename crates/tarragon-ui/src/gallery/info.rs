@@ -17,8 +17,9 @@ impl Gallery {
         match self.scope {
             Scope::All => Scope::All.label().to_owned(),
             Scope::Folder => self
-                .folder
-                .as_deref()
+                .busy
+                .loading()
+                .or(self.folder.as_deref())
                 .and_then(Path::file_name)
                 .and_then(|name| name.to_str())
                 .map_or_else(|| "No folder".to_owned(), ToOwned::to_owned),

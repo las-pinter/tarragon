@@ -1,5 +1,7 @@
+use std::path::Path;
+
 use super::work::Work;
-use super::{Library, Queued, Slot, Thumbs};
+use super::{Library, Queued, Slot, Target, Thumbs};
 
 impl Thumbs {
     /// True while a folder or the library opens or waits to open. A purge or
@@ -9,6 +11,22 @@ impl Thumbs {
         matches!(self.slot, Slot::Opening { .. })
             || self.pending.is_some()
             || self.library == Library::Wanted
+    }
+
+    /// The folder that opens now or waits to open, for the info bar. A library
+    /// open has no folder.
+    #[must_use]
+    pub(crate) fn loading_folder(&self) -> Option<&Path> {
+        if let Some(folder) = &self.pending {
+            return Some(folder);
+        }
+        match &self.slot {
+            Slot::Opening {
+                target: Target::Folder(folder),
+                ..
+            } => Some(folder),
+            _ => None,
+        }
     }
 
     /// True while an open or a purge runs or waits. The gallery shows its busy

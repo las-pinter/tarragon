@@ -1,6 +1,6 @@
 //! Tests that the busy flag follows the pipeline into the gallery.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use eframe::App as _;
@@ -154,6 +154,37 @@ fn a_failed_open_ends_with_the_flag_false() {
     rig.settle();
     assert!(!rig.app.thumbs.is_busy());
     assert!(!rig.strip());
+}
+
+/// Whether one frame shows an info bar text that starts with `name`.
+fn info_starts_with(texts: &[String], name: &str) -> bool {
+    texts.iter().any(|t| t.starts_with(&format!("{name} - ")))
+}
+
+#[test]
+fn the_first_open_names_the_folder_in_the_info_bar_before_it_ends() {
+    let mut rig = Rig::new();
+    let folder = rig.folder.clone();
+    rig.app.navigate(&folder);
+    let texts = rig.texts();
+    assert!(rig.app.thumbs.is_busy(), "the open still runs");
+    assert!(info_starts_with(&texts, "pics"), "{texts:?}");
+    assert!(!texts.iter().any(|t| t.starts_with("No folder")));
+}
+
+#[test]
+fn a_failed_open_leaves_the_info_bar_on_the_old_folder() {
+    let mut rig = Rig::new();
+    let folder = rig.folder.clone();
+    rig.app.navigate(&folder);
+    rig.settle();
+    rig.app.navigate(Path::new("/nonexistent/x"));
+    let during = rig.texts();
+    assert!(info_starts_with(&during, "x"), "{during:?}");
+    rig.settle();
+    let after = rig.texts();
+    assert!(info_starts_with(&after, "pics"), "{after:?}");
+    assert!(!info_starts_with(&after, "x"));
 }
 
 #[test]

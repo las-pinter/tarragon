@@ -373,19 +373,11 @@ fn max_multi_preview(db: &Database) -> usize {
     }
 }
 
-/// Raise the window when a second start asked for it.
-fn raise_if_requested(ctx: &Context, guard: Option<&Guard>) {
-    let requested = guard.is_some_and(Guard::take_activate_request);
-    for command in window::activate_commands(requested) {
-        ctx.send_viewport_cmd(command);
-    }
-}
-
 impl eframe::App for App {
     // A minimized or hidden window runs no `ui`, but eframe still calls this,
     // so the activate request is taken here and only here.
     fn logic(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
-        raise_if_requested(ctx, self.guard.as_deref());
+        window::raise_if_requested(ctx, self.guard.as_deref());
     }
 
     fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
@@ -404,6 +396,7 @@ impl eframe::App for App {
         if let Some(folder) = self.thumbs.take_folder_change() {
             self.shell.set_folder(Some(folder));
         }
+        self.sync_busy();
         self.show_failure();
         let source = self.logs.source();
         let view = LogView {
@@ -475,6 +468,7 @@ impl eframe::App for App {
     }
 }
 
+mod busy;
 mod card;
 mod crash;
 #[cfg(test)]

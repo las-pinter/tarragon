@@ -1,6 +1,8 @@
 //! The window start options, the maximized flag, and the raise-the-window commands.
 
-use eframe::egui::{UserAttentionType, ViewportBuilder, ViewportCommand, ViewportInfo};
+use eframe::egui::{Context, UserAttentionType, ViewportBuilder, ViewportCommand, ViewportInfo};
+
+use crate::instance::Guard;
 
 /// The inner size of a window that is not maximized, in points.
 const DEFAULT_SIZE: [f32; 2] = tarragon_ui::tokens::WINDOW_SIZE;
@@ -38,6 +40,14 @@ pub fn activate_commands(requested: bool) -> Vec<ViewportCommand> {
         ViewportCommand::Focus,
         ViewportCommand::RequestUserAttention(UserAttentionType::Informational),
     ]
+}
+
+/// Raise the window when a second start asked for it.
+pub fn raise_if_requested(ctx: &Context, guard: Option<&Guard>) {
+    let requested = guard.is_some_and(Guard::take_activate_request);
+    for command in activate_commands(requested) {
+        ctx.send_viewport_cmd(command);
+    }
 }
 
 #[cfg(test)]

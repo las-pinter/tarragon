@@ -37,6 +37,19 @@ fn context() -> Context {
     ctx
 }
 
+/// Draw frames until the library load is over. The busy strip moves the
+/// layout while it shows, and a click must not land in that shift.
+fn settle(app: &mut App, ctx: &Context) {
+    let mut eframe_frame = Frame::_new_kittest();
+    let start = std::time::Instant::now();
+    while !app.thumbs.is_idle() {
+        frame(ctx, Vec::new(), &mut |ui| app.ui(ui, &mut eframe_frame));
+        assert!(start.elapsed().as_secs() < 30, "the load hangs");
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    frame(ctx, Vec::new(), &mut |ui| app.ui(ui, &mut eframe_frame));
+}
+
 #[test]
 fn a_tag_click_in_the_app_filters_the_gallery() {
     let dir = new_dir();
@@ -64,6 +77,7 @@ fn a_tag_click_in_the_app_filters_the_gallery() {
     gallery.set_scope(Scope::All);
     gallery.set_filter_lists(vec!["night".into()], Vec::new());
     let ctx = context();
+    settle(&mut app, &ctx);
     let mut eframe_frame = Frame::_new_kittest();
     let mut run = |ui: &mut Ui| app.ui(ui, &mut eframe_frame);
     click_text(&ctx, "Filter Tags", &mut run);
@@ -142,6 +156,7 @@ fn the_tag_menu_lists_the_user_tags_and_no_colour_tags() {
     let dir = new_dir();
     let mut app = seeded_app(&dir);
     let ctx = context();
+    settle(&mut app, &ctx);
     let mut eframe_frame = Frame::_new_kittest();
     let mut run = |ui: &mut Ui| app.ui(ui, &mut eframe_frame);
     let tags = click_text(&ctx, "Filter Tags", &mut run);
@@ -156,6 +171,7 @@ fn the_folder_menu_lists_the_seeded_folders() {
     let dir = new_dir();
     let mut app = seeded_app(&dir);
     let ctx = context();
+    settle(&mut app, &ctx);
     let mut eframe_frame = Frame::_new_kittest();
     let mut run = |ui: &mut Ui| app.ui(ui, &mut eframe_frame);
     let folders = click_text(&ctx, "Filter Folders", &mut run);
@@ -173,6 +189,7 @@ fn a_tag_added_after_startup_shows_when_the_menu_opens() {
     let db = Database::open(dir.0.join("tarragon.db")).expect("open");
     db.ensure_tag("dusk", TagSource::User).expect("tag");
     let ctx = context();
+    settle(&mut app, &ctx);
     let mut eframe_frame = Frame::_new_kittest();
     let mut run = |ui: &mut Ui| app.ui(ui, &mut eframe_frame);
     assert!(click_text(&ctx, "Filter Tags", &mut run).contains(&"dusk".to_owned()));
@@ -183,6 +200,7 @@ fn a_chip_whose_folder_left_the_database_goes_when_a_menu_opens() {
     let dir = new_dir();
     let mut app = seeded_app(&dir);
     let ctx = context();
+    settle(&mut app, &ctx);
     let mut eframe_frame = Frame::_new_kittest();
     let mut run = |ui: &mut Ui| app.ui(ui, &mut eframe_frame);
     click_text(&ctx, "Filter Folders", &mut run);

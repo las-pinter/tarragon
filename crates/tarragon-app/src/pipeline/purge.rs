@@ -1,4 +1,4 @@
-//! Purge the thumbnail cache: the tier files and the stored thumbnail rows.
+//! Purge the thumbnail cache: the tier files and the cache links of the rows.
 
 use std::path::Path;
 
@@ -8,11 +8,14 @@ use tarragon_cache::store::CacheStore;
 use super::{Pipeline, PipelineError};
 
 impl Pipeline {
-    /// Delete every cache file and every `thumbnails` row.
+    /// Delete every cache file and reset the cache links of every row.
+    ///
+    /// The file rows stay, so the library still lists every file. Each row
+    /// loses only its cache links, and the render path renders it again.
     ///
     /// It drains the pool first, so no render writes while the files go, and
     /// stores the rows the writer still holds, so none arrives after the
-    /// clear. It forgets the remembered failures. `protected` is the data
+    /// reset. It forgets the remembered failures. `protected` is the data
     /// directory: a cache root that is that directory or its parent is
     /// refused, and nothing is deleted. Tags and favorites stay.
     ///
@@ -27,7 +30,7 @@ impl Pipeline {
     ///
     /// Returns [`PipelineError::Cache`] when the cache root is unsafe or a
     /// file cannot be removed; the rows stay then. Returns
-    /// [`PipelineError::Db`] when the row clear fails.
+    /// [`PipelineError::Db`] when the link reset fails.
     pub fn purge(&mut self, protected: &Path) -> Result<PurgeOutcome, PipelineError> {
         self.drain();
         self.flush();
@@ -36,9 +39,9 @@ impl Pipeline {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clear();
         let outcome = CacheStore::new(self.cache_root.clone()).purge(Some(protected))?;
-        let rows = self.db.clear_thumbnails()?;
+        let rows = self.db.clear_cache_links()?;
         tracing::info!(
-            "purged the cache: {} files, {} bytes, {rows} rows",
+            "purged the cache: {} files, {} bytes, {rows} rows reset",
             outcome.files_removed,
             outcome.bytes_removed
         );

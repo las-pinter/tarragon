@@ -41,9 +41,9 @@ fn open_stored(setup: &mut Setup, names: &[&str]) -> PathBuf {
 }
 
 #[test]
-fn a_purge_removes_the_files_and_rows_and_keeps_the_cache_root() {
+fn a_purge_removes_the_files_and_resets_the_rows_and_keeps_the_cache_root() {
     let mut setup = start(TempDir::new(), 2, counting_render(&Arc::default()));
-    open_stored(&mut setup, &["a.png", "b.png"]);
+    let folder = open_stored(&mut setup, &["a.png", "b.png"]);
     assert!(files_under(&setup.cache_root).len() > 1);
     assert_eq!(setup.db.count_thumbnails().expect("count"), 2);
 
@@ -55,7 +55,15 @@ fn a_purge_removes_the_files_and_rows_and_keeps_the_cache_root() {
     assert!(outcome.files_removed > 0);
     assert_eq!(files_under(&setup.cache_root).len(), 0);
     assert!(setup.cache_root.is_dir());
-    assert_eq!(setup.db.count_thumbnails().expect("count"), 0);
+    assert_eq!(setup.db.count_thumbnails().expect("count"), 2);
+    for name in ["a.png", "b.png"] {
+        let row = setup
+            .db
+            .thumbnail(&path_text(&folder.join(name)))
+            .expect("read")
+            .expect("the row stays");
+        assert!(row.thumbnail_cache_path.is_none());
+    }
 }
 
 #[test]
@@ -87,7 +95,10 @@ fn a_purge_keeps_the_file_tags() {
 #[test]
 fn an_unsafe_root_is_refused_and_the_rows_stay() {
     let mut setup = start(TempDir::new(), 2, counting_render(&Arc::default()));
-    open_stored(&mut setup, &["a.png"]);
+    let folder = open_stored(&mut setup, &["a.png"]);
+    let path = path_text(&folder.join("a.png"));
+    let before = setup.db.thumbnail(&path).expect("read").expect("the row");
+    assert!(before.thumbnail_cache_path.is_some());
     let files = files_under(&setup.cache_root).len();
     // The cache root is the data directory, then the parent of it.
     let inside = setup.cache_root.join("data");
@@ -100,6 +111,8 @@ fn an_unsafe_root_is_refused_and_the_rows_stay() {
             PipelineError::Cache(tarragon_cache::CacheError::UnsafeRoot(_))
         ));
         assert_eq!(setup.db.count_thumbnails().expect("count"), 1);
+        let after = setup.db.thumbnail(&path).expect("read").expect("the row");
+        assert_eq!(after, before, "a refused purge keeps the cache links");
         assert_eq!(files_under(&setup.cache_root).len(), files);
     }
 }
@@ -129,7 +142,7 @@ fn a_purge_waits_for_a_running_render_and_leaves_none_of_its_files() {
         assert!(late, "the purge returns after the release");
     });
     assert_eq!(files_under(&setup.cache_root).len(), 0);
-    assert_eq!(setup.db.count_thumbnails().expect("count"), 0);
+    assert_eq!(setup.db.count_thumbnails().expect("count"), 1);
 }
 
 #[test]
@@ -147,4 +160,6 @@ fn a_folder_renders_every_file_again_after_a_purge() {
     collect(&setup.results, 2);
 
     assert_eq!(calls.lock().expect("calls lock").len(), 4);
+    setup.pipeline.flush();
+    assert!(files_under(&setup.cache_root).len() > 1);
 }

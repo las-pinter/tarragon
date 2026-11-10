@@ -249,18 +249,6 @@ impl Database {
         Ok(changed)
     }
 
-    /// Delete every thumbnail row. The cache purge calls this.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`DbError::Sqlite`] when the statement fails. Returns
-    /// [`DbError::LockPoisoned`] after a panic poisoned the lock.
-    pub fn clear_thumbnails(&self) -> Result<usize, DbError> {
-        let conn = self.lock()?;
-        let changed = conn.execute("DELETE FROM thumbnails", [])?;
-        Ok(changed)
-    }
-
     /// Reset every row that holds a cache link to the scan state.
     ///
     /// The method sets `thumb_hash`, `cache_uuid`, the three cache paths to

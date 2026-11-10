@@ -235,7 +235,7 @@ fn a_cache_that_cannot_be_read_shows_unknown_and_logs_a_warning() {
 }
 
 #[test]
-fn a_purge_empties_the_cache_and_the_rows_and_the_folder_renders_again() {
+fn a_purge_empties_the_cache_and_keeps_the_rows_and_the_folder_renders_again() {
     let mut held = Held::new(false);
     held.open_and_settle();
     let cache = held.rig.app.cache_root.clone();
@@ -248,6 +248,7 @@ fn a_purge_empties_the_cache_and_the_rows_and_the_folder_renders_again() {
     held.until("the size shows", |_, texts| shows(texts, &want));
 
     let rows = held.rig.app.db.thumbnails_by_last_accessed().expect("rows");
+    assert_eq!(rows.len(), 3);
     assert!(rows.iter().any(|row| row.thumbnail_cache_path.is_some()));
 
     // The reopened tiles wait at the gate, so the empty state can be checked.
@@ -255,9 +256,10 @@ fn a_purge_empties_the_cache_and_the_rows_and_the_folder_renders_again() {
     held.rig.click("Purge Cache", false);
     held.until_purged();
     assert!(files_under(&cache).is_empty(), "no tier file is left");
-    // The reopen scans the folder at once and stores fresh rows. None of them
-    // points at a tier file, because the renders are still held.
+    // The purge keeps the file rows. None of them points at a tier file,
+    // because the renders are still held.
     let rows = held.rig.app.db.thumbnails_by_last_accessed().expect("rows");
+    assert_eq!(rows.len(), 3);
     assert!(rows.iter().all(|row| row.thumbnail_cache_path.is_none()));
     held.until("the size reads zero", |_, texts| shows(texts, "0 B"));
     assert!(!shows(&held.rig.frame(Vec::new()).0, "Purging cache..."));
@@ -267,6 +269,11 @@ fn a_purge_empties_the_cache_and_the_rows_and_the_folder_renders_again() {
         rig.app.thumbs.loaded_once().is_some()
     });
     assert!(!files_under(&cache).is_empty(), "the tiles rendered again");
+    // The writer stores the rows after the tiles settle, so wait for them.
+    held.until("every row has a cache path again", |rig, _| {
+        let rows = rig.app.db.thumbnails_by_last_accessed().expect("rows");
+        rows.len() == 3 && rows.iter().all(|row| row.thumbnail_cache_path.is_some())
+    });
 }
 
 #[test]

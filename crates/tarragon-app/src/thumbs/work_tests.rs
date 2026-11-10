@@ -173,8 +173,14 @@ fn a_purge_reopens_the_library_and_leaves_the_folder_alone() {
     let thumbs = &held.rig.thumbs;
     assert_eq!(thumbs.current.as_deref(), Some(a.as_path()));
     assert_eq!(thumbs.pending, None);
-    // The purge cleared every stored row, so the reopened library is empty.
-    assert!(!held.rig.gallery.has_item(&b.join("b1.png")));
+    // The purge keeps the file rows, so the reopened library lists every file.
+    for name in ["a1.png", "a2.png"] {
+        assert!(held.rig.gallery.has_item(&a.join(name)), "{name}");
+    }
+    assert!(held.rig.gallery.has_item(&b.join("b1.png")));
+    assert!(thumbs.feed.all_settled());
+    let cache = held.rig.dir.0.join("cache");
+    assert!(!files_under(&cache).is_empty(), "the tiles rendered again");
 }
 
 #[test]

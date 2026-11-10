@@ -3,7 +3,7 @@
 //! The manual purge deletes the three tier folders under the cache root and
 //! nothing else. The caller
 //! cancels the pending renders and drains the worker pool first, so no render
-//! writes while the purge deletes. The `DELETE FROM thumbnails` clear is a
+//! writes while the purge deletes. The cache links of the rows are reset in a
 //! separate call, because the cache crate cannot reach the database.
 //!
 //! The shutdown rule clears only the `full` tier when the setting is true. The

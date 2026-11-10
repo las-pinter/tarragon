@@ -6,8 +6,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crossbeam_channel::{Receiver, Sender};
-use tarragon_db::Database;
-use tarragon_db::repository::ThumbnailWrite;
+use tarragon_db::repository::{ThumbnailWrite, WriteBatch, WriteReport};
+use tarragon_db::{Database, DbError};
 
 use super::Repaint;
 
@@ -26,55 +26,54 @@ pub(super) enum Message {
     Flush(Sender<()>),
 }
 
-/// Store rows until every sender is gone. Workers never touch the database,
-/// so this loop is the only writer and the lock is rarely contended.
+/// Store batches until every sender is gone. Workers never touch the
+/// database, so this loop is the only writer. The UI thread reads under the
+/// same lock, so a pass must hold it for a short time only.
 ///
-/// After each pass that stored data, `epoch` goes up by one and `repaint` runs.
+/// Each pass stores its whole batch in one transaction. After a pass that
+/// stored data, `epoch` goes up by one and `repaint` runs. A failed pass is
+/// dropped, and those files render again on the next open.
 pub(super) fn run(
     db: &Arc<Database>,
     messages: &Receiver<Message>,
     epoch: &AtomicU64,
     repaint: &Repaint,
 ) {
+    run_with(&|batch| db.apply_writes(batch), messages, epoch, repaint);
+}
+
+/// The writer loop with the storage call passed in, so a test can record it.
+fn run_with(
+    store: &dyn Fn(&WriteBatch) -> Result<WriteReport, DbError>,
+    messages: &Receiver<Message>,
+    epoch: &AtomicU64,
+    repaint: &Repaint,
+) {
     while let Ok(first) = messages.recv() {
-        let mut rows = Vec::new();
+        let mut batch = WriteBatch::default();
         let mut acks = Vec::new();
-        let mut touched = Vec::new();
-        let mut colors = Vec::new();
-        // A batch is one drain of the channel per pass, up to BATCH messages.
-        // Each row is still one upsert; touches share one statement.
-        let mut batch = Batch {
-            rows: &mut rows,
-            acks: &mut acks,
-            touched: &mut touched,
-            colors: &mut colors,
-        };
-        batch.add(first);
-        while batch.len() < BATCH {
+        // A pass is one drain of the channel, up to BATCH messages.
+        let mut count = 1;
+        add(&mut batch, &mut acks, first);
+        while count < BATCH {
             let Ok(next) = messages.try_recv() else { break };
-            batch.add(next);
+            add(&mut batch, &mut acks, next);
+            count += 1;
         }
-        let mut stored = false;
-        for row in &rows {
-            match db.upsert_thumbnail(row) {
-                Ok(()) => stored = true,
+        batch.touched_at = now();
+        let stored = !batch.is_empty()
+            && match store(&batch) {
+                Ok(report) => report.stored,
                 Err(error) => {
-                    tracing::warn!("cannot store the thumbnail row for {}: {error}", row.path);
+                    tracing::warn!(
+                        "cannot store the writer batch of {} rows, {} touches and {} colours: {error}",
+                        batch.rows.len(),
+                        batch.touched.len(),
+                        batch.colors.len(),
+                    );
+                    false
                 }
-            }
-        }
-        if !touched.is_empty() {
-            match db.touch_last_accessed(&touched, now()) {
-                Ok(_) => stored = true,
-                Err(error) => tracing::warn!("cannot refresh last_accessed: {error}"),
-            }
-        }
-        for (path, names) in &colors {
-            match db.replace_auto_color_tags(path, names) {
-                Ok(_) => stored = true,
-                Err(error) => tracing::warn!("cannot store the colour tags for {path}: {error}"),
-            }
-        }
+            };
         if stored {
             // Bump before the callback, so a woken UI sees the new value.
             epoch.fetch_add(1, Ordering::AcqRel);
@@ -87,27 +86,13 @@ pub(super) fn run(
     }
 }
 
-/// The lists one pass fills.
-struct Batch<'a> {
-    rows: &'a mut Vec<ThumbnailWrite>,
-    acks: &'a mut Vec<Sender<()>>,
-    touched: &'a mut Vec<String>,
-    colors: &'a mut Vec<(String, Vec<String>)>,
-}
-
-impl Batch<'_> {
-    fn len(&self) -> usize {
-        self.rows.len() + self.acks.len() + self.touched.len() + self.colors.len()
-    }
-
-    /// Put a message in the list for its kind.
-    fn add(&mut self, message: Message) {
-        match message {
-            Message::Row(row) => self.rows.push(row),
-            Message::Touch(path) => self.touched.push(path),
-            Message::Colors { path, names } => self.colors.push((path, names)),
-            Message::Flush(ack) => self.acks.push(ack),
-        }
+/// Put a message in the list for its kind.
+fn add(batch: &mut WriteBatch, acks: &mut Vec<Sender<()>>, message: Message) {
+    match message {
+        Message::Row(row) => batch.rows.push(row),
+        Message::Touch(path) => batch.touched.push(path),
+        Message::Colors { path, names } => batch.colors.push((path, names)),
+        Message::Flush(ack) => acks.push(ack),
     }
 }
 
@@ -117,3 +102,7 @@ pub(super) fn now() -> i64 {
         .duration_since(UNIX_EPOCH)
         .map_or(0, |age| i64::try_from(age.as_secs()).unwrap_or(i64::MAX))
 }
+
+#[cfg(test)]
+#[path = "writer_tests.rs"]
+mod tests;

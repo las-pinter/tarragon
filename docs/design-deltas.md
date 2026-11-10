@@ -653,9 +653,12 @@ After: there is no such screen. The app reads rows of `editor_associations`. The
 lower-case extension without a dot, and `*` is the fallback. The extension row wins over `*`.
 `{file}` in a template is replaced with the path. Without `{file}`, the path is the last
 argument. A missing or blank row is skipped, and with no row left the system opener runs.
-Double-click to open and the Regenerate Thumbnail menu are not built.
+A double-click on a tile selects that image only and opens it by these rules. A failed start
+logs a warning and does not retry. The grid context menu with Regenerate Thumbnail is not
+built, so a right-click on a tile shows no menu.
 
-Reason: the screen is outside the current scope, and a file can still open in a program.
+Reason: the screen is outside the current scope, and a file can still open in a program. The
+menu stays out because Retry on the error card already re-renders one file.
 
 ## Open Folder and roots
 
@@ -707,7 +710,7 @@ needs its own text, and a button there would not help.
 Before: the mockup menu bar shows no shortcut text and no Quit item. The Python application
 had mnemonics only, such as `&File`.
 
-After: four shortcuts exist. The command key is Ctrl on Linux and Windows, and Cmd on macOS.
+After: five shortcuts exist. The command key is Ctrl on Linux and Windows, and Cmd on macOS.
 A chord with an extra Shift or Alt does not act.
 
 | Shortcut | Action                                        | Off when                                       |
@@ -716,6 +719,7 @@ A chord with an extra Shift or Alt does not act.
 | Ctrl+,   | Preferences, as Settings > Preferences...     | A dialog window is open                        |
 | Ctrl+F   | Focus the search field and select its text    | A dialog window is open                        |
 | Ctrl+A   | Select every visible image                    | A dialog window is open, or a text field has focus |
+| Enter    | Open the selected image in its editor, when exactly one image is selected | A dialog window is open, or a widget other than a tile has focus |
 
 - The windows are the crash card, Preferences, and Manage tags. While one is open, no
   shortcut acts.
@@ -723,8 +727,9 @@ A chord with an extra Shift or Alt does not act.
   not block it. An image that the search hides is not selected.
 - No menu shows these shortcuts, because the mockup shows none. This list is the only place
   that names them.
-- Not built: Escape to clear the selection, arrow keys, Enter to open in the editor, Delete,
-  Ctrl+Q, and F5 to rescan. The File menu has a Quit item, which the mockup lacks. Each
+- Enter needs no modifier. With none or several images selected, it does nothing and is not
+  consumed. A focused button or text field keeps its own Enter.
+- Not built: Escape to clear the selection, arrow keys, Delete, Ctrl+Q, and F5 to rescan. The File menu has a Quit item, which the mockup lacks. Each
   other key needs its own decision.
 - egui has no mnemonics, so Alt+F is not supported.
 

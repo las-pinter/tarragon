@@ -82,3 +82,37 @@ fn the_frame_asks_for_a_repaint_only_while_busy() {
     let (_, busy) = busy_frame(&ctx, &mut gallery);
     assert_eq!(busy, Duration::ZERO, "the strip animates");
 }
+
+/// The rects of the filter buttons and the top of the grid in one frame. The
+/// grid is the lowest clip area, because it is the last part of the page.
+fn layout(ctx: &egui::Context, gallery: &mut Gallery) -> (Vec<(String, egui::Pos2)>, f32) {
+    let output = frame(ctx, gallery, Vec::new());
+    let buttons = super::filter_bar::texts(&output)
+        .into_iter()
+        .filter(|t| t.0 == "Filter Tags" || t.0 == "Filter Folders")
+        .collect();
+    let grid_top = output
+        .shapes
+        .iter()
+        .map(|clipped| clipped.clip_rect.min.y)
+        .fold(f32::MIN, f32::max);
+    output.drop_without_applying_deltas();
+    (buttons, grid_top)
+}
+
+#[test]
+fn the_strip_moves_the_grid_and_leaves_the_filter_buttons_still() {
+    let (ctx, mut gallery) = setup();
+    for _ in 0..3 {
+        busy_frame(&ctx, &mut gallery);
+    }
+    let (idle_buttons, idle_top) = layout(&ctx, &mut gallery);
+    assert!(!idle_buttons.is_empty(), "a filter button shows");
+    gallery.set_busy(true);
+    let (busy_buttons, busy_top) = layout(&ctx, &mut gallery);
+    assert_eq!(busy_buttons, idle_buttons, "the filter buttons stay put");
+    assert!(
+        busy_top > idle_top,
+        "the grid moves down: {idle_top} to {busy_top}"
+    );
+}

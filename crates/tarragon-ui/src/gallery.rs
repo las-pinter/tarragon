@@ -129,7 +129,7 @@ pub struct Gallery {
     search_focus_requested: bool,
     /// The image path that waits for the app to open it, or none.
     open_request: Option<PathBuf>,
-    /// Whether the busy strip shows under the info bar.
+    /// Whether the busy strip shows under the filter bar.
     busy: busy::Busy,
 }
 

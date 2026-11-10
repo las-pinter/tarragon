@@ -1,4 +1,4 @@
-//! The busy strip under the info bar.
+//! The busy strip under the filter bar.
 
 use egui::Ui;
 

@@ -67,7 +67,6 @@ impl Gallery {
                 ui.add_space(tokens::SPACING_XS);
                 self.search_field(ui, now);
                 let picked = self.sort_segment(ui);
-                self.show_busy(ui);
                 if let Some(mode) = picked {
                     self.pick_sort_mode(mode);
                 }
@@ -83,6 +82,8 @@ impl Gallery {
                     // The app refreshes the rows when a menu opens.
                     self.filter_events.opened = true;
                 }
+                // Last, so the controls above stay still and only the grid moves.
+                self.show_busy(ui);
             });
     }
 

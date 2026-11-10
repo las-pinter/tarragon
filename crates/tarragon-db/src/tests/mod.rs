@@ -10,6 +10,7 @@ mod filter_folder;
 mod folder;
 mod folder_listing;
 mod library;
+mod pragmas;
 mod repository;
 mod roots;
 mod settings;

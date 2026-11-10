@@ -101,7 +101,12 @@ impl Database {
         })
     }
 
-    /// Set WAL, turn foreign keys on, and set the busy timeout.
+    /// Set WAL, turn foreign keys on, set the busy timeout, and set
+    /// `synchronous` to NORMAL.
+    ///
+    /// Under WAL, NORMAL skips the fsync on each commit. An application crash
+    /// loses no committed data. An operating system crash or a power loss can
+    /// lose the last commits, but it cannot corrupt the file.
     fn configure(conn: &Connection) -> Result<(), DbError> {
         // The timeout comes first: switching to WAL needs a lock, and a second
         // instance would otherwise fail at once with a busy error.
@@ -111,6 +116,7 @@ impl Database {
             return Err(DbError::Wal(mode));
         }
         conn.pragma_update(None, "foreign_keys", "ON")?;
+        conn.pragma_update(None, "synchronous", "NORMAL")?;
         Ok(())
     }
 

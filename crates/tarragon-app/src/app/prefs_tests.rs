@@ -117,6 +117,44 @@ fn ok_with_colour_tags_off_removes_the_swatch_row_at_once() {
     assert_eq!(rig.swatches(), 0);
 }
 
+/// The Preview and the Gallery colour flags of the app.
+fn colour_flags(rig: &mut Rig) -> (bool, bool) {
+    (
+        rig.app.shell.preview_mut().colors_enabled(),
+        rig.app.shell.gallery_mut().colors_enabled(),
+    )
+}
+
+#[test]
+fn ok_sets_both_colour_flags_from_the_saved_setting() {
+    let mut rig = Rig::new(&[], &[], 9);
+    assert_eq!(colour_flags(&mut rig), (true, true));
+    let off = PrefsValues {
+        color_tag_enabled: false,
+        ..defaults()
+    };
+    open_with(&mut rig, off);
+    rig.click("OK", false);
+    assert_eq!(colour_flags(&mut rig), (false, false));
+    open_with(&mut rig, defaults());
+    rig.click("OK", false);
+    assert_eq!(colour_flags(&mut rig), (true, true));
+}
+
+#[test]
+fn a_failed_save_leaves_both_colour_flags_unchanged() {
+    let mut rig = Rig::new(&[], &[], 9);
+    let bad = PrefsValues {
+        tile_grid: "9x9".to_owned(),
+        color_tag_enabled: false,
+        ..defaults()
+    };
+    open_with(&mut rig, bad);
+    rig.click("OK", false);
+    assert!(rig.app.shell.prefs_mut().is_open());
+    assert_eq!(colour_flags(&mut rig), (true, true));
+}
+
 #[test]
 fn cancel_stores_nothing() {
     let mut rig = Rig::new(&[], &[], 9);

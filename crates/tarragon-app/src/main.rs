@@ -2,6 +2,9 @@
 
 mod app;
 mod cli;
+mod colorflag;
+#[cfg(test)]
+mod colorflag_tests;
 mod colortags;
 mod crashcard;
 mod data_dir;

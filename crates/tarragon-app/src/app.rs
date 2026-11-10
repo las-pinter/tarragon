@@ -13,6 +13,7 @@ use tarragon_ui::Shell;
 use tarragon_ui::gallery::Scope;
 use tarragon_ui::shell::{LogPanelEvents, LogView};
 
+use crate::colorflag;
 use crate::crashcard;
 use crate::data_dir;
 use crate::filtering;
@@ -135,6 +136,7 @@ impl App {
         }
         let mut shell = Shell::new().with_sort_mode(window_state.sort_mode());
         filtering::init(shell.gallery_mut(), &db);
+        colorflag::load(&mut shell, &db);
         // Log only the size: the stored text is not useful in a log line.
         if let Some(text) = &window_state.layout
             && !shell.restore_layout(text)

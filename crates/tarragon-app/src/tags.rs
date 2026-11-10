@@ -11,7 +11,6 @@ use tarragon_ui::preview::{ColorState, ColorStates, Preview, TagPill};
 use tarragon_ui::swatch::Swatch;
 
 use crate::colortags::swatch_name;
-use crate::filtering::colors_enabled;
 
 mod events;
 pub use events::apply_preview_events;
@@ -35,21 +34,17 @@ pub fn selection_changed(seen: &mut u64, revision: u64) -> bool {
 /// keeps what it had.
 pub fn refresh_preview(shell: &mut Shell, db: &Database) {
     let paths = shell.selected_paths();
-    let enabled = colors_enabled(db);
-    refresh_with(shell.preview_mut(), &paths, enabled, |stored| {
+    refresh_with(shell.preview_mut(), &paths, |stored| {
         Ok((db.tags_for_files(stored)?, db.all_tags()?))
     });
 }
 
-/// Like [`refresh_preview`], with the colour setting and the read as
-/// parameters.
+/// Like [`refresh_preview`], with the read as a parameter.
 fn refresh_with(
     preview: &mut Preview,
     paths: &[PathBuf],
-    colors_enabled: bool,
     read: impl FnOnce(&[String]) -> Result<Read, DbError>,
 ) {
-    preview.set_colors_enabled(colors_enabled);
     let stored: Vec<String> = paths
         .iter()
         .map(|path| path.to_string_lossy().into_owned())

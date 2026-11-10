@@ -325,6 +325,12 @@ impl Gallery {
         self.filter_events.changed |= before != (0, false);
     }
 
+    /// Whether the colour row shows.
+    #[must_use]
+    pub fn colors_enabled(&self) -> bool {
+        self.colors_enabled
+    }
+
     /// Number of items the filters show.
     #[must_use]
     pub fn visible_len(&self) -> usize {

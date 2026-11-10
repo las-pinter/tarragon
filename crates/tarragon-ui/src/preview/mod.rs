@@ -155,6 +155,12 @@ impl Preview {
         self.colors_enabled = enabled;
     }
 
+    /// Whether the colour squares show.
+    #[must_use]
+    pub fn colors_enabled(&self) -> bool {
+        self.colors_enabled
+    }
+
     /// Close the "+ add" menu and input. The app calls it when the selection
     /// changes; `set_tags` must not, because tags refresh after every tag event.
     pub fn selection_changed(&mut self) {

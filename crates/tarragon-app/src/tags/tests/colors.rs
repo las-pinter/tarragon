@@ -92,7 +92,7 @@ fn a_refresh_paints_the_colour_squares_of_the_selection() {
     tarragon_ui::apply_theme(&ctx);
     let mut preview = preview();
     // Files `a` and `b` both have red; neither has blue.
-    refresh_with(&mut preview, &selection(), true, read_from(&db));
+    refresh_with(&mut preview, &selection(), read_from(&db));
     let fills = square_fills(&ctx, &mut preview);
     assert_eq!(fills.len(), 11);
     assert_eq!(fills[0], swatch::bucket_color(ColorBucket::Red));
@@ -101,14 +101,15 @@ fn a_refresh_paints_the_colour_squares_of_the_selection() {
 }
 
 #[test]
-fn the_colour_setting_shows_or_hides_the_squares() {
+fn the_colour_flag_shows_or_hides_the_squares() {
     let (db, _dir) = seeded();
     let ctx = Context::default();
     tarragon_ui::install(&ctx);
     tarragon_ui::apply_theme(&ctx);
     let mut preview = preview();
-    refresh_with(&mut preview, &selection(), false, read_from(&db));
+    preview.set_colors_enabled(false);
+    refresh_with(&mut preview, &selection(), read_from(&db));
     assert_eq!(square_fills(&ctx, &mut preview).len(), 0);
-    refresh_with(&mut preview, &selection(), true, read_from(&db));
+    preview.set_colors_enabled(true);
     assert_eq!(square_fills(&ctx, &mut preview).len(), 11);
 }

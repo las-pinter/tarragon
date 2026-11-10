@@ -103,6 +103,24 @@ fn the_stored_colour_setting_decides_the_swatch_row() {
     assert_eq!(swatches(&dir, &ctx, &mut eframe_frame), 0);
 }
 
+#[test]
+fn the_app_applies_the_stored_colour_setting_to_both_flags_at_start() {
+    let dir = new_dir();
+    let mut app = open(&dir);
+    assert!(app.shell.preview_mut().colors_enabled());
+    assert!(app.shell.gallery_mut().colors_enabled());
+    drop(app);
+    let db = Database::open(dir.0.join("tarragon.db")).expect("open");
+    let off = Settings::new(&db).set(SettingKey::ColorTagEnabled, SettingValue::Bool(false));
+    off.expect("save the setting");
+    drop(db);
+
+    let mut app = open(&dir);
+
+    assert!(!app.shell.preview_mut().colors_enabled());
+    assert!(!app.shell.gallery_mut().colors_enabled());
+}
+
 /// Seed two folders, a user tag, and the colour auto tags, then open the app.
 fn seeded_app(dir: &TempDir) -> App {
     let db = Database::open(dir.0.join("tarragon.db")).expect("open");

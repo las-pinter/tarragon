@@ -7,9 +7,8 @@ use tarragon_ui::prefs::{PrefsEvent, PrefsValues};
 use tarragon_ui::shell::MenuEvent;
 
 use super::{App, max_multi_preview};
-use crate::filtering::colors_enabled;
 use crate::picker::Purpose;
-use crate::{prefs, sidebar, tags};
+use crate::{colorflag, prefs, sidebar, tags};
 
 /// The Cache Size text until a measure ends, and when a measure fails.
 const CACHE_SIZE_UNKNOWN: &str = "unknown";
@@ -81,8 +80,7 @@ impl App {
             .preview_mut()
             .set_max_multi_preview(self.max_multi_preview);
         self.feed_preview();
-        let enabled = colors_enabled(&self.db);
-        self.shell.gallery_mut().set_colors_enabled(enabled);
+        colorflag::load(&mut self.shell, &self.db);
         tags::refresh_preview(&mut self.shell, &self.db);
         ctx.request_repaint();
     }

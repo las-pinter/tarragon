@@ -123,7 +123,7 @@ fn an_empty_selection_gives_no_pills() {
     tarragon_ui::apply_theme(&ctx);
     let mut preview = preview();
     preview.set_tags(vec![pill("stale", ColorState::All)]);
-    refresh_with(&mut preview, &[], true, read_from(&db));
+    refresh_with(&mut preview, &[], read_from(&db));
     assert!(!painted(&ctx, &mut preview).contains(&"stale".to_owned()));
 }
 
@@ -135,7 +135,7 @@ fn a_refresh_draws_the_pills_of_the_selection() {
     tarragon_ui::install(&ctx);
     tarragon_ui::apply_theme(&ctx);
     let mut preview = preview();
-    refresh_with(&mut preview, &selection(), true, read_from(&db));
+    refresh_with(&mut preview, &selection(), read_from(&db));
     let texts = painted(&ctx, &mut preview);
     assert!(texts.contains(&"night".to_owned()));
     assert!(texts.contains(&"solo".to_owned()));
@@ -150,7 +150,7 @@ fn a_refresh_fills_the_add_menu_with_the_user_tags_only() {
     tarragon_ui::install(&ctx);
     tarragon_ui::apply_theme(&ctx);
     let mut preview = preview();
-    refresh_with(&mut preview, &selection(), true, read_from(&db));
+    refresh_with(&mut preview, &selection(), read_from(&db));
     let mut show = |ui: &mut Ui| preview.show(ui);
     // `unused` is on no file, so only the known list can draw it.
     let texts = click_text(&ctx, "+ add", &mut show);
@@ -171,9 +171,7 @@ fn a_failed_read_logs_a_warning_and_keeps_the_pills() {
     let subscriber =
         tracing_subscriber::layer::SubscriberExt::with(tracing_subscriber::registry(), layer);
     tracing::subscriber::with_default(subscriber, || {
-        refresh_with(&mut preview, &selection(), true, |_| {
-            Err(DbError::LockPoisoned)
-        });
+        refresh_with(&mut preview, &selection(), |_| Err(DbError::LockPoisoned));
     });
     assert!(painted(&ctx, &mut preview).contains(&"kept".to_owned()));
     let lines = ring.snapshot();

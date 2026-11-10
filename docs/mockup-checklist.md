@@ -11,33 +11,33 @@ The owner checks the app against each mockup in `design/mockups/index.html`.
 
 | ID | Mockup | Look for | Agent pre-check (not a sign-off) | Owner result | Initials | Date |
 |----|--------|----------|------|------|------|------|
-| D1 | theme.html | Open the app: colors, spacing, and radii match; the font is Roboto, not Segoe UI (deltas, UI font and Monospace face). | - | | | |
-| D2 | main-window.html | Open `$SEED/pics`: Library 220 px, Preview 490 px, Log hidden at first; docks resize and move, tabs do not float (delta, Dock regions). | - | | | |
-| D3 | menubar.html | Open each menu: File holds Open Folder and Quit, not Open Folder only (delta, section File menu); View and Settings match. | - | | | |
-| D4 | library.html | Check the folder tree, the selected-folder tint, and favorite labels (deltas, Library sidebar layout, Favorite labels and roots). | - | | | |
-| D5 | favorites-reorder.html | Drag a favorite between two rows: the new order stays; the grip shows on every row, no hint line (delta, section Favorites drag). | - | | | |
-| D6 | empty-no-folder.html | No folder open: the Open a folder card matches; Preview says "Select an image to preview it" (delta, Preview empty state and picture box). | - | | | |
-| D7 | scanning-busy.html | Open `$SEED/big`: the indeterminate busy bar and the loading cells show (a small folder ends too fast to see). | - | | | |
-| D8 | grid-single-select.html | Click one tile: it shows as selected and Preview shows its metadata; double-click on a tile opens the image in the editor. | - | | | |
-| D9 | grid-multi-select.html | Ctrl-click several tiles: the count matches; the check mark is painted (delta, Selection check glyph); Enter with several opens nothing. | - | | | |
-| D10 | grid-hover.html | Hover a tile: the fill, border, and shadow fade, but it does not scale (delta, Grid hover scale); Enter with one tile selected opens it. | - | | | |
-| D11 | gallery-tabs.html | Switch between the Folder and All Images tabs: Filter Folders shows only in All Images (deltas, Active tab underline, All Images scope). | - | | | |
-| D12 | info-bar.html | Info bar: name and count, the amber pill ("1 filter active"), Name and Date pills (deltas, Filter count pill, Sort pill styling). | - | | | |
-| D13 | filter-colors.html | Click the color chips: the row has twelve swatches, with pink and transparent (delta, section Filter colour row), and the grid filters. | - | | | |
-| D14 | filter-tags.html | Open Filter Tags and check tags: amber chips show in order; a Manage tags row is added (delta, section Tag manager and tag rules). | - | | | |
-| D15 | filter-folders.html | In All Images, use Filter Folders: chips show the last two path parts, a tooltip shows the full path (delta, Folder labels). | - | | | |
-| D16 | preview-single.html | Select one tile: pill x shows on hover; twelve color squares (deltas, Preview tag pills and the add menu, Preview colour squares). | - | | | |
-| D17 | preview-mosaic.html | Select more than nine tiles: the mosaic and "+3 more" caption show; no badge or loading box yet (delta, Preview mosaic). | - | | | |
-| D18 | tag-edit.html | In Preview, choose Create new in + add: an inline input, Enter adds, Escape cancels; name rules apply (delta, Tag manager and tag rules). | - | | | |
-| D19 | context-grid.html | Right-click a tile: the mockup shows Regenerate Thumbnail, the app shows no menu (delta, section Editor templates). | - | | | |
-| D20 | context-preview.html | Open the Preview "+ add" tag menu: it lists tags some files lack, no color tags (delta, Preview tag pills and the add menu). | - | | | |
-| D21 | settings.html | Open Preferences: the groups match; the window is 520 points wide, saves only on OK (delta, section Preferences dialog). | - | | | |
-| D22 | settings-cache.html | Preferences, Cache: the cap row, jpeg-only format, Purge Cache busy strip, OK, Cancel (delta, Preferences dialog). | - | | | |
-| D23 | log-panel.html | Open the Log dock: lines by level, Debug toggle; no critical level, not monospace (deltas, Log levels and toolbar, Monospace face). | - | | | |
-| D24 | empty-folder.html | Open `$SEED/empty`: the empty-folder card and button match; the hint lists ten extensions (delta, section Empty states). | - | | | |
-| D25 | busy-states.html | Check the busy strip. Scan: `$SEED/big`. Purge: Purge Cache with a filled cache. Decode: `$SEED/formats` and the large PSB. | - | | | |
-| D26 | preview-formats.html | Open `$SEED/formats` and select the PSD, CLIP, and KRA: the Format line shows the extension, such as PSD (delta, Preview format detail). | - | | | |
-| D27 | error-state.html | Open `$SEED/broken`, select `broken.png`: the card, Retry, Open in editor; the hint text differs (delta, section Error card). | - | | | |
+| D1 | theme.html | Open the app: colors, spacing, and radii match; the font is Roboto, not Segoe UI (deltas, UI font and Monospace face). | ok | | | |
+| D2 | main-window.html | Open `$SEED/pics`: Library 220 px, Preview 490 px, Log hidden at first; docks resize and move, tabs do not float (delta, Dock regions). | ok | | | |
+| D3 | menubar.html | Open each menu: File holds Open Folder and Quit, not Open Folder only (delta, section File menu); View and Settings match. | diff: View menu checked rows blue-filled; mockup has amber v, no fill | | | |
+| D4 | library.html | Check the folder tree, the selected-folder tint, and favorite labels (deltas, Library sidebar layout, Favorite labels and roots). | delta: Library sidebar layout | | | |
+| D5 | favorites-reorder.html | Drag a favorite between two rows: the new order stays; the grip shows on every row, no hint line (delta, section Favorites drag). | delta: Favorites drag | | | |
+| D6 | empty-no-folder.html | No folder open: the Open a folder card matches; Preview says "Select an image to preview it" (delta, Preview empty state and picture box). | diff: filter bar shows with no folder; card button smaller than mockup | | | |
+| D7 | scanning-busy.html | Open `$SEED/big`: the indeterminate busy bar and the loading cells show (a small folder ends too fast to see). | diff: no scan busy bar or Working... line; label reads No folder - 0 files | | | |
+| D8 | grid-single-select.html | Click one tile: it shows as selected and Preview shows its metadata; double-click on a tile opens the image in the editor. | ok | | | |
+| D9 | grid-multi-select.html | Ctrl-click several tiles: the count matches; the check mark is painted (delta, Selection check glyph); Enter with several opens nothing. | diff: multi-select Preview lacks Metadata block and Tags (union) head | | | |
+| D10 | grid-hover.html | Hover a tile: the fill, border, and shadow fade, but it does not scale (delta, Grid hover scale); Enter with one tile selected opens it. | delta: Grid hover scale | | | |
+| D11 | gallery-tabs.html | Switch between the Folder and All Images tabs: Filter Folders shows only in All Images (deltas, Active tab underline, All Images scope). | delta: Active tab underline | | | |
+| D12 | info-bar.html | Info bar: name and count, the amber pill ("1 filter active"), Name and Date pills (deltas, Filter count pill, Sort pill styling). | delta: Filter count pill | | | |
+| D13 | filter-colors.html | Click the color chips: the row has twelve swatches, with pink and transparent (delta, section Filter colour row), and the grid filters. | delta: Filter colour row | | | |
+| D14 | filter-tags.html | Open Filter Tags and check tags: amber chips show in order; a Manage tags row is added (delta, section Tag manager and tag rules). | delta: Tag manager and tag rules | | | |
+| D15 | filter-folders.html | In All Images, use Filter Folders: chips show the last two path parts, a tooltip shows the full path (delta, Folder labels). | delta: Folder labels | | | |
+| D16 | preview-single.html | Select one tile: pill x shows on hover; twelve color squares (deltas, Preview tag pills and the add menu, Preview colour squares). | delta: Preview tag pills and the add menu | | | |
+| D17 | preview-mosaic.html | Select more than nine tiles: the mosaic and "+3 more" caption show; no badge or loading box yet (delta, Preview mosaic). | delta: Preview mosaic | | | |
+| D18 | tag-edit.html | In Preview, choose Create new in + add: an inline input, Enter adds, Escape cancels; name rules apply (delta, Tag manager and tag rules). | delta: Tag manager and tag rules | | | |
+| D19 | context-grid.html | Right-click a tile: the mockup shows Regenerate Thumbnail, the app shows no menu (delta, section Editor templates). | delta: Editor templates | | | |
+| D20 | context-preview.html | Open the Preview "+ add" tag menu: it lists tags some files lack, no color tags (delta, Preview tag pills and the add menu). | diff: add menu has no "Add tag to selected files" header | | | |
+| D21 | settings.html | Open Preferences: the groups match; the window is 520 points wide, saves only on OK (delta, section Preferences dialog). | diff: text inputs fill #0a0a0a not #211f29; checkbox grey not coral | | | |
+| D22 | settings-cache.html | Preferences, Cache: the cap row, jpeg-only format, Purge Cache busy strip, OK, Cancel (delta, Preferences dialog). | diff: Purge Cache button grey, mockup coral; inputs #0a0a0a | | | |
+| D23 | log-panel.html | Open the Log dock: lines by level, Debug toggle; no critical level, not monospace (deltas, Log levels and toolbar, Monospace face). | diff: Debug checkbox grey not coral; WARNING text column not aligned | | | |
+| D24 | empty-folder.html | Open `$SEED/empty`: the empty-folder card and button match; the hint lists ten extensions (delta, section Empty states). | diff: card button 18 px high, mockup 30 px | | | |
+| D25 | busy-states.html | Check the busy strip. Scan: `$SEED/big`. Purge: Purge Cache with a filled cache. Decode: `$SEED/formats` and the large PSB. | diff: no scan or decode busy strip; only the purge strip exists | | | |
+| D26 | preview-formats.html | Open `$SEED/formats` and select the PSD, CLIP, and KRA: the Format line shows the extension, such as PSD (delta, Preview format detail). | diff: no file-type badge on the Preview image | | | |
+| D27 | error-state.html | Open `$SEED/broken`, select `broken.png`: the card, Retry, Open in editor; the hint text differs (delta, section Error card). | diff: no ERROR line in Log after the render failure; mockup shows one | | | |
 
 ## Sittings
 

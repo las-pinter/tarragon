@@ -31,6 +31,7 @@ mod keys;
 mod manager;
 mod notice;
 mod open;
+mod rename_dialog;
 mod selected;
 pub(crate) mod strip;
 mod thumbs;
@@ -119,6 +120,8 @@ pub struct Gallery {
     notice: notice::Notice,
     /// The tile menu and the choices it made since the last take.
     tile_menu: context_menu::TileMenu,
+    /// The Rename dialog, or none while it is closed.
+    rename: Option<rename_dialog::RenameDialog>,
 }
 
 impl Gallery {
@@ -157,6 +160,7 @@ impl Gallery {
             busy: busy::Busy::default(),
             notice: notice::Notice::default(),
             tile_menu: context_menu::TileMenu::default(),
+            rename: None,
         }
     }
 
@@ -324,6 +328,7 @@ impl Gallery {
         self.strip(ui, now);
         self.request_search_wake(ui, now);
         self.tag_manager.show(ui.ctx());
+        self.show_rename(ui.ctx());
         self.show_notice(ui, now);
         ui.add_space(tokens::SPACING_S);
         self.grid(ui);

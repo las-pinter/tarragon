@@ -15,6 +15,7 @@ mod info_rows;
 mod keys;
 mod notice;
 mod open;
+mod rename_dialog;
 mod scope;
 mod search;
 mod selected;

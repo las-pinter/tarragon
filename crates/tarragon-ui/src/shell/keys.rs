@@ -64,7 +64,11 @@ impl Shell {
     /// Shift+Enter and Command+Enter do nothing. The grid keys follow the same
     /// focus rule, see `grid_key_events`.
     pub(super) fn handle_shortcuts(&mut self, ctx: &Context) {
-        if self.crash_card.is_open() || self.prefs.is_open() || self.gallery.manager_open() {
+        if self.crash_card.is_open()
+            || self.prefs.is_open()
+            || self.gallery.manager_open()
+            || self.gallery.rename_open()
+        {
             return;
         }
         if take_command_press(ctx, Key::O) {

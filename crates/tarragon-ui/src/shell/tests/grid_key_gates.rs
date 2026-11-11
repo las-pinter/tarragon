@@ -39,6 +39,23 @@ fn the_manage_tags_window_blocks_the_grid_keys() {
     assert_grid_keys_blocked(&ctx, &mut shell);
 }
 
+#[test]
+fn the_rename_dialog_blocks_the_grid_keys() {
+    let (ctx, mut shell) = setup();
+    select_one(&ctx, &mut shell, 1);
+    shell.gallery_mut().open_rename(path("b.png"));
+    frame(&ctx, &mut shell, vec![]);
+    frame(&ctx, &mut shell, vec![]);
+    // The field holds the focus, which blocks the keys too. Let it go, so
+    // only the window gate is under test.
+    ctx.memory_mut(|m| {
+        if let Some(id) = m.focused() {
+            m.surrender_focus(id);
+        }
+    });
+    assert_grid_keys_blocked(&ctx, &mut shell);
+}
+
 /// The rect of the tile of item `index`.
 fn tile_rect(ctx: &Context, index: usize) -> egui::Rect {
     ctx.read_response(crate::grid::tile_id(index))

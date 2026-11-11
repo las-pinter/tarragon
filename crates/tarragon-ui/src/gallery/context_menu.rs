@@ -50,6 +50,14 @@ pub enum GridMenuEvent {
     Duplicate(Vec<PathBuf>),
     /// Ask for a new name for the file.
     Rename(PathBuf),
+    /// Give the file a new name. `new_stem` is the name without the extension,
+    /// which stays as it is.
+    RenameTo {
+        /// The file to rename.
+        path: PathBuf,
+        /// The new stem, which passed the name rules.
+        new_stem: String,
+    },
     /// Move the files to the trash.
     Delete(Vec<PathBuf>),
     /// Delete the files with no way back.
@@ -69,6 +77,13 @@ pub(super) struct TileMenu {
     pub(super) from_card: bool,
     /// The choices since the last take.
     events: Vec<GridMenuEvent>,
+}
+
+impl TileMenu {
+    /// Queue a choice for the app.
+    pub(super) fn push_event(&mut self, event: GridMenuEvent) {
+        self.events.push(event);
+    }
 }
 
 /// Draw one row `width` wide. Returns whether an enabled row was clicked.

@@ -213,6 +213,50 @@ fn a_click_on_the_button_sets_the_request_once() {
     assert!(!gallery.take_open_folder_request());
 }
 
+/// The height of the click target that holds the text at `at`.
+fn click_target_height(ctx: &egui::Context, at: egui::Pos2) -> f32 {
+    let layer = ctx.layer_id_at(at).expect("a layer holds the text");
+    ctx.viewport(|viewport| {
+        viewport
+            .prev_pass
+            .widgets
+            .get_layer(layer)
+            .filter(|widget| widget.sense.senses_click() && widget.rect.contains(at))
+            .map(|widget| widget.rect.height())
+            .fold(f32::MAX, f32::min)
+    })
+}
+
+#[test]
+fn the_action_button_is_30_points_high() {
+    let ctx = themed();
+    let mut height = 0.0;
+    let output = ctx.run_ui(RawInput::default(), |ui| {
+        height = crate::widgets::action_button(ui, "Open").rect.height();
+    });
+    output.drop_without_applying_deltas();
+    assert!((height - 30.0).abs() <= 0.5, "button height {height}");
+}
+
+#[test]
+fn both_cards_draw_the_button_at_the_action_height() {
+    for (folder, label) in [
+        (None, "Open Folder..."),
+        (Some(PathBuf::from("/images")), "Open Another Folder..."),
+    ] {
+        let ctx = themed();
+        let mut gallery = Gallery::new(SortMode::Natural);
+        gallery.set_folder(folder);
+        let found = texts(&ctx, &mut gallery, Vec::new());
+        let (_, rect) = found
+            .iter()
+            .find(|(text, _)| text == label)
+            .expect("the button is painted");
+        let height = click_target_height(&ctx, rect.center());
+        assert!((height - 30.0).abs() <= 0.5, "{label}: height {height}");
+    }
+}
+
 #[test]
 fn every_card_is_centred_in_its_area() {
     let area = egui::Rect::from_min_size(egui::pos2(0.0, 100.0), egui::vec2(1200.0, 500.0));

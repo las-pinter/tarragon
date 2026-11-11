@@ -14,6 +14,21 @@ pub(crate) fn small_button(ui: &mut Ui, text: &str) -> Response {
     .inner
 }
 
+/// The height of an action button: the mockup `.btn` height.
+pub(crate) const ACTION_BUTTON_HEIGHT: f32 = 30.0;
+
+/// An action button: `SIZE_BODY` text with 12 by 6 point padding, as `.btn`.
+pub(crate) fn action_button(ui: &mut Ui, text: &str) -> Response {
+    ui.scope(|ui| {
+        ui.spacing_mut().button_padding = vec2(tokens::SPACING_M, 6.0);
+        ui.add(
+            Button::new(RichText::new(text).size(tokens::SIZE_BODY))
+                .min_size(vec2(0.0, ACTION_BUTTON_HEIGHT)),
+        )
+    })
+    .inner
+}
+
 /// A ghost button: a transparent pill with a thin border, caption-size muted
 /// text, and a highlight fill on hover.
 pub(crate) fn ghost_button(ui: &mut Ui, text: &str) -> Response {

@@ -8,7 +8,7 @@ use tarragon_core::format::SUPPORTED_EXTENSIONS;
 use self::icon::folder_icon;
 use super::{Gallery, Scope};
 use crate::tokens;
-use crate::widgets::small_button;
+use crate::widgets::action_button;
 
 /// The width at which the hint wraps.
 const HINT_WIDTH: f32 = 440.0;
@@ -145,7 +145,7 @@ fn column(ui: &mut Ui, kind: EmptyKind) -> bool {
                 .halign(Align::Center),
             );
         });
-        button.is_some_and(|label| small_button(ui, label).clicked())
+        button.is_some_and(|label| action_button(ui, label).clicked())
     })
     .inner
 }

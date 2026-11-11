@@ -220,5 +220,7 @@ fn system_opener(file: &Path) -> Launch {
     }
 }
 
+mod exec;
+
 #[cfg(test)]
 mod tests;

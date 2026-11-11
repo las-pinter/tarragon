@@ -408,14 +408,14 @@ fn uri_list(paths: &[PathBuf]) -> String {
 
 /// The bytes of a path. On Unix they are the exact bytes of the name.
 #[cfg(unix)]
-fn path_bytes(path: &Path) -> Cow<'_, [u8]> {
+pub(crate) fn path_bytes(path: &Path) -> Cow<'_, [u8]> {
     use std::os::unix::ffi::OsStrExt;
     Cow::Borrowed(path.as_os_str().as_bytes())
 }
 
 /// The bytes of a path. A name that is not valid text loses its bad parts.
 #[cfg(not(unix))]
-fn path_bytes(path: &Path) -> Cow<'_, [u8]> {
+pub(crate) fn path_bytes(path: &Path) -> Cow<'_, [u8]> {
     Cow::Owned(path.to_string_lossy().into_owned().into_bytes())
 }
 
@@ -434,7 +434,7 @@ fn bytes_to_path(bytes: Vec<u8>) -> PathBuf {
 
 /// Add `bytes` to `out`, percent-encoded. Letters, digits, `-`, `.`, `_`, `~`,
 /// and `/` stay as they are.
-fn encode_into(out: &mut String, bytes: &[u8]) {
+pub(crate) fn encode_into(out: &mut String, bytes: &[u8]) {
     const HEX: &[u8; 16] = b"0123456789ABCDEF";
     for &byte in bytes {
         if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~' | b'/') {

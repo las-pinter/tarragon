@@ -62,6 +62,14 @@ pub enum GridMenuEvent {
     Delete(Vec<PathBuf>),
     /// Delete the files with no way back.
     DeletePermanently(Vec<PathBuf>),
+    /// The user confirmed a delete in the dialog. The files are the ones the
+    /// dialog showed. `permanent` is set to delete with no way back.
+    ConfirmedDelete {
+        /// The files to delete.
+        paths: Vec<PathBuf>,
+        /// Whether to delete for good instead of moving to the trash.
+        permanent: bool,
+    },
 }
 
 /// Whether the menu is open, and the choices that wait for the app.

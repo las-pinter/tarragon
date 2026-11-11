@@ -25,6 +25,7 @@ pub use view::Scope;
 
 mod busy;
 mod context_menu;
+mod delete_dialog;
 mod empty;
 mod info;
 mod keys;
@@ -122,6 +123,8 @@ pub struct Gallery {
     tile_menu: context_menu::TileMenu,
     /// The Rename dialog, or none while it is closed.
     rename: Option<rename_dialog::RenameDialog>,
+    /// The Delete dialog, or none while it is closed.
+    delete: Option<delete_dialog::DeleteDialog>,
 }
 
 impl Gallery {
@@ -161,6 +164,7 @@ impl Gallery {
             notice: notice::Notice::default(),
             tile_menu: context_menu::TileMenu::default(),
             rename: None,
+            delete: None,
         }
     }
 
@@ -329,6 +333,7 @@ impl Gallery {
         self.request_search_wake(ui, now);
         self.tag_manager.show(ui.ctx());
         self.show_rename(ui.ctx());
+        self.show_delete(ui.ctx());
         self.show_notice(ui, now);
         ui.add_space(tokens::SPACING_S);
         self.grid(ui);

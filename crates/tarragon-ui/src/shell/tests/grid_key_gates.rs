@@ -56,6 +56,30 @@ fn the_rename_dialog_blocks_the_grid_keys() {
     assert_grid_keys_blocked(&ctx, &mut shell);
 }
 
+#[test]
+fn the_delete_dialogs_block_the_grid_keys() {
+    let openers: [fn(&mut crate::gallery::Gallery); 3] = [
+        |gallery| gallery.open_delete(vec![path("b.png")], false),
+        |gallery| gallery.open_delete(vec![path("b.png")], true),
+        |gallery| gallery.open_delete_instead(vec![path("b.png")]),
+    ];
+    for open in openers {
+        let (ctx, mut shell) = setup();
+        select_one(&ctx, &mut shell, 1);
+        open(shell.gallery_mut());
+        frame(&ctx, &mut shell, vec![]);
+        frame(&ctx, &mut shell, vec![]);
+        // The default button holds the focus, which blocks the keys too. Let
+        // it go, so only the window gate is under test.
+        ctx.memory_mut(|m| {
+            if let Some(id) = m.focused() {
+                m.surrender_focus(id);
+            }
+        });
+        assert_grid_keys_blocked(&ctx, &mut shell);
+    }
+}
+
 /// The rect of the tile of item `index`.
 fn tile_rect(ctx: &Context, index: usize) -> egui::Rect {
     ctx.read_response(crate::grid::tile_id(index))

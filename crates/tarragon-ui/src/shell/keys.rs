@@ -68,6 +68,7 @@ impl Shell {
             || self.prefs.is_open()
             || self.gallery.manager_open()
             || self.gallery.rename_open()
+            || self.gallery.delete_open()
         {
             return;
         }

@@ -30,7 +30,11 @@ fn painted(output: egui::FullOutput) -> Vec<(String, Rect)> {
 }
 
 /// Draw one frame and return its texts.
-fn texts(ctx: &Context, gallery: &mut Gallery, events: Vec<Event>) -> Vec<(String, Rect)> {
+pub(super) fn texts(
+    ctx: &Context,
+    gallery: &mut Gallery,
+    events: Vec<Event>,
+) -> Vec<(String, Rect)> {
     painted(frame(ctx, gallery, events))
 }
 
@@ -53,7 +57,7 @@ fn open_with(items: Vec<GridItem>, name: &str) -> (Context, Gallery) {
     (ctx, gallery)
 }
 
-fn has_text(seen: &[(String, Rect)], text: &str) -> bool {
+pub(super) fn has_text(seen: &[(String, Rect)], text: &str) -> bool {
     seen.iter().any(|(shown, _)| shown == text)
 }
 
@@ -70,7 +74,7 @@ fn click_ok(ctx: &Context, gallery: &mut Gallery) {
 }
 
 /// Click the button that reads `label`.
-fn click_button(ctx: &Context, gallery: &mut Gallery, label: &str) {
+pub(super) fn click_button(ctx: &Context, gallery: &mut Gallery, label: &str) {
     let seen = texts(ctx, gallery, Vec::new());
     let (_, rect) = seen
         .iter()
@@ -264,10 +268,29 @@ fn a_right_click_does_not_open_a_menu_while_the_dialog_is_open() {
     for _ in 0..2 {
         super::context_menu::run(&ctx, &mut gallery, Vec::new());
     }
-    let pos = super::context_menu::tile_center(&ctx, 1);
+    // Tile 0 lies outside the dialog window, so only the dim layer can keep
+    // the click from it.
+    let pos = super::context_menu::tile_center(&ctx, 0);
+    let window = ctx
+        // egui keys a window by the optional text of its title.
+        .memory(|memory| memory.area_rect(Id::new(Some("Rename"))))
+        .expect("the dialog window was drawn");
+    assert!(!window.contains(pos), "the tile is under the window");
     let seen = press_at(&ctx, &mut gallery, pos, PointerButton::Secondary);
     assert!(!menu_shows(&seen), "a menu opened over the dialog");
     gallery.rename = None;
     let seen = super::context_menu::run(&ctx, &mut gallery, Vec::new());
     assert!(!menu_shows(&seen), "a menu waited under the dialog");
+}
+
+#[test]
+fn a_rename_does_not_open_while_a_delete_dialog_is_open() {
+    let (ctx, mut gallery) = super::context_menu::setup();
+    gallery.open_delete(vec![PathBuf::from("/images/a.png")], false);
+    gallery.open_rename(PathBuf::from("/images/b.png"));
+    assert!(!gallery.rename_open(), "a Rename dialog opened over Delete");
+    for _ in 0..2 {
+        super::context_menu::run(&ctx, &mut gallery, Vec::new());
+    }
+    assert!(gallery.delete_open(), "the Delete dialog stayed");
 }

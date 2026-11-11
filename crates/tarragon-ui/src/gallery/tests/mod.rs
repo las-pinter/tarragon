@@ -3,6 +3,7 @@
 mod busy;
 mod context_menu;
 mod debounce;
+mod delete_dialog;
 mod empty;
 mod empty_card_menu;
 mod empty_space_menu;

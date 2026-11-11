@@ -2,6 +2,9 @@
 
 mod app;
 mod cli;
+// Not called yet.
+#[allow(dead_code)]
+mod clipboard;
 mod colorflag;
 #[cfg(test)]
 mod colorflag_tests;

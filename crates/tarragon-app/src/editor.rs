@@ -221,6 +221,8 @@ fn system_opener(file: &Path) -> Launch {
 }
 
 mod exec;
+#[cfg(target_os = "linux")]
+mod xdg;
 
 #[cfg(test)]
 mod tests;

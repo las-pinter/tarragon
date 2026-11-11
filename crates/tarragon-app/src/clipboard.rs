@@ -188,18 +188,18 @@ fn recv_error(tool: &ToolCommand, error: RecvTimeoutError) -> ClipboardError {
 }
 
 /// The time left before `deadline`.
-fn remaining(deadline: Instant) -> Duration {
+pub(crate) fn remaining(deadline: Instant) -> Duration {
     deadline.saturating_duration_since(Instant::now())
 }
 
 /// End a child and collect it, so it does not stay a zombie.
-fn kill_and_reap(child: &mut Child) {
+pub(crate) fn kill_and_reap(child: &mut Child) {
     let _ = child.kill();
     let _ = child.wait();
 }
 
 /// Wait for `child` to end until `deadline`. `None` means the time ran out.
-fn wait_until(child: &mut Child, deadline: Instant) -> io::Result<Option<ExitStatus>> {
+pub(crate) fn wait_until(child: &mut Child, deadline: Instant) -> io::Result<Option<ExitStatus>> {
     loop {
         if let Some(status) = child.try_wait()? {
             return Ok(Some(status));
@@ -333,7 +333,7 @@ fn start_readers(
 
 /// Read up to `cap` bytes of `reader` on a thread. The rest is read and thrown
 /// away, so the helper does not stop on a full pipe.
-fn read_capped<R: Read + Send + 'static>(
+pub(crate) fn read_capped<R: Read + Send + 'static>(
     name: &str,
     mut reader: R,
     cap: usize,

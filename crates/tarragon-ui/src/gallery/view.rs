@@ -38,6 +38,7 @@ impl Gallery {
             return;
         }
         self.scope = scope;
+        self.removed_at = None;
         self.filter_events.changed = true;
         self.refresh_view();
     }
@@ -62,6 +63,8 @@ impl Gallery {
             .filter(|&index| self.in_scope(index) && self.matches(index))
             .collect();
         self.visible = visible;
+        // A display position is stale once the view is rebuilt.
+        self.scroll_to = None;
         self.selection.retain_from(&self.visible);
         self.sync_selection_revision();
     }

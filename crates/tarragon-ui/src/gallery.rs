@@ -94,6 +94,10 @@ pub struct Gallery {
     selection_revision: u64,
     /// The selected paths that the revision last saw.
     seen_paths: Vec<PathBuf>,
+    /// The display position that the next grid frame scrolls into view.
+    scroll_to: Option<usize>,
+    /// Where the first removed tile stood, as a display position.
+    removed_at: Option<usize>,
     /// Whether the sort mode changed since the last take.
     sort_changed: bool,
     /// Item indices in sort order.
@@ -152,6 +156,8 @@ impl Gallery {
             selection: Selection::default(),
             selection_revision: 0,
             seen_paths: Vec::new(),
+            scroll_to: None,
+            removed_at: None,
             sort_changed: false,
             order: Vec::new(),
             visible: Vec::new(),
@@ -208,6 +214,7 @@ impl Gallery {
             .as_ref()
             .map(|path| dunce::canonicalize(path).unwrap_or_else(|_| path.clone()));
         self.raw_folder = folder;
+        self.removed_at = None;
         self.refresh_view();
     }
 
@@ -391,6 +398,7 @@ impl Gallery {
     /// Draw the filtered items through the virtual grid.
     fn grid(&mut self, ui: &mut Ui) {
         if let Some(kind) = self.empty_kind() {
+            self.scroll_to = None;
             self.painted_scratch.clear();
             self.record_painted();
             if kind != EmptyKind::EmptyFolder {
@@ -411,6 +419,7 @@ impl Gallery {
             &self.visible,
             &self.selection,
             &mut self.painted_scratch,
+            self.scroll_to.take(),
         );
         self.record_painted();
         if let Some(click) = response.click {

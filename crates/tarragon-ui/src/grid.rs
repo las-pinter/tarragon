@@ -137,6 +137,17 @@ impl GridMetrics {
     }
 }
 
+/// How one frame treats the scroll position.
+#[derive(Clone, Copy)]
+enum Scroll {
+    /// Keep the offset that the scroll area holds.
+    Keep,
+    /// Pin the offset to this many points.
+    Pin(f32),
+    /// Scroll once so the tile at this display position is in view.
+    Reveal(usize),
+}
+
 /// The scroll bar style of the grid: a solid bar with a gap between the tiles
 /// and the bar.
 fn scroll_style() -> egui::style::ScrollStyle {
@@ -226,7 +237,7 @@ impl VirtualGrid {
         scroll_y: f32,
         cell_ui: impl FnMut(&mut Ui, Rect, usize),
     ) -> usize {
-        self.paint(ui, Some(scroll_y), cell_ui).0
+        self.paint(ui, Scroll::Pin(scroll_y), cell_ui).0
     }
 
     /// Paint only the visible cells and let the scroll area keep the offset.
@@ -234,10 +245,10 @@ impl VirtualGrid {
     /// The scroll position lives in egui state across frames, so a wheel turn or
     /// a scrollbar drag moves the grid. Use [`Self::show_at`] to pin the offset.
     pub fn show_interactive(self, ui: &mut Ui, cell_ui: impl FnMut(&mut Ui, Rect, usize)) -> usize {
-        self.paint(ui, None, cell_ui).0
+        self.paint(ui, Scroll::Keep, cell_ui).0
     }
 
-    /// Paint the visible cells. A `Some` offset pins the scroll position.
+    /// Paint the visible cells. `scroll` says whether to keep, pin, or reveal.
     ///
     /// Returns the number of cells built, and whether a right-click hit the
     /// grid area but no cell. A click sensor under the cells takes the
@@ -247,16 +258,16 @@ impl VirtualGrid {
     fn paint(
         self,
         ui: &mut Ui,
-        scroll_y: Option<f32>,
+        scroll: Scroll,
         mut cell_ui: impl FnMut(&mut Ui, Rect, usize),
     ) -> (usize, bool) {
         let mut painted = 0usize;
         let mut empty_click = false;
 
         let area = ScrollArea::vertical().auto_shrink([false, false]);
-        let area = match scroll_y {
-            Some(scroll_y) => area.scroll_offset(vec2(0.0, scroll_y)),
-            None => area,
+        let area = match scroll {
+            Scroll::Pin(scroll_y) => area.scroll_offset(vec2(0.0, scroll_y)),
+            Scroll::Keep | Scroll::Reveal(_) => area,
         };
         // A floating bar paints over the last column. A solid bar takes its own
         // width from the viewport, so the tiles end before the bar. The scope
@@ -273,6 +284,15 @@ impl VirtualGrid {
                     ui.interact(ui.clip_rect(), ui.id().with("grid-backdrop"), Sense::CLICK);
                 empty_click = backdrop.secondary_clicked();
                 let origin = ui.max_rect().min;
+                if let Scroll::Reveal(position) = scroll
+                    && metrics.columns > 0
+                    && position < self.item_count
+                {
+                    let cell =
+                        metrics.cell_rect(position / metrics.columns, position % metrics.columns);
+                    let rect = cell.translate(origin.to_vec2());
+                    ui.scroll_to_rect_animation(rect, None, egui::style::ScrollAnimation::none());
+                }
                 let cols = metrics.visible_cols(viewport);
                 for row in metrics.visible_rows(viewport) {
                     if row >= row_count {
@@ -307,11 +327,14 @@ impl VirtualGrid {
         order: &[usize],
         selection: &Selection,
     ) -> GridResponse {
-        self.items_at(ui, None, items, order, selection, None)
+        self.items_at(ui, Scroll::Keep, items, order, selection, None)
     }
 
     /// Like [`Self::show_items`], and push the item index of each painted
     /// tile into `painted`. The caller clears the vector first.
+    ///
+    /// A `Some` `reveal` is a display position. The grid scrolls once, as far
+    /// as needed, so that tile is in view. Later frames keep the offset.
     pub fn show_items_collect(
         self,
         ui: &mut Ui,
@@ -319,8 +342,10 @@ impl VirtualGrid {
         order: &[usize],
         selection: &Selection,
         painted: &mut Vec<usize>,
+        reveal: Option<usize>,
     ) -> GridResponse {
-        self.items_at(ui, None, items, order, selection, Some(painted))
+        let scroll = reveal.map_or(Scroll::Keep, Scroll::Reveal);
+        self.items_at(ui, scroll, items, order, selection, Some(painted))
     }
 
     /// Show the grid over `items` at a pinned `scroll_y` in points.
@@ -334,14 +359,14 @@ impl VirtualGrid {
         order: &[usize],
         selection: &Selection,
     ) -> GridResponse {
-        self.items_at(ui, Some(scroll_y), items, order, selection, None)
+        self.items_at(ui, Scroll::Pin(scroll_y), items, order, selection, None)
     }
 
-    /// Paint the tiles. A `Some` offset pins the scroll position.
+    /// Paint the tiles. `scroll` says whether to keep, pin, or reveal.
     fn items_at(
         self,
         ui: &mut Ui,
-        scroll_y: Option<f32>,
+        scroll: Scroll,
         items: &[GridItem],
         order: &[usize],
         selection: &Selection,
@@ -354,7 +379,7 @@ impl VirtualGrid {
             metrics: self.metrics,
             item_count: order.len(),
         };
-        let (painted, empty_secondary_click) = grid.paint(ui, scroll_y, |ui, rect, position| {
+        let (painted, empty_secondary_click) = grid.paint(ui, scroll, |ui, rect, position| {
             let Some(&index) = order.get(position) else {
                 return;
             };

@@ -19,6 +19,7 @@ mod open;
 mod rename_dialog;
 mod scope;
 mod search;
+mod select_after_write;
 mod selected;
 mod sort;
 mod tag_manager;

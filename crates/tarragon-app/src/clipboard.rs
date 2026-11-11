@@ -101,8 +101,6 @@ pub fn copy_files(paths: &[PathBuf]) -> Result<(), ClipboardError> {
 /// [`ClipboardError::Unsupported`] on Windows, [`ClipboardError::NoDisplay`]
 /// when no display is set, and [`ClipboardError::Timeout`] when the clipboard
 /// owner does not answer.
-// Not called yet. The allow also keeps the helpers that only this call uses.
-#[allow(dead_code)]
 pub fn read_files() -> Result<Vec<PathBuf>, ClipboardError> {
     if cfg!(windows) {
         return Err(ClipboardError::Unsupported);

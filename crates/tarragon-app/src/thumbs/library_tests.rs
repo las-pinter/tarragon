@@ -193,3 +193,36 @@ fn an_announced_summary_keeps_its_start_when_the_library_loads() {
     assert_eq!(rig.thumbs.started, folder_start);
     assert!(rig.thumbs.loaded_once().is_none());
 }
+
+#[test]
+fn reload_folder_opens_the_shown_folder_again_and_finds_a_new_file() {
+    let (mut rig, a, _b) = rig_with_two_folders("reload-folder");
+    let new = a.join("a3.png");
+    assert!(!rig.gallery.has_item(&new));
+    rig.folder("a", &["a3.png"]);
+    // The shown folder is a no-op for `navigate`, so the reload is a new call.
+    rig.thumbs.navigate(a.clone());
+    assert!(rig.thumbs.is_idle());
+    rig.thumbs.reload_folder(a);
+    rig.run_until_idle();
+    assert!(rig.gallery.has_item(&new));
+}
+
+#[test]
+fn reload_library_loads_the_library_again() {
+    let (mut rig, _a, _b) = rig_with_two_folders("reload-library");
+    rig.thumbs.show_library();
+    settle_library(&mut rig);
+    rig.thumbs.reload_library();
+    assert!(rig.thumbs.is_opening());
+    settle_library(&mut rig);
+    assert!(rig.thumbs.library_loaded());
+}
+
+#[test]
+fn reload_library_does_nothing_while_the_gallery_shows_a_folder() {
+    let (mut rig, _a, _b) = rig_with_two_folders("reload-no-library");
+    rig.thumbs.reload_library();
+    assert!(rig.thumbs.is_idle());
+    assert_eq!(rig.thumbs.library, Library::Absent);
+}

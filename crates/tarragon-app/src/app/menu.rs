@@ -2,7 +2,8 @@
 //!
 //! The gallery only raises the events. Work that can stall runs off the UI
 //! thread: the clipboard copy on a short-lived thread, and the render again of
-//! thumbnails on the work thread. Starting a program does not wait for it.
+//! thumbnails on the work thread. Starting a program does not wait for it. The
+//! choices that write files are in `writes`.
 
 use std::path::{Path, PathBuf};
 
@@ -13,6 +14,7 @@ use tarragon_ui::gallery::GridMenuEvent;
 use super::App;
 use crate::clipboard::{self, ClipboardError};
 use crate::{editor, tags};
+use writes::{FileWrite, Outcome, PendingSelect};
 
 /// What a clipboard copy on its thread answers.
 type CopyResult = Result<(), ClipboardError>;
@@ -22,6 +24,13 @@ type CopyResult = Result<(), ClipboardError>;
 pub(super) struct MenuState {
     /// The answer of the running clipboard copy, until it arrives.
     copying: Option<Receiver<CopyResult>>,
+    /// The answer of the running duplicate or paste, until it arrives.
+    writing: Option<Receiver<Outcome>>,
+    /// The files to select once the shown folder has loaded again.
+    pending: Option<PendingSelect>,
+    /// The last write that changed files. Nothing reads it yet.
+    #[allow(dead_code, reason = "kept for the undo slot")]
+    last_write: Option<FileWrite>,
 }
 
 impl App {
@@ -29,6 +38,8 @@ impl App {
     /// the gallery raised this frame. Runs once per frame, after the draw.
     pub(super) fn apply_menu_events(&mut self, ctx: &Context) {
         self.poll_menu_work(ctx);
+        self.poll_write(ctx);
+        self.apply_pending_select(ctx);
         for event in self.shell.gallery_mut().take_menu_events() {
             self.apply_menu_event(ctx, event);
         }
@@ -51,9 +62,9 @@ impl App {
                 self.shell.gallery_mut().open_delete(paths, true);
             }
             GridMenuEvent::TagPaths { paths, tag } => self.tag_paths(ctx, &paths, &tag),
-            GridMenuEvent::RenameTo { path, new_stem } => rename_to(&path, &new_stem),
-            GridMenuEvent::Duplicate(paths) => duplicate(&paths),
-            GridMenuEvent::Paste => paste(),
+            GridMenuEvent::RenameTo { path, new_stem } => self.rename_to(ctx, &path, &new_stem),
+            GridMenuEvent::Duplicate(paths) => self.duplicate(ctx, paths),
+            GridMenuEvent::Paste => self.paste(ctx),
             GridMenuEvent::ConfirmedDelete { paths, permanent } => {
                 confirmed_delete(&paths, permanent);
             }
@@ -190,21 +201,11 @@ fn regenerate_text(result: Result<usize, String>) -> String {
     }
 }
 
-/// Rename the file to `new_stem`, keeping its extension. Not wired yet: the
-/// event is taken and nothing happens.
-fn rename_to(_path: &Path, _new_stem: &str) {}
-
-/// Copy each file next to itself. Not wired yet: the event is taken and nothing
-/// happens.
-fn duplicate(_paths: &[PathBuf]) {}
-
-/// Paste the clipboard files into the open folder. Not wired yet: the event is
-/// taken and nothing happens.
-fn paste() {}
-
 /// Delete the confirmed files. Not wired yet: the event is taken and nothing
 /// happens.
 fn confirmed_delete(_paths: &[PathBuf], _permanent: bool) {}
+
+mod writes;
 
 #[cfg(test)]
 #[path = "menu_tests.rs"]

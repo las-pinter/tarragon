@@ -69,6 +69,7 @@ impl Shell {
             || self.gallery.manager_open()
             || self.gallery.rename_open()
             || self.gallery.delete_open()
+            || self.gallery.tag_picker_open()
         {
             return;
         }

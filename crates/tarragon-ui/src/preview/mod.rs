@@ -5,7 +5,7 @@ use egui::{RichText, ScrollArea, Ui};
 use crate::swatch::Swatch;
 use crate::tokens;
 
-mod add;
+pub(crate) mod add;
 pub mod budget;
 mod colors;
 mod failure;

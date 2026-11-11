@@ -80,6 +80,18 @@ fn the_delete_dialogs_block_the_grid_keys() {
     }
 }
 
+#[test]
+fn the_tag_picker_blocks_the_grid_keys() {
+    let (ctx, mut shell) = setup();
+    select_one(&ctx, &mut shell, 1);
+    shell
+        .gallery_mut()
+        .open_tag_picker(egui::pos2(300.0, 300.0), vec![path("b.png")]);
+    frame(&ctx, &mut shell, vec![]);
+    frame(&ctx, &mut shell, vec![]);
+    assert_grid_keys_blocked(&ctx, &mut shell);
+}
+
 /// The rect of the tile of item `index`.
 fn tile_rect(ctx: &Context, index: usize) -> egui::Rect {
     ctx.read_response(crate::grid::tile_id(index))

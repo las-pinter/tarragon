@@ -58,6 +58,14 @@ pub enum GridMenuEvent {
         /// The new stem, which passed the name rules.
         new_stem: String,
     },
+    /// Add a tag to the files. The tag is a known one, or a new name that
+    /// passed the name rules.
+    TagPaths {
+        /// The files that get the tag.
+        paths: Vec<PathBuf>,
+        /// The tag name.
+        tag: String,
+    },
     /// Move the files to the trash.
     Delete(Vec<PathBuf>),
     /// Delete the files with no way back.
@@ -127,6 +135,9 @@ impl Gallery {
     /// Open the tile menu at the pointer. A right-click on an unselected tile
     /// selects only that tile first. On a selected tile the selection stays.
     pub(super) fn open_tile_menu(&mut self, ui: &Ui, click: CellClick) {
+        if self.tag_picker.is_some() {
+            return;
+        }
         if !self.selection.contains(click.index) {
             self.selection.select_only(click.index);
             self.sync_selection_revision();
@@ -144,7 +155,7 @@ impl Gallery {
     /// is open. It replaces the tile menu, so one menu shows at a time.
     /// Returns whether the menu opened.
     pub(super) fn open_empty_space_menu(&mut self, ui: &Ui) -> bool {
-        if self.folder.is_none() {
+        if self.folder.is_none() || self.tag_picker.is_some() {
             return false;
         }
         let pos = ui

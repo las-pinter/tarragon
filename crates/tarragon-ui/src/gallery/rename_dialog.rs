@@ -193,9 +193,9 @@ fn select_all(ctx: &Context, id: Id, text: &str) {
 
 impl Gallery {
     /// Open the Rename dialog for the file at `path`. A tile menu that is open
-    /// closes. Nothing opens while a Delete dialog is open.
+    /// closes. Nothing opens while a Delete dialog or the tag picker is open.
     pub fn open_rename(&mut self, path: PathBuf) {
-        if self.delete.is_some() {
+        if self.delete.is_some() || self.tag_picker.is_some() {
             return;
         }
         self.close_tile_menu();

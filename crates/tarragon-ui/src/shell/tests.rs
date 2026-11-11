@@ -14,6 +14,7 @@ mod grid_keys;
 mod keys;
 mod min_width;
 mod preview_wiring;
+mod tag_picker_input;
 
 /// The headless screen, wide and tall enough for both docks.
 pub(super) fn input() -> RawInput {

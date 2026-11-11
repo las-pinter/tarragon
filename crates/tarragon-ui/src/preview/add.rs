@@ -2,7 +2,7 @@
 //! input for a new tag name.
 
 use egui::{
-    Area, CornerRadius, FontId, Frame, Id, Key, Margin, Order, Response, ScrollArea, Stroke,
+    Area, CornerRadius, FontId, Frame, Id, Key, Margin, Order, Rect, Response, ScrollArea, Stroke,
     StrokeKind, TextEdit, Ui, text::LayoutJob, text_edit::TextEditState, vec2,
 };
 
@@ -53,18 +53,19 @@ pub fn show_button(ui: &mut Ui, state: &mut AddState) -> Response {
     response
 }
 
-/// Draw the menu next to `button`. A row applies its tag; "Create new..." opens
-/// the input. Escape or a press outside closes it with no event.
+/// Draw the menu next to `button`, the rect that it opens from. A row applies
+/// its tag; "Create new..." opens the input. Escape or a press outside closes
+/// it with no event.
 pub fn show_menu(
     ui: &Ui,
     id: Id,
-    button: &Response,
+    button: Rect,
     choices: &[&str],
     state: &mut AddState,
     events: &mut Vec<PreviewEvent>,
 ) {
     let bounds = ui.ctx().content_rect().shrink(tokens::MENU_EDGE_MARGIN);
-    let (pos, pivot) = menu_placement(button.rect, menu_height(choices.len()), bounds);
+    let (pos, pivot) = menu_placement(button, menu_height(choices.len()), bounds);
     let room = ui.max_rect().right() - pos.x;
     let area = Area::new(id)
         .order(Order::Foreground)
@@ -130,7 +131,7 @@ pub fn show_menu(
         i.pointer.any_pressed()
             && i.pointer
                 .interact_pos()
-                .is_some_and(|p| !area.response.rect.contains(p) && !button.rect.contains(p))
+                .is_some_and(|p| !area.response.rect.contains(p) && !button.contains(p))
     });
     if escape || outside {
         *state = AddState::Closed;

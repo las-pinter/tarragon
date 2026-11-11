@@ -35,6 +35,7 @@ mod open;
 mod rename_dialog;
 mod selected;
 pub(crate) mod strip;
+mod tag_picker;
 mod thumbs;
 mod view;
 
@@ -125,6 +126,8 @@ pub struct Gallery {
     rename: Option<rename_dialog::RenameDialog>,
     /// The Delete dialog, or none while it is closed.
     delete: Option<delete_dialog::DeleteDialog>,
+    /// The tag picker, or none while it is closed.
+    tag_picker: Option<tag_picker::TagPicker>,
 }
 
 impl Gallery {
@@ -165,6 +168,7 @@ impl Gallery {
             tile_menu: context_menu::TileMenu::default(),
             rename: None,
             delete: None,
+            tag_picker: None,
         }
     }
 
@@ -337,6 +341,7 @@ impl Gallery {
         self.show_notice(ui, now);
         ui.add_space(tokens::SPACING_S);
         self.grid(ui);
+        self.show_tag_picker(ui);
     }
 
     /// Ask for a repaint while the search window runs.

@@ -189,8 +189,9 @@ impl Gallery {
     /// Open the Delete confirm for `paths`: the permanent one when `permanent`
     /// is set, the Trash one otherwise. A tile menu that is open closes.
     ///
-    /// Nothing opens for an empty list, or while a Delete or Rename dialog is
-    /// open, so a second event cannot stack a dialog on the first.
+    /// Nothing opens for an empty list, or while a Delete or Rename dialog or
+    /// the tag picker is open, so a second event cannot stack a dialog on the
+    /// first.
     pub fn open_delete(&mut self, paths: Vec<PathBuf>, permanent: bool) {
         let kind = if permanent {
             Kind::Permanent
@@ -208,7 +209,11 @@ impl Gallery {
 
     /// Open the dialog of `kind` unless nothing may open.
     fn open_delete_kind(&mut self, paths: Vec<PathBuf>, kind: Kind) {
-        if paths.is_empty() || self.delete.is_some() || self.rename.is_some() {
+        if paths.is_empty()
+            || self.delete.is_some()
+            || self.rename.is_some()
+            || self.tag_picker.is_some()
+        {
             return;
         }
         self.close_tile_menu();

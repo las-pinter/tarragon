@@ -23,13 +23,14 @@ mod selected;
 mod sort;
 mod tag_manager;
 mod tag_manager_modal;
+mod tag_picker;
 mod thumbs;
 
 use std::path::PathBuf;
 
 use super::strip::{filter_pill_text, sort_label};
 use super::*;
-use egui::{Event, Id, Modifiers, PointerButton, Pos2, RawInput, Rect, vec2};
+use egui::{Event, Id, Modifiers, PointerButton, Pos2, RawInput, Rect, pos2, vec2};
 
 /// Four items in one folder. Two files share one mtime, so the date tie shows.
 fn items() -> Vec<GridItem> {

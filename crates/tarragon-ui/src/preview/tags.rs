@@ -65,7 +65,14 @@ pub fn show_pills(
             .map(String::as_str)
             .filter(|name| !full(name))
             .collect();
-        add::show_menu(ui, ui.id().with("add-menu"), button, &choices, add, events);
+        add::show_menu(
+            ui,
+            ui.id().with("add-menu"),
+            button.rect,
+            &choices,
+            add,
+            events,
+        );
     }
     add::show_input(ui, ui.id().with("add-input"), add, events);
 }

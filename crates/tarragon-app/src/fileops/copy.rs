@@ -16,8 +16,42 @@ pub struct Copied {
     pub path: PathBuf,
     /// The bytes in the new file.
     pub len: u64,
-    /// The modification time of the new file, in epoch seconds.
-    pub mtime: i64,
+    /// The modification time of the new file, at the precision of the disk.
+    /// It is `UNIX_EPOCH` when the disk gives none.
+    pub mtime: SystemTime,
+    /// The device and inode of the new file, so a later file of the same name
+    /// is not taken for it.
+    #[cfg(unix)]
+    pub id: (u64, u64),
+}
+
+impl Copied {
+    /// Whether the file is still the one the copy made: a regular file, not a
+    /// link, with the saved length, the exact saved modification time, and on
+    /// Unix the saved device and inode. A missing file, a link, a file that was
+    /// edited since, or a new file that took the name gives false.
+    #[must_use]
+    pub fn is_unchanged(&self) -> bool {
+        fs::symlink_metadata(&self.path).is_ok_and(|metadata| {
+            metadata.is_file()
+                && metadata.len() == self.len
+                && metadata.modified().unwrap_or(UNIX_EPOCH) == self.mtime
+                && self.same_file_id(&metadata)
+        })
+    }
+
+    /// Whether `metadata` has the saved device and inode.
+    #[cfg(unix)]
+    fn same_file_id(&self, metadata: &fs::Metadata) -> bool {
+        use std::os::unix::fs::MetadataExt;
+        (metadata.dev(), metadata.ino()) == self.id
+    }
+
+    /// Without device and inode numbers, the other checks stand alone.
+    #[cfg(not(unix))]
+    fn same_file_id(&self, _metadata: &fs::Metadata) -> bool {
+        true
+    }
 }
 
 /// Copy `source` into `folder` and give the new file.
@@ -124,7 +158,12 @@ fn write_copy(
         Ok(metadata) => Ok(Copied {
             path: target.to_path_buf(),
             len: metadata.len(),
-            mtime: metadata.modified().map_or(0, epoch_secs),
+            mtime: metadata.modified().unwrap_or(UNIX_EPOCH),
+            #[cfg(unix)]
+            id: {
+                use std::os::unix::fs::MetadataExt;
+                (metadata.dev(), metadata.ino())
+            },
         }),
         Err(error) => {
             // The write error is the one to report, so a failed cleanup is ignored.
@@ -132,12 +171,6 @@ fn write_copy(
             Err(error)
         }
     }
-}
-
-/// The epoch seconds of a time. A time before the epoch gives zero.
-fn epoch_secs(time: SystemTime) -> i64 {
-    time.duration_since(UNIX_EPOCH)
-        .map_or(0, |d| i64::try_from(d.as_secs()).unwrap_or(i64::MAX))
 }
 
 #[cfg(test)]

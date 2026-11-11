@@ -19,7 +19,9 @@ use crate::app::App;
 use crate::clipboard::{self, ClipboardError};
 use crate::fileops::{self, Copied, FileOpError};
 
-/// What one file write changed, for the undo slot.
+use super::undo::{UndoChange, UndoStep};
+
+/// What one file write changed.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub(super) struct FileWrite {
     /// The files that a duplicate or a paste made.
@@ -42,6 +44,8 @@ pub(super) struct Outcome {
     pub deleted: Vec<PathBuf>,
     /// The files the trash refused, to offer a permanent delete.
     pub refused: Vec<PathBuf>,
+    /// What the write does to the undo slot.
+    pub undo: UndoChange,
 }
 
 /// Files to select after the shown folder has loaded again.
@@ -75,7 +79,10 @@ impl App {
         let cache = CacheStore::new(self.cache_root.clone());
         match rename_write(&self.db, &cache, path, new_stem) {
             Ok(write) => {
-                self.finish_write(ctx, write, None, path.parent());
+                if let Some((old, new)) = write.renamed.clone() {
+                    self.set_undo(Some(UndoStep::Rename { old, new }));
+                }
+                self.finish_write(ctx, &write, None, path.parent());
             }
             Err(error) => {
                 tracing::warn!("cannot rename the file: {error}");
@@ -103,7 +110,7 @@ impl App {
 
     /// [`Self::paste`] with the call that reads the clipboard, so a test needs
     /// no clipboard program.
-    fn paste_with(
+    pub(super) fn paste_with(
         &mut self,
         ctx: &Context,
         read: impl FnOnce() -> Result<Vec<PathBuf>, ClipboardError> + Send + 'static,
@@ -162,7 +169,8 @@ impl App {
         match receiver.try_recv() {
             Ok(outcome) => {
                 let folder = outcome.folder.as_deref();
-                self.finish_write(ctx, outcome.write, outcome.notice, folder);
+                self.apply_undo_change(outcome.undo);
+                self.finish_write(ctx, &outcome.write, outcome.notice, folder);
                 self.finish_delete(ctx, outcome.deleted, outcome.refused, folder);
             }
             Err(TryRecvError::Empty) => self.menu.writing = Some(receiver),
@@ -173,12 +181,12 @@ impl App {
         }
     }
 
-    /// Show the notice, keep the write, and load the shown folder again when a
-    /// file changed. `folder` is the folder the write was for.
-    fn finish_write(
+    /// Show the notice, and load the shown folder again when a file changed.
+    /// `folder` is the folder the write was for.
+    pub(super) fn finish_write(
         &mut self,
         ctx: &Context,
-        write: FileWrite,
+        write: &FileWrite,
         notice: Option<String>,
         folder: Option<&Path>,
     ) {
@@ -189,7 +197,6 @@ impl App {
         if let Some((_, new)) = &write.renamed {
             changed.push(new.clone());
         }
-        self.menu.last_write = Some(write);
         if !changed.is_empty() {
             self.reload_and_select(ctx, changed, folder);
         }
@@ -288,10 +295,10 @@ impl App {
 }
 
 /// The notice for a second write request.
-const BUSY: &str = "Another file task is running. Try again soon.";
+pub(super) const BUSY: &str = "Another file task is running. Try again soon.";
 
 /// Rename the file on disk and in the database.
-fn rename_write(
+pub(super) fn rename_write(
     db: &Database,
     cache: &CacheStore,
     path: &Path,
@@ -338,6 +345,14 @@ fn duplicate_outcome(paths: &[PathBuf], folder: Option<PathBuf>) -> Outcome {
             )
         }
     });
+    // A duplicate that made no copy leaves an older step in place.
+    let undo = if copied.is_empty() {
+        UndoChange::Keep
+    } else {
+        UndoChange::Set(UndoStep::Duplicate {
+            copies: copied.clone(),
+        })
+    };
     Outcome {
         write: FileWrite {
             copied,
@@ -345,6 +360,7 @@ fn duplicate_outcome(paths: &[PathBuf], folder: Option<PathBuf>) -> Outcome {
         },
         notice,
         folder,
+        undo,
         ..Outcome::default()
     }
 }
@@ -363,6 +379,7 @@ fn paste_outcome(
                 write: FileWrite::default(),
                 notice: Some(paste_failure_text(&error)),
                 folder: Some(folder.to_path_buf()),
+                undo: UndoChange::Clear,
                 ..Outcome::default()
             };
         }
@@ -372,6 +389,7 @@ fn paste_outcome(
             write: FileWrite::default(),
             notice: Some("The clipboard holds no files".to_owned()),
             folder: Some(folder.to_path_buf()),
+            undo: UndoChange::Clear,
             ..Outcome::default()
         };
     }
@@ -390,6 +408,7 @@ fn paste_outcome(
         },
         notice: Some(notice),
         folder: Some(folder.to_path_buf()),
+        undo: UndoChange::Clear,
         ..Outcome::default()
     }
 }

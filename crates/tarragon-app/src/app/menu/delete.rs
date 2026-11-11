@@ -13,12 +13,13 @@ use std::path::{Path, PathBuf};
 
 use eframe::egui::Context;
 
+use super::undo::UndoChange;
 use super::writes::Outcome;
 use crate::app::App;
 use crate::fileops::{self, FileOpError};
 
 /// What a delete call gives back: the failure of each path it could not remove.
-type Failures = Vec<(PathBuf, FileOpError)>;
+pub(super) type Failures = Vec<(PathBuf, FileOpError)>;
 
 impl App {
     /// Carry out a delete the user confirmed: the trash, or for good when
@@ -98,6 +99,7 @@ fn delete_outcome(
         folder,
         deleted,
         refused,
+        undo: UndoChange::Clear,
         ..Outcome::default()
     }
 }

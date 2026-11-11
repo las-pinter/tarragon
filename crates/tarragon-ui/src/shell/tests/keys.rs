@@ -57,6 +57,7 @@ pub(super) fn frame_held(
             Key::Enter,
             Key::F2,
             Key::Delete,
+            Key::Z,
         ];
         for key in watched {
             if ui.input(|input| input.key_pressed(key)) {

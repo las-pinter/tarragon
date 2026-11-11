@@ -66,6 +66,9 @@ pub enum GridMenuEvent {
         /// The tag name.
         tag: String,
     },
+    /// Undo the last rename or duplicate. The shell raises it only while
+    /// [`Gallery::set_undo_available`] was set to true.
+    Undo,
     /// Move the files to the trash.
     Delete(Vec<PathBuf>),
     /// Delete the files with no way back.
@@ -91,6 +94,8 @@ pub(super) struct TileMenu {
     empty_space: bool,
     /// Whether the open menu came from the empty-folder card.
     pub(super) from_card: bool,
+    /// Whether the app holds a step that Ctrl+Z can undo.
+    pub(super) undo_available: bool,
     /// The choices since the last take.
     events: Vec<GridMenuEvent>,
 }

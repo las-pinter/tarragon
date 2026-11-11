@@ -86,9 +86,13 @@ fn a_rename_moves_the_file_and_selects_the_new_name_after_the_reload() {
     });
     assert!(rig.app.shell.gallery_mut().has_item(&new));
     assert!(!rig.app.shell.gallery_mut().has_item(&dir.join("a.png")));
-    let write = rig.app.menu.last_write.clone().expect("the write is kept");
-    assert_eq!(write.renamed, Some((dir.join("a.png"), new)));
-    assert_eq!(write.copied, Vec::new());
+    assert_eq!(
+        rig.app.menu.undo,
+        Some(UndoStep::Rename {
+            old: dir.join("a.png"),
+            new,
+        })
+    );
 }
 
 #[test]
@@ -102,7 +106,7 @@ fn a_rename_onto_an_existing_name_shows_the_error_and_changes_nothing() {
     wait_for_text(&mut rig, "Cannot rename");
     assert!(dir.join("a.png").exists());
     assert!(dir.join("b.png").exists());
-    assert!(rig.app.menu.last_write.is_none());
+    assert!(rig.app.menu.undo.is_none());
     assert!(rig.app.menu.pending.is_none());
 }
 
@@ -125,11 +129,13 @@ fn a_duplicate_of_three_files_selects_the_three_copies_after_the_reload() {
     for copy in &copies {
         assert!(copy.exists(), "{}", copy.display());
     }
-    let write = rig.app.menu.last_write.clone().expect("the write is kept");
-    let mut made: Vec<PathBuf> = write.copied.iter().map(|c| c.path.clone()).collect();
-    made.sort();
-    assert_eq!(made, copies);
-    assert!(write.copied.iter().all(|c| c.len > 0));
+    let Some(UndoStep::Duplicate { copies: made }) = rig.app.menu.undo.clone() else {
+        panic!("the duplicate is in the undo slot");
+    };
+    let mut paths: Vec<PathBuf> = made.iter().map(|c| c.path.clone()).collect();
+    paths.sort();
+    assert_eq!(paths, copies);
+    assert!(made.iter().all(|c| c.len > 0));
 }
 
 #[test]
@@ -365,7 +371,7 @@ fn a_write_that_ends_during_a_folder_switch_does_not_reload_the_old_folder() {
         renamed: Some((dir.join("a.png"), dir.join("z.png"))),
     };
     let ctx = rig.ctx.clone();
-    rig.app.finish_write(&ctx, write, None, Some(&dir));
+    rig.app.finish_write(&ctx, &write, None, Some(&dir));
 
     // The switch wins: the pending folder is still the other one, and no
     // selection is held for the old folder.
@@ -387,7 +393,7 @@ fn a_write_for_another_folder_than_the_shown_one_does_not_reload() {
         renamed: Some((dir.join("a.png"), dir.join("z.png"))),
     };
     let elsewhere = dir.join("elsewhere");
-    rig.app.finish_write(&ctx, write, None, Some(&elsewhere));
+    rig.app.finish_write(&ctx, &write, None, Some(&elsewhere));
     assert!(rig.app.menu.pending.is_none());
     assert!(!rig.app.thumbs.is_opening());
 }
@@ -418,7 +424,7 @@ fn in_the_library_view_a_paste_does_nothing_and_a_duplicate_copies_beside_each_f
     // the copies for selection.
     let mut reloaded = false;
     frames_until(&mut rig, "the duplicate to end", |rig| {
-        if rig.app.menu.last_write.is_some() {
+        if rig.app.menu.undo.is_some() {
             reloaded = rig.app.thumbs.is_opening() && rig.app.menu.pending.is_some();
             return true;
         }
@@ -426,9 +432,11 @@ fn in_the_library_view_a_paste_does_nothing_and_a_duplicate_copies_beside_each_f
     });
     assert!(reloaded, "the library did not load again");
     assert!(copy.exists());
-    let write = rig.app.menu.last_write.clone().expect("the write is kept");
-    assert_eq!(write.copied.len(), 1);
-    assert_eq!(write.copied[0].path, copy);
+    let Some(UndoStep::Duplicate { copies }) = rig.app.menu.undo.clone() else {
+        panic!("the duplicate is in the undo slot");
+    };
+    assert_eq!(copies.len(), 1);
+    assert_eq!(copies[0].path, copy);
 }
 
 #[test]

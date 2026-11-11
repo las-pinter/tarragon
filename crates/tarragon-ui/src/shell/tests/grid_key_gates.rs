@@ -100,7 +100,7 @@ fn tile_rect(ctx: &Context, index: usize) -> egui::Rect {
 }
 
 /// Right-click the tile of item `index`, then run one frame to draw the menu.
-fn right_click_tile(ctx: &Context, shell: &mut Shell, index: usize) {
+pub(super) fn right_click_tile(ctx: &Context, shell: &mut Shell, index: usize) {
     right_click_at(ctx, shell, tile_rect(ctx, index).center());
 }
 

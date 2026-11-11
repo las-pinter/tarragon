@@ -3,8 +3,8 @@
 //! The gallery only raises the events. Work that can stall runs off the UI
 //! thread: the clipboard copy on a short-lived thread, and the render again of
 //! thumbnails on the work thread. Starting a program does not wait for it. The
-//! choices that write files are in `writes`, and the confirmed deletes in
-//! `delete`.
+//! choices that write files are in `writes`, the confirmed deletes in `delete`,
+//! and the one-step undo in `undo`.
 
 use std::path::{Path, PathBuf};
 
@@ -15,7 +15,8 @@ use tarragon_ui::gallery::GridMenuEvent;
 use super::App;
 use crate::clipboard::{self, ClipboardError};
 use crate::{editor, tags};
-use writes::{Deferred, FileWrite, Outcome, PendingSelect};
+use undo::UndoStep;
+use writes::{Deferred, Outcome, PendingSelect};
 
 /// What a clipboard copy on its thread answers.
 type CopyResult = Result<(), ClipboardError>;
@@ -31,9 +32,9 @@ pub(super) struct MenuState {
     pending: Option<PendingSelect>,
     /// A reload that waits for the open that runs now.
     deferred: Option<Deferred>,
-    /// The last write that changed files. Nothing reads it yet.
-    #[allow(dead_code, reason = "kept for the undo slot")]
-    last_write: Option<FileWrite>,
+    /// The one step that Ctrl+Z can undo. Change it only through
+    /// `App::set_undo`, which tells the gallery.
+    undo: Option<UndoStep>,
 }
 
 impl App {
@@ -69,6 +70,7 @@ impl App {
             GridMenuEvent::RenameTo { path, new_stem } => self.rename_to(ctx, &path, &new_stem),
             GridMenuEvent::Duplicate(paths) => self.duplicate(ctx, paths),
             GridMenuEvent::Paste => self.paste(ctx),
+            GridMenuEvent::Undo => self.undo_last(ctx),
             GridMenuEvent::ConfirmedDelete { paths, permanent } => {
                 self.confirmed_delete(ctx, paths, permanent);
             }
@@ -206,6 +208,7 @@ fn regenerate_text(result: Result<usize, String>) -> String {
 }
 
 mod delete;
+mod undo;
 mod writes;
 
 #[cfg(test)]

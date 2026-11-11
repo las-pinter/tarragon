@@ -63,6 +63,10 @@ impl Shell {
     /// tile has focus, so a focused button or text field keeps its own Enter.
     /// Shift+Enter and Command+Enter do nothing. The grid keys follow the same
     /// focus rule, see `grid_key_events`.
+    ///
+    /// Command+Z raises [`crate::gallery::GridMenuEvent::Undo`] under the same
+    /// focus rule, and only while the gallery knows of a step to undo. A focused
+    /// text field keeps its own undo.
     pub(super) fn handle_shortcuts(&mut self, ctx: &Context) {
         if self.crash_card.is_open()
             || self.prefs.is_open()
@@ -92,6 +96,14 @@ impl Shell {
             && take_exact_press(ctx, Key::Enter, Modifiers::NONE)
         {
             self.gallery.open_selected();
+        }
+        // Taken only when the app holds a step, so with an empty slot the press
+        // stays for anything else that reads it. Ctrl+Shift+Z does nothing.
+        if self.enter_is_free(ctx)
+            && self.gallery.undo_ready()
+            && take_fresh_press(ctx, Key::Z, Modifiers::COMMAND)
+        {
+            self.gallery.raise_undo();
         }
         self.grid_key_events(ctx);
     }

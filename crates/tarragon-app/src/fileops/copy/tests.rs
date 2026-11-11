@@ -56,7 +56,7 @@ fn duplicate_twice_gives_copy_then_copy_2_and_keeps_the_source() {
     assert_eq!(first.path, dir.0.join("a copy.png"));
     assert_eq!(second.path, dir.0.join("a copy 2.png"));
     assert_eq!(first.len, 6);
-    assert!(first.mtime > 0);
+    assert!(first.mtime > UNIX_EPOCH);
     assert_eq!(fs::read(&first.path).expect("read"), b"pixels");
     assert_eq!(fs::read(&second.path).expect("read"), b"pixels");
     assert_eq!(fs::read(&source).expect("read"), b"pixels");
@@ -216,4 +216,95 @@ fn a_fifo_is_refused_without_blocking_and_leaves_no_file() {
     let error = result.expect_err("fifo");
     assert!(matches!(error, FileOpError::NotAFile(_)), "{error}");
     assert_eq!(names(&into), Vec::<String>::new());
+}
+
+#[test]
+fn is_unchanged_is_true_for_a_fresh_copy_and_false_after_an_edit_or_a_removal() {
+    let dir = TempDir::new();
+    let source = dir.0.join("a.png");
+    fs::write(&source, b"pixels").expect("write the source");
+    let copied = copy_into(&source, &dir.sub("into")).expect("copy");
+    assert!(copied.is_unchanged());
+
+    let file = OpenOptions::new()
+        .write(true)
+        .open(&copied.path)
+        .expect("open the copy");
+    let saved = file.metadata().expect("read").modified().expect("time");
+    file.set_modified(saved + std::time::Duration::from_secs(60))
+        .expect("touch the copy");
+    drop(file);
+    assert!(!copied.is_unchanged(), "the time changed");
+
+    fs::write(&copied.path, b"more pixels").expect("edit the copy");
+    let file = OpenOptions::new()
+        .write(true)
+        .open(&copied.path)
+        .expect("open the copy");
+    file.set_modified(saved).expect("restore the time");
+    drop(file);
+    assert!(!copied.is_unchanged(), "the length changed");
+
+    fs::remove_file(&copied.path).expect("remove the copy");
+    assert!(!copied.is_unchanged(), "the file is gone");
+}
+
+/// Set the modification time of the file at `path`.
+fn set_mtime(path: &Path, time: SystemTime) {
+    OpenOptions::new()
+        .write(true)
+        .open(path)
+        .expect("open the file")
+        .set_modified(time)
+        .expect("set the time");
+}
+
+#[test]
+fn is_unchanged_compares_the_time_below_one_second() {
+    let dir = TempDir::new();
+    let source = dir.0.join("a.png");
+    fs::write(&source, b"pixels").expect("write the source");
+    let mut copied = copy_into(&source, &dir.sub("into")).expect("copy");
+    let whole = UNIX_EPOCH + std::time::Duration::from_secs(1_700_000_000);
+    let saved = whole + std::time::Duration::from_millis(100);
+    set_mtime(&copied.path, saved);
+    copied.mtime = saved;
+    assert!(copied.is_unchanged(), "the saved time matches");
+
+    set_mtime(&copied.path, whole + std::time::Duration::from_millis(900));
+
+    assert!(!copied.is_unchanged(), "the same second, another time");
+}
+
+#[cfg(unix)]
+#[test]
+fn is_unchanged_is_false_for_a_new_file_with_the_same_size_content_and_time() {
+    let dir = TempDir::new();
+    let source = dir.0.join("a.png");
+    fs::write(&source, b"pixels").expect("write the source");
+    let copied = copy_into(&source, &dir.sub("into")).expect("copy");
+    // The new file is made while the copy still exists, so the inode differs.
+    let other = dir.0.join("other.png");
+    fs::write(&other, b"pixels").expect("write the new file");
+    set_mtime(&other, copied.mtime);
+    fs::rename(&other, &copied.path).expect("take the name of the copy");
+
+    assert!(!copied.is_unchanged());
+}
+
+#[cfg(unix)]
+#[test]
+fn is_unchanged_is_false_for_a_link_to_the_copy() {
+    let dir = TempDir::new();
+    let source = dir.0.join("a.png");
+    fs::write(&source, b"pixels").expect("write the source");
+    let copied = copy_into(&source, &dir.sub("into")).expect("copy");
+    // A link to a second name of the same file: following it gives the same
+    // device, inode, size, and time, so only the link check can refuse it.
+    let hard = dir.0.join("hard.png");
+    fs::hard_link(&copied.path, &hard).expect("hard link");
+    fs::remove_file(&copied.path).expect("remove the copy");
+    std::os::unix::fs::symlink(&hard, &copied.path).expect("symlink");
+
+    assert!(!copied.is_unchanged());
 }

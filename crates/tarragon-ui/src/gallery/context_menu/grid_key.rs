@@ -3,6 +3,7 @@
 use egui::{Key, Modifiers, Pos2};
 
 use super::Gallery;
+use super::GridMenuEvent;
 use super::Scope;
 use super::rows::{Kind, event};
 
@@ -38,6 +39,30 @@ impl Gallery {
             Kind::Rename => self.selection.len() == 1,
             _ => !self.selection.is_empty(),
         }
+    }
+
+    /// Tell the gallery whether the app holds a step to undo. The app calls
+    /// this each time its undo slot changes.
+    pub fn set_undo_available(&mut self, available: bool) {
+        self.tile_menu.undo_available = available;
+    }
+
+    /// Whether the app told the gallery that a step can be undone.
+    #[must_use]
+    pub fn undo_available(&self) -> bool {
+        self.tile_menu.undo_available
+    }
+
+    /// Whether a Ctrl+Z press would raise [`GridMenuEvent::Undo`] now: the app
+    /// holds a step, and no menu is open.
+    pub(crate) fn undo_ready(&self) -> bool {
+        self.tile_menu.undo_available && self.tile_menu.open_at.is_none()
+    }
+
+    /// Queue [`GridMenuEvent::Undo`]. The caller checks
+    /// [`Gallery::undo_ready`] first.
+    pub(crate) fn raise_undo(&mut self) {
+        self.tile_menu.events.push(GridMenuEvent::Undo);
     }
 
     /// Queue the event of a grid key, the same event its menu row gives. The

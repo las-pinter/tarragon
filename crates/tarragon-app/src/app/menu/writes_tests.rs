@@ -226,11 +226,7 @@ fn a_write_does_not_block_the_caller_and_a_second_request_gets_a_notice() {
     let start = Instant::now();
     rig.app.start_write(&rig.ctx.clone(), move || {
         let _ = wait.recv_timeout(Duration::from_secs(3));
-        Outcome {
-            write: FileWrite::default(),
-            notice: None,
-            folder: None,
-        }
+        Outcome::default()
     });
     let returned_in = start.elapsed();
     // No path, so a duplicate that ran by mistake would copy nothing.
@@ -250,11 +246,7 @@ fn a_rename_waits_with_a_notice_while_a_write_runs() {
     let (release, wait) = crossbeam_channel::bounded::<()>(1);
     rig.app.start_write(&rig.ctx.clone(), move || {
         let _ = wait.recv_timeout(Duration::from_secs(3));
-        Outcome {
-            write: FileWrite::default(),
-            notice: None,
-            folder: None,
-        }
+        Outcome::default()
     });
     let event = GridMenuEvent::RenameTo {
         path: dir.join("a.png"),
@@ -264,6 +256,44 @@ fn a_rename_waits_with_a_notice_while_a_write_runs() {
     let _ = release.send(());
     assert!(dir.join("a.png").exists());
     wait_for_text(&mut rig, "Another file task is running");
+}
+
+#[test]
+fn a_rename_that_ends_while_the_same_folder_loads_shows_the_new_name_after_that_load() {
+    let (mut rig, dir) = folder_rig(&["a.png", "b.png"]);
+    rig.app.thumbs.reload_folder(dir.clone());
+    assert!(rig.app.thumbs.is_opening());
+    let event = GridMenuEvent::RenameTo {
+        path: dir.join("a.png"),
+        new_stem: "z".to_owned(),
+    };
+    rig.app.apply_menu_event(&rig.ctx, event);
+    assert!(rig.app.menu.deferred.is_some());
+
+    let new = dir.join("z.png");
+    frames_until(&mut rig, "the new name to be selected", |rig| {
+        selected(rig) == [new.clone()]
+    });
+    assert!(!rig.app.shell.gallery_mut().has_item(&dir.join("a.png")));
+}
+
+#[test]
+fn a_confirmed_delete_waits_with_a_notice_while_a_write_runs() {
+    let (mut rig, dir) = folder_rig(&["a.png"]);
+    let (release, wait) = crossbeam_channel::bounded::<()>(1);
+    rig.app.start_write(&rig.ctx.clone(), move || {
+        let _ = wait.recv_timeout(Duration::from_secs(3));
+        Outcome::default()
+    });
+    let event = GridMenuEvent::ConfirmedDelete {
+        paths: vec![dir.join("a.png")],
+        permanent: true,
+    };
+    rig.app.apply_menu_event(&rig.ctx, event);
+    let _ = release.send(());
+    assert!(dir.join("a.png").exists());
+    wait_for_text(&mut rig, "Another file task is running");
+    assert!(dir.join("a.png").exists());
 }
 
 /// An app that shows `dir` and waits for a load, with the pending selection of
@@ -280,6 +310,7 @@ fn pending_rig() -> (Rig, PathBuf) {
     rig.app.menu.pending = Some(PendingSelect {
         folder: Some(dir.clone()),
         paths: vec![new],
+        near: false,
     });
     (rig, dir)
 }
@@ -411,6 +442,7 @@ fn the_held_selection_is_dropped_when_the_load_ends_without_the_files() {
     rig.app.menu.pending = Some(PendingSelect {
         folder: Some(dir.clone()),
         paths: vec![dir.join("new.png")],
+        near: false,
     });
     rig.app.apply_pending_select(&rig.ctx.clone());
     assert!(rig.app.menu.pending.is_none());

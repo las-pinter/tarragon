@@ -29,6 +29,7 @@ pub(super) struct FileWrite {
 }
 
 /// What the write thread answers: the write and the notice to show, if any.
+#[derive(Default)]
 pub(super) struct Outcome {
     /// What changed on disk.
     pub write: FileWrite,
@@ -37,14 +38,30 @@ pub(super) struct Outcome {
     /// The folder the write was for. The shown folder loads again only when it
     /// is still this folder at the end of the write.
     pub folder: Option<PathBuf>,
+    /// The files a delete removed.
+    pub deleted: Vec<PathBuf>,
+    /// The files the trash refused, to offer a permanent delete.
+    pub refused: Vec<PathBuf>,
 }
 
 /// Files to select after the shown folder has loaded again.
 pub(super) struct PendingSelect {
     /// The folder the gallery showed when the write ended.
     folder: Option<PathBuf>,
-    /// The files to select.
+    /// The files to select, or the files that were removed when `near` is set.
     paths: Vec<PathBuf>,
+    /// Select the tile that took the place of the removed files.
+    near: bool,
+}
+
+/// A reload that waits until the open that runs now has ended.
+pub(super) struct Deferred {
+    /// The folder the write was for. A library reload has the shown folder.
+    target: Option<PathBuf>,
+    /// The files to hold, as for [`PendingSelect`].
+    paths: Vec<PathBuf>,
+    /// Select near the removed files, as for [`PendingSelect`].
+    near: bool,
 }
 
 impl App {
@@ -143,12 +160,11 @@ impl App {
             return;
         };
         match receiver.try_recv() {
-            Ok(outcome) => self.finish_write(
-                ctx,
-                outcome.write,
-                outcome.notice,
-                outcome.folder.as_deref(),
-            ),
+            Ok(outcome) => {
+                let folder = outcome.folder.as_deref();
+                self.finish_write(ctx, outcome.write, outcome.notice, folder);
+                self.finish_delete(ctx, outcome.deleted, outcome.refused, folder);
+            }
             Err(TryRecvError::Empty) => self.menu.writing = Some(receiver),
             Err(TryRecvError::Disconnected) => {
                 tracing::warn!("the file thread ended without an answer");
@@ -181,12 +197,33 @@ impl App {
 
     /// Load the shown folder, or the library, again and hold `paths` until the
     /// new list is in the gallery. Nothing happens, and nothing is held, when
-    /// another open is pending or running, or when the shown folder is not
-    /// `target`: a switch to another folder must win over this reload.
+    /// the shown folder is not `target`: a switch to another folder must win
+    /// over this reload. While another open is pending or running, the reload
+    /// waits for it.
     fn reload_and_select(&mut self, ctx: &Context, paths: Vec<PathBuf>, target: Option<&Path>) {
+        self.reload_and_hold(ctx, paths, false, target);
+    }
+
+    /// [`Self::reload_and_select`], or with `near` set, hold the removed `paths`
+    /// and select the tile near their place when the new list lacks them.
+    pub(super) fn reload_and_hold(
+        &mut self,
+        ctx: &Context,
+        paths: Vec<PathBuf>,
+        near: bool,
+        target: Option<&Path>,
+    ) {
         if self.thumbs.is_opening() {
+            // The open may have listed the folder before this write, so the
+            // reload waits for the open to end. A newer request replaces it.
+            self.menu.deferred = Some(Deferred {
+                target: target.map(Path::to_path_buf),
+                paths,
+                near,
+            });
             return;
         }
+        self.menu.deferred = None;
         let gallery = self.shell.gallery_mut();
         let folder = gallery.folder().map(Path::to_path_buf);
         match (gallery.scope(), &folder) {
@@ -196,8 +233,29 @@ impl App {
             (Scope::All, _) => self.thumbs.reload_library(),
             _ => return,
         }
-        self.menu.pending = Some(PendingSelect { folder, paths });
+        self.menu.pending = Some(PendingSelect {
+            folder,
+            paths,
+            near,
+        });
         ctx.request_repaint();
+    }
+
+    /// Run the reload that waited for an open, once no open is pending or
+    /// running. The reload is dropped when the shown folder is not its folder
+    /// any more: a switch to another folder wins.
+    pub(super) fn apply_deferred_reload(&mut self, ctx: &Context) {
+        if self.thumbs.is_opening() {
+            return;
+        }
+        if let Some(deferred) = self.menu.deferred.take() {
+            self.reload_and_hold(
+                ctx,
+                deferred.paths,
+                deferred.near,
+                deferred.target.as_deref(),
+            );
+        }
     }
 
     /// Select the held files once the gallery has them. The hold ends without a
@@ -212,7 +270,15 @@ impl App {
             return;
         }
         let arrived = pending.paths.iter().any(|path| gallery.has_item(path));
-        if arrived {
+        if pending.near {
+            // Removed files: the new list has arrived when none of them is in it.
+            if !arrived {
+                gallery.select_near();
+                ctx.request_repaint();
+            } else if self.thumbs.is_opening() {
+                self.menu.pending = Some(pending);
+            }
+        } else if arrived {
             gallery.select_paths(&pending.paths);
             ctx.request_repaint();
         } else if self.thumbs.is_opening() {
@@ -279,6 +345,7 @@ fn duplicate_outcome(paths: &[PathBuf], folder: Option<PathBuf>) -> Outcome {
         },
         notice,
         folder,
+        ..Outcome::default()
     }
 }
 
@@ -296,6 +363,7 @@ fn paste_outcome(
                 write: FileWrite::default(),
                 notice: Some(paste_failure_text(&error)),
                 folder: Some(folder.to_path_buf()),
+                ..Outcome::default()
             };
         }
     };
@@ -304,6 +372,7 @@ fn paste_outcome(
             write: FileWrite::default(),
             notice: Some("The clipboard holds no files".to_owned()),
             folder: Some(folder.to_path_buf()),
+            ..Outcome::default()
         };
     }
     let kept: Vec<PathBuf> = listed
@@ -321,6 +390,7 @@ fn paste_outcome(
         },
         notice: Some(notice),
         folder: Some(folder.to_path_buf()),
+        ..Outcome::default()
     }
 }
 

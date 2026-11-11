@@ -210,11 +210,16 @@ impl Gallery {
     /// caller's path cannot empty the gallery. A path that does not exist keeps
     /// its text, because canonicalization needs a real file system entry.
     pub fn set_folder(&mut self, folder: Option<PathBuf>) {
-        self.folder = folder
+        let shown = folder
             .as_ref()
             .map(|path| dunce::canonicalize(path).unwrap_or_else(|_| path.clone()));
+        // A load of the same folder again sets it once more. The place that a
+        // delete recorded must survive that, so only a real switch forgets it.
+        if shown != self.folder {
+            self.removed_at = None;
+        }
+        self.folder = shown;
         self.raw_folder = folder;
-        self.removed_at = None;
         self.refresh_view();
     }
 

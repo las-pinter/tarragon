@@ -1,12 +1,10 @@
 //! Disk operations on image files: copy, rename, trash, and delete a file.
 
 mod copy;
-#[allow(dead_code, reason = "nothing deletes yet")]
 mod remove;
 mod rename;
 
 pub use copy::{Copied, copy_into};
-#[allow(unused_imports, reason = "nothing deletes yet")]
 pub use remove::{delete_permanently, trash};
 pub use rename::rename;
 
@@ -66,7 +64,6 @@ pub enum FileOpError {
         source: Box<FileOpError>,
     },
     /// The trash refused a file.
-    #[allow(dead_code, reason = "nothing moves a file to the trash yet")]
     #[error("cannot move {} to the trash: {source}", path.display())]
     Trash {
         /// The file the trash refused.

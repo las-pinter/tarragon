@@ -255,6 +255,7 @@ fn an_empty_view_drops_a_pending_scroll_request() {
 fn a_folder_or_scope_switch_forgets_the_remembered_place() {
     let mut gallery = dated_gallery();
     gallery.remember_place(&[path("b.png")]);
+    gallery.set_folder(Some(PathBuf::from("/other")));
     gallery.set_folder(Some(PathBuf::from("/images")));
     gallery.select_paths(&[path("a.png")]);
     gallery.select_near();
@@ -264,6 +265,18 @@ fn a_folder_or_scope_switch_forgets_the_remembered_place() {
     gallery.set_scope(Scope::All);
     gallery.select_near();
     assert_eq!(gallery.selected_paths(), [path("a.png")], "scope switch");
+}
+
+#[test]
+fn setting_the_same_folder_again_keeps_the_remembered_place() {
+    let mut gallery = dated_gallery();
+    gallery.remember_place(&[path("b.png")]);
+
+    gallery.set_folder(Some(PathBuf::from("/images")));
+    gallery.set_items(items_without(&["b.png"]));
+    gallery.select_near();
+
+    assert_eq!(gallery.selected_paths(), [path("a 2.png")]);
 }
 
 #[test]

@@ -3,7 +3,8 @@
 //! The gallery only raises the events. Work that can stall runs off the UI
 //! thread: the clipboard copy on a short-lived thread, and the render again of
 //! thumbnails on the work thread. Starting a program does not wait for it. The
-//! choices that write files are in `writes`.
+//! choices that write files are in `writes`, and the confirmed deletes in
+//! `delete`.
 
 use std::path::{Path, PathBuf};
 
@@ -14,7 +15,7 @@ use tarragon_ui::gallery::GridMenuEvent;
 use super::App;
 use crate::clipboard::{self, ClipboardError};
 use crate::{editor, tags};
-use writes::{FileWrite, Outcome, PendingSelect};
+use writes::{Deferred, FileWrite, Outcome, PendingSelect};
 
 /// What a clipboard copy on its thread answers.
 type CopyResult = Result<(), ClipboardError>;
@@ -28,6 +29,8 @@ pub(super) struct MenuState {
     writing: Option<Receiver<Outcome>>,
     /// The files to select once the shown folder has loaded again.
     pending: Option<PendingSelect>,
+    /// A reload that waits for the open that runs now.
+    deferred: Option<Deferred>,
     /// The last write that changed files. Nothing reads it yet.
     #[allow(dead_code, reason = "kept for the undo slot")]
     last_write: Option<FileWrite>,
@@ -39,6 +42,7 @@ impl App {
     pub(super) fn apply_menu_events(&mut self, ctx: &Context) {
         self.poll_menu_work(ctx);
         self.poll_write(ctx);
+        self.apply_deferred_reload(ctx);
         self.apply_pending_select(ctx);
         for event in self.shell.gallery_mut().take_menu_events() {
             self.apply_menu_event(ctx, event);
@@ -66,7 +70,7 @@ impl App {
             GridMenuEvent::Duplicate(paths) => self.duplicate(ctx, paths),
             GridMenuEvent::Paste => self.paste(ctx),
             GridMenuEvent::ConfirmedDelete { paths, permanent } => {
-                confirmed_delete(&paths, permanent);
+                self.confirmed_delete(ctx, paths, permanent);
             }
         }
     }
@@ -201,10 +205,7 @@ fn regenerate_text(result: Result<usize, String>) -> String {
     }
 }
 
-/// Delete the confirmed files. Not wired yet: the event is taken and nothing
-/// happens.
-fn confirmed_delete(_paths: &[PathBuf], _permanent: bool) {}
-
+mod delete;
 mod writes;
 
 #[cfg(test)]

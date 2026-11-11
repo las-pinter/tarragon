@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use crossbeam_channel::Receiver;
 use eframe::egui::{Context, TextureHandle, TextureId};
 use image::{Rgba, RgbaImage};
 use tarragon_ui::preview::{Preview, PreviewImage};
@@ -35,6 +36,18 @@ fn result(revision: u64, name: &str, image: Result<RgbaImage, String>) -> Loaded
         revision,
         key: PathBuf::from(name),
         image,
+    }
+}
+
+/// Wait for the loader result of `revision` and take it. Each wait is bounded.
+fn revision_result(loader: &PreviewLoader, signals: &Receiver<()>, revision: u64) -> Loaded {
+    loop {
+        signals
+            .recv_timeout(std::time::Duration::from_secs(10))
+            .expect("a repaint signal");
+        if let Some(found) = loader.poll().into_iter().find(|l| l.revision == revision) {
+            return found;
+        }
     }
 }
 
@@ -149,16 +162,25 @@ fn a_failed_decode_leaves_the_others_and_is_tried_again_on_select() {
 
 #[test]
 fn the_only_image_failing_still_refreshes_the_preview() {
-    let (ctx, loader) = (Context::default(), loader());
+    let (signal, signals) = crossbeam_channel::unbounded();
+    let repaint: Repaint = Arc::new(move || {
+        let _ = signal.send(());
+    });
+    let loader = PreviewLoader::new(repaint).expect("start the loader");
+    let ctx = Context::default();
     let mut feed = PreviewFeed::<TextureHandle>::new();
     let mut preview = Preview::default();
     feed.select(&source(&["a"]), &loader);
     feed.apply(&ctx, result(1, "a", Ok(picture(20, 20))));
     assert!(feed.poll(&ctx, &loader, &mut preview, 1));
     feed.select(&source(&["b"]), &loader);
+    // The loader fails "b" on its own thread (the tier file is missing). Take
+    // that result out of the loader first, so no `poll` below can meet it early.
+    let failed = revision_result(&loader, &signals, 2);
     assert!(feed.poll(&ctx, &loader, &mut preview, 1));
     assert!(!feed.poll(&ctx, &loader, &mut preview, 1));
-    feed.apply(&ctx, result(2, "b", Err("broken".to_owned())));
+    assert!(failed.image.is_err());
+    feed.apply(&ctx, failed);
     assert!(feed.poll(&ctx, &loader, &mut preview, 1));
     assert!(!feed.poll(&ctx, &loader, &mut preview, 1));
 }

@@ -26,6 +26,7 @@ mod empty;
 mod info;
 mod keys;
 mod manager;
+mod notice;
 mod open;
 mod selected;
 pub(crate) mod strip;
@@ -131,6 +132,8 @@ pub struct Gallery {
     open_request: Option<PathBuf>,
     /// Whether the busy strip shows under the filter bar.
     busy: busy::Busy,
+    /// The notice line at the foot of the gallery.
+    notice: notice::Notice,
 }
 
 impl Gallery {
@@ -167,6 +170,7 @@ impl Gallery {
             search_focus_requested: false,
             open_request: None,
             busy: busy::Busy::default(),
+            notice: notice::Notice::default(),
         }
     }
 
@@ -348,11 +352,17 @@ impl Gallery {
     /// The tabs and the search field draw first and refresh the cached view.
     /// The info bar and the grid then paint that one set in this frame.
     pub fn show(&mut self, ui: &mut Ui) {
-        let now = Instant::now();
+        self.show_at(ui, Instant::now());
+    }
+
+    /// Draw the top strip, the notice line, and the grid, with `now` as the
+    /// time of the frame.
+    fn show_at(&mut self, ui: &mut Ui, now: Instant) {
         self.apply_pending_search(now);
         self.strip(ui, now);
         self.request_search_wake(ui, now);
         self.tag_manager.show(ui.ctx());
+        self.show_notice(ui, now);
         ui.add_space(tokens::SPACING_S);
         self.grid(ui);
     }

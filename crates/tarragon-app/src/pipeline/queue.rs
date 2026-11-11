@@ -4,7 +4,7 @@
 //! Both keep scan order. A worker takes from the visible set first.
 
 use std::collections::{BTreeMap, HashSet};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Condvar, Mutex, MutexGuard, PoisonError};
 
 use super::job::Job;
@@ -17,8 +17,11 @@ struct State {
     /// The next free sequence number, so a late job sorts after the rest.
     next_seq: u64,
     shutdown: bool,
-    /// The jobs a worker took and has not finished.
-    busy: usize,
+    /// The files of the jobs a worker took and has not finished.
+    running: Vec<PathBuf>,
+    /// The files that [`JobQueue::settle`] waits for. A result of one of them
+    /// is stale, so a worker drops it instead of waiting for room.
+    settling: HashSet<PathBuf>,
 }
 
 /// A blocking queue shared by the workers and the pipeline.
@@ -118,7 +121,7 @@ impl JobQueue {
             {
                 // Counted under the same lock as the pop, so no gap shows an
                 // empty queue with a job in hand.
-                state.busy += 1;
+                state.running.push(job.path.clone());
                 return Some(job);
             }
             state = self
@@ -128,10 +131,12 @@ impl JobQueue {
         }
     }
 
-    /// Mark one job taken by [`Self::next`] as done.
-    pub(super) fn finish(&self) {
+    /// Mark the job of `path`, taken by [`Self::next`], as done.
+    pub(super) fn finish(&self, path: &Path) {
         let mut state = self.lock();
-        state.busy = state.busy.saturating_sub(1);
+        if let Some(index) = state.running.iter().position(|running| running == path) {
+            state.running.swap_remove(index);
+        }
         drop(state);
         self.idle.notify_all();
     }
@@ -139,12 +144,37 @@ impl JobQueue {
     /// Block until no worker holds a job, or until [`Self::shutdown`].
     pub(super) fn wait_idle(&self) {
         let mut state = self.lock();
-        while state.busy > 0 && !state.shutdown {
+        while !state.running.is_empty() && !state.shutdown {
             state = self
                 .idle
                 .wait(state)
                 .unwrap_or_else(PoisonError::into_inner);
         }
+    }
+
+    /// Drop the waiting jobs of `keys`, then block until no worker renders one
+    /// of them, or until [`Self::shutdown`]. Other jobs keep running and
+    /// keep their place.
+    ///
+    /// Nothing queues a job of `keys` while this waits, so the files are
+    /// quiet when it returns: no render of them runs or will start.
+    pub(super) fn settle(&self, keys: &HashSet<PathBuf>) {
+        let mut state = self.lock();
+        state.visible.retain(|_, job| !keys.contains(&job.path));
+        state.rest.retain(|_, job| !keys.contains(&job.path));
+        state.settling.clone_from(keys);
+        while state.running.iter().any(|path| keys.contains(path)) && !state.shutdown {
+            state = self
+                .idle
+                .wait(state)
+                .unwrap_or_else(PoisonError::into_inner);
+        }
+        state.settling.clear();
+    }
+
+    /// True while [`Self::settle`] waits for `path`.
+    pub(super) fn is_settling(&self, path: &Path) -> bool {
+        self.lock().settling.contains(path)
     }
 
     /// The number of jobs waiting for a worker.
@@ -185,6 +215,53 @@ mod tests {
             colors: None,
             needs_colors: false,
         }
+    }
+
+    fn names(queue: &JobQueue, count: usize) -> Vec<PathBuf> {
+        (0..count)
+            .filter_map(|_| queue.next())
+            .map(|job| job.path)
+            .collect()
+    }
+
+    /// Run `settle` on another thread and report whether it returned in time.
+    fn settles(queue: &std::sync::Arc<JobQueue>, keys: &[&str]) -> bool {
+        let keys: HashSet<PathBuf> = keys.iter().map(PathBuf::from).collect();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let queue = std::sync::Arc::clone(queue);
+        std::thread::spawn(move || {
+            queue.settle(&keys);
+            let _ = tx.send(());
+        });
+        rx.recv_timeout(std::time::Duration::from_secs(5)).is_ok()
+    }
+
+    #[test]
+    fn settle_drops_the_waiting_jobs_of_the_keys_and_keeps_the_order_of_the_rest() {
+        let queue = std::sync::Arc::new(JobQueue::default());
+        queue.replace(vec![job("a"), job("b"), job("c"), job("d")]);
+        queue.request(vec![job("e")]);
+
+        assert!(settles(&queue, &["b", "e"]));
+
+        assert_eq!(queue.queued(), 3);
+        let order = names(&queue, 3);
+        assert_eq!(
+            order,
+            [PathBuf::from("a"), PathBuf::from("c"), PathBuf::from("d")]
+        );
+    }
+
+    #[test]
+    fn settle_does_not_wait_for_a_running_job_of_another_key() {
+        let queue = std::sync::Arc::new(JobQueue::default());
+        queue.replace(vec![job("x")]);
+        let taken = queue.next().expect("a job");
+        assert_eq!(taken.path, PathBuf::from("x"));
+
+        assert!(settles(&queue, &["y"]), "x is not waited for");
+        assert!(!queue.is_settling(Path::new("y")), "the mark is cleared");
+        queue.finish(Path::new("x"));
     }
 
     #[test]

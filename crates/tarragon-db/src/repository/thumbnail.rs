@@ -285,6 +285,41 @@ impl Database {
         Ok(changed)
     }
 
+    /// Reset the cache links of the rows at `paths` to the scan state.
+    ///
+    /// It clears the same columns as [`Self::clear_cache_links`], in one
+    /// transaction, and leaves every other row alone. A path with no row, or
+    /// with no link, changes nothing. The method returns the number of rows
+    /// that had a link.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DbError::Sqlite`] when a statement fails. Returns
+    /// [`DbError::LockPoisoned`] after a panic poisoned the lock.
+    pub fn clear_cache_links_for(&self, paths: &[String]) -> Result<usize, DbError> {
+        if paths.is_empty() {
+            return Ok(0);
+        }
+        let mut conn = self.lock()?;
+        let tx = conn.transaction()?;
+        let mut changed = 0;
+        {
+            let mut stmt = tx.prepare(
+                "UPDATE thumbnails SET thumb_hash = NULL, cache_uuid = NULL, \
+                 thumbnail_cache_path = NULL, preview_cache_path = NULL, \
+                 full_cache_path = NULL, last_accessed = 0 \
+                 WHERE path = ?1 AND (thumb_hash IS NOT NULL OR cache_uuid IS NOT NULL \
+                 OR thumbnail_cache_path IS NOT NULL OR preview_cache_path IS NOT NULL \
+                 OR full_cache_path IS NOT NULL)",
+            )?;
+            for path in paths {
+                changed += stmt.execute([normalize_path(path)])?;
+            }
+        }
+        tx.commit()?;
+        Ok(changed)
+    }
+
     /// Write one folder group of scan results in a single transaction.
     ///
     /// Each file becomes a row with the scanned width and height and no

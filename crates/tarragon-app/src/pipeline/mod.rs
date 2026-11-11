@@ -15,6 +15,7 @@ mod library;
 mod prune;
 mod purge;
 mod queue;
+mod regenerate;
 mod worker;
 mod writer;
 

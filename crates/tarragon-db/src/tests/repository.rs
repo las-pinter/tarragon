@@ -527,6 +527,43 @@ fn clear_cache_links_resets_links_and_keeps_file_rows() {
 }
 
 #[test]
+fn clear_cache_links_for_resets_only_the_named_rows() {
+    let temp = TempDb::new();
+    linked_row(&temp, "/refs/a.png", 1);
+    linked_row(&temp, "/refs/b.png", 2);
+    let untouched = temp
+        .db
+        .thumbnail("/refs/b.png")
+        .expect("read")
+        .expect("row");
+    let named = ["/refs/a.png".to_owned(), "/refs/missing.png".to_owned()];
+
+    let changed = temp.db.clear_cache_links_for(&named).expect("clear");
+
+    assert_eq!(changed, 1, "only the linked named row counts");
+    let cleared = temp
+        .db
+        .thumbnail("/refs/a.png")
+        .expect("read")
+        .expect("the row stays");
+    assert_eq!(cleared.thumb_hash, None);
+    assert_eq!(cleared.cache_uuid, None);
+    assert_eq!(cleared.thumbnail_cache_path, None);
+    assert_eq!(cleared.preview_cache_path, None);
+    assert_eq!(cleared.full_cache_path, None);
+    assert_eq!(cleared.last_accessed, 0);
+    assert_eq!(cleared.mtime, 1);
+    assert_eq!(
+        temp.db
+            .thumbnail("/refs/b.png")
+            .expect("read")
+            .expect("row"),
+        untouched
+    );
+    assert_eq!(temp.db.clear_cache_links_for(&[]).expect("empty"), 0);
+}
+
+#[test]
 fn clear_cache_links_twice_changes_nothing_the_second_time() {
     let temp = TempDb::new();
     linked_row(&temp, "/refs/a.png", 1);

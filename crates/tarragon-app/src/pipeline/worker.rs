@@ -1,7 +1,7 @@
 //! The worker loop and the per-file flow.
 
 use std::panic::{AssertUnwindSafe, catch_unwind};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
@@ -41,18 +41,18 @@ pub(super) type ColorFn = fn(&DynamicImage, ColorTagConfig) -> ColorTags;
 
 /// Releases the queue slot of a taken job when it drops, so every exit from
 /// the loop body (skip, panic, early return) frees the slot.
-struct Slot<'a>(&'a JobQueue);
+struct Slot<'a>(&'a JobQueue, PathBuf);
 
 impl Drop for Slot<'_> {
     fn drop(&mut self) {
-        self.0.finish();
+        self.0.finish(&self.1);
     }
 }
 
 /// Take jobs until the queue shuts down.
 pub(super) fn run(shared: &Shared) {
     while let Some(job) = shared.queue.next() {
-        let _slot = Slot(&shared.queue);
+        let _slot = Slot(&shared.queue, job.path.clone());
         // A job from an older folder is dropped before any work starts.
         if job.generation != shared.generation.load(Ordering::Acquire) {
             continue;
@@ -150,6 +150,7 @@ fn send(shared: &Shared, mut result: ThumbResult) -> Sent {
             Err(SendTimeoutError::Timeout(back)) => {
                 if back.generation != shared.generation.load(Ordering::Acquire)
                     || shared.queue.is_shutdown()
+                    || shared.queue.is_settling(&back.key)
                 {
                     return Sent::Dropped;
                 }

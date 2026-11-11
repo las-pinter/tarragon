@@ -910,4 +910,5 @@ mod failure_log;
 mod library_open;
 mod prune_missing;
 mod purge;
+mod regenerate;
 mod retry;

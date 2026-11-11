@@ -404,6 +404,9 @@ impl Gallery {
         if let Some(click) = response.secondary_click {
             self.open_tile_menu(ui, click);
         }
+        if response.empty_secondary_click {
+            self.open_empty_space_menu(ui);
+        }
         self.show_tile_menu(ui);
     }
 }

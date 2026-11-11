@@ -8,7 +8,7 @@ use super::{Gallery, Scope};
 use crate::grid::CellClick;
 use crate::popup::{menu_frame, row_frame, text_width};
 use crate::tokens;
-use rows::{Row, event, groups};
+use rows::{Row, empty_groups, event, groups};
 
 mod rows;
 
@@ -62,6 +62,8 @@ pub(super) struct TileMenu {
     open_at: Option<Pos2>,
     /// The selection revision when the menu opened.
     revision: u64,
+    /// Whether the open menu is the empty-space menu, not the tile menu.
+    empty_space: bool,
     /// The choices since the last take.
     events: Vec<GridMenuEvent>,
 }
@@ -107,6 +109,21 @@ impl Gallery {
             .input(|input| input.pointer.interact_pos())
             .unwrap_or_else(|| ui.max_rect().center());
         self.tile_menu.open_at = Some(pos);
+        self.tile_menu.empty_space = false;
+        self.tile_menu.revision = self.selection_revision;
+    }
+
+    /// Open the empty-space menu at the pointer. It opens only while a folder
+    /// is open. It replaces the tile menu, so one menu shows at a time.
+    pub(super) fn open_empty_space_menu(&mut self, ui: &Ui) {
+        if self.folder.is_none() {
+            return;
+        }
+        let pos = ui
+            .input(|input| input.pointer.interact_pos())
+            .unwrap_or_else(|| ui.max_rect().center());
+        self.tile_menu.open_at = Some(pos);
+        self.tile_menu.empty_space = true;
         self.tile_menu.revision = self.selection_revision;
     }
 
@@ -123,12 +140,24 @@ impl Gallery {
         let Some(pos) = self.tile_menu.open_at else {
             return;
         };
+        let empty_space = self.tile_menu.empty_space;
         let count = self.selection.len();
-        if count == 0 || self.selection_revision != self.tile_menu.revision {
+        let no_target = if empty_space {
+            // The folder can change while the menu is open.
+            self.folder.is_none()
+        } else {
+            count == 0
+        };
+        if no_target || self.selection_revision != self.tile_menu.revision {
             self.close_tile_menu();
             return;
         }
-        let groups = groups(count, self.scope == Scope::Folder);
+        let paste = self.scope == Scope::Folder;
+        let groups = if empty_space {
+            empty_groups(paste)
+        } else {
+            Vec::from(groups(count, paste))
+        };
         let bounds = ui.ctx().content_rect().shrink(tokens::MENU_EDGE_MARGIN);
         let area = Area::new(Id::new(MENU_ID))
             .order(Order::Foreground)
@@ -164,7 +193,12 @@ impl Gallery {
             });
         if let Some(kind) = area.inner {
             self.close_tile_menu();
-            if let Some(event) = event(kind, self.selected_paths(), pos) {
+            let paths = if empty_space {
+                Vec::new()
+            } else {
+                self.selected_paths()
+            };
+            if let Some(event) = event(kind, paths, pos) {
                 self.tile_menu.events.push(event);
             }
             return;

@@ -4,6 +4,7 @@ mod busy;
 mod context_menu;
 mod debounce;
 mod empty;
+mod empty_space_menu;
 mod filter_bar;
 mod filter_pill;
 mod filter_result;

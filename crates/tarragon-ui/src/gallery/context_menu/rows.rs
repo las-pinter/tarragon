@@ -98,6 +98,17 @@ pub(super) fn groups(count: usize, paste: bool) -> [Vec<Row>; 4] {
     ]
 }
 
+/// The rows of the empty-space menu: one group with Paste. Paste works only
+/// when one folder is open.
+pub(super) fn empty_groups(paste: bool) -> Vec<Vec<Row>> {
+    vec![vec![Row {
+        kind: Kind::Paste,
+        label: "Paste".to_owned(),
+        shortcut: "Ctrl+V",
+        enabled: paste,
+    }]]
+}
+
 /// The event for a click on a row. Paste needs no file. Every other row gives
 /// none when no file is selected.
 pub(super) fn event(kind: Kind, paths: Vec<PathBuf>, pos: Pos2) -> Option<GridMenuEvent> {

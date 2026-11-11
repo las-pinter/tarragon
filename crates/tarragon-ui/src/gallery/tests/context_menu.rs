@@ -6,7 +6,7 @@ use egui::epaint::Shape;
 use egui::{Color32, Key};
 
 /// One painted text: the text, its rect, and its colour.
-type Text = (String, Rect, Color32);
+pub(super) type Text = (String, Rect, Color32);
 
 /// The text shapes of one frame.
 fn texts(output: &egui::FullOutput) -> Vec<Text> {
@@ -31,7 +31,7 @@ fn texts(output: &egui::FullOutput) -> Vec<Text> {
 
 /// Draw one frame with `events`. The screen is tall enough that the four test
 /// items need no scroll bar, so the frame does not ask for a repaint.
-fn run(ctx: &egui::Context, gallery: &mut Gallery, events: Vec<Event>) -> Vec<Text> {
+pub(super) fn run(ctx: &egui::Context, gallery: &mut Gallery, events: Vec<Event>) -> Vec<Text> {
     let input = RawInput {
         screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(900.0, 800.0))),
         events,
@@ -45,7 +45,7 @@ fn run(ctx: &egui::Context, gallery: &mut Gallery, events: Vec<Event>) -> Vec<Te
 }
 
 /// A themed context and a gallery with four items in the folder `/images`.
-fn setup() -> (egui::Context, Gallery) {
+pub(super) fn setup() -> (egui::Context, Gallery) {
     let ctx = egui::Context::default();
     crate::theme::apply_theme(&ctx);
     let mut gallery = Gallery::new(SortMode::Natural);
@@ -58,7 +58,7 @@ fn setup() -> (egui::Context, Gallery) {
 }
 
 /// Move to `pos`, press and release `button`, and draw a settled frame.
-fn press_at(
+pub(super) fn press_at(
     ctx: &egui::Context,
     gallery: &mut Gallery,
     pos: Pos2,
@@ -81,7 +81,7 @@ fn press_at(
 }
 
 /// The centre of the tile of item `index`.
-fn tile_center(ctx: &egui::Context, index: usize) -> Pos2 {
+pub(super) fn tile_center(ctx: &egui::Context, index: usize) -> Pos2 {
     ctx.read_response(tile_id(index))
         .expect("the tile registered a response")
         .rect
@@ -90,13 +90,22 @@ fn tile_center(ctx: &egui::Context, index: usize) -> Pos2 {
 
 /// Right-click the tile of item `index`. Returns the pointer position and the
 /// texts of the frame after.
-fn right_click(ctx: &egui::Context, gallery: &mut Gallery, index: usize) -> (Pos2, Vec<Text>) {
+pub(super) fn right_click(
+    ctx: &egui::Context,
+    gallery: &mut Gallery,
+    index: usize,
+) -> (Pos2, Vec<Text>) {
     let pos = tile_center(ctx, index);
     (pos, press_at(ctx, gallery, pos, PointerButton::Secondary))
 }
 
 /// Click the menu row that reads `label`. Returns the texts of the frame after.
-fn click_row(ctx: &egui::Context, gallery: &mut Gallery, seen: &[Text], label: &str) -> Vec<Text> {
+pub(super) fn click_row(
+    ctx: &egui::Context,
+    gallery: &mut Gallery,
+    seen: &[Text],
+    label: &str,
+) -> Vec<Text> {
     let (_, rect, _) = seen
         .iter()
         .find(|(text, ..)| text == label)
@@ -105,7 +114,7 @@ fn click_row(ctx: &egui::Context, gallery: &mut Gallery, seen: &[Text], label: &
 }
 
 /// Whether the menu shows in `seen`.
-fn menu_shows(seen: &[Text]) -> bool {
+pub(super) fn menu_shows(seen: &[Text]) -> bool {
     seen.iter().any(|(text, ..)| text == "Add tag...")
 }
 
@@ -121,13 +130,13 @@ fn select(gallery: &mut Gallery, indices: &[usize]) {
 }
 
 /// Assert that the menu has no event waiting. `what` names the step.
-fn assert_no_events(gallery: &mut Gallery, what: &str) {
+pub(super) fn assert_no_events(gallery: &mut Gallery, what: &str) {
     let events = gallery.take_menu_events();
     assert_eq!(events, Vec::new(), "{what}");
 }
 
 /// A key press of `key`.
-fn key(key: Key) -> Event {
+pub(super) fn key(key: Key) -> Event {
     Event::Key {
         key,
         physical_key: Some(key),

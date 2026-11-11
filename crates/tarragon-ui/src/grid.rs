@@ -10,7 +10,7 @@
 
 use std::ops::Range;
 
-use egui::{Modifiers, Rect, ScrollArea, Ui, Vec2, pos2, vec2};
+use egui::{Modifiers, Rect, ScrollArea, Sense, Ui, Vec2, pos2, vec2};
 
 use crate::tokens;
 
@@ -188,6 +188,8 @@ pub struct GridResponse {
     pub double_click: Option<CellClick>,
     /// The tile that got a right-click this frame, if any.
     pub secondary_click: Option<CellClick>,
+    /// Whether the grid area got a right-click that hit no cell this frame.
+    pub empty_secondary_click: bool,
 }
 
 /// A grid over `item_count` items with a fixed cell geometry.
@@ -224,7 +226,7 @@ impl VirtualGrid {
         scroll_y: f32,
         cell_ui: impl FnMut(&mut Ui, Rect, usize),
     ) -> usize {
-        self.paint(ui, Some(scroll_y), cell_ui)
+        self.paint(ui, Some(scroll_y), cell_ui).0
     }
 
     /// Paint only the visible cells and let the scroll area keep the offset.
@@ -232,17 +234,24 @@ impl VirtualGrid {
     /// The scroll position lives in egui state across frames, so a wheel turn or
     /// a scrollbar drag moves the grid. Use [`Self::show_at`] to pin the offset.
     pub fn show_interactive(self, ui: &mut Ui, cell_ui: impl FnMut(&mut Ui, Rect, usize)) -> usize {
-        self.paint(ui, None, cell_ui)
+        self.paint(ui, None, cell_ui).0
     }
 
     /// Paint the visible cells. A `Some` offset pins the scroll position.
+    ///
+    /// Returns the number of cells built, and whether a right-click hit the
+    /// grid area but no cell. A click sensor under the cells takes the
+    /// right-click only where no cell lies on top. It is not focusable. It
+    /// takes clicks in the gaps, so a click a few points outside a tile no
+    /// longer reaches the tile through the closest-widget fallback of egui.
     fn paint(
         self,
         ui: &mut Ui,
         scroll_y: Option<f32>,
         mut cell_ui: impl FnMut(&mut Ui, Rect, usize),
-    ) -> usize {
+    ) -> (usize, bool) {
         let mut painted = 0usize;
+        let mut empty_click = false;
 
         let area = ScrollArea::vertical().auto_shrink([false, false]);
         let area = match scroll_y {
@@ -260,6 +269,9 @@ impl VirtualGrid {
                 let content = metrics.content_size(self.item_count);
                 let row_count = metrics.row_count(self.item_count);
                 ui.set_min_size(content);
+                let backdrop =
+                    ui.interact(ui.clip_rect(), ui.id().with("grid-backdrop"), Sense::CLICK);
+                empty_click = backdrop.secondary_clicked();
                 let origin = ui.max_rect().min;
                 let cols = metrics.visible_cols(viewport);
                 for row in metrics.visible_rows(viewport) {
@@ -279,7 +291,7 @@ impl VirtualGrid {
             });
         });
 
-        painted
+        (painted, empty_click)
     }
 
     /// Show the grid over `items` in display `order` and paint each tile.
@@ -342,7 +354,7 @@ impl VirtualGrid {
             metrics: self.metrics,
             item_count: order.len(),
         };
-        let painted = grid.paint(ui, scroll_y, |ui, rect, position| {
+        let (painted, empty_secondary_click) = grid.paint(ui, scroll_y, |ui, rect, position| {
             let Some(&index) = order.get(position) else {
                 return;
             };
@@ -373,6 +385,7 @@ impl VirtualGrid {
             click,
             double_click,
             secondary_click,
+            empty_secondary_click,
         }
     }
 }

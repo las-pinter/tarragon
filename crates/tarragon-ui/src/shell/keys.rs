@@ -37,14 +37,6 @@ fn take_fresh_press(ctx: &Context, key: Key, modifiers: Modifiers) -> bool {
     fresh && take_exact_press(ctx, key, modifiers)
 }
 
-/// Take the first event that `is_wanted` accepts out of the input.
-fn take_event(ctx: &Context, is_wanted: fn(&Event) -> bool) -> bool {
-    ctx.input_mut(|input| {
-        let found = input.events.iter().position(is_wanted);
-        found.map(|at| input.events.remove(at)).is_some()
-    })
-}
-
 /// How long, in seconds, a held Ctrl or a Ctrl+Shift chord counts for a later
 /// V event. It covers the gap between Ctrl going up and V going up, not frame
 /// gaps.
@@ -78,6 +70,7 @@ impl Trail {
         } else if !held.command {
             self.chord_ended = true;
         } else if self.chord_ended {
+            // A Command-up only ended the chord; this plain press clears it.
             self.chord_at = f64::NEG_INFINITY;
             self.chord_ended = false;
         }
@@ -97,6 +90,8 @@ impl Trail {
 pub(super) struct PrevKeys {
     /// Whether V was down at the end of the last frame.
     v_down: bool,
+    /// The modifiers at the end of the last frame.
+    last: Modifiers,
     trail: Trail,
 }
 
@@ -104,6 +99,7 @@ impl Default for PrevKeys {
     fn default() -> Self {
         Self {
             v_down: false,
+            last: Modifiers::NONE,
             trail: Trail::NEVER,
         }
     }
@@ -126,6 +122,7 @@ impl PrevKeys {
     fn after_frame(mut self, ctx: &Context) -> Self {
         ctx.input(|input| {
             self.v_down = input.key_down(Key::V);
+            self.last = input.modifiers;
             for held in frame_modifiers(input) {
                 self.trail.note(held, input.time);
             }
@@ -185,6 +182,35 @@ fn take_swallowed_paste(ctx: &Context, prev: PrevKeys) -> bool {
                         break;
                     }
                     v_down = false;
+                }
+                _ => {}
+            }
+        }
+        found.map(|at| input.events.remove(at)).is_some()
+    })
+}
+
+/// Take the Ctrl+C that copies.
+///
+/// This leans on egui-winit 0.36 (lib.rs:1024-1026): it turns Ctrl+C, and also
+/// Ctrl+Shift+C and Ctrl+Alt+C, into a copy event with no modifiers. So the
+/// modifiers stand where the event stands: exactly Command at the start of the
+/// frame, or after the last event before it. Ctrl may go up later in the same
+/// frame. The end of the frame says nothing. There is no memory of older
+/// frames, so a lone copy event after Ctrl went up does nothing.
+fn take_swallowed_copy(ctx: &Context, prev: PrevKeys) -> bool {
+    ctx.input_mut(|input| {
+        let mut held_now = prev.last;
+        let mut found = None;
+        for (at, event) in input.events.iter().enumerate() {
+            match event {
+                Event::ModifiersChanged(held)
+                | Event::Key {
+                    modifiers: held, ..
+                } => held_now = *held,
+                Event::Copy if held_now.matches_exact(Modifiers::COMMAND) => {
+                    found = Some(at);
+                    break;
                 }
                 _ => {}
             }
@@ -269,8 +295,9 @@ impl Shell {
     /// The platform layer reports a Ctrl+C press as a copy event and drops
     /// the Ctrl+V press, but it reports the V release as a key event whatever
     /// the clipboard holds. The copy event also comes for Ctrl+Shift+C and
-    /// Ctrl+Alt+C and carries no modifiers, so Copy takes it only while the
-    /// held modifiers are exactly Ctrl. A held Ctrl+C repeats Copy, which is
+    /// Ctrl+Alt+C and carries no modifiers, so Copy takes it only when Ctrl was
+    /// held at the event, never with Shift or Alt, see `take_swallowed_copy`.
+    /// Ctrl may go up in the same frame. A held Ctrl+C repeats Copy, which is
     /// harmless as the event has no repeat flag.
     ///
     /// Paste takes the release of a V that has no press before it, see
@@ -290,10 +317,7 @@ impl Shell {
                 continue;
             }
             let taken = match key {
-                Key::C => {
-                    ctx.input(|input| input.modifiers.matches_exact(Modifiers::COMMAND))
-                        && take_event(ctx, |event| matches!(event, Event::Copy))
-                }
+                Key::C => take_swallowed_copy(ctx, prev),
                 Key::V => take_swallowed_paste(ctx, prev),
                 _ => take_fresh_press(ctx, key, modifiers),
             };

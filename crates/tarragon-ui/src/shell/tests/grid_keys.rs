@@ -25,7 +25,7 @@ fn all_grid_keys() -> Vec<Event> {
 
 /// The release of V with `modifiers` held. The platform layer drops the
 /// press of Ctrl+V and reports only the release.
-fn v_release(modifiers: Modifiers) -> Event {
+pub(super) fn v_release(modifiers: Modifiers) -> Event {
     Event::Key {
         key: Key::V,
         physical_key: Some(Key::V),
@@ -236,7 +236,11 @@ fn a_v_release_with_shift_or_alt_and_a_lone_paste_event_do_nothing() {
 
 /// Run `frames` as they come, with no modifier change added. Return the grid
 /// events of each frame. A last frame lets go of every modifier.
-fn run_raw(ctx: &Context, shell: &mut Shell, frames: Vec<Vec<Event>>) -> Vec<Vec<GridMenuEvent>> {
+pub(super) fn run_raw(
+    ctx: &Context,
+    shell: &mut Shell,
+    frames: Vec<Vec<Event>>,
+) -> Vec<Vec<GridMenuEvent>> {
     let queued = frames
         .into_iter()
         .map(|events| {
@@ -248,7 +252,7 @@ fn run_raw(ctx: &Context, shell: &mut Shell, frames: Vec<Vec<Event>>) -> Vec<Vec
     queued
 }
 
-fn mods(modifiers: Modifiers) -> Event {
+pub(super) fn mods(modifiers: Modifiers) -> Event {
     Event::ModifiersChanged(modifiers)
 }
 

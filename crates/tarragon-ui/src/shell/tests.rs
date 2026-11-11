@@ -8,6 +8,7 @@ use egui::{
 };
 use std::path::PathBuf;
 
+mod copy_keys;
 mod empty_card;
 mod grid_key_gates;
 mod grid_keys;

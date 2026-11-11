@@ -12,6 +12,7 @@ mod folder;
 mod folder_listing;
 mod library;
 mod pragmas;
+mod rename;
 mod repository;
 mod roots;
 mod settings;

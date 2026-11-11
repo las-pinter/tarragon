@@ -15,6 +15,7 @@ mod batch;
 mod editor;
 mod favorites;
 mod folder;
+mod rename;
 mod roots;
 mod settings;
 mod tags;

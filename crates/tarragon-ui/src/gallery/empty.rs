@@ -74,6 +74,16 @@ impl Gallery {
         );
         column(&mut probe, kind);
         let height = probe.min_rect().height();
+        // The constant is not focusable, so no Tab stop. It is added before
+        // the button, so the button keeps its own click.
+        let sensor = ui.interact(
+            ui.available_rect_before_wrap(),
+            ui.id().with("empty-card"),
+            egui::Sense::CLICK,
+        );
+        if kind == EmptyKind::EmptyFolder && sensor.secondary_clicked() {
+            self.tile_menu.from_card = self.open_empty_space_menu(ui);
+        }
         let clicked = ui
             .allocate_ui(area, |ui| {
                 ui.add_space(((area.y - height) / 2.0).max(0.0));
@@ -129,10 +139,15 @@ fn column(ui: &mut Ui, kind: EmptyKind) -> bool {
     ui.vertical_centered(|ui| {
         ui.spacing_mut().item_spacing.y = tokens::SPACING_M;
         folder_icon(ui);
-        ui.label(
-            RichText::new(big)
-                .size(BIG_SIZE)
-                .color(tokens::TEXT_SECONDARY),
+        // The labels are not selectable, so a click on the text reaches the
+        // card sensor under it.
+        ui.add(
+            Label::new(
+                RichText::new(big)
+                    .size(BIG_SIZE)
+                    .color(tokens::TEXT_SECONDARY),
+            )
+            .selectable(false),
         );
         ui.scope(|ui| {
             ui.set_max_width(HINT_WIDTH.min(ui.available_width()));
@@ -142,7 +157,8 @@ fn column(ui: &mut Ui, kind: EmptyKind) -> bool {
                         .size(tokens::SIZE_CAPTION)
                         .color(tokens::TEXT_MUTED),
                 )
-                .halign(Align::Center),
+                .halign(Align::Center)
+                .selectable(false),
             );
         });
         button.is_some_and(|label| action_button(ui, label).clicked())

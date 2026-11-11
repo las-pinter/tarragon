@@ -378,8 +378,11 @@ impl Gallery {
         if let Some(kind) = self.empty_kind() {
             self.painted_scratch.clear();
             self.record_painted();
-            self.close_tile_menu();
+            if kind != EmptyKind::EmptyFolder {
+                self.close_tile_menu();
+            }
             self.show_empty(ui, kind);
+            self.show_tile_menu(ui);
             return;
         }
         let grid = VirtualGrid {

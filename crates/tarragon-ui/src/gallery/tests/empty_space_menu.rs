@@ -9,7 +9,7 @@ use crate::grid::tile_id;
 use egui::Key;
 
 /// Whether the Paste-only menu shows in `seen`.
-fn paste_menu_shows(seen: &[Text]) -> bool {
+pub(super) fn paste_menu_shows(seen: &[Text]) -> bool {
     seen.iter().any(|(text, ..)| text == "Paste") && !menu_shows(seen)
 }
 

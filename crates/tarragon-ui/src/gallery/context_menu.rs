@@ -64,6 +64,8 @@ pub(super) struct TileMenu {
     revision: u64,
     /// Whether the open menu is the empty-space menu, not the tile menu.
     empty_space: bool,
+    /// Whether the open menu came from the empty-folder card.
+    pub(super) from_card: bool,
     /// The choices since the last take.
     events: Vec<GridMenuEvent>,
 }
@@ -110,21 +112,25 @@ impl Gallery {
             .unwrap_or_else(|| ui.max_rect().center());
         self.tile_menu.open_at = Some(pos);
         self.tile_menu.empty_space = false;
+        self.tile_menu.from_card = false;
         self.tile_menu.revision = self.selection_revision;
     }
 
     /// Open the empty-space menu at the pointer. It opens only while a folder
     /// is open. It replaces the tile menu, so one menu shows at a time.
-    pub(super) fn open_empty_space_menu(&mut self, ui: &Ui) {
+    /// Returns whether the menu opened.
+    pub(super) fn open_empty_space_menu(&mut self, ui: &Ui) -> bool {
         if self.folder.is_none() {
-            return;
+            return false;
         }
         let pos = ui
             .input(|input| input.pointer.interact_pos())
             .unwrap_or_else(|| ui.max_rect().center());
         self.tile_menu.open_at = Some(pos);
         self.tile_menu.empty_space = true;
+        self.tile_menu.from_card = false;
         self.tile_menu.revision = self.selection_revision;
+        true
     }
 
     /// Close the tile menu with no event.
@@ -148,7 +154,9 @@ impl Gallery {
         } else {
             count == 0
         };
-        if no_target || self.selection_revision != self.tile_menu.revision {
+        // A card menu ends when the card goes away.
+        let card_gone = self.tile_menu.from_card && self.empty_kind().is_none();
+        if no_target || card_gone || self.selection_revision != self.tile_menu.revision {
             self.close_tile_menu();
             return;
         }

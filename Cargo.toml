@@ -100,6 +100,12 @@ time = { version = "=0.3.55", default-features = false, features = ["std", "loca
 # the build links no GTK. `gtk3` and the other defaults stay off.
 rfd = { version = "=0.17.2", default-features = false, features = ["xdg-portal"] }
 
+# Moves a file to the desktop trash. `trash` is MIT licensed. Only the
+# `freedesktop` backend is on: it follows the freedesktop trash spec in plain
+# file calls and links no GTK or D-Bus. `chrono` is on only for the
+# `DeletionDate` line of the trash info file. The other defaults stay off.
+trash = { version = "=5.3.0", default-features = false, features = ["freedesktop", "chrono"] }
+
 # Dependencies build optimized in dev and test, so image decoding and egui
 # code do not run at opt-level 0. The workspace crates keep fast rebuilds.
 [profile.dev.package."*"]

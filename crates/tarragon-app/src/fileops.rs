@@ -1,9 +1,11 @@
-//! Disk operations on image files: copy a file and rename a file.
+//! Disk operations on image files: copy, rename, trash, and delete a file.
 
 mod copy;
+mod remove;
 mod rename;
 
 pub use copy::{Copied, copy_into};
+pub use remove::{delete_permanently, trash};
 pub use rename::rename;
 
 use std::io;
@@ -60,6 +62,14 @@ pub enum FileOpError {
         db: Box<DbError>,
         /// Why the move back failed.
         source: Box<FileOpError>,
+    },
+    /// The trash refused a file.
+    #[error("cannot move {} to the trash: {source}", path.display())]
+    Trash {
+        /// The file the trash refused.
+        path: PathBuf,
+        /// The error from the trash.
+        source: trash::Error,
     },
     /// A disk call failed.
     #[error("cannot {action} {}: {source}", path.display())]

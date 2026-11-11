@@ -45,6 +45,154 @@ fn take_event(ctx: &Context, is_wanted: fn(&Event) -> bool) -> bool {
     })
 }
 
+/// How long, in seconds, a held Ctrl or a Ctrl+Shift chord counts for a later
+/// V event. It covers the gap between Ctrl going up and V going up, not frame
+/// gaps.
+const KEY_MEMORY: f64 = 1.0;
+
+/// When Command, and Command with Shift or Alt, were last held.
+#[derive(Clone, Copy)]
+struct Trail {
+    command_at: f64,
+    chord_at: f64,
+    /// Command went up after the chord. A Command press after that starts a
+    /// new gesture, so it clears the chord.
+    chord_ended: bool,
+}
+
+impl Trail {
+    const NEVER: Self = Self {
+        command_at: f64::NEG_INFINITY,
+        chord_at: f64::NEG_INFINITY,
+        chord_ended: false,
+    };
+
+    /// Add the modifiers `held` that stood at time `now`.
+    fn note(&mut self, held: Modifiers, now: f64) {
+        if held.command {
+            self.command_at = now;
+        }
+        if held.command && (held.shift || held.alt) {
+            self.chord_at = now;
+            self.chord_ended = false;
+        } else if !held.command {
+            self.chord_ended = true;
+        } else if self.chord_ended {
+            self.chord_at = f64::NEG_INFINITY;
+            self.chord_ended = false;
+        }
+    }
+
+    fn command_held(&self, now: f64) -> bool {
+        now - self.command_at <= KEY_MEMORY
+    }
+
+    fn chord_held(&self, now: f64) -> bool {
+        now - self.chord_at <= KEY_MEMORY
+    }
+}
+
+/// What earlier frames showed of the keys that decide a Ctrl+V.
+#[derive(Clone, Copy)]
+pub(super) struct PrevKeys {
+    /// Whether V was down at the end of the last frame.
+    v_down: bool,
+    trail: Trail,
+}
+
+impl Default for PrevKeys {
+    fn default() -> Self {
+        Self {
+            v_down: false,
+            trail: Trail::NEVER,
+        }
+    }
+}
+
+/// The modifiers after each event of the frame, then those at its end.
+fn frame_modifiers(input: &egui::InputState) -> impl Iterator<Item = Modifiers> + '_ {
+    let after_events = input.events.iter().filter_map(|event| match event {
+        Event::ModifiersChanged(held)
+        | Event::Key {
+            modifiers: held, ..
+        } => Some(*held),
+        _ => None,
+    });
+    after_events.chain(std::iter::once(input.modifiers))
+}
+
+impl PrevKeys {
+    /// Add the frame that `ctx` is running to `self`.
+    fn after_frame(mut self, ctx: &Context) -> Self {
+        ctx.input(|input| {
+            self.v_down = input.key_down(Key::V);
+            for held in frame_modifiers(input) {
+                self.trail.note(held, input.time);
+            }
+        });
+        self
+    }
+}
+
+/// Take the Ctrl+V that pastes.
+///
+/// This leans on egui-winit 0.36 (lib.rs:1020-1043): it turns the Ctrl+V press
+/// into a paste event, so only the V release comes as a key event. That release
+/// has no V press before it, here or in an earlier frame. Ctrl was held
+/// shortly before it, in this frame or an earlier one, and never with Shift or
+/// Alt. The user may let go of Ctrl before V, so the release can carry no
+/// modifiers, but it must not carry Shift or Alt.
+///
+/// A platform that delivers the press as a key event pastes on the press: a
+/// first V press with exactly Ctrl held. Its release is then not taken, as V
+/// was down.
+fn take_swallowed_paste(ctx: &Context, prev: PrevKeys) -> bool {
+    ctx.input_mut(|input| {
+        let now = input.time;
+        let mut trail = prev.trail;
+        let mut v_down = prev.v_down;
+        let mut found = None;
+        for (at, event) in input.events.iter().enumerate() {
+            let (Event::ModifiersChanged(held)
+            | Event::Key {
+                modifiers: held, ..
+            }) = event
+            else {
+                continue;
+            };
+            trail.note(*held, now);
+            match event {
+                Event::Key {
+                    key: Key::V,
+                    pressed: true,
+                    repeat,
+                    ..
+                } => {
+                    if !v_down && !repeat && held.matches_exact(Modifiers::COMMAND) {
+                        found = Some(at);
+                        break;
+                    }
+                    v_down = true;
+                }
+                Event::Key {
+                    key: Key::V,
+                    pressed: false,
+                    ..
+                } => {
+                    let plain = !held.shift && !held.alt;
+                    if !v_down && trail.command_held(now) && !trail.chord_held(now) && plain {
+                        found = Some(at);
+                        break;
+                    }
+                    v_down = false;
+                }
+                _ => {}
+            }
+        }
+        found.map(|at| input.events.remove(at)).is_some()
+    })
+}
+
 /// Take one press of `key` held with the command modifier and no extra Shift
 /// or Alt.
 fn take_command_press(ctx: &Context, key: Key) -> bool {
@@ -68,6 +216,9 @@ impl Shell {
     /// focus rule, and only while the gallery knows of a step to undo. A focused
     /// text field keeps its own undo.
     pub(super) fn handle_shortcuts(&mut self, ctx: &Context) {
+        // Kept before the early returns, so the next frame sees this one.
+        let prev = self.prev_keys;
+        self.prev_keys = prev.after_frame(ctx);
         if self.crash_card.is_open()
             || self.prefs.is_open()
             || self.gallery.manager_open()
@@ -105,7 +256,7 @@ impl Shell {
         {
             self.gallery.raise_undo();
         }
-        self.grid_key_events(ctx);
+        self.grid_key_events(ctx, prev);
     }
 
     /// Raise the menu event of F2, Delete, Shift+Delete, Command+C, and
@@ -120,12 +271,17 @@ impl Shell {
     /// the clipboard holds. The copy event also comes for Ctrl+Shift+C and
     /// Ctrl+Alt+C and carries no modifiers, so Copy takes it only while the
     /// held modifiers are exactly Ctrl. A held Ctrl+C repeats Copy, which is
-    /// harmless as the event has no repeat flag. Paste takes the
-    /// release of V with Ctrl held and no Shift or Alt. Paste fires on that
-    /// release: if the user lets go of Ctrl before V, nothing happens. A paste
-    /// event is left alone, so a text field still gets it. F2 and Delete take
-    /// a new key press, not a repeat of a held key.
-    fn grid_key_events(&mut self, ctx: &Context) {
+    /// harmless as the event has no repeat flag.
+    ///
+    /// Paste takes the release of a V that has no press before it, see
+    /// `take_swallowed_paste`. Ctrl must have been held shortly before that
+    /// release, in this frame or an earlier one, and never with Shift or Alt.
+    /// So Paste also works when the user lets go of Ctrl before V. A plain V
+    /// press and release does nothing. A paste event is left alone, so a text
+    /// field still gets it.
+    ///
+    /// F2 and Delete take a new key press, not a repeat of a held key.
+    fn grid_key_events(&mut self, ctx: &Context, prev: PrevKeys) {
         if !self.enter_is_free(ctx) {
             return;
         }
@@ -138,13 +294,7 @@ impl Shell {
                     ctx.input(|input| input.modifiers.matches_exact(Modifiers::COMMAND))
                         && take_event(ctx, |event| matches!(event, Event::Copy))
                 }
-                Key::V => take_event(ctx, |event| {
-                    matches!(
-                        event,
-                        Event::Key { key: Key::V, pressed: false, modifiers: held, .. }
-                            if held.matches_exact(Modifiers::COMMAND)
-                    )
-                }),
+                Key::V => take_swallowed_paste(ctx, prev),
                 _ => take_fresh_press(ctx, key, modifiers),
             };
             if taken {

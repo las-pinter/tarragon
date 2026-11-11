@@ -2,7 +2,9 @@
 //! Ctrl+C, and Ctrl+V.
 
 use super::super::Shell;
-use super::keys::{ctrl, frame, frame_held, press, search_id, select_one, setup};
+use super::keys::{
+    ctrl, frame, frame_at, frame_events, frame_held, press, search_id, select_one, setup,
+};
 use crate::gallery::{GridMenuEvent, Scope};
 use egui::{Context, Event, Key, Modifiers};
 use std::path::PathBuf;
@@ -218,10 +220,9 @@ fn delete_and_copy_take_every_selected_tile_in_grid_order() {
 }
 
 #[test]
-fn a_v_release_without_exact_ctrl_and_a_lone_paste_event_do_nothing() {
+fn a_v_release_with_shift_or_alt_and_a_lone_paste_event_do_nothing() {
     let (ctx, mut shell) = setup();
     for modifiers in [
-        Modifiers::NONE,
         Modifiers::SHIFT,
         ctrl() | Modifiers::SHIFT,
         ctrl() | Modifiers::ALT,
@@ -231,6 +232,278 @@ fn a_v_release_without_exact_ctrl_and_a_lone_paste_event_do_nothing() {
     }
     let (events, _) = send(&ctx, &mut shell, Event::Paste("x".to_owned()));
     assert_eq!(events, vec![], "a paste event alone does not paste");
+}
+
+/// Run `frames` as they come, with no modifier change added. Return the grid
+/// events of each frame. A last frame lets go of every modifier.
+fn run_raw(ctx: &Context, shell: &mut Shell, frames: Vec<Vec<Event>>) -> Vec<Vec<GridMenuEvent>> {
+    let queued = frames
+        .into_iter()
+        .map(|events| {
+            frame_events(ctx, shell, events);
+            shell.gallery_mut().take_menu_events()
+        })
+        .collect();
+    frame_events(ctx, shell, vec![Event::ModifiersChanged(Modifiers::NONE)]);
+    queued
+}
+
+fn mods(modifiers: Modifiers) -> Event {
+    Event::ModifiersChanged(modifiers)
+}
+
+#[test]
+fn paste_fires_when_ctrl_goes_up_before_v_in_one_frame() {
+    let (ctx, mut shell) = setup();
+    let events = vec![
+        mods(ctrl()),
+        mods(Modifiers::NONE),
+        v_release(Modifiers::NONE),
+    ];
+    let queued = run_raw(&ctx, &mut shell, vec![events]);
+    assert_eq!(queued, vec![vec![GridMenuEvent::Paste]]);
+}
+
+#[test]
+fn paste_fires_when_ctrl_goes_up_before_v_in_a_later_frame() {
+    let (ctx, mut shell) = setup();
+    let frames = vec![
+        vec![mods(ctrl())],
+        vec![mods(Modifiers::NONE), v_release(Modifiers::NONE)],
+    ];
+    let queued = run_raw(&ctx, &mut shell, frames);
+    assert_eq!(queued, vec![vec![], vec![GridMenuEvent::Paste]]);
+}
+
+#[test]
+fn paste_fires_when_a_quiet_frame_comes_between_ctrl_up_and_v_up() {
+    let (ctx, mut shell) = setup();
+    let frames = vec![
+        vec![mods(ctrl()), mods(Modifiers::NONE)],
+        vec![],
+        vec![v_release(Modifiers::NONE)],
+    ];
+    let queued = run_raw(&ctx, &mut shell, frames);
+    assert_eq!(queued, vec![vec![], vec![], vec![GridMenuEvent::Paste]]);
+}
+
+#[test]
+fn a_v_release_long_after_ctrl_pastes_nothing() {
+    let (ctx, mut shell) = setup();
+    frame_at(&ctx, &mut shell, vec![mods(ctrl())], Some(100.0));
+    frame_at(&ctx, &mut shell, vec![mods(Modifiers::NONE)], Some(100.1));
+    let late = vec![v_release(Modifiers::NONE)];
+    frame_at(&ctx, &mut shell, late, Some(110.0));
+    assert_eq!(shell.gallery_mut().take_menu_events(), vec![]);
+}
+
+#[test]
+fn paste_fires_when_the_v_release_itself_carries_ctrl() {
+    let (ctx, mut shell) = setup();
+    let queued = run_raw(&ctx, &mut shell, vec![vec![v_release(ctrl())]]);
+    assert_eq!(queued, vec![vec![GridMenuEvent::Paste]]);
+}
+
+#[test]
+fn a_plain_v_press_and_release_pastes_nothing() {
+    let (ctx, mut shell) = setup();
+    // Ctrl was held earlier and is up again, so only the V press says it is typed.
+    let up = || vec![mods(ctrl()), mods(Modifiers::NONE)];
+    let same_frame = [up(), vec![press(Key::V, Modifiers::NONE)]].concat();
+    let release = v_release(Modifiers::NONE);
+    let queued = run_raw(
+        &ctx,
+        &mut shell,
+        vec![[same_frame, vec![release.clone()]].concat()],
+    );
+    assert_eq!(queued, vec![vec![]], "press and release in one frame");
+
+    // The release frame sees Ctrl too, so only the memory of the press rejects it.
+    let frames = vec![
+        vec![press(Key::V, Modifiers::NONE)],
+        [up(), vec![release]].concat(),
+    ];
+    let queued = run_raw(&ctx, &mut shell, frames);
+    assert_eq!(
+        queued,
+        vec![vec![], vec![]],
+        "press and release in two frames"
+    );
+}
+
+#[test]
+fn a_bare_v_release_with_no_ctrl_history_pastes_nothing() {
+    let (ctx, mut shell) = setup();
+    let queued = run_raw(&ctx, &mut shell, vec![vec![v_release(Modifiers::NONE)]]);
+    assert_eq!(queued, vec![vec![]]);
+}
+
+/// A frame at `time` seconds. Return the grid events it queued.
+fn at(ctx: &Context, shell: &mut Shell, time: f64, events: Vec<Event>) -> Vec<GridMenuEvent> {
+    frame_at(ctx, shell, events, Some(time));
+    shell.gallery_mut().take_menu_events()
+}
+
+/// A press or release of the left Ctrl key, as the platform layer sends it.
+fn ctrl_key(pressed: bool, modifiers: Modifiers) -> Event {
+    Event::Key {
+        key: Key::ControlLeft,
+        physical_key: Some(Key::ControlLeft),
+        pressed,
+        repeat: false,
+        modifiers,
+    }
+}
+
+#[test]
+fn ctrl_v_right_after_a_ctrl_shift_chord_pastes() {
+    let (ctx, mut shell) = setup();
+    let chord = mods(ctrl() | Modifiers::SHIFT);
+    assert_eq!(at(&ctx, &mut shell, 10.0, vec![chord]), vec![]);
+    assert_eq!(
+        at(&ctx, &mut shell, 10.1, vec![mods(Modifiers::NONE)]),
+        vec![]
+    );
+    // A new Ctrl press starts a new gesture.
+    let events = vec![
+        mods(ctrl()),
+        mods(Modifiers::NONE),
+        v_release(Modifiers::NONE),
+    ];
+    assert_eq!(
+        at(&ctx, &mut shell, 10.2, events),
+        vec![GridMenuEvent::Paste]
+    );
+}
+
+#[test]
+fn a_chord_older_than_the_key_memory_does_not_block_paste() {
+    let (ctx, mut shell) = setup();
+    let chord = mods(ctrl() | Modifiers::SHIFT);
+    assert_eq!(at(&ctx, &mut shell, 10.0, vec![chord]), vec![]);
+    // Shift goes up and Ctrl stays down, so only the age clears the chord.
+    assert_eq!(at(&ctx, &mut shell, 10.1, vec![mods(ctrl())]), vec![]);
+    let events = vec![
+        mods(ctrl()),
+        mods(Modifiers::NONE),
+        v_release(Modifiers::NONE),
+    ];
+    assert_eq!(
+        at(&ctx, &mut shell, 11.5, events),
+        vec![GridMenuEvent::Paste]
+    );
+}
+
+#[test]
+fn a_ctrl_v_press_delivered_as_a_key_event_pastes_once() {
+    let (ctx, mut shell) = setup();
+    let press_v = press(Key::V, ctrl());
+    let same_frame = vec![mods(ctrl()), press_v.clone(), v_release(ctrl())];
+    let queued = run_raw(&ctx, &mut shell, vec![same_frame]);
+    assert_eq!(queued, vec![vec![GridMenuEvent::Paste]], "one frame");
+
+    let frames = vec![vec![mods(ctrl()), press_v], vec![v_release(ctrl())]];
+    let queued = run_raw(&ctx, &mut shell, frames);
+    assert_eq!(
+        queued,
+        vec![vec![GridMenuEvent::Paste], vec![]],
+        "two frames"
+    );
+
+    // Ctrl goes up before V.
+    let frames = vec![
+        vec![mods(ctrl()), press(Key::V, ctrl())],
+        vec![mods(Modifiers::NONE), v_release(Modifiers::NONE)],
+    ];
+    let queued = run_raw(&ctx, &mut shell, frames);
+    assert_eq!(
+        queued,
+        vec![vec![GridMenuEvent::Paste], vec![]],
+        "Ctrl up first"
+    );
+}
+
+#[test]
+fn paste_fires_for_the_full_shape_with_ctrl_key_events() {
+    let (ctx, mut shell) = setup();
+    let events = vec![
+        ctrl_key(true, Modifiers::NONE),
+        mods(ctrl()),
+        ctrl_key(false, ctrl()),
+        mods(Modifiers::NONE),
+        v_release(Modifiers::NONE),
+    ];
+    let queued = run_raw(&ctx, &mut shell, vec![events]);
+    assert_eq!(queued, vec![vec![GridMenuEvent::Paste]]);
+}
+
+#[test]
+fn an_auto_repeated_plain_v_press_and_the_release_paste_nothing() {
+    let (ctx, mut shell) = setup();
+    let repeat = Event::Key {
+        key: Key::V,
+        physical_key: Some(Key::V),
+        pressed: true,
+        repeat: true,
+        modifiers: Modifiers::NONE,
+    };
+    // Ctrl was held and is up, so only the V presses say V is typed.
+    let events = vec![
+        mods(ctrl()),
+        mods(Modifiers::NONE),
+        press(Key::V, Modifiers::NONE),
+        repeat.clone(),
+        repeat,
+        v_release(Modifiers::NONE),
+    ];
+    let queued = run_raw(&ctx, &mut shell, vec![events]);
+    assert_eq!(queued, vec![vec![]]);
+}
+
+#[test]
+fn ctrl_history_is_kept_while_a_dialog_owns_the_keyboard() {
+    let (ctx, mut shell) = setup();
+    shell.gallery_mut().open_rename(path("a.png"));
+    frame_events(&ctx, &mut shell, vec![]);
+    assert!(shell.gallery_mut().rename_open());
+    // Ctrl goes down and up while the dialog is open. The handler returns early.
+    let events = vec![mods(ctrl()), mods(Modifiers::NONE)];
+    assert_eq!(at(&ctx, &mut shell, 10.0, events), vec![]);
+    let escape = press(Key::Escape, Modifiers::NONE);
+    assert_eq!(at(&ctx, &mut shell, 10.1, vec![escape]), vec![]);
+    assert!(!shell.gallery_mut().rename_open(), "Escape closed it");
+    let events = vec![v_release(Modifiers::NONE)];
+    assert_eq!(
+        at(&ctx, &mut shell, 10.2, events),
+        vec![GridMenuEvent::Paste]
+    );
+}
+
+#[test]
+fn ctrl_shift_v_in_the_real_shape_pastes_nothing() {
+    let (ctx, mut shell) = setup();
+    let down = mods(ctrl() | Modifiers::SHIFT);
+    // Shift goes up, then Ctrl, then V: the V release carries nothing.
+    let events = vec![
+        down.clone(),
+        mods(ctrl()),
+        mods(Modifiers::NONE),
+        v_release(Modifiers::NONE),
+    ];
+    let queued = run_raw(&ctx, &mut shell, vec![events]);
+    assert_eq!(queued, vec![vec![]], "in one frame");
+
+    let frames = vec![
+        vec![down],
+        // Ctrl is seen again here, so only the memory of Shift rejects it.
+        vec![
+            mods(ctrl()),
+            mods(Modifiers::NONE),
+            v_release(Modifiers::NONE),
+        ],
+    ];
+    let queued = run_raw(&ctx, &mut shell, frames);
+    assert_eq!(queued, vec![vec![], vec![]], "over two frames");
 }
 
 #[test]

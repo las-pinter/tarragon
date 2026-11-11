@@ -44,7 +44,24 @@ pub(super) fn frame_held(
 ) -> Vec<Key> {
     let mut events = events;
     events.insert(0, Event::ModifiersChanged(held));
+    frame_events(ctx, shell, events)
+}
+
+/// Run one frame with exactly `events`, so a test sets the modifier changes
+/// itself. Return the keys that the shell left unconsumed.
+pub(super) fn frame_events(ctx: &Context, shell: &mut Shell, events: Vec<Event>) -> Vec<Key> {
+    frame_at(ctx, shell, events, None)
+}
+
+/// Run one frame as `frame_events` does, at `time` seconds when it is set.
+pub(super) fn frame_at(
+    ctx: &Context,
+    shell: &mut Shell,
+    events: Vec<Event>,
+    time: Option<f64>,
+) -> Vec<Key> {
     let mut input = test_support::input(1400.0, events);
+    input.time = time;
     input.screen_rect = Some(Rect::from_min_size(Pos2::ZERO, egui::vec2(1400.0, 900.0)));
     let mut left = Vec::new();
     ctx.run_ui(input, |ui| {

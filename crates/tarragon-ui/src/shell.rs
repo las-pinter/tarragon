@@ -61,6 +61,9 @@ pub struct Shell {
     prefs: Prefs,
     /// The menu choices that the app has not taken yet.
     menu_events: Vec<MenuEvent>,
+    /// What earlier frames showed of Ctrl and V. Paste reads a V release that
+    /// has no press, so it needs this history.
+    prev_keys: keys::PrevKeys,
 }
 
 impl Shell {
@@ -77,6 +80,7 @@ impl Shell {
             crash_card: CrashCard::default(),
             prefs: Prefs::default(),
             menu_events: Vec::new(),
+            prev_keys: keys::PrevKeys::default(),
         }
     }
 

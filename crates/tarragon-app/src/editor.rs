@@ -220,6 +220,8 @@ fn system_opener(file: &Path) -> Launch {
     }
 }
 
+#[cfg(target_os = "linux")]
+mod desktop;
 mod exec;
 #[cfg(target_os = "linux")]
 mod xdg;

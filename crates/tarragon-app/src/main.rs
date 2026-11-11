@@ -10,6 +10,9 @@ mod crashcard;
 mod data_dir;
 mod editor;
 mod feed;
+// Not called yet.
+#[allow(dead_code, unused_imports)]
+mod fileops;
 mod filtering;
 mod instance;
 mod logging;

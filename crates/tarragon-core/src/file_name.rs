@@ -32,8 +32,10 @@ pub enum FileNameError {
 /// Split a name into its stem and extension, without the dot.
 ///
 /// The extension starts at the last dot. A dot at the start of the name does
-/// not start an extension, so `.hidden` is all stem.
-fn split_name(name: &str) -> (&str, Option<&str>) {
+/// not start an extension, so `.hidden` is all stem. A name that ends in a dot
+/// has an empty extension, so `a.` gives the stem `a` and the extension `""`.
+#[must_use]
+pub fn split_file_name(name: &str) -> (&str, Option<&str>) {
     match name.rfind('.') {
         Some(index) if index > 0 => (&name[..index], Some(&name[index + 1..])),
         _ => (name, None),
@@ -55,7 +57,7 @@ fn join_name(stem: &str, extension: Option<&str>) -> String {
 /// extension gives `stem copy`. A name that starts with a dot and has no other
 /// dot keeps the whole name as the stem.
 pub fn copy_name(name: &str, mut taken: impl FnMut(&str) -> bool) -> String {
-    let (stem, extension) = split_name(name);
+    let (stem, extension) = split_file_name(name);
     let mut number: u64 = 1;
     loop {
         let candidate = if number == 1 {
@@ -115,6 +117,14 @@ mod tests {
 
     fn none_taken(_: &str) -> bool {
         false
+    }
+
+    #[test]
+    fn split_file_name_splits_at_the_last_dot_after_the_first_byte() {
+        assert_eq!(split_file_name(".hidden"), (".hidden", None));
+        assert_eq!(split_file_name("a."), ("a", Some("")));
+        assert_eq!(split_file_name("a.tar.gz"), ("a.tar", Some("gz")));
+        assert_eq!(split_file_name("a.png"), ("a", Some("png")));
     }
 
     #[test]

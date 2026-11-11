@@ -7,7 +7,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use tarragon_core::file_name::{MAX_FILE_NAME_BYTES, copy_name};
 
-use super::FileOpError;
+use super::{FileOpError, io_error};
 
 /// A file the copy made, with the values the disk had after the write.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -138,15 +138,6 @@ fn write_copy(
 fn epoch_secs(time: SystemTime) -> i64 {
     time.duration_since(UNIX_EPOCH)
         .map_or(0, |d| i64::try_from(d.as_secs()).unwrap_or(i64::MAX))
-}
-
-/// Wrap a disk error with what the call did and the path it used.
-fn io_error(action: &'static str, path: &Path, source: io::Error) -> FileOpError {
-    FileOpError::Io {
-        action,
-        path: path.to_path_buf(),
-        source,
-    }
 }
 
 #[cfg(test)]

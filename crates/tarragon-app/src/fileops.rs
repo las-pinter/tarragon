@@ -1,11 +1,16 @@
-//! Disk operations on image files: copy a file beside itself or into a folder.
+//! Disk operations on image files: copy a file and rename a file.
 
 mod copy;
+mod rename;
 
 pub use copy::{Copied, copy_into};
+pub use rename::rename;
 
 use std::io;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+
+use tarragon_core::file_name::FileNameError;
+use tarragon_db::DbError;
 
 /// Why a file operation failed.
 #[derive(Debug, thiserror::Error)]
@@ -34,6 +39,28 @@ pub enum FileOpError {
         /// The bytes in the source.
         expected: u64,
     },
+    /// The new file stem is refused, or a file already has the new name.
+    #[error(transparent)]
+    Stem(#[from] FileNameError),
+    /// A database call failed.
+    #[error("database call failed: {0}")]
+    Db(#[from] DbError),
+    /// The database call failed and the file could not move back.
+    #[error(
+        "the database call failed ({db}), and the file is still at {}: move it back to {}",
+        from.display(),
+        to.display()
+    )]
+    RollbackFailed {
+        /// Where the file is now.
+        from: PathBuf,
+        /// The old path the file should have.
+        to: PathBuf,
+        /// The database error.
+        db: Box<DbError>,
+        /// Why the move back failed.
+        source: Box<FileOpError>,
+    },
     /// A disk call failed.
     #[error("cannot {action} {}: {source}", path.display())]
     Io {
@@ -44,4 +71,13 @@ pub enum FileOpError {
         /// The error from the operating system.
         source: io::Error,
     },
+}
+
+/// Wrap a disk error with what the call did and the path it used.
+fn io_error(action: &'static str, path: &Path, source: io::Error) -> FileOpError {
+    FileOpError::Io {
+        action,
+        path: path.to_path_buf(),
+        source,
+    }
 }

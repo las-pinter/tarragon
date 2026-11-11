@@ -10,6 +10,7 @@ use crate::popup::{menu_frame, row_frame, text_width};
 use crate::tokens;
 use rows::{Row, empty_groups, event, groups};
 
+mod grid_key;
 mod rows;
 
 /// The id of the menu area.

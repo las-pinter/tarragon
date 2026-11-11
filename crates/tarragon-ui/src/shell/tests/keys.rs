@@ -9,17 +9,17 @@ use egui::{Context, Event, Id, Key, Modifiers, Pos2, Rect};
 use std::path::PathBuf;
 
 /// The id of the gallery search field.
-fn search_id() -> Id {
+pub(super) fn search_id() -> Id {
     Id::new("tarragon-gallery-search")
 }
 
 /// What the real keyboard reports for Ctrl held on Linux.
-fn ctrl() -> Modifiers {
+pub(super) fn ctrl() -> Modifiers {
     Modifiers::CTRL | Modifiers::COMMAND
 }
 
 /// A press of `key` with `modifiers`.
-fn press(key: Key, modifiers: Modifiers) -> Event {
+pub(super) fn press(key: Key, modifiers: Modifiers) -> Event {
     Event::Key {
         key,
         physical_key: Some(key),
@@ -30,16 +30,56 @@ fn press(key: Key, modifiers: Modifiers) -> Event {
 }
 
 /// Run one frame with `events`. Return the keys that the shell left unconsumed.
-fn frame(ctx: &Context, shell: &mut Shell, events: Vec<Event>) -> Vec<Key> {
+pub(super) fn frame(ctx: &Context, shell: &mut Shell, events: Vec<Event>) -> Vec<Key> {
+    frame_held(ctx, shell, events, Modifiers::NONE)
+}
+
+/// Run one frame with `events` while `held` modifiers are down. A copy event
+/// carries no modifiers of its own, so the frame states them.
+pub(super) fn frame_held(
+    ctx: &Context,
+    shell: &mut Shell,
+    events: Vec<Event>,
+    held: Modifiers,
+) -> Vec<Key> {
+    let mut events = events;
+    events.insert(0, Event::ModifiersChanged(held));
     let mut input = test_support::input(1400.0, events);
     input.screen_rect = Some(Rect::from_min_size(Pos2::ZERO, egui::vec2(1400.0, 900.0)));
     let mut left = Vec::new();
     ctx.run_ui(input, |ui| {
         shell.show(ui);
-        for key in [Key::O, Key::Comma, Key::F, Key::A, Key::Enter] {
+        let watched = [
+            Key::O,
+            Key::Comma,
+            Key::F,
+            Key::A,
+            Key::Enter,
+            Key::F2,
+            Key::Delete,
+        ];
+        for key in watched {
             if ui.input(|input| input.key_pressed(key)) {
                 left.push(key);
             }
+        }
+        // Copy arrives as an event and paste as the release of V. C and V stand
+        // for them.
+        let has = |wanted: fn(&Event) -> bool| ui.input(|input| input.events.iter().any(wanted));
+        if has(|event| matches!(event, Event::Copy)) {
+            left.push(Key::C);
+        }
+        if has(|event| {
+            matches!(
+                event,
+                Event::Key {
+                    key: Key::V,
+                    pressed: false,
+                    ..
+                }
+            )
+        }) {
+            left.push(Key::V);
         }
     })
     .drop_without_applying_deltas();
@@ -47,7 +87,7 @@ fn frame(ctx: &Context, shell: &mut Shell, events: Vec<Event>) -> Vec<Key> {
 }
 
 /// A shell that shows four items, drawn twice.
-fn setup() -> (Context, Shell) {
+pub(super) fn setup() -> (Context, Shell) {
     let ctx = test_support::context();
     let mut shell = Shell::new();
     shell.set_folder(Some(PathBuf::from("/images")));
@@ -150,7 +190,7 @@ fn the_crash_card_blocks_the_shortcuts() {
 }
 
 /// Preferences values for a window that only has to open.
-fn prefs_values() -> PrefsValues {
+pub(super) fn prefs_values() -> PrefsValues {
     PrefsValues {
         max_psd_workers: 3,
         max_multi_preview: 9,
@@ -206,7 +246,7 @@ fn other_chords_do_nothing() {
 }
 
 /// Click the tile of item `index` so it becomes the only selected image.
-fn select_one(ctx: &Context, shell: &mut Shell, index: usize) {
+pub(super) fn select_one(ctx: &Context, shell: &mut Shell, index: usize) {
     let tile = Id::new(("tarragon-grid-tile", index));
     let at = ctx
         .read_response(tile)

@@ -9,6 +9,8 @@ use egui::{
 use std::path::PathBuf;
 
 mod empty_card;
+mod grid_key_gates;
+mod grid_keys;
 mod keys;
 mod min_width;
 mod preview_wiring;

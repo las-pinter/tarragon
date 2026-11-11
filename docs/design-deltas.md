@@ -677,11 +677,90 @@ lower-case extension without a dot, and `*` is the fallback. The extension row w
 `{file}` in a template is replaced with the path. Without `{file}`, the path is the last
 argument. A missing or blank row is skipped, and with no row left the system opener runs.
 A double-click on a tile selects that image only and opens it by these rules. A failed start
-logs a warning and does not retry. The grid context menu with Regenerate Thumbnail is not
-built, so a right-click on a tile shows no menu.
+logs a warning and does not retry. A right-click on a tile opens the grid context menu, which
+has its own entry below.
 
-Reason: the screen is outside the current scope, and a file can still open in a program. The
-menu stays out because Retry on the error card already re-renders one file.
+Reason: the screen is outside the current scope, and a file can still open in a program.
+
+## Grid context menu
+
+Before: the mockup shows one menu on a tile, with one item, Regenerate Thumbnail. No
+mockup shows the other items, the menu on empty space, or a notice line.
+
+After: a right-click on a tile opens a menu at the pointer. A right-click on an
+unselected tile selects only that tile first. A right-click on a selected tile keeps
+the selection. The menu has four groups. A line separates the groups. Shortcut text is
+drawn dim at the right.
+
+| Group | Item (one file)       | Shortcut  | Many files selected           | Greyed when        |
+| ----- | --------------------- | --------- | ----------------------------- | ------------------ |
+| 1     | Open in editor        | Enter     | Open N in editor              |                    |
+| 1     | Show in file manager  |           |                               | more than one file |
+| 2     | Regenerate Thumbnail  |           | Regenerate N Thumbnails       |                    |
+| 2     | Add tag...            |           |                               |                    |
+| 2     | Copy path             |           |                               | more than one file |
+| 3     | Copy                  | Ctrl+C    |                               |                    |
+| 3     | Paste                 | Ctrl+V    |                               | the All scope      |
+| 3     | Duplicate             |           |                               |                    |
+| 3     | Rename...             | F2        |                               | more than one file |
+| 4     | Delete                | Del       | Delete N items                |                    |
+| 4     | Delete permanently... | Shift+Del | Delete N items permanently... |                    |
+
+- Escape or a press outside the menu closes it with no action. A change of the
+  selected files under the open menu closes it too.
+- Right-click on empty space in the grid, or on the empty folder card, opens a menu
+  with one item, Paste. It opens only while a folder is open. Paste is greyed in the
+  All scope.
+- Show in file manager opens the folder of the file through the system opener
+  (`xdg-open` on Linux). Copy path puts the file path on the clipboard as text.
+- Add tag... opens, at the pointer, the same menu as the Preview "+ add" button: the
+  known tags and Create new.... The chosen tag goes to every selected file.
+- Regenerate Thumbnail queues a new render of each selected file.
+- Rename... opens a dialog with the name without its extension. The extension shows
+  beside the field as locked text and cannot change. The dialog refuses an empty name,
+  a name with a slash, a backslash or a NUL character, `.` or `..`, a name that starts
+  or ends with a space or a dot, a whole name over 255 bytes, and a name that another
+  file already has. A rename moves the file on disk and updates its row in the library.
+- Duplicate copies each file next to itself under the first free copy name, such as
+  `a copy.png`, then `a copy 2.png`. It never overwrites a file. In the All scope each
+  copy goes into the folder of its source file.
+- Copy puts the files on the clipboard as a `text/uri-list`. Paste reads that list and
+  copies each regular file of a supported type into the open folder, under a free
+  name. It skips other entries and counts them in the notice. Paste does nothing in
+  the All scope. The clipboard needs `wl-copy` and `wl-paste` under Wayland, or
+  `xclip` under X11. A missing program shows a notice that names the package. File
+  Copy and Paste are not supported on Windows.
+- Delete and Delete permanently... always ask first. Delete asks to move the files to
+  the Trash, and its default button, Move to Trash, confirms. Delete permanently...
+  asks for confirmation and warns that it cannot be undone. Its default button is
+  Cancel, and Enter never confirms it. If the Trash refuses a file, a second prompt
+  offers to delete that file permanently instead. Its default button is Cancel too.
+  After a delete, the tile nearest to the removed place is selected.
+- The notice line is one line of text at the foot of the gallery, above the grid. It
+  shows the result of a write, a failure, or a busy message for six seconds. A new
+  message replaces the old one. No mockup shows it.
+- Ctrl+Z undoes the last Rename or Duplicate of the session, one step only. A new
+  Rename or Duplicate replaces the step. Paste and every delete clear it. A finished
+  undo clears the step. A refused Rename undo also clears it. A failed undo keeps it.
+  Nothing redoes an undo. Undoing a Duplicate moves only the copies that are unchanged
+  to the Trash. It keeps a copy that was edited or is gone. Undoing a Rename moves the
+  file back, unless it is gone or another file has the old name. Ctrl+Z does nothing
+  while a text field has focus or a dialog is open.
+
+Reason: the mockup shows the menu with one item. Managing files in place needs the other
+items. The notice line shows the result of work that has no window of its own.
+
+## Keyboard shortcuts for the grid
+
+Before: the mockup menu shows no shortcut text for these actions.
+
+After: F2, Del, Shift+Del, Ctrl+C, Ctrl+V, and Ctrl+Z do what the menu items of the same
+name do, under the rules in "Grid context menu". They act only when no widget other
+than a tile has focus and no dialog or menu is open. Del, Shift+Del, and Ctrl+C need a
+selected file. F2 needs exactly one. Ctrl+V needs one open folder. Ctrl+Z needs an
+undo step.
+
+Reason: the menu shows these keys, so they must work.
 
 ## Open Folder and roots
 
@@ -748,12 +827,13 @@ A chord with an extra Shift or Alt does not act.
   shortcut acts.
 - Ctrl+A leaves a focused text field its own select all. Focus on a tile or a button does
   not block it. An image that the search hides is not selected.
-- No menu shows these shortcuts, because the mockup shows none. This list is the only place
-  that names them.
+- No menu bar menu shows these shortcuts, because the mockup shows none. This list is the
+  only place that names them. The grid context menu does show its own keys, see "Grid
+  context menu".
 - Enter needs no modifier. With none or several images selected, it does nothing and is not
   consumed. A focused button or text field keeps its own Enter.
-- Not built: Escape to clear the selection, arrow keys, Delete, Ctrl+Q, and F5 to rescan. The File menu has a Quit item, which the mockup lacks. Each
-  other key needs its own decision.
+- Not built: Escape to clear the selection, arrow keys, Ctrl+Q, and F5 to rescan. The File menu has a Quit item, which the mockup lacks. Each
+  other key needs its own decision. The grid keys are in "Keyboard shortcuts for the grid".
 - egui has no mnemonics, so Alt+F is not supported.
 
 Reason: the shortcuts save a trip to the menu. The mockup wins on looks, so the menus stay

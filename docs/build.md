@@ -534,6 +534,12 @@ Packages for a run in a container (not tested as a minimal set):
 `libxkbcommon-x11-0`, `libwayland-client0`, `libegl1`, `libgl1`,
 `libgl1-mesa-dri`, `libvulkan1`, and `mesa-vulkan-drivers`.
 
+Optional run-time packages, for any install of the app. They are not build
+packages. File Copy and Paste in the grid menu need `xclip` on X11 or
+`wl-clipboard` on Wayland. Without them the app runs and shows a notice that names
+the missing package. The Show in file manager item and the system opener start
+`xdg-open` on Linux (package `xdg-utils` on Debian and Ubuntu).
+
 The CI `gates` job needs no new `apt` step. The example built on a plain
 `ubuntu:22.04` image with `build-essential` only. The `release-build` jobs
 for Windows and macOS run `cargo build --release --workspace`. That command

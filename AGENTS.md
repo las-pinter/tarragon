@@ -14,7 +14,7 @@ There are no exceptions.
 ## Project
 
 Tarragon is a fast, free image browser for artists. It browses thousands of
-reference images, sketches, and PSD files instantly, without moving a file.
+reference images, sketches, and PSD files instantly, and manages files in place: rename, duplicate, copy, paste, and delete.
 Users find images by dominant color, user tags, and a favorites sidebar, and
 open them in Photoshop, GIMP, or Krita. It is a compiled native application,
 not a web app. The project is being rewritten in Rust.

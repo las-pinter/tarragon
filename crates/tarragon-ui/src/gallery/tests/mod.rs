@@ -1,6 +1,7 @@
 //! Tests for the gallery strip and the search timer.
 
 mod busy;
+mod context_menu;
 mod debounce;
 mod empty;
 mod filter_bar;

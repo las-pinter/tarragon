@@ -186,6 +186,8 @@ pub struct GridResponse {
     pub click: Option<CellClick>,
     /// The tile that got a double-click this frame, if any.
     pub double_click: Option<CellClick>,
+    /// The tile that got a right-click this frame, if any.
+    pub secondary_click: Option<CellClick>,
 }
 
 /// A grid over `item_count` items with a fixed cell geometry.
@@ -335,6 +337,7 @@ impl VirtualGrid {
     ) -> GridResponse {
         let mut click = None;
         let mut double_click = None;
+        let mut secondary_click = None;
         let grid = Self {
             metrics: self.metrics,
             item_count: order.len(),
@@ -361,11 +364,15 @@ impl VirtualGrid {
             if response.double_clicked() {
                 double_click = Some(hit());
             }
+            if response.secondary_clicked() {
+                secondary_click = Some(hit());
+            }
         });
         GridResponse {
             painted,
             click,
             double_click,
+            secondary_click,
         }
     }
 }

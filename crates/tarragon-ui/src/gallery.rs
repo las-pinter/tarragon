@@ -18,10 +18,12 @@ use crate::grid::{GridItem, Selection, VirtualGrid, items_in_order, metrics_for}
 use crate::tag_manager::TagManager;
 pub use crate::tag_manager::{TagManagerEvent, TagRow};
 use crate::tokens;
+pub use context_menu::GridMenuEvent;
 pub use empty::EmptyKind;
 use keys::Debouncer;
 
 mod busy;
+mod context_menu;
 mod empty;
 mod info;
 mod keys;
@@ -134,6 +136,8 @@ pub struct Gallery {
     busy: busy::Busy,
     /// The notice line at the foot of the gallery.
     notice: notice::Notice,
+    /// The tile menu and the choices it made since the last take.
+    tile_menu: context_menu::TileMenu,
 }
 
 impl Gallery {
@@ -171,6 +175,7 @@ impl Gallery {
             open_request: None,
             busy: busy::Busy::default(),
             notice: notice::Notice::default(),
+            tile_menu: context_menu::TileMenu::default(),
         }
     }
 
@@ -463,6 +468,7 @@ impl Gallery {
         if let Some(kind) = self.empty_kind() {
             self.painted_scratch.clear();
             self.record_painted();
+            self.close_tile_menu();
             self.show_empty(ui, kind);
             return;
         }
@@ -485,5 +491,9 @@ impl Gallery {
         if let Some(click) = response.double_click {
             self.apply_grid_double_click(click);
         }
+        if let Some(click) = response.secondary_click {
+            self.open_tile_menu(ui, click);
+        }
+        self.show_tile_menu(ui);
     }
 }

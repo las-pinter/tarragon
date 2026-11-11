@@ -85,6 +85,27 @@ fn open_with_path(db: &Database, file: &Path, path: Option<&OsStr>) -> Result<()
     Ok(())
 }
 
+/// Show the folder of `file` in the file manager, without waiting for it.
+///
+/// The system opener runs on the folder, so the manager does not open the
+/// file itself.
+///
+/// # Errors
+///
+/// Returns [`OpenError::Spawn`] when the program does not start.
+pub fn open_folder_in_manager(file: &Path) -> Result<(), OpenError> {
+    open_folder_with_path(file, None)
+}
+
+/// [`open_folder_in_manager`] with an optional `PATH` for the child.
+fn open_folder_with_path(file: &Path, path: Option<&OsStr>) -> Result<(), OpenError> {
+    let launch = system_opener(file.parent().unwrap_or(file));
+    spawn_with_path(&launch, path).map_err(|source| OpenError::Spawn {
+        program: launch.program.to_string_lossy().into_owned(),
+        source,
+    })
+}
+
 /// Start the program of `launch` and return at once.
 ///
 /// A small thread waits for the child, so it does not stay a zombie.

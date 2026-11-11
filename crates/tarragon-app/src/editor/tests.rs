@@ -208,3 +208,34 @@ fn open_without_template_runs_the_system_opener() {
     open_with_path(&db, Path::new("/a/x.png"), Some(bin.as_os_str())).expect("open");
     assert_eq!(wait_for_text(&out).as_deref(), Some("/a/x.png\n"));
 }
+
+#[cfg(target_os = "linux")]
+#[test]
+fn the_file_manager_gets_the_folder_and_not_the_file() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let (dir, _db) = db_with(&[]);
+    let out = dir.0.join("arg.txt");
+    let bin = dir.0.join("bin");
+    std::fs::create_dir_all(&bin).expect("create bin");
+    let script = bin.join("xdg-open");
+    std::fs::write(
+        &script,
+        format!("#!/bin/sh\necho \"$1\" > {}\n", out.display()),
+    )
+    .expect("write script");
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).expect("chmod");
+    open_folder_with_path(Path::new("/a/b/x.png"), Some(bin.as_os_str())).expect("open");
+    assert_eq!(wait_for_text(&out).as_deref(), Some("/a/b\n"));
+}
+
+#[cfg(unix)]
+#[test]
+fn a_missing_file_manager_opener_is_a_spawn_error() {
+    let (dir, _db) = db_with(&[]);
+    let empty = dir.0.join("empty");
+    std::fs::create_dir_all(&empty).expect("create the empty folder");
+    let error = open_folder_with_path(Path::new("/a/b/x.png"), Some(empty.as_os_str()))
+        .expect_err("must fail");
+    assert!(matches!(error, OpenError::Spawn { .. }));
+}

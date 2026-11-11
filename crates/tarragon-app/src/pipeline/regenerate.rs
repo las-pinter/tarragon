@@ -29,8 +29,6 @@ impl Pipeline {
     /// channel with a result of a chosen file drops that result and is not
     /// waited for. A result of an old render that is already in the channel
     /// stays there; the new result follows it.
-    // Not called yet.
-    #[allow(dead_code)]
     pub fn regenerate(&mut self, keys: &HashSet<PathBuf>) -> usize {
         let known: HashSet<PathBuf> = keys
             .iter()

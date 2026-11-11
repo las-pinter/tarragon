@@ -80,11 +80,27 @@ fn apply_events(shell: &mut Shell, db: &Database, events: Vec<PreviewEvent>) -> 
     if !write_events(db, &shell.selected_paths(), events) {
         return false;
     }
+    refresh_after_write(shell, db);
+    true
+}
+
+/// Put the user tag `tag` on `paths` in one batch, then show the result as
+/// after a Preview tag add. Returns true when the write succeeded.
+pub fn apply_tag_paths(shell: &mut Shell, db: &Database, paths: &[PathBuf], tag: &str) -> bool {
+    let events = vec![PreviewEvent::TagApplied(tag.to_owned())];
+    if !write_events(db, paths, events) {
+        return false;
+    }
+    refresh_after_write(shell, db);
+    true
+}
+
+/// Read the Preview tags again and bring the filter lists up to date.
+fn refresh_after_write(shell: &mut Shell, db: &Database) {
     refresh_preview(shell, db);
     // A new tag must reach the Filter Tags list, and an active tag filter must run again.
     filtering::refresh_lists(shell.gallery_mut(), db);
     shell.gallery_mut().refresh_filter();
-    true
 }
 
 /// Write the events to the database. Returns true when any write succeeded.

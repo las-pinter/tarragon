@@ -101,6 +101,8 @@ pub struct App {
     crash_dir: Option<PathBuf>,
     /// The report the crash card shows, until the user dismisses it.
     crash_path: Option<PathBuf>,
+    /// What the grid menu handlers keep between frames.
+    menu: menu::MenuState,
 }
 
 impl App {
@@ -188,6 +190,7 @@ impl App {
             preview_total: 0,
             crash_dir: startup.crash_dir,
             crash_path,
+            menu: menu::MenuState::default(),
         })
     }
 
@@ -428,6 +431,7 @@ impl eframe::App for App {
             self.thumbs.show_library();
         }
         self.apply_log_events(events);
+        self.apply_menu_events(&ctx);
         self.apply_prefs_events(&ctx);
         let handled = sidebar::handle_events(&mut self.shell, &self.db);
         if let Some(path) = handled.navigate {
@@ -483,6 +487,7 @@ mod failure_tests;
 mod filter_tests;
 #[cfg(test)]
 mod library_tests;
+mod menu;
 mod open;
 mod prefs;
 #[cfg(test)]

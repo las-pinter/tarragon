@@ -1,9 +1,11 @@
-//! Cache upkeep that runs on a work thread: a purge or an eviction.
+//! Cache upkeep that runs on a work thread: a purge, an eviction, or a render
+//! again of chosen files.
 //!
-//! A purge waits for the renders in flight and an eviction walks the cache,
-//! so neither may run on the UI thread. The pipeline moves into the thread
-//! the same way it does for an open.
+//! A purge and a render again wait for the renders in flight and an eviction
+//! walks the cache, so none may run on the UI thread. The pipeline moves into
+//! the thread the same way it does for an open.
 
+use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -22,6 +24,8 @@ pub enum Work {
     Purge,
     /// Evict the least recently used sources down to the size cap.
     Evict,
+    /// Delete the cache files of chosen sources and render them again.
+    Regenerate,
 }
 
 /// What a finished piece of work did.
@@ -31,6 +35,8 @@ pub enum WorkOutcome {
     Purged(PurgeOutcome),
     /// The rows and bytes an eviction left behind.
     Evicted(Evicted),
+    /// How many files were queued to render again.
+    Regenerated(usize),
 }
 
 /// What the work thread hands back, with the pipeline it borrowed.
@@ -45,6 +51,8 @@ pub(super) enum Queued {
     Purge { data_root: PathBuf },
     /// Evict down to `cap_gb` GiB.
     Evict { cap_gb: i64 },
+    /// Render these files again.
+    Regenerate { keys: HashSet<PathBuf> },
 }
 
 impl Queued {
@@ -53,6 +61,7 @@ impl Queued {
         match self {
             Self::Purge { .. } => Work::Purge,
             Self::Evict { .. } => Work::Evict,
+            Self::Regenerate { .. } => Work::Regenerate,
         }
     }
 
@@ -79,6 +88,7 @@ impl Queued {
                     .map(WorkOutcome::Evicted)
                     .map_err(|error| error.to_string())
             }
+            Self::Regenerate { keys } => Ok(WorkOutcome::Regenerated(pipeline.regenerate(keys))),
         }
     }
 }
@@ -98,6 +108,19 @@ impl Thumbs {
         (self.repaint)();
     }
 
+    /// Ask to render `keys` again. It waits for an idle pipeline like
+    /// [`Self::purge`] and runs on the work thread, because it waits for the
+    /// renders of those files that already run. Returns false, and queues
+    /// nothing, when another work request waits, so it cannot replace one.
+    pub fn regenerate(&mut self, keys: HashSet<PathBuf>) -> bool {
+        if self.queued.is_some() {
+            return false;
+        }
+        self.queued = Some(Queued::Regenerate { keys });
+        (self.repaint)();
+        true
+    }
+
     /// The work that runs now, for the busy strip.
     #[must_use]
     pub fn is_working(&self) -> Option<Work> {
@@ -107,9 +130,41 @@ impl Thumbs {
         }
     }
 
-    /// Return the result of the last finished work, once.
+    /// Return the result of the last finished work, once, whatever it was. The
+    /// app takes results by kind, so only tests use this.
+    #[cfg(test)]
     pub fn take_work_result(&mut self) -> Option<(Work, Result<WorkOutcome, String>)> {
         self.finished.take()
+    }
+
+    /// Return the result of a finished [`Self::regenerate`], once. The result
+    /// of other work stays for its own taker.
+    pub fn take_regenerate_result(&mut self) -> Option<Result<usize, String>> {
+        let result = self.take_result_of(Work::Regenerate)?;
+        Some(result.map(|outcome| match outcome {
+            WorkOutcome::Regenerated(count) => count,
+            _ => 0,
+        }))
+    }
+
+    /// Return the result of a finished purge, once. The result of other work
+    /// stays for its own taker.
+    pub fn take_purge_result(&mut self) -> Option<Result<WorkOutcome, String>> {
+        self.take_result_of(Work::Purge)
+    }
+
+    /// Return the result of a finished eviction, once. Its failure is already
+    /// logged, so a caller only takes it to clear it.
+    pub fn take_evict_result(&mut self) -> Option<Result<WorkOutcome, String>> {
+        self.take_result_of(Work::Evict)
+    }
+
+    /// Take the last result only when it came from `work`.
+    fn take_result_of(&mut self, work: Work) -> Option<Result<WorkOutcome, String>> {
+        if !matches!(&self.finished, Some((done, _)) if *done == work) {
+            return None;
+        }
+        self.finished.take().map(|(_, result)| result)
     }
 }
 

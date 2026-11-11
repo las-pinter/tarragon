@@ -13,7 +13,7 @@ use tarragon_ui::swatch::Swatch;
 use crate::colortags::swatch_name;
 
 mod events;
-pub use events::apply_preview_events;
+pub use events::{apply_preview_events, apply_tag_paths};
 mod manager;
 pub use manager::apply_manager_events;
 

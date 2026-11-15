@@ -7,10 +7,14 @@ use std::process::{Command, Stdio};
 
 use tarragon_db::{Database, DbError};
 
+use self::exec::{ExecLine, ListKind};
+
 /// The key that holds the fallback template for every extension.
 const FALLBACK_KEY: &str = "*";
 /// The text in a template that stands for the file path.
 const PLACEHOLDER: &str = "{file}";
+/// The argument in a template that stands for the whole list of files.
+const LIST_PLACEHOLDER: &str = "{files}";
 
 /// A program and its arguments, ready to hand to a process builder.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -30,12 +34,8 @@ pub struct Launch {
 ///
 /// Returns the [`DbError`] of a failed template read.
 pub fn resolve(db: &Database, file: &Path) -> Result<Launch, DbError> {
-    let extension = file
-        .extension()
-        .map(|ext| ext.to_string_lossy().to_lowercase())
-        .filter(|ext| !ext.is_empty());
-    let keys = extension.as_deref().into_iter().chain([FALLBACK_KEY]);
-    for key in keys {
+    let extension = template_extension(file);
+    for key in template_keys(extension.as_deref()) {
         let Some(template) = db.editor_command(key)? else {
             continue;
         };
@@ -44,6 +44,62 @@ pub fn resolve(db: &Database, file: &Path) -> Result<Launch, DbError> {
         }
     }
     Ok(system_opener(file))
+}
+
+/// How a file opens: once for this file, or once for a list of files.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(not(test), expect(dead_code, reason = "no caller yet"))]
+pub enum Route {
+    /// Start the app for this one file.
+    Single(Launch),
+    /// Start the app once for all the files that share the template.
+    List {
+        /// The template text, so callers can group files by template.
+        key: String,
+        /// The parsed line; its slot takes the files.
+        line: ExecLine,
+    },
+}
+
+/// Find how to open `file`, and say whether the template takes many files.
+///
+/// The lookup order is that of [`resolve`]. A template with an argument that
+/// is exactly `{files}` and no `{file}` gives [`Route::List`]. Every other
+/// template, and the system opener, gives [`Route::Single`].
+///
+/// # Errors
+///
+/// Returns the [`DbError`] of a failed template read.
+#[cfg_attr(not(test), expect(dead_code, reason = "no caller yet"))]
+pub fn resolve_route(db: &Database, file: &Path) -> Result<Route, DbError> {
+    let extension = template_extension(file);
+    for key in template_keys(extension.as_deref()) {
+        let Some(template) = db.editor_command(key)? else {
+            continue;
+        };
+        if let Some(line) = list_line(&template) {
+            return Ok(Route::List {
+                key: template,
+                line,
+            });
+        }
+        if let Some(launch) = expand(&template, file) {
+            return Ok(Route::Single(launch));
+        }
+    }
+    Ok(Route::Single(system_opener(file)))
+}
+
+/// The lower-case extension of `file`, or `None` when it has none.
+fn template_extension(file: &Path) -> Option<String> {
+    file.extension()
+        .map(|ext| ext.to_string_lossy().to_lowercase())
+        .filter(|ext| !ext.is_empty())
+}
+
+/// The template keys to try, in order: the extension, then the fallback.
+fn template_keys(extension: Option<&str>) -> impl Iterator<Item = &str> {
+    extension.into_iter().chain([FALLBACK_KEY])
 }
 
 /// Why an editor could not be opened.
@@ -157,6 +213,30 @@ fn expand(template: &str, file: &Path) -> Option<Launch> {
         args.push(file.as_os_str().to_owned());
     }
     Some(Launch { program, args })
+}
+
+/// Build a many-file line from a template, or `None` when the template is not
+/// one. It needs a program, an argument that is exactly `{files}`, and no
+/// `{file}` anywhere, so a `{file}` template keeps its one-file meaning.
+fn list_line(template: &str) -> Option<ExecLine> {
+    let mut parts = split_template(template);
+    if parts.first().is_none_or(String::is_empty) {
+        return None;
+    }
+    if parts.iter().any(|part| part.contains(PLACEHOLDER)) {
+        return None;
+    }
+    let program = parts.remove(0);
+    let slot = parts.iter().position(|part| part == LIST_PLACEHOLDER)?;
+    let after = parts.split_off(slot + 1);
+    parts.pop();
+    Some(ExecLine {
+        program,
+        before: parts,
+        after,
+        list: ListKind::Many,
+        uri: false,
+    })
 }
 
 /// Replace each placeholder in `part` with the path, keeping a bare path exact.

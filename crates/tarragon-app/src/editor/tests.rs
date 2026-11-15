@@ -239,3 +239,108 @@ fn a_missing_file_manager_opener_is_a_spawn_error() {
         .expect_err("must fail");
     assert!(matches!(error, OpenError::Spawn { .. }));
 }
+
+#[test]
+fn files_row_gives_a_list_route_with_all_paths() {
+    let (_dir, db) = db_with(&[("png", "gimp {files}")]);
+    let route = resolve_route(&db, Path::new("/a/x.png")).expect("route");
+    let Route::List { key, line } = route else {
+        panic!("expected a list route");
+    };
+    assert_eq!(key, "gimp {files}");
+    assert_eq!(line.list, ListKind::Many);
+    assert!(!line.uri);
+    let files: Vec<PathBuf> = ["/a/1.png", "/a/2.png", "/a/3.png"]
+        .iter()
+        .map(PathBuf::from)
+        .collect();
+    let launch = line.launch(&files);
+    assert_eq!(launch.program, OsString::from("gimp"));
+    assert_eq!(launch.args, os(&["/a/1.png", "/a/2.png", "/a/3.png"]));
+}
+
+#[test]
+fn files_row_keeps_arguments_before_and_after_the_slot() {
+    let (_dir, db) = db_with(&[("*", "ed --new {files} -v")]);
+    let route = resolve_route(&db, Path::new("/a/x.png")).expect("route");
+    let Route::List { line, .. } = route else {
+        panic!("expected a list route");
+    };
+    let launch = line.launch(&[PathBuf::from("/a/1.png")]);
+    assert_eq!(launch.args, os(&["--new", "/a/1.png", "-v"]));
+}
+
+#[test]
+fn file_row_and_plain_row_stay_single_like_resolve() {
+    for template in ["krita \"{file}\"", "viewer"] {
+        let (_dir, db) = db_with(&[("psd", template)]);
+        let path = Path::new("/a/b c/x.psd");
+        let route = resolve_route(&db, path).expect("route");
+        let expected = resolve(&db, path).expect("resolve");
+        assert_eq!(route, Route::Single(expected), "template {template}");
+    }
+}
+
+#[test]
+fn files_inside_a_longer_argument_is_not_a_list_slot() {
+    let (_dir, db) = db_with(&[("png", "ed --open={files}")]);
+    let path = Path::new("/a/x.png");
+    let route = resolve_route(&db, path).expect("route");
+    let Route::Single(launch) = route else {
+        panic!("expected a single route");
+    };
+    assert_eq!(launch.args, os(&["--open={files}", "/a/x.png"]));
+    assert_eq!(launch, resolve(&db, path).expect("resolve"));
+}
+
+#[test]
+fn file_and_files_together_give_a_single_route() {
+    let (_dir, db) = db_with(&[("png", "ed {file} {files}")]);
+    let route = resolve_route(&db, Path::new("/a/x.png")).expect("route");
+    let Route::Single(launch) = route else {
+        panic!("expected a single route");
+    };
+    assert_eq!(launch.args, os(&["/a/x.png", "{files}"]));
+}
+
+#[test]
+fn extension_files_row_beats_the_fallback_row() {
+    let (_dir, db) = db_with(&[("*", "gimp {file}"), ("psd", "krita {files}")]);
+    let route = resolve_route(&db, Path::new("/a/x.PSD")).expect("route");
+    assert!(matches!(route, Route::List { ref key, .. } if key == "krita {files}"));
+    let route = resolve_route(&db, Path::new("/a/x.png")).expect("route");
+    assert!(matches!(route, Route::Single(_)));
+}
+
+#[test]
+fn fallback_files_row_serves_other_extensions() {
+    let (_dir, db) = db_with(&[("psd", "krita {file}"), ("*", "gimp {files}")]);
+    let route = resolve_route(&db, Path::new("/a/x.png")).expect("route");
+    assert!(matches!(route, Route::List { ref key, .. } if key == "gimp {files}"));
+}
+
+#[test]
+fn no_row_gives_the_system_opener_as_single() {
+    let (_dir, db) = db_with(&[("png", "  ")]);
+    let path = Path::new("/a/x.png");
+    let route = resolve_route(&db, path).expect("route");
+    assert_eq!(route, Route::Single(system_opener(path)));
+}
+
+#[test]
+fn files_row_with_an_empty_program_is_ignored() {
+    let (_dir, db) = db_with(&[("png", "\"\" {files}"), ("*", "gimp {files}")]);
+    let route = resolve_route(&db, Path::new("/a/x.png")).expect("route");
+    assert!(matches!(route, Route::List { ref key, .. } if key == "gimp {files}"));
+}
+
+#[test]
+fn only_the_first_files_argument_is_the_slot() {
+    let (_dir, db) = db_with(&[("png", "ed {files} {files}")]);
+    let route = resolve_route(&db, Path::new("/a/x.png")).expect("route");
+    let Route::List { line, .. } = route else {
+        panic!("expected a list route");
+    };
+    assert_eq!(line.before.len(), 0);
+    assert_eq!(line.after, ["{files}"]);
+}

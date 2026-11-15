@@ -8,6 +8,7 @@ use std::process::{Command, Stdio};
 use tarragon_db::{Database, DbError};
 
 use self::exec::{ExecLine, ListKind};
+pub use self::many::open_many;
 
 /// The key that holds the fallback template for every extension.
 const FALLBACK_KEY: &str = "*";
@@ -48,7 +49,6 @@ pub fn resolve(db: &Database, file: &Path) -> Result<Launch, DbError> {
 
 /// How a file opens: once for this file, or once for a list of files.
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(not(test), expect(dead_code, reason = "no caller yet"))]
 pub enum Route {
     /// Start the app for this one file.
     Single(Launch),
@@ -70,7 +70,6 @@ pub enum Route {
 /// # Errors
 ///
 /// Returns the [`DbError`] of a failed template read.
-#[cfg_attr(not(test), expect(dead_code, reason = "no caller yet"))]
 pub fn resolve_route(db: &Database, file: &Path) -> Result<Route, DbError> {
     let extension = template_extension(file);
     for key in template_keys(extension.as_deref()) {
@@ -303,6 +302,7 @@ fn system_opener(file: &Path) -> Launch {
 #[cfg(target_os = "linux")]
 mod desktop;
 mod exec;
+mod many;
 mod plan;
 #[cfg(target_os = "linux")]
 mod xdg;

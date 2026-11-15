@@ -21,7 +21,6 @@ const GROUP: &str = "[Desktop Entry]";
 
 /// The default app of a type: its desktop id and its `Exec` line.
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(not(test), expect(dead_code, reason = "wired in brief 06"))]
 pub struct DefaultApp {
     /// The desktop id, such as `org.kde.krita.desktop`.
     pub id: String,
@@ -51,7 +50,6 @@ struct Fields {
 /// fewest `/` first. Only the first eight `-` of an id are tried as `/`. An id
 /// that is empty, `.`, `..`, or holds `/` or NUL gives `None`. A mix of dashes
 /// that makes an empty, `.`, or `..` part is skipped.
-#[cfg_attr(not(test), expect(dead_code, reason = "wired in brief 06"))]
 pub fn locate(id: &str, env: &Env) -> Option<PathBuf> {
     if matches!(id, "" | "." | "..") || id.contains(['/', '\0']) {
         return None;
@@ -111,7 +109,6 @@ fn dash_variants(id: &str) -> Vec<PathBuf> {
 /// program that is not found or not executable; `Exec` is missing; or
 /// [`ExecLine::parse`] gives `None`. `NoDisplay` is not read, because it only
 /// hides the entry from menus.
-#[cfg_attr(not(test), expect(dead_code, reason = "wired in brief 06"))]
 pub fn load(id: &str, env: &Env) -> Option<DefaultApp> {
     let path = locate(id, env)?;
     let text = read_text(&path)?;

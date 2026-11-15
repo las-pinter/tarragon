@@ -84,20 +84,13 @@ impl App {
         ctx.request_repaint();
     }
 
-    /// Start the editor of each file. No call waits for an editor, so many
-    /// files cost one process start each. A failure shows one notice.
+    /// Open the files in their editors. Files that share an app go into one
+    /// start when the app takes many files. No call waits for an editor. A
+    /// failure shows one notice with the counts.
     fn open_in_editor(&mut self, ctx: &Context, paths: &[PathBuf]) {
-        let mut first = None;
-        let mut failed = 0;
-        for path in paths {
-            if let Err(error) = editor::open(&self.db, path) {
-                tracing::warn!("cannot open the file in an editor: {error}");
-                failed += 1;
-                first.get_or_insert_with(|| error.to_string());
-            }
-        }
-        if let Some(text) = first {
-            self.notify(ctx, open_failure_text(&text, failed, paths.len()));
+        let report = editor::open_many(&self.db, paths);
+        if let Some(text) = report.first_error {
+            self.notify(ctx, open_failure_text(&text, report.failed, paths.len()));
         }
     }
 

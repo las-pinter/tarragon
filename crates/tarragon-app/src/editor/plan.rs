@@ -17,7 +17,6 @@ const MAX_PATH_BYTES: usize = 100_000;
 
 /// One process start and the files it covers.
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(not(test), expect(dead_code, reason = "no caller yet"))]
 pub struct Planned {
     /// The program and arguments to run.
     pub launch: Launch,
@@ -50,7 +49,6 @@ enum Slot {
 ///
 /// A group becomes one start, or several when it holds too many files or too
 /// much path text. On a one-file line it is one start per file.
-#[cfg_attr(not(test), expect(dead_code, reason = "no caller yet"))]
 pub fn plan(routes: Vec<(PathBuf, Route)>) -> Vec<Planned> {
     let mut seen = HashSet::new();
     let mut index: HashMap<String, usize> = HashMap::new();
@@ -90,7 +88,6 @@ pub fn plan(routes: Vec<(PathBuf, Route)>) -> Vec<Planned> {
 }
 
 /// Add the starts of one group to `out`.
-#[cfg_attr(not(test), expect(dead_code, reason = "no caller yet"))]
 fn plan_group(group: &Group, out: &mut Vec<Planned>) {
     let chunks = match group.line.list {
         ListKind::One => group.paths.chunks(1).map(<[PathBuf]>::to_vec).collect(),
@@ -106,7 +103,6 @@ fn plan_group(group: &Group, out: &mut Vec<Planned>) {
 
 /// Split `paths` into runs within the count and byte caps. A path is never
 /// split, so a single long path still gets a run of its own.
-#[cfg_attr(not(test), expect(dead_code, reason = "no caller yet"))]
 fn chunk(paths: &[PathBuf]) -> Vec<Vec<PathBuf>> {
     let mut chunks = Vec::new();
     let mut current: Vec<PathBuf> = Vec::new();

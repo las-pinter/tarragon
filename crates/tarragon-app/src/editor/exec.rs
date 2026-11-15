@@ -10,7 +10,6 @@ use crate::clipboard::{encode_into, path_bytes};
 
 /// How many files one start of the app takes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(not(test), expect(dead_code, reason = "wired in brief 06"))]
 pub enum ListKind {
     /// One file (`%f`, `%u`): the caller starts the app once for each file.
     One,
@@ -20,7 +19,6 @@ pub enum ListKind {
 
 /// An `Exec` line with a slot for the files.
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(not(test), expect(dead_code, reason = "wired in brief 06"))]
 pub struct ExecLine {
     /// The program to run.
     pub program: String,
@@ -42,7 +40,6 @@ enum Expanded {
     Files { list: ListKind, uri: bool },
 }
 
-#[cfg_attr(not(test), expect(dead_code, reason = "wired in brief 06"))]
 impl ExecLine {
     /// Parse the `Exec` text of the entry at `entry_path`.
     ///

@@ -13,7 +13,6 @@ use crate::clipboard::{kill_and_reap, read_capped, remaining, wait_until};
 
 /// How long one query may take. The tool ends in about 70 ms; the deadline
 /// only guards a hang.
-#[cfg_attr(not(test), expect(dead_code, reason = "wired in brief 06"))]
 pub const QUERY_TIMEOUT: Duration = Duration::from_secs(2);
 /// The most bytes of tool output that a query keeps.
 const MAX_OUTPUT_BYTES: usize = 64 * 1024;
@@ -24,12 +23,10 @@ const DEFAULT_DATA_DIRS: &str = "/usr/local/share:/usr/share";
 
 /// A query did not end before its deadline. The tool was killed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(not(test), expect(dead_code, reason = "wired in brief 06"))]
 pub struct TimedOut;
 
 /// The parts of the process environment that the desktop lookups read.
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(not(test), expect(dead_code, reason = "wired in brief 06"))]
 pub struct Env {
     /// The `PATH` for the tool. `None` keeps the one of the process.
     pub path: Option<OsString>,
@@ -43,7 +40,6 @@ pub struct Env {
 
 impl Env {
     /// Read the values from the process environment.
-    #[cfg_attr(not(test), expect(dead_code, reason = "wired in brief 06"))]
     pub fn from_process() -> Self {
         Self::from_lookup(|name| std::env::var_os(name))
     }
@@ -76,7 +72,6 @@ impl Env {
 /// # Errors
 ///
 /// Returns [`TimedOut`] when the tool does not end before `env.timeout`.
-#[cfg_attr(not(test), expect(dead_code, reason = "wired in brief 06"))]
 pub fn mime_of(file: &Path, env: &Env) -> Result<Option<String>, TimedOut> {
     let mime = query("filetype", file.as_os_str(), env)?;
     Ok(mime.filter(|mime| mime != UNKNOWN_MIME))
@@ -89,7 +84,6 @@ pub fn mime_of(file: &Path, env: &Env) -> Result<Option<String>, TimedOut> {
 /// # Errors
 ///
 /// Returns [`TimedOut`] when the tool does not end before `env.timeout`.
-#[cfg_attr(not(test), expect(dead_code, reason = "wired in brief 06"))]
 pub fn default_app_id(mime: &str, env: &Env) -> Result<Option<String>, TimedOut> {
     query("default", OsStr::new(mime), env)
 }

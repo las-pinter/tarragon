@@ -303,6 +303,7 @@ fn system_opener(file: &Path) -> Launch {
 #[cfg(target_os = "linux")]
 mod desktop;
 mod exec;
+mod plan;
 #[cfg(target_os = "linux")]
 mod xdg;
 

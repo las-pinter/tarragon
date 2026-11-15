@@ -672,15 +672,48 @@ older report from showing at a later start.
 
 Before: the mockups show no screen to edit editor commands.
 
-After: there is no such screen. The app reads rows of `editor_associations`. The key is the
-lower-case extension without a dot, and `*` is the fallback. The extension row wins over `*`.
-`{file}` in a template is replaced with the path. Without `{file}`, the path is the last
-argument. A missing or blank row is skipped, and with no row left the system opener runs.
+After: there is no such screen. The user picks the app in the desktop settings. The app
+reads rows of `editor_associations`. The key is the lower-case extension without a dot,
+and `*` is the fallback. The extension row wins over `*`. `{file}` in a template is
+replaced with the path. Without `{file}`, the path is the last argument. A missing or blank row is skipped, and with no row left the system opener runs.
 A double-click on a tile selects that image only and opens it by these rules. A failed start
 logs a warning and does not retry. A right-click on a tile opens the grid context menu, which
 has its own entry below.
 
-Reason: the screen is outside the current scope, and a file can still open in a program.
+Many files: the menu item Open N in editor opens the selected files with as few process
+starts as the apps allow. One selected file opens by the rules above, with no default-app
+lookup. For more files, each file gets a route, and files with the same route share a start.
+
+- A template with `{file}` stays one start per file.
+- A template with `{files}` is one start for all its files. `{files}` must be an argument
+  of its own, and the template must not contain `{file}`. The paths replace `{files}` in
+  the order of the selection.
+- A file that has no editor row for its extension or `*` uses the default app of the
+  desktop. A user's own editor row wins over the default app.
+- The type comes from `xdg-mime query filetype`. The app comes from
+  `xdg-mime query default`, and the app starts from the `Exec` line of its desktop entry.
+  The lookup runs once for each lower-case extension, not once for each file.
+- An `Exec` line with `%F` or `%U` is one start for all the files of that app. A line with
+  `%f` or `%u` is one start per file.
+- One start takes at most 500 paths and 100 000 bytes of path text. More files go into
+  more starts. A path is never split.
+- A path that appears twice is opened once.
+- A file with no extension and no `*` row skips the lookup and keeps the system opener,
+  one start per file.
+- The system opener (`xdg-open`) stays in use for a file when `xdg-mime` is missing, fails,
+  or gives no type or no default app; the desktop entry is missing or unusable (for
+  example it is unreadable or too large, is not an application, has `Hidden=true`, has a
+  `TryExec` program that is not found, or has no `Exec` line); the entry has
+  `Terminal=true`; the `Exec` line has no file code; or an `xdg-mime` query runs past its
+  2 s deadline. The timeout is logged. After one timeout, no more queries run, so the wait
+  is one deadline at most.
+- A failed start counts every file in it as failed. The other starts still run. The app
+  shows one notice with the counts.
+- On Windows and macOS there is no default-app lookup. A file with no editor row uses the
+  system opener, one start per file. Editor rows work as above.
+
+Reason: the app has no editor screen, and a file can still open in a program. One
+start for many files keeps a large selection from opening many windows of one app.
 
 ## Grid context menu
 

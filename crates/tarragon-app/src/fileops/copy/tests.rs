@@ -171,7 +171,8 @@ fn a_short_copy_is_reported_and_the_partial_file_is_removed() {
     assert!(!target.exists());
 }
 
-#[cfg(unix)]
+// macOS file systems accept only UTF-8 names, so the setup cannot make this file.
+#[cfg(target_os = "linux")]
 #[test]
 fn a_name_that_is_not_utf8_is_refused_and_leaves_no_file() {
     use std::os::unix::ffi::OsStrExt;

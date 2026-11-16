@@ -1,4 +1,10 @@
 use std::path::PathBuf;
+#[cfg(all(
+    unix,
+    not(target_os = "macos"),
+    not(target_os = "ios"),
+    not(target_os = "android")
+))]
 use std::process::Command;
 
 use super::*;
@@ -23,12 +29,24 @@ impl Drop for TempDir {
     }
 }
 
+#[cfg(all(
+    unix,
+    not(target_os = "macos"),
+    not(target_os = "ios"),
+    not(target_os = "android")
+))]
 /// The variable that tells the helper test which file to trash.
 const HELPER_FILE: &str = "TARRAGON_TEST_TRASH_FILE";
 
 /// Runs only as a child of `trash_moves_the_file_into_the_trash_home`, which
 /// sets the trash home for the child alone. Without the variable it fails
 /// before it trashes anything.
+#[cfg(all(
+    unix,
+    not(target_os = "macos"),
+    not(target_os = "ios"),
+    not(target_os = "android")
+))]
 #[test]
 #[ignore = "runs only as a child process of the trash test"]
 fn trash_helper_child() {
@@ -37,6 +55,13 @@ fn trash_helper_child() {
     assert!(failures.is_empty(), "{failures:?}");
 }
 
+// The trash crate uses the freedesktop trash only off macOS; macOS uses its own trash.
+#[cfg(all(
+    unix,
+    not(target_os = "macos"),
+    not(target_os = "ios"),
+    not(target_os = "android")
+))]
 #[test]
 fn trash_moves_the_file_into_the_trash_home() {
     // The trash crate reads XDG_DATA_HOME from the process environment, and

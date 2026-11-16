@@ -1,7 +1,8 @@
 //! Runs the app rows of `tests/smoke/smoke.sh` with a stub app that writes a
 //! canned perf log, so no real window, scan, or `sudo` is involved.
 
-#![cfg(unix)]
+// The script needs Linux tools such as `free`, `lscpu` and `taskset`.
+#![cfg(target_os = "linux")]
 
 #[allow(
     dead_code,

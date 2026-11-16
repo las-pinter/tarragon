@@ -3,7 +3,8 @@
 //! script reads the CPU tables and the drop command from its test overrides.
 //! The app rows are tested in `smoke_script_app.rs`.
 
-#![cfg(unix)]
+// The script needs Linux tools such as `free`, `lscpu` and `taskset`.
+#![cfg(target_os = "linux")]
 
 #[allow(
     dead_code,

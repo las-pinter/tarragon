@@ -649,3 +649,71 @@ stat -c '%s' target/release/tarragon
 cargo build --release --examples
 stat -c '%s' target/release/examples/grid_bench target/release/examples/jpeg_q90_check target/release/examples/stack_spike target/release/examples/psd_rss_bench
 ```
+
+## End-to-end smoke test
+
+`tests/smoke/smoke.sh` is a POSIX `sh` script. It only measures. It prints one
+row per check (`PASS`, `FAIL`, or `INFO`), then a `SUMMARY` block. The exit code
+is 0 only when no row is `FAIL`. The output is also written to
+`smoke-result.txt`, and each app run keeps its perf log as `perf-<row>.txt`.
+`sh smoke.sh --check-only` prints the memory line and the CPU pin, then stops.
+It runs no drop, no scan, and no app.
+
+Rows and bars:
+
+| Row | Bar |
+|-----|-----|
+| `corpus` | the 10k corpus is made or reused; `FAIL` stops the run |
+| `pin` | `FAIL` with fewer than 4 physical cores; stops the run |
+| `scan_cold` | `scan_bench` on the 10k corpus, 120 s, right after the cache drop |
+| `cold_start` | under 3000 ms, from spawn to the first frame with the grid shown |
+| `peak_rss` | under 2 GiB (2,097,152 KiB) |
+| `p99_wayland` | frame run under Wayland: p99 under 33 ms, no frame over 100 ms |
+| `p99_xwayland` | same run with `WAYLAND_DISPLAY` unset; `INFO` only, never a bar |
+| `psd_rss_bench` | `INFO` only; the numbers are for the record |
+
+How it runs:
+
+- Corpus: 10,000 files, 10 percent PSD copies, in `/var/tmp/tarragon-10k` or
+  the folder given as the argument. A folder that holds exactly that many files
+  from an earlier run is reused. Any other folder with files fails the row. The
+  script never deletes a folder.
+- Pin: the first logical CPU of each of the first four physical cores, from
+  `lscpu -p=CPU,CORE`. The scan, the cold start, and both frame runs run under
+  `taskset` with that list, and so does `psd_rss_bench`. The pin row shows the core type. The script fails
+  when the machine has fewer than 4 physical cores.
+- Sudo step: before the scan and again before the cold start, the script runs
+  `sync` and drops the caches with `sudo`. It asks for the password. It prints
+  `cache COLD` only when the drop works. Otherwise it prints `cache PARTLY
+  COLD` and the cold rows fail.
+- App runs: each has a 300 s time limit, a new data folder, and the pin. The
+  rows read the perf log that the app writes, never the screen. The two frame
+  runs take about 40 s each. Keep the window visible and do not touch the mouse.
+  The p99 run is valid only with about 1000 or more live textures.
+- Wayland: the run must report a Wayland session, or the row fails. The
+  XWayland run needs `DISPLAY`; without it the row is skipped.
+- Memory: the script prints `free -g` for the record. It has no guard and no
+  cap.
+
+To run it on a machine with no Rust, build the bundle on the build machine. Run
+`sh tests/psd-corpus/fetch.sh tests/psd-corpus` once first. Then run:
+
+```sh
+sh tests/smoke/bundle.sh
+```
+
+The script refuses a dirty tree. It checks the sha256 of each corpus file, never
+downloads, and builds the four release binaries with `--locked`. It writes
+`/var/tmp/tarragon-smoke-<commit>.tar.gz` and removes its staging folder. The
+archive holds `bin/` (`tarragon`, `scan_bench`, `corpus_gen`,
+`psd_rss_bench`), `smoke.sh`, `README.txt`, `fixtures/rgb_8bit.psd`,
+`psd-corpus/` (16 files, `fetch.sh`, `SHA256SUMS`), and `VERSION`. The archive
+is under 150 MB.
+
+Copy the archive to the target machine, unpack it in an empty folder, and run
+`sh smoke.sh`. Send back `smoke-result.txt` and the `perf-*.txt` files. The
+binaries are built on the build machine, so the target needs glibc 2.39 or
+newer. `VERSION` records the commit, the rustc version, and the libc.
+
+Never commit or publish the bundle. The licences of the corpus files are
+unknown (see `psd-corpus.md`).

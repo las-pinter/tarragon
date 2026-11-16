@@ -64,6 +64,60 @@ fn a_folder_with_a_real_pipeline_settles_all_tiles() {
     assert_eq!(gallery.visible_len(), 3);
 }
 
+#[test]
+fn the_grid_is_shown_once_before_any_tile_settles() {
+    let dir = TempDir(std::env::temp_dir().join(format!("tarragon-shown-{}", std::process::id())));
+    let folder = dir.0.join("pics");
+    std::fs::create_dir_all(&folder).expect("make the folder");
+    RgbaImage::new(8, 8)
+        .save(folder.join("a.png"))
+        .expect("write a png");
+    let db = Arc::new(Database::open(dir.0.join("t.db")).expect("open the db"));
+    db.initialize().expect("initialize the db");
+    // The renderer waits for the gate, so no tile can settle before it opens.
+    let gate = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let held = Arc::clone(&gate);
+    let config = Config {
+        cache: CacheStore::new(dir.0.join("cache")),
+        workers: 1,
+        render: Arc::new(move |_| {
+            while !held.load(std::sync::atomic::Ordering::SeqCst) {
+                std::thread::sleep(Duration::from_millis(5));
+            }
+            Ok(DynamicImage::ImageRgba8(RgbaImage::new(8, 8)))
+        }),
+    };
+    let repaint: Repaint = Arc::new(|| {});
+    let (pipeline, results) =
+        Pipeline::new(config, db, Arc::clone(&repaint)).expect("start the pipeline");
+    let mut thumbs = Thumbs::new(pipeline, results, Some(folder), repaint);
+    // Declared after `thumbs`, so it opens the gate first, even on a failed
+    // assert; the pipeline cannot stop while a render waits.
+    let _open = OpenOnDrop(Arc::clone(&gate));
+    let ctx = Context::default();
+    let mut gallery = Gallery::new(SortMode::Natural);
+    let start = Instant::now();
+    loop {
+        thumbs.before_draw(&ctx, &mut gallery);
+        if thumbs.grid_shown_once() {
+            break;
+        }
+        assert!(start.elapsed() < Duration::from_secs(30), "never shown");
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    assert!(thumbs.loaded_once().is_none(), "no tile is settled yet");
+    assert!(!thumbs.grid_shown_once(), "the report is one-shot");
+}
+
+/// Opens a render gate when dropped.
+struct OpenOnDrop(Arc<std::sync::atomic::AtomicBool>);
+
+impl Drop for OpenOnDrop {
+    fn drop(&mut self) {
+        self.0.store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
 /// A thumbs on a real pipeline with a fake renderer, and a folder tree to fill.
 pub(super) struct Rig {
     pub(super) dir: TempDir,

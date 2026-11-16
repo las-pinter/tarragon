@@ -50,6 +50,8 @@ impl Rig {
             close_when_loaded: false,
             exit_wait: ExitWait::default(),
             crash_dir: None,
+            perf_log: None,
+            frame_run: false,
         };
         let mut app =
             App::open(&path, LogRing::new(), control, None, startup).expect("open the app");

@@ -125,6 +125,8 @@ pub struct Thumbs {
     opened: bool,
     /// True once `loaded_once` has reported.
     announced: bool,
+    /// When `grid_shown_once` reported, if it did.
+    shown: Option<Instant>,
     started: Instant,
     repaint: Repaint,
 }
@@ -153,6 +155,7 @@ impl Thumbs {
             synced: None,
             opened: false,
             announced: false,
+            shown: None,
             started: Instant::now(),
             repaint,
         }
@@ -327,6 +330,17 @@ impl Thumbs {
         self.library = Library::Failed;
     }
 
+    /// True once, in the first frame that ends with an opened folder's tiles
+    /// in the grid. Tiles may still wait for their textures. Later calls
+    /// return false.
+    pub fn grid_shown_once(&mut self) -> bool {
+        if self.shown.is_some() || self.current.is_none() {
+            return false;
+        }
+        self.shown = Some(Instant::now());
+        true
+    }
+
     /// Once the folder is open and every tile has a texture or an error,
     /// return a one-line summary. Later calls return none.
     pub fn loaded_once(&mut self) -> Option<String> {
@@ -339,6 +353,11 @@ impl Thumbs {
             "{total} tiles settled, {failed} failed, after {:?}",
             self.started.elapsed()
         ))
+    }
+
+    /// How many grid textures are live now.
+    pub fn live_textures(&self) -> usize {
+        self.feed.live_textures()
     }
 
     /// Move the pipeline into a short-lived thread that loads `target`.

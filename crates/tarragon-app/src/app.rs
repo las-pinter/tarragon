@@ -21,6 +21,7 @@ use crate::instance::Guard;
 use crate::logging::LogControl;
 use crate::logging::ring::LogRing;
 use crate::logview::LogCache;
+use crate::perflog::{self, PerfLog};
 use crate::pipeline::{Config, Pipeline, Repaint};
 use crate::preview_feed::PreviewFeed;
 use crate::preview_loader::PreviewLoader;
@@ -53,6 +54,10 @@ pub struct Startup {
     pub exit_wait: ExitWait,
     /// The folder of the crash reports, or none when it is unknown.
     pub crash_dir: Option<PathBuf>,
+    /// The perf log file, from `TARRAGON_PERF_LOG`, or none for no log.
+    pub perf_log: Option<PathBuf>,
+    /// Run the frame recorder after the load, from `TARRAGON_FRAME_RUN`.
+    pub frame_run: bool,
 }
 
 /// The running application: one database, one window state, one shell.
@@ -103,6 +108,8 @@ pub struct App {
     crash_path: Option<PathBuf>,
     /// What the grid menu handlers keep between frames.
     menu: menu::MenuState,
+    /// The perf log, when one was asked for.
+    perf: Option<PerfLog>,
 }
 
 impl App {
@@ -191,6 +198,7 @@ impl App {
             crash_dir: startup.crash_dir,
             crash_path,
             menu: menu::MenuState::default(),
+            perf: PerfLog::new(startup.perf_log, startup.frame_run),
         })
     }
 
@@ -385,7 +393,7 @@ impl eframe::App for App {
         window::raise_if_requested(ctx, self.guard.as_deref());
     }
 
-    fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut Ui, frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         self.window_state.maximized = ctx
             .input(|input| window::maximized_from(input.viewport(), self.window_state.maximized));
@@ -454,11 +462,37 @@ impl eframe::App for App {
             ctx.request_repaint();
         }
         self.thumbs.after_draw(self.shell.gallery_mut());
+        // Both users share the one-shot report of the load.
+        let loaded = (self.close_when_loaded || self.perf.is_some())
+            .then(|| self.thumbs.loaded_once())
+            .flatten();
         if self.close_when_loaded
-            && let Some(summary) = self.thumbs.loaded_once()
+            && let Some(summary) = &loaded
         {
             tracing::info!("{summary}");
             ctx.send_viewport_cmd(ViewportCommand::Close);
+        }
+        let shown = self.perf.is_some() && self.thumbs.grid_shown_once();
+        if let Some(perf) = &mut self.perf {
+            let size = ctx.content_rect().size();
+            let step = perf.frame(&perflog::Frame {
+                now: Instant::now(),
+                window: [size.x, size.y],
+                renderer: if frame.wgpu_render_state().is_some() {
+                    "wgpu"
+                } else {
+                    "glow"
+                },
+                shown,
+                loaded: loaded.is_some(),
+                textures: self.thumbs.live_textures(),
+            });
+            match step {
+                perflog::Step::Idle => {}
+                perflog::Step::Wait(left) => ctx.request_repaint_after(left),
+                perflog::Step::Repaint => ctx.request_repaint(),
+                perflog::Step::Close => ctx.send_viewport_cmd(ViewportCommand::Close),
+            }
         }
 
         if let Err(error) = self.persist_sort_if_changed() {

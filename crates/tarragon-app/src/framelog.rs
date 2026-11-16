@@ -16,7 +16,6 @@ const P99_LIMIT_MS: f64 = 33.0;
 const MAX_LIMIT_MS: f64 = 100.0;
 
 /// Where a recorder is in its run.
-#[cfg_attr(not(test), expect(dead_code, reason = "no caller yet"))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Phase {
     /// Frames still inside the warm-up; none is recorded.
@@ -28,7 +27,6 @@ pub enum Phase {
 }
 
 /// Turns frame timestamps into a list of frame times.
-#[cfg_attr(not(test), expect(dead_code, reason = "no caller yet"))]
 #[derive(Debug)]
 pub struct FrameRecorder {
     /// Frames before this offset from the first frame are not recorded.
@@ -45,7 +43,6 @@ pub struct FrameRecorder {
     span: Duration,
 }
 
-#[cfg_attr(not(test), expect(dead_code, reason = "no caller yet"))]
 impl FrameRecorder {
     /// Make a recorder that skips `warmup` and then records for `run`.
     pub fn new(warmup: Duration, run: Duration) -> Self {
@@ -109,7 +106,6 @@ fn nearest_rank(sorted: &[Duration], p: usize) -> Duration {
 }
 
 /// The pass or fail result of a run.
-#[cfg_attr(not(test), expect(dead_code, reason = "no caller yet"))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Verdict {
     /// Both limits hold.
@@ -119,7 +115,6 @@ pub enum Verdict {
 }
 
 /// The statistics of one run.
-#[cfg_attr(not(test), expect(dead_code, reason = "no caller yet"))]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FrameReport {
     /// The number of recorded frame times.
@@ -136,7 +131,6 @@ pub struct FrameReport {
     pub span: Duration,
 }
 
-#[cfg_attr(not(test), expect(dead_code, reason = "no caller yet"))]
 impl FrameReport {
     /// Fail when the p99 is 33 ms or more, or the max is over 100 ms. The
     /// max check catches one long stall that the p99 hides. It judges the

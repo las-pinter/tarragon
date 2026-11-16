@@ -161,6 +161,8 @@ fn the_saved_root_is_in_the_tree_after_a_restart() {
         close_when_loaded: false,
         exit_wait: ExitWait::default(),
         crash_dir: None,
+        perf_log: None,
+        frame_run: false,
     };
     let path = rig.dir.0.join("tarragon.db");
     let mut second = App::open(&path, LogRing::new(), control, None, startup).expect("reopen");

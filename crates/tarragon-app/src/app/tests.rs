@@ -35,6 +35,8 @@ fn app_with_pending_request(dir: &TempDir) -> App {
             close_when_loaded: false,
             exit_wait: ExitWait::default(),
             crash_dir: None,
+            perf_log: None,
+            frame_run: false,
         },
     )
     .expect("open the app");
@@ -79,6 +81,8 @@ fn a_reorder_event_persists_across_a_restart() {
             close_when_loaded: false,
             exit_wait: ExitWait::default(),
             crash_dir: None,
+            perf_log: None,
+            frame_run: false,
         };
         App::open(&db_path, LogRing::new(), control, None, startup).expect("open the app")
     };
@@ -113,6 +117,8 @@ fn app_at(dir: &TempDir, folder: Option<PathBuf>) -> App {
         close_when_loaded: false,
         exit_wait: ExitWait::default(),
         crash_dir: None,
+        perf_log: None,
+        frame_run: false,
     };
     App::open(&dir.0.join("t.db"), LogRing::new(), control, None, startup).expect("open")
 }
@@ -390,4 +396,26 @@ fn the_saved_state_carries_the_dock_and_a_restart_restores_it() {
     let app = app_at(&dir, None);
     assert!(!app.shell.log_visible());
     assert!(app.shell.library_visible());
+}
+
+#[test]
+fn without_the_variables_the_app_has_no_perf_log_and_makes_no_file() {
+    let dir = new_dir();
+    let (path, frame_run) = crate::perflog::from_vars(None, false);
+    let perf_file = dir.0.join("perf.txt");
+    let (_filter, control) = LogControl::new_filter();
+    let startup = Startup {
+        folder: None,
+        close_when_loaded: false,
+        exit_wait: ExitWait::default(),
+        crash_dir: None,
+        perf_log: path,
+        frame_run,
+    };
+    assert!(startup.perf_log.is_none());
+    assert!(!startup.frame_run);
+    let app = App::open(&dir.0.join("t.db"), LogRing::new(), control, None, startup)
+        .expect("open the app");
+    assert!(app.perf.is_none());
+    assert!(!perf_file.exists());
 }

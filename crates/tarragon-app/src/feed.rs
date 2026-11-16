@@ -120,6 +120,12 @@ impl Feed {
         self.failed.get(key)
     }
 
+    /// The number of textures the budget holds now.
+    #[must_use]
+    pub fn live_textures(&self) -> usize {
+        self.budget.len()
+    }
+
     /// True when every tile has a texture or an error.
     #[must_use]
     pub fn all_settled(&self) -> bool {

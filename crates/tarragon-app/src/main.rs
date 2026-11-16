@@ -18,6 +18,7 @@ mod instance;
 mod logging;
 mod logview;
 mod maintenance;
+mod perflog;
 mod picker;
 mod pipeline;
 mod prefs;
@@ -40,6 +41,7 @@ use std::sync::Arc;
 use app::{App, Startup};
 
 fn main() -> ExitCode {
+    perflog::mark_main_start();
     // Flags return before any I/O, so they never touch the data directory.
     let folder = match cli::parse(std::env::args_os().skip(1)) {
         cli::Command::Run(None) => None,
@@ -118,6 +120,7 @@ fn main() -> ExitCode {
 
     // The guard stays alive here until the window closes.
     let exit_wait = thumbs::ExitWait::default();
+    let (perf_log, frame_run) = perflog::from_env();
     let open = || {
         App::open(
             &db_path,
@@ -130,6 +133,8 @@ fn main() -> ExitCode {
                 close_when_loaded: std::env::var_os("TARRAGON_CLOSE_WHEN_LOADED").is_some(),
                 exit_wait: exit_wait.clone(),
                 crash_dir: location.as_ref().ok().map(|l| l.crash_dir.clone()),
+                perf_log: perf_log.clone(),
+                frame_run,
             },
         )
     };

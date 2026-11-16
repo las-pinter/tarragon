@@ -43,6 +43,8 @@ impl Rig {
             close_when_loaded: false,
             exit_wait: ExitWait::default(),
             crash_dir: None,
+            perf_log: None,
+            frame_run: false,
         };
         let db_path = dir.0.join("t.db");
         let log = LogRing::new();

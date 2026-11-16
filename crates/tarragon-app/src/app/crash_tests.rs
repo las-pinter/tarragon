@@ -44,6 +44,8 @@ impl Rig {
             close_when_loaded: false,
             exit_wait: ExitWait::default(),
             crash_dir,
+            perf_log: None,
+            frame_run: false,
         };
         let app = App::open(&dir.0.join("t.db"), LogRing::new(), control, None, startup)
             .expect("open the app");

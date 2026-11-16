@@ -67,6 +67,8 @@ fn open_app(dir: &TempDir) -> (App, ExitWait) {
         close_when_loaded: false,
         exit_wait: exit_wait.clone(),
         crash_dir: None,
+        perf_log: None,
+        frame_run: false,
     };
     let app = App::open(&dir.0.join("t.db"), LogRing::new(), control, None, startup)
         .expect("open the app");

@@ -24,6 +24,8 @@ fn open(dir: &TempDir) -> App {
         close_when_loaded: false,
         exit_wait: ExitWait::default(),
         crash_dir: None,
+        perf_log: None,
+        frame_run: false,
     };
     let path = dir.0.join("tarragon.db");
     App::open(&path, LogRing::new(), control, None, startup).expect("open the app")

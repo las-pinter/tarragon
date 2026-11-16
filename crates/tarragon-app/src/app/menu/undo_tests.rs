@@ -9,7 +9,7 @@ use tarragon_ui::gallery::{GridMenuEvent, Scope};
 
 use super::*;
 use crate::app::preview_tests::Rig;
-use crate::app::tests::new_dir;
+use crate::app::tests::{db_key, new_dir};
 use crate::fileops::FileOpError;
 use crate::sidebar;
 
@@ -120,7 +120,7 @@ fn duplicate(rig: &mut Rig, dir: &Path, names: &[&str]) -> Vec<Copied> {
 fn undo_after_a_rename_restores_the_name_the_tags_and_the_favorite() {
     let (mut rig, dir) = folder_rig(&["a.png", "b.png"]);
     let a = dir.join("a.png");
-    let old_key = a.to_string_lossy().into_owned();
+    let old_key = db_key(&a);
     let tag = rig.app.db.ensure_tag("keep", TagSource::User).expect("tag");
     rig.app
         .db

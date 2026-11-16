@@ -10,7 +10,7 @@ use tarragon_ui::gallery::{GridMenuEvent, Scope};
 
 use super::*;
 use crate::app::preview_tests::Rig;
-use crate::app::tests::new_dir;
+use crate::app::tests::{db_key, new_dir};
 use crate::sidebar;
 
 /// Room for a thread to finish; each wait ends at this limit.
@@ -111,7 +111,7 @@ fn a_trash_keeps_the_tags_of_the_file_and_drops_its_thumbnail_row() {
     let (mut rig, dir) = folder_rig(&["a.png", "b.png"]);
     let bin = new_dir();
     let b = dir.join("b.png");
-    let key = b.to_string_lossy().into_owned();
+    let key = db_key(&b);
     frames_until(&mut rig, "the thumbnail row", |rig| {
         rig.app.db.thumbnail(&key).expect("read").is_some()
     });

@@ -56,6 +56,11 @@ pub(super) fn new_dir() -> TempDir {
     TempDir(dir)
 }
 
+/// The path text the database keys by: forward slashes, like `tarragon-db`.
+pub(super) fn db_key(path: &std::path::Path) -> String {
+    path.to_string_lossy().replace('\\', "/")
+}
+
 /// Like `new_dir`, with a short path on unix so a socket path fits in it.
 fn short_dir() -> TempDir {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);

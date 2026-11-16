@@ -9,6 +9,7 @@ use tarragon_db::Database;
 
 use super::*;
 use crate::app::preview_tests::Rig;
+use crate::app::tests::db_key;
 
 /// Room for a thread to finish; each wait ends at this limit.
 const LIMIT: Duration = Duration::from_secs(10);
@@ -62,10 +63,7 @@ fn tag_paths_writes_the_tag_to_every_path_and_refreshes_the_preview() {
     rig.app.apply_menu_event(&rig.ctx, event);
 
     let db = Database::open(rig.dir.0.join("tarragon.db")).expect("open");
-    let stored: Vec<String> = paths
-        .iter()
-        .map(|path| path.to_string_lossy().into_owned())
-        .collect();
+    let stored: Vec<String> = paths.iter().map(|path| db_key(path)).collect();
     let by_file = db.tags_for_files(&stored).expect("read the tags");
     for path in &stored {
         let names: Vec<&str> = by_file[path].iter().map(|tag| tag.name.as_str()).collect();

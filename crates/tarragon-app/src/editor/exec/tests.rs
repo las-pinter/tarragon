@@ -119,6 +119,8 @@ fn only_the_first_file_code_marks_the_slot() {
     assert_eq!(line.after, strings(&["b", "c"]));
 }
 
+// A POSIX path is not absolute on Windows, so the filter drops it.
+#[cfg(unix)]
 #[test]
 fn uri_kind_percent_encodes_the_path() {
     let line = parse("app %U").expect("parse");

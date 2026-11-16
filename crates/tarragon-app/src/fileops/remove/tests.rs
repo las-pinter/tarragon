@@ -111,6 +111,8 @@ fn trash_counts_a_missing_file_as_done() {
     assert!(failures.is_empty(), "{failures:?}");
 }
 
+// Windows reports not-found for a path below a file, not ENOTDIR.
+#[cfg(unix)]
 #[test]
 fn trash_names_a_path_it_cannot_inspect_and_goes_on() {
     let dir = TempDir::new();

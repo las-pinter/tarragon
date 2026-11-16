@@ -14,6 +14,8 @@ fn long_list() -> Vec<PathBuf> {
         .collect()
 }
 
+// A POSIX path is not absolute on Windows, so the filter drops it.
+#[cfg(unix)]
 #[test]
 fn uri_list_encodes_paths_and_ends_lines_with_crlf() {
     let paths = [
@@ -29,6 +31,8 @@ fn uri_list_encodes_paths_and_ends_lines_with_crlf() {
     );
 }
 
+// A POSIX path is not absolute on Windows, so the filter drops it.
+#[cfg(unix)]
 #[test]
 fn uri_list_skips_a_path_that_is_not_absolute() {
     let paths = [PathBuf::from("a/b.png"), PathBuf::from("/ok.png")];
@@ -38,6 +42,8 @@ fn uri_list_skips_a_path_that_is_not_absolute() {
     assert_eq!(text, "file:///ok.png\r\n");
 }
 
+// A POSIX path is not absolute on Windows, so the filter drops it.
+#[cfg(unix)]
 #[test]
 fn uri_list_keeps_a_newline_in_a_path_inside_one_line() {
     let path = PathBuf::from("/a/b\nc.png");
@@ -141,6 +147,8 @@ fn commands_report_no_display_when_neither_display_is_set() {
     ));
 }
 
+// A POSIX path is not absolute on Windows, so the filter drops it.
+#[cfg(unix)]
 #[test]
 fn copy_with_a_missing_tool_names_the_package() {
     let result = copy_with(&MISSING, &[PathBuf::from("/a.png")], Duration::from_secs(1));

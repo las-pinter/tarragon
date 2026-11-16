@@ -1,127 +1,20 @@
 //! Runs `tests/smoke/smoke.sh` with stub tools, so no real corpus, scan,
 //! `sudo`, or window is involved. The stubs sit in a fake bundle folder. The
 //! script reads the CPU tables and the drop command from its test overrides.
+//! The app rows are tested in `smoke_script_app.rs`.
 
 #![cfg(unix)]
 
+#[allow(
+    dead_code,
+    reason = "shared with the app-row tests; each file uses part of it"
+)]
+#[path = "support/smoke_bundle.rs"]
+mod smoke_bundle;
+
+use smoke_bundle::{BENCH_EXIT_FAIL, BENCH_NO_TIME, BENCH_PASS, BENCH_RESULT_FAIL, Bundle, text};
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
-use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
-
-/// A bundle of stub tools in a temp folder. It removes itself on drop.
-struct Bundle {
-    root: PathBuf,
-}
-
-impl Bundle {
-    /// Make a bundle. `bench` is the shell body of the stub `scan_bench`.
-    fn new(name: &str, bench: &str) -> Self {
-        let root = std::env::temp_dir().join(format!(
-            "tarragon-smoke-script-{}-{name}",
-            std::process::id()
-        ));
-        let _ = fs::remove_dir_all(&root);
-        fs::create_dir_all(root.join("bin")).expect("make bin");
-        fs::create_dir_all(root.join("fixtures")).expect("make fixtures");
-        fs::write(root.join("fixtures/rgb_8bit.psd"), b"8BPS").expect("write psd");
-        // Like the real tool: fail when the folder has files, else fill it.
-        stub(
-            &root.join("bin/corpus_gen"),
-            "echo \"$*\" >> \"$CORPUS_LOG\"\n\
-             [ \"$1\" = --out ] || exit 2\n\
-             if [ -d \"$2\" ] && [ -n \"$(ls -A \"$2\")\" ]; then exit 2; fi\n\
-             mkdir -p \"$2\" && : > \"$2/made.png\"\n",
-        );
-        stub(
-            &root.join("bin/scan_bench"),
-            &format!("echo \"$*\" >> \"$SCAN_LOG\"\n{bench}"),
-        );
-        // Record the arguments, then run the rest of the line without the pin.
-        stub(
-            &root.join("tools/taskset"),
-            "echo \"$*\" >> \"$TASKSET_LOG\"\nshift 2\nexec \"$@\"\n",
-        );
-        fs::write(
-            root.join("cores4"),
-            "# CPU,Core\n0,0\n1,0\n2,1\n3,1\n4,2\n5,2\n6,3\n7,3\n8,4\n9,5\n",
-        )
-        .expect("cores4");
-        fs::write(root.join("cores2"), "# CPU,Core\n0,0\n1,0\n2,1\n3,1\n").expect("cores2");
-        fs::write(
-            root.join("freq"),
-            "CPU CORE MAXMHZ\n0 0 4900.0\n1 0 4900.0\n2 1 5000.0\n3 1 5000.0\n4 2 4900.0\n5 2 4900.0\n6 3 4900.0\n7 3 4900.0\n8 4 3800.0\n9 5 3800.0\n",
-        )
-        .expect("freq");
-        Self { root }
-    }
-
-    /// Run the script with the given cores file, drop command, and args.
-    fn run(&self, cores: &str, drop_cmd: &str, args: &[&str]) -> Output {
-        self.run_env(cores, drop_cmd, args, &[])
-    }
-
-    /// Like `run`, with more environment variables.
-    fn run_env(&self, cores: &str, drop_cmd: &str, args: &[&str], env: &[(&str, &str)]) -> Output {
-        let script = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/smoke/smoke.sh");
-        let path = format!(
-            "{}:{}",
-            self.root.join("tools").display(),
-            std::env::var("PATH").unwrap_or_default()
-        );
-        Command::new("sh")
-            .arg(script)
-            .args(args)
-            .env("PATH", path)
-            .env("TARRAGON_SMOKE_BASE", &self.root)
-            .env("TARRAGON_SMOKE_LSCPU_CORES", self.root.join(cores))
-            .env("TARRAGON_SMOKE_LSCPU_FREQ", self.root.join("freq"))
-            .env("TARRAGON_SMOKE_DROP_CMD", drop_cmd)
-            .env("TASKSET_LOG", self.root.join("taskset.log"))
-            .env("CORPUS_LOG", self.root.join("corpus_gen.log"))
-            .env("SCAN_LOG", self.root.join("scan_bench.log"))
-            .envs(env.iter().copied())
-            .output()
-            .expect("the script starts")
-    }
-
-    /// Replace the frequency table the script reads.
-    fn set_freq(&self, table: &str) {
-        fs::write(self.root.join("freq"), table).expect("freq");
-    }
-
-    /// The corpus folder the script is told to use.
-    fn corpus(&self) -> PathBuf {
-        self.root.join("corpus")
-    }
-}
-
-impl Drop for Bundle {
-    fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.root);
-    }
-}
-
-/// Write an executable `sh` stub.
-fn stub(path: &Path, body: &str) {
-    fs::create_dir_all(path.parent().expect("parent")).expect("make folder");
-    fs::write(path, format!("#!/bin/sh\n{body}")).expect("write stub");
-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("chmod");
-}
-
-/// Bench that passes.
-const BENCH_PASS: &str = "echo 'total elapsed:    1.500 s'\necho 'result:           PASS'\n";
-/// Bench that prints `result: FAIL` but exits 0.
-const BENCH_RESULT_FAIL: &str = "echo 'total elapsed:    1.500 s'\necho 'result:           FAIL'\n";
-/// Bench that exits 1 but prints `result: PASS`.
-const BENCH_EXIT_FAIL: &str =
-    "echo 'total elapsed:    1.500 s'\necho 'result:           PASS'\nexit 1\n";
-/// Bench that prints no time line.
-const BENCH_NO_TIME: &str = "echo 'result:           PASS'\n";
-
-fn text(out: &Output) -> String {
-    String::from_utf8_lossy(&out.stdout).into_owned()
-}
+use std::process::Output;
 
 #[test]
 fn check_only_prints_pin_and_memory_without_corpus() {
@@ -158,7 +51,7 @@ fn failed_drop_gives_partly_cold_and_fails_scan() {
     assert_eq!(out.status.code(), Some(1), "{s}");
     assert!(s.contains("INFO cache PARTLY COLD"), "{s}");
     assert!(s.contains("FAIL scan_cold 1.500 s"), "{s}");
-    assert!(s.contains("SUMMARY pass=1 fail=1"), "{s}");
+    assert!(s.contains("SUMMARY pass=3 fail=2"), "{s}");
 }
 
 #[test]

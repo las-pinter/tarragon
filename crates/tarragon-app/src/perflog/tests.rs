@@ -16,6 +16,7 @@ fn frame_at(now: Instant, loaded: bool, textures: usize) -> Frame {
         shown: loaded,
         loaded,
         textures,
+        scroll_y: 0.0,
     }
 }
 
@@ -55,8 +56,8 @@ fn the_lines_have_the_key_value_format() {
     );
     assert!(loaded_lines(None, 0).contains("peak_rss_kib: na\n"));
     assert_eq!(
-        end_lines(None, 12, false),
-        "frames: too few\nlive_textures_at_end: 12\nrun_valid: no\n"
+        end_lines(None, 5200.4, 12, false),
+        "frames: too few\nscroll_max_pt: 5200\nlive_textures_at_end: 12\nrun_valid: no\n"
     );
 }
 
@@ -173,4 +174,35 @@ fn the_cold_start_is_written_when_the_grid_is_shown_before_it_is_loaded() {
     assert_eq!(text.matches("cold_start_ms: ").count(), 1, "{text}");
     assert!(text.contains("peak_rss_kib: "), "{text}");
     assert!(text.contains("live_textures: 5\n"), "{text}");
+}
+
+#[test]
+fn the_grid_scrolls_only_in_the_warm_up_and_the_run_and_the_log_keeps_the_peak() {
+    let path = temp_file("scroll");
+    let t0 = Instant::now();
+    let mut log = PerfLog::new(Some(path.clone()), true).expect("a log");
+    assert_eq!(log.scroll_elapsed(t0), None);
+    log.frame(&frame_at(t0, true, 950));
+    // Inside the settle wait the grid stays still.
+    assert_eq!(log.scroll_elapsed(t0 + 4 * SEC), None);
+    assert_eq!(log.scroll_elapsed(t0 + 7 * SEC), Some(2 * SEC));
+
+    let settled = t0 + 5 * SEC;
+    let mut step = Step::Repaint;
+    for i in 0..=3600 {
+        let mut frame = frame_at(settled + Duration::from_millis(10 * i), false, 950);
+        frame.scroll_y = if i == 1800 { 5200.0 } else { 40.0 };
+        step = log.frame(&frame);
+        if step == Step::Close {
+            break;
+        }
+    }
+    assert_eq!(step, Step::Close);
+    let text = std::fs::read_to_string(&path).expect("read the log");
+    assert!(text.contains("scroll_max_pt: 5200\n"), "{text}");
+    assert_eq!(log.scroll_elapsed(settled + 40 * SEC), None);
+
+    let mut plain = PerfLog::new(Some(temp_file("plain")), false).expect("a log");
+    plain.frame(&frame_at(t0, true, 950));
+    assert_eq!(plain.scroll_elapsed(t0 + 60 * SEC), None);
 }

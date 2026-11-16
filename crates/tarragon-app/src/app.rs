@@ -10,7 +10,7 @@ use tarragon_cache::store::CacheStore;
 use tarragon_db::Database;
 use tarragon_db::settings::{SettingKey, SettingValue, Settings, SettingsError, WindowState};
 use tarragon_ui::Shell;
-use tarragon_ui::gallery::Scope;
+use tarragon_ui::gallery::{Scope, scroll_offset};
 use tarragon_ui::shell::{LogPanelEvents, LogView};
 
 use crate::colorflag;
@@ -225,6 +225,16 @@ impl App {
     /// pipeline, the gallery, and the sidebar see the same path.
     fn navigate(&mut self, path: &Path) {
         self.thumbs.navigate(sidebar::normalize(path));
+    }
+
+    /// While a frame run records, move the grid along its path.
+    fn drive_scroll(&mut self, now: Instant) {
+        let Some(elapsed) = self.perf.as_ref().and_then(|perf| perf.scroll_elapsed(now)) else {
+            return;
+        };
+        let gallery = self.shell.gallery_mut();
+        let (content, view) = gallery.scroll_extent();
+        gallery.set_scroll_offset(scroll_offset(elapsed, content, view));
     }
 
     /// Persist a sort change to the window state, if one happened.
@@ -475,8 +485,9 @@ impl eframe::App for App {
         let shown = self.perf.is_some() && self.thumbs.grid_shown_once();
         if let Some(perf) = &mut self.perf {
             let size = ctx.content_rect().size();
+            let now = Instant::now();
             let step = perf.frame(&perflog::Frame {
-                now: Instant::now(),
+                now,
                 window: [size.x, size.y],
                 renderer: if frame.wgpu_render_state().is_some() {
                     "wgpu"
@@ -486,7 +497,9 @@ impl eframe::App for App {
                 shown,
                 loaded: loaded.is_some(),
                 textures: self.thumbs.live_textures(),
+                scroll_y: self.shell.gallery_mut().scroll_y(),
             });
+            self.drive_scroll(now);
             match step {
                 perflog::Step::Idle => {}
                 perflog::Step::Wait(left) => ctx.request_repaint_after(left),

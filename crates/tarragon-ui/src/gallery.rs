@@ -14,13 +14,16 @@ use tarragon_core::filter_state::{FilterScope, FilterState};
 use tarragon_core::sorting::SortMode;
 
 use crate::filter_bar::Shown;
-use crate::grid::{GridItem, Selection, VirtualGrid, items_in_order, metrics_for};
+use crate::grid::{
+    GridItem, Scroll, ScrollInfo, Selection, VirtualGrid, items_in_order, metrics_for,
+};
 use crate::tag_manager::TagManager;
 pub use crate::tag_manager::{TagManagerEvent, TagRow};
 use crate::tokens;
 pub use context_menu::GridMenuEvent;
 pub use empty::EmptyKind;
 use keys::Debouncer;
+pub use scroll::scroll_offset;
 pub use view::Scope;
 
 mod busy;
@@ -33,6 +36,7 @@ mod manager;
 mod notice;
 mod open;
 mod rename_dialog;
+mod scroll;
 mod selected;
 pub(crate) mod strip;
 mod tag_picker;
@@ -96,6 +100,10 @@ pub struct Gallery {
     seen_paths: Vec<PathBuf>,
     /// The display position that the next grid frame scrolls into view.
     scroll_to: Option<usize>,
+    /// An offset in points that the next grid frame takes, or none.
+    scroll_pin: Option<f32>,
+    /// Where the scroll area stood after the last grid frame.
+    scroll_info: ScrollInfo,
     /// Where the first removed tile stood, as a display position.
     removed_at: Option<usize>,
     /// Whether the sort mode changed since the last take.
@@ -157,6 +165,8 @@ impl Gallery {
             selection_revision: 0,
             seen_paths: Vec::new(),
             scroll_to: None,
+            scroll_pin: None,
+            scroll_info: ScrollInfo::default(),
             removed_at: None,
             sort_changed: false,
             order: Vec::new(),
@@ -418,14 +428,21 @@ impl Gallery {
             item_count: self.visible.len(),
         };
         self.painted_scratch.clear();
+        // A pinned offset wins over a reveal.
+        let scroll = match (self.scroll_pin.take(), self.scroll_to.take()) {
+            (Some(y), _) => Scroll::Pin(y),
+            (None, Some(position)) => Scroll::Reveal(position),
+            (None, None) => Scroll::Keep,
+        };
         let response = grid.show_items_collect(
             ui,
             &self.items,
             &self.visible,
             &self.selection,
             &mut self.painted_scratch,
-            self.scroll_to.take(),
+            scroll,
         );
+        self.scroll_info = response.scroll;
         self.record_painted();
         if let Some(click) = response.click {
             self.apply_grid_click(click);

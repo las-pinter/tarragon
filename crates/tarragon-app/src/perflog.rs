@@ -59,6 +59,8 @@ pub struct Frame {
     pub loaded: bool,
     /// The textures the grid budget holds now.
     pub textures: usize,
+    /// The vertical scroll offset of the grid in points.
+    pub scroll_y: f32,
 }
 
 /// What the app must do after a frame.
@@ -91,6 +93,8 @@ pub struct PerfLog {
     recorder: FrameRecorder,
     /// Whether the end of the run is written.
     finished: bool,
+    /// The largest grid offset seen while the run scrolled, in points.
+    scroll_max: f32,
 }
 
 impl PerfLog {
@@ -104,6 +108,7 @@ impl PerfLog {
             loaded_at: None,
             recorder: FrameRecorder::new(WARMUP, RUN),
             finished: false,
+            scroll_max: 0.0,
         })
     }
 
@@ -134,6 +139,7 @@ impl PerfLog {
         if frame.now < settled {
             return Step::Wait(settled - frame.now);
         }
+        self.scroll_max = self.scroll_max.max(frame.scroll_y);
         if self.recorder.frame(frame.now) != Phase::Done {
             return Step::Repaint;
         }
@@ -141,8 +147,24 @@ impl PerfLog {
         let report = self.recorder.report();
         let span = report.as_ref().map_or(Duration::ZERO, |r| r.span);
         let valid = run_valid(frame.window, span, frame.textures);
-        self.write(&end_lines(report.as_ref(), frame.textures, valid));
+        self.write(&end_lines(
+            report.as_ref(),
+            self.scroll_max,
+            frame.textures,
+            valid,
+        ));
         Step::Close
+    }
+
+    /// How long the grid has scrolled itself, or none outside the scroll span.
+    ///
+    /// The span is the warm-up and the recorded run, after the settle wait.
+    /// Without a frame run the answer is always none.
+    pub fn scroll_elapsed(&self, now: Instant) -> Option<Duration> {
+        let loaded_at = self
+            .loaded_at
+            .filter(|_| self.frame_run && !self.finished)?;
+        now.checked_duration_since(loaded_at + SETTLE)
     }
 
     /// Write `text`; the first write creates or cuts the file. A failure is
@@ -207,8 +229,14 @@ fn loaded_lines(rss_kib: Option<u64>, textures: usize) -> String {
 }
 
 /// The lines written when the frame run ends.
-fn end_lines(report: Option<&FrameReport>, textures: usize, valid: bool) -> String {
+fn end_lines(
+    report: Option<&FrameReport>,
+    scroll_max: f32,
+    textures: usize,
+    valid: bool,
+) -> String {
     let mut text = report.map_or_else(|| "frames: too few\n".to_owned(), FrameReport::lines);
+    let _ = writeln!(text, "scroll_max_pt: {scroll_max:.0}");
     let _ = writeln!(text, "live_textures_at_end: {textures}");
     let _ = writeln!(text, "run_valid: {}", if valid { "yes" } else { "no" });
     text

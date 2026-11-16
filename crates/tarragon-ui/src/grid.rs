@@ -137,9 +137,20 @@ impl GridMetrics {
     }
 }
 
+/// Where the scroll area of the grid stood after a frame, in points.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct ScrollInfo {
+    /// The vertical offset of the view.
+    pub offset: f32,
+    /// The full height of the grid content.
+    pub content: f32,
+    /// The height of the visible part.
+    pub view: f32,
+}
+
 /// How one frame treats the scroll position.
-#[derive(Clone, Copy)]
-enum Scroll {
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Scroll {
     /// Keep the offset that the scroll area holds.
     Keep,
     /// Pin the offset to this many points.
@@ -201,6 +212,8 @@ pub struct GridResponse {
     pub secondary_click: Option<CellClick>,
     /// Whether the grid area got a right-click that hit no cell this frame.
     pub empty_secondary_click: bool,
+    /// Where the scroll area stood after this frame.
+    pub scroll: ScrollInfo,
 }
 
 /// A grid over `item_count` items with a fixed cell geometry.
@@ -260,7 +273,7 @@ impl VirtualGrid {
         ui: &mut Ui,
         scroll: Scroll,
         mut cell_ui: impl FnMut(&mut Ui, Rect, usize),
-    ) -> (usize, bool) {
+    ) -> (usize, bool, ScrollInfo) {
         let mut painted = 0usize;
         let mut empty_click = false;
 
@@ -272,7 +285,7 @@ impl VirtualGrid {
         // A floating bar paints over the last column. A solid bar takes its own
         // width from the viewport, so the tiles end before the bar. The scope
         // keeps the solid style from leaking to the caller's ui.
-        ui.scope(|ui| {
+        let output = ui.scope(|ui| {
             ui.spacing_mut().scroll = scroll_style();
             area.show_viewport(ui, |ui, viewport| {
                 // The inner width excludes the scrollbar, so the columns fit.
@@ -308,10 +321,16 @@ impl VirtualGrid {
                         painted += 1;
                     }
                 }
-            });
+            })
         });
+        let output = output.inner;
+        let info = ScrollInfo {
+            offset: output.state.offset.y,
+            content: output.content_size.y,
+            view: output.inner_rect.height(),
+        };
 
-        (painted, empty_click)
+        (painted, empty_click, info)
     }
 
     /// Show the grid over `items` in display `order` and paint each tile.
@@ -333,8 +352,8 @@ impl VirtualGrid {
     /// Like [`Self::show_items`], and push the item index of each painted
     /// tile into `painted`. The caller clears the vector first.
     ///
-    /// A `Some` `reveal` is a display position. The grid scrolls once, as far
-    /// as needed, so that tile is in view. Later frames keep the offset.
+    /// `scroll` says whether to keep the offset, pin it, or reveal a tile.
+    /// A reveal scrolls once, as far as needed; later frames keep the offset.
     pub fn show_items_collect(
         self,
         ui: &mut Ui,
@@ -342,9 +361,8 @@ impl VirtualGrid {
         order: &[usize],
         selection: &Selection,
         painted: &mut Vec<usize>,
-        reveal: Option<usize>,
+        scroll: Scroll,
     ) -> GridResponse {
-        let scroll = reveal.map_or(Scroll::Keep, Scroll::Reveal);
         self.items_at(ui, scroll, items, order, selection, Some(painted))
     }
 
@@ -379,38 +397,40 @@ impl VirtualGrid {
             metrics: self.metrics,
             item_count: order.len(),
         };
-        let (painted, empty_secondary_click) = grid.paint(ui, scroll, |ui, rect, position| {
-            let Some(&index) = order.get(position) else {
-                return;
-            };
-            let Some(item) = items.get(index) else {
-                return;
-            };
-            if let Some(painted) = painted_items.as_deref_mut() {
-                painted.push(index);
-            }
-            let response = cell::show_cell(ui, rect, item, index, selection);
-            let hit = || CellClick {
-                index,
-                position,
-                modifiers: ui.input(|input| input.modifiers),
-            };
-            if response.clicked() {
-                click = Some(hit());
-            }
-            if response.double_clicked() {
-                double_click = Some(hit());
-            }
-            if response.secondary_clicked() {
-                secondary_click = Some(hit());
-            }
-        });
+        let (painted, empty_secondary_click, scroll_info) =
+            grid.paint(ui, scroll, |ui, rect, position| {
+                let Some(&index) = order.get(position) else {
+                    return;
+                };
+                let Some(item) = items.get(index) else {
+                    return;
+                };
+                if let Some(painted) = painted_items.as_deref_mut() {
+                    painted.push(index);
+                }
+                let response = cell::show_cell(ui, rect, item, index, selection);
+                let hit = || CellClick {
+                    index,
+                    position,
+                    modifiers: ui.input(|input| input.modifiers),
+                };
+                if response.clicked() {
+                    click = Some(hit());
+                }
+                if response.double_clicked() {
+                    double_click = Some(hit());
+                }
+                if response.secondary_clicked() {
+                    secondary_click = Some(hit());
+                }
+            });
         GridResponse {
             painted,
             click,
             double_click,
             secondary_click,
             empty_secondary_click,
+            scroll: scroll_info,
         }
     }
 }

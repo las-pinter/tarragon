@@ -211,3 +211,37 @@ jobs:
             exit 1
           fi
           docker run --rm -v "$PWD/unpacked/$top:/app:ro" "$IMAGE" /app/tarragon --help > /dev/null
+
+  # Only a tag run reaches this job. It is the only job that can write.
+  # The release is always a draft. The owner reads it and publishes it by hand.
+  # --verify-tag stops the command from making a tag that does not exist.
+  publish:
+    name: Draft release
+    needs: [build, smoke]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Download the package
+        uses: actions/download-artifact@v8
+        with:
+          name: tarragon-linux-portable
+          path: package
+      - name: Check the checksum
+        env:
+          ZIP_NAME: ${{ needs.build.outputs.zip_name }}
+        run: (cd package && sha256sum -c "$ZIP_NAME.sha256")
+      # The job has no checkout, so gh gets the repository from GH_REPO.
+      - name: Create the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ZIP_NAME: ${{ needs.build.outputs.zip_name }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --draft --verify-tag \
+            --title "$GITHUB_REF_NAME" \
+            --notes "Portable Linux x86_64 build. It needs glibc 2.31 or newer." \
+            "package/$ZIP_NAME" "package/$ZIP_NAME.sha256"

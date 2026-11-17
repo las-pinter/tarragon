@@ -38,9 +38,13 @@ Musl release build:
 cargo build --release --target x86_64-unknown-linux-musl
 ```
 
-Windows and macOS run `cargo build --release` and `cargo test`. No release
-job builds the Linux portable zip yet. The only workflow,
-`.github/workflows/rust.yml`, has one job that builds the large PSB fixture.
+Windows and macOS run `cargo build --release` and `cargo test`. Two workflows
+exist:
+
+- `.github/workflows/rust.yml` runs the gates, the Windows and macOS builds,
+  and the PSD jobs.
+- `.github/workflows/release-linux.yml` builds the Linux portable zip with
+  `cargo zigbuild`, smoke-tests it, and, on a tag only, makes a draft release.
 
 ## Portable data folder
 
@@ -520,10 +524,10 @@ rustup. The highest `GLIBC_` symbol version comes from `objdump -T`.
 | host, Ubuntu 24.04 | 2.39 | `GLIBC_2.35` | `hypot`, `hypotf` |
 
 The floor is glibc 2.30 when the build runs on `ubuntu:20.04`. A build on a
-newer image raises the floor to the glibc of that image, at most. Use an old
-image for the release build. `debian:bullseye` could not install packages: its
-security archive is gone. The system libraries that the binary loads at run
-time (X11, Wayland, EGL, Vulkan) are not in this number.
+newer image raises the floor to the glibc of that image, at most. The table is
+a record of an old test. The release build no longer depends on the image
+glibc (see "Release build" below). The system libraries that the binary loads
+at run time (X11, Wayland, EGL, Vulkan) are not in this number.
 
 Packages that the container build needed (Debian and Ubuntu names):
 `build-essential`, `ca-certificates`, `curl`, and `binutils`. No `-dev`
@@ -544,6 +548,72 @@ The CI `gates` job needs no new `apt` step. The example built on a plain
 `ubuntu:22.04` image with `build-essential` only. The `release-build` jobs
 for Windows and macOS run `cargo build --release --workspace`. That command
 builds no example and no dev-dependency, so the new crates do not enter it.
+
+#### Release build
+
+`.github/workflows/release-linux.yml` builds the Linux portable zip. It runs on
+a push to `rust`, on a `v*` tag, and by hand. It has three jobs:
+
+- `build` runs in an `ubuntu:26.04` container. It builds, checks, and packs
+  the zip, and uploads the zip and its sha256 file as one workflow artifact.
+- `smoke` starts the unpacked binary in `ubuntu:20.04` and `debian:11`.
+- `publish` runs only on a `v*` tag, after `build` and `smoke` pass. It
+  creates a draft release. The owner reads the draft and publishes it by hand.
+
+The build uses these pins:
+
+- Rust: the toolchain in `rust-toolchain.toml` (1.99.0).
+- Zig: `ziglang==0.17.0`, from pip in a venv.
+- `cargo-zigbuild` 0.24.0, installed with `--locked`.
+- Target: `x86_64-unknown-linux-gnu.2.31`. The `.2.31` suffix makes Zig link
+  against glibc 2.31, whatever glibc the image has.
+
+The build command is:
+
+```sh
+cargo zigbuild --release --locked -p tarragon-app --target x86_64-unknown-linux-gnu.2.31
+```
+
+Fallback if Zig 0.17 fails: use Zig 0.16.x with `cargo-zigbuild` 0.23.4. Never
+mix a `cargo-zigbuild` below 0.23 with Zig 0.17. PyPI marks the `ziglang`
+0.17.0 wheel as yanked (a partial upload). `pip` still installs it, with a
+warning.
+
+Two flags break the release build: `linker-plugin-lto` and `crt-static`.
+`cargo-zigbuild` does not support `crt-static` for glibc targets.
+`linker-plugin-lto` fails with `unsupported linker arg: -plugin-opt`. The
+`build` job fails when either one is set in a Cargo config, a `Cargo.toml`,
+or the workflow file. It also fails when `RUSTFLAGS` is set.
+
+The `build` job checks each result and fails on a miss:
+
+- The highest `GLIBC_` symbol from `objdump -T` must not pass 2.31.
+- `ldd` may list only `linux-vdso.so.1`, `libc.so.6`, `libm.so.6`,
+  `libpthread.so.0`, `libdl.so.2`, and `ld-linux-x86-64.so.2`.
+- The binary must be at most 62,914,560 bytes (60 MB).
+- `tarragon --version` must print `tarragon` and the workspace version.
+- On a tag run, the tag must equal `v` and the workspace version.
+
+Measured on a push run of this workflow (cold cache, version 0.2.0):
+
+| Measure | Result |
+|---------|--------|
+| Highest `GLIBC_` symbol | 2.30 (limit 2.31) |
+| `ldd` list | `linux-vdso.so.1`, `libm.so.6`, `libc.so.6`, `/lib64/ld-linux-x86-64.so.2`, `libpthread.so.0`, `libdl.so.2` |
+| Binary size (not stripped) | 23,756,480 bytes |
+| Workflow artifact (zip and sha256 file) | 9,766,125 bytes |
+| `cargo zigbuild --release` | 2 min 54 s |
+| Smoke in `ubuntu:20.04` and `debian:11` | `--version` prints `tarragon 0.2.0`, `--help` exits 0 |
+
+The binary does not link `libgcc_s`.
+
+Limits of the test:
+
+- RHEL 8 (glibc 2.28) is not covered. The floor is glibc 2.31.
+- The smoke test runs `--version` and `--help` only. A GUI start on old
+  distros is not tested.
+- The window and graphics libraries (X11, Wayland, EGL, Vulkan) load at run
+  time. The `ldd` check does not see them.
 
 ### egui_dock
 

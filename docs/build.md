@@ -311,41 +311,17 @@ it adds screen reader support. This is an open item.
 
 ### glibc floor
 
-The example was built in release mode in containers. The repository was
-mounted read-only. The toolchain came from `rust-toolchain.toml` through
-rustup. The highest `GLIBC_` symbol version comes from `objdump -T`.
-
-| Build image | glibc of the image | Highest symbol | Symbols at the top |
-|-------------|--------------------|----------------|--------------------|
-| `ubuntu:22.04` | 2.35 | `GLIBC_2.35` | `hypot`, `hypotf` |
-| `ubuntu:20.04` | 2.31 | `GLIBC_2.30` | `gettid` |
-| host, Ubuntu 24.04 | 2.39 | `GLIBC_2.35` | `hypot`, `hypotf` |
-
-The floor is glibc 2.30 when the build runs on `ubuntu:20.04`. A build on a
-newer image raises the floor to the glibc of that image, at most. The table is
-a record of an old test. The release build no longer depends on the image
-glibc (see "Release build" below). The system libraries that the binary loads
-at run time (X11, Wayland, EGL, Vulkan) are not in this number.
-
-Packages that the container build needed (Debian and Ubuntu names):
-`build-essential`, `ca-certificates`, `curl`, and `binutils`. No `-dev`
-package was needed. The window and graphics libraries load at run time.
-
-Packages for a run in a container (not tested as a minimal set):
-`libx11-6`, `libxcursor1`, `libxrandr2`, `libxi6`, `libxkbcommon0`,
-`libxkbcommon-x11-0`, `libwayland-client0`, `libegl1`, `libgl1`,
-`libgl1-mesa-dri`, `libvulkan1`, and `mesa-vulkan-drivers`.
+The release is built with `cargo zigbuild` for glibc 2.31, so the floor is
+glibc 2.31 whatever glibc the build image has. The release build reads the
+highest `GLIBC_` symbol version of the binary with `objdump -T` and fails when
+it is above 2.31 (see "Release build"). The system libraries that the binary
+loads at run time (X11, Wayland, EGL, Vulkan) are not in this number.
 
 Optional run-time packages, for any install of the app. They are not build
 packages. File Copy and Paste in the grid menu need `xclip` on X11 or
 `wl-clipboard` on Wayland. Without them the app runs and shows a notice that names
 the missing package. The Show in file manager item and the system opener start
 `xdg-open` on Linux (package `xdg-utils` on Debian and Ubuntu).
-
-The CI `gates` job needs no new `apt` step. The example built on a plain
-`ubuntu:22.04` image with `build-essential` only. The `release-build` jobs
-for Windows and macOS run `cargo build --release --workspace`. That command
-builds no example and no dev-dependency, so the new crates do not enter it.
 
 #### Release build
 
@@ -356,7 +332,8 @@ a push to `rust`, on a `v*` tag, and by hand. It has three jobs:
   the zip, and uploads the zip and its sha256 file as one workflow artifact.
 - `smoke` starts the unpacked binary in `ubuntu:20.04` and `debian:11`.
 - `publish` runs only on a `v*` tag, after `build` and `smoke` pass. It
-  creates a draft release. The owner reads the draft and publishes it by hand.
+  creates a draft release. A maintainer reviews the draft and publishes it by
+  hand.
 
 The build uses these pins:
 
@@ -391,17 +368,6 @@ The `build` job checks each result and fails on a miss:
 - The binary must be at most 62,914,560 bytes (60 MB).
 - `tarragon --version` must print `tarragon` and the workspace version.
 - On a tag run, the tag must equal `v` and the workspace version.
-
-Measured on a push run of this workflow (cold cache, version 0.2.0):
-
-| Measure | Result |
-|---------|--------|
-| Highest `GLIBC_` symbol | 2.30 (limit 2.31) |
-| `ldd` list | `linux-vdso.so.1`, `libm.so.6`, `libc.so.6`, `/lib64/ld-linux-x86-64.so.2`, `libpthread.so.0`, `libdl.so.2` |
-| `cargo zigbuild --release` | 2 min 54 s |
-| Smoke in `ubuntu:20.04` and `debian:11` | `--version` prints `tarragon 0.2.0`, `--help` exits 0 |
-
-The binary does not link `libgcc_s`.
 
 Limits of the test:
 
@@ -535,13 +501,14 @@ downloads, and builds the four release binaries with `--locked`. It writes
 `/var/tmp/tarragon-smoke-<commit>.tar.gz` and removes its staging folder. The
 archive holds `bin/` (`tarragon`, `scan_bench`, `corpus_gen`,
 `psd_rss_bench`), `smoke.sh`, `README.txt`, `fixtures/rgb_8bit.psd`,
-`psd-corpus/` (16 files, `fetch.sh`, `SHA256SUMS`), and `VERSION`. The archive
-is under 150 MB.
+`psd-corpus/` (16 files, `fetch.sh`, `SHA256SUMS`), and `VERSION`. The script
+fails when the archive is over 150 MB.
 
 Copy the archive to the target machine, unpack it in an empty folder, and run
 `sh smoke.sh`. Send back `smoke-result.txt` and the `perf-*.txt` files. The
-binaries are built on the build machine, so the target needs glibc 2.39 or
-newer. `VERSION` records the commit, the rustc version, and the libc.
+binaries are built on the build machine, so the target needs a glibc at least
+as new as the one on the build machine. `VERSION` records the commit, the rustc
+version, and the libc.
 
 Never commit or publish the bundle. The licences of the corpus files are
 unknown (see `psd-corpus.md`).

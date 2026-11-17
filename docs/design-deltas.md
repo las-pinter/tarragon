@@ -16,15 +16,29 @@ After: the field reads `Default cache directory`, as the mockup shows.
 Reason: the design shows a fixed label, not a live path. A path in the design
 would differ on every machine and would show one user's folder.
 
+## Grid cache tier
+
+Before: `design/mockups/settings-cache.html` listed the cache tiers as 256,
+1024, and full. `design/mockups/log-panel.html` showed the log line
+`tier 256 hit for sketch_014.png`.
+
+After: the first tier is 320 px on the longest edge. The settings text reads
+`Cache tiers: 320, 1024, full.` and the log line reads
+`tier 320 hit for sketch_014.png`. The app no longer reads old 256 folders.
+
+Reason: a grid cell of 160 pt at a display scale of 2.0 needs 320 px, so the
+thumbnail stays sharp up to that scale.
+
 ## Outside references in the design folder
 
 Before: `design/README.md` pointed to an archive of alternative designs and to
 a separate design-alternatives document, both outside the repository. The
 comment block in `design/mockups/theme.css` named the source files of the
-previous implementation.
+previous implementation. Two captions in `design/mockups/menubar.html` read
+"The Python File menu" and "The Python Settings menu".
 
-After: both files name no source outside the repository. The palette values are
-unchanged.
+After: the files name no source outside the repository. The palette values are
+unchanged. The captions read "The File menu" and "The Settings menu".
 
 Reason: a repository document must stand alone, and a path outside the
 repository may not resolve for a reader.
@@ -244,6 +258,18 @@ keeps a blank of the same width.
 
 Reason: the vendored Roboto family has no check glyph, and a text `v` reads as
 a letter at the caption size. The difference is visual only.
+
+## Selection frame
+
+Before: `design/mockups/theme.css` drew a selected tile with two frames: the
+1.5 px coral border of `.cell.selected`, and a second 1 px coral outline on the
+thumbnail (`.cell.selected .thumb`, with an offset of -1 px).
+
+After: a selected tile draws one frame, the cell border. The mockup rule for
+the thumbnail outline is removed.
+
+Reason: the second stroke over the thumbnail doubled the frame. One frame marks
+the selection clearly.
 
 ## Log levels and toolbar
 

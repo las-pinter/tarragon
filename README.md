@@ -86,3 +86,13 @@ for the toolchain and the other build steps.
 ## License
 
 Tarragon is released under the MIT license. See [LICENSE](LICENSE).
+
+## Attribution
+
+![Share of AI and human lines](assets/attribution.svg)
+
+Lines are counted with `git blame` over the tracked text files. A line is AI
+when its commit heading starts with `ai:` (or the older `ai-`). Every other
+line is human, and lines not yet committed count as human. Files under the
+top-level `assets/` folder and binary files are left out. The command
+`cargo xtask attribution` makes the chart. It is refreshed before each release.

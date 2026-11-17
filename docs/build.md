@@ -346,12 +346,28 @@ loads at run time (X11, Wayland, EGL, Vulkan) are not in this number.
 `.github/workflows/release-linux.yml` builds the Linux portable zip. It runs on
 a push to `rust`, on a `v*` tag, and by hand. It has three jobs:
 
-- `build` runs in an `ubuntu:26.04` container. It builds, checks, and packs
-  the zip, and uploads the zip and its sha256 file as one workflow artifact.
+- `build` runs in an `ubuntu:26.04` container. On a `v*` tag it runs
+  `cargo xtask attribution` before the build and fails when
+  `assets/attribution.svg` differs from the committed file. It builds, checks,
+  and packs the zip, and uploads the zip and its sha256 file as one workflow
+  artifact.
 - `smoke` starts the unpacked binary in `ubuntu:20.04` and `debian:11`.
 - `publish` runs only on a `v*` tag, after `build` and `smoke` pass. It
   creates a draft release. A maintainer reviews the draft and publishes it by
   hand.
+
+Before a release tag, do these steps in this order:
+
+1. Finish and commit every other change, so the tree is clean apart from the
+   chart. The tool counts uncommitted lines as human, so a chart made over
+   uncommitted work goes stale after the commit.
+2. Run `cargo xtask attribution` last.
+3. Commit only `assets/attribution.svg`.
+4. Tag that commit.
+
+The chart counts the tracked text files, so a later change to a tracked text
+file outside `assets/` makes it stale and the tag run fails. The check needs
+the full history, so the checkout uses `fetch-depth: 0`.
 
 The build uses these pins:
 
@@ -386,6 +402,7 @@ The `build` job checks each result and fails on a miss:
 - The binary must be at most 62,914,560 bytes (60 MB).
 - `tarragon --version` must print `tarragon` and the workspace version.
 - On a tag run, the tag must equal `v` and the workspace version.
+- On a tag run, `assets/attribution.svg` must match the committed file.
 
 Limits of the test:
 

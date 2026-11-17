@@ -40,6 +40,8 @@ jobs:
             ca-certificates curl git build-essential binutils python3 python3-venv zip unzip
       - name: Check out
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - name: Install rustup
         run: |
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain none --profile minimal
@@ -70,6 +72,16 @@ jobs:
           fi
           if [ -n "${RUSTFLAGS:-}" ]; then
             echo "RUSTFLAGS is set." >&2
+            exit 1
+          fi
+      # The chart counts lines with git blame, so the checkout needs the full history.
+      # Only a tag run checks it. The chart is right only if nothing changed after it was made.
+      - name: Verify the attribution chart
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          cargo xtask attribution
+          if ! git diff --exit-code -- assets/attribution.svg; then
+            echo "The attribution chart is stale. Run cargo xtask attribution and commit the chart before tagging." >&2
             exit 1
           fi
       - name: Build

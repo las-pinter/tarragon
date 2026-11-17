@@ -1,7 +1,7 @@
 # Build
 
 This file records the pinned toolchain, the build commands, the link mode,
-the measured binary sizes, and the 60 MB check.
+and the measured results.
 
 ## Pinned toolchain
 
@@ -109,37 +109,11 @@ sharp up to scale 2.0, and soft above it.
 
 ## Measured sizes
 
-Host release, glibc (`cargo build --release`):
-
-| Binary | Bytes | MiB |
-|--------|-------|-----|
-| `target/release/tarragon` | 444,704 | 0.42 |
-
-### Scope of the measurement
-
 The `tarragon-app` binary parses the `--version` and `--help` flags. Without a
 flag it resolves the data directory, takes the single-instance guard, sets up
 logging, and opens the database, then opens the shell window with eframe. It
 tries the wgpu renderer first and falls back to glow. A second start ends after
-the guard, before the log file is opened or rolled. The size figure above
-was measured at an earlier, smaller build, before the window was wired in, and
-is not re-measured here.
-
-The two heavy crates are measured through their examples. Run
-`cargo build --release --examples`.
-
-| Example | Crates | Bytes | MiB |
-|---------|--------|-------|-----|
-| `grid_bench` | egui 0.36.2, rayon, the vendored Roboto fonts | 6,559,464 | 6.26 |
-| `jpeg_q90_check` | image 0.25.10 | 1,971,456 | 1.88 |
-| `psd_rss_bench` | image 0.25.10, rayon, the PSD, cache, and scan crates | 3,882,000 | 3.70 |
-
-The `grid_bench` and `jpeg_q90_check` rows were re-measured on this working
-tree; `psd_rss_bench` was measured on its own. The `grid_bench`
-example carries the three Roboto files (305,608, 306,536, and 306,940 bytes),
-because it installs the shipped fonts. `jpeg_q90_check` calls no font module.
-
-The final size of the wired binary is not measured yet.
+the guard, before the log file is opened or rolled.
 
 ### Grid benchmark
 
@@ -387,20 +361,6 @@ CPUs 0 to 3 are four cores and the list was `0,1,2,3`.
 
 Do not read the partly cold row as a cold figure.
 
-## 60 MB check
-
-The limit is 60 MB. Take 60 MB as 62,914,560 bytes.
-
-| Binary | Bytes | Result |
-|--------|-------|--------|
-| `tarragon` (package `tarragon-app`, glibc, release) | 444,704 | pass |
-| `grid_bench` (example) | 6,559,464 | pass |
-| `jpeg_q90_check` (example) | 1,971,456 | pass |
-| `psd_rss_bench` (example) | 3,882,000 | pass |
-
-The highest measured size is 6,559,464 bytes. That is 10.4% of the 60 MB
-budget. Every measured binary is under the limit.
-
 ## GUI stack spike
 
 The spike checked the window stack before the app shell was wired in. The code
@@ -442,12 +402,11 @@ Reasons for `wgpu`:
 
 Reasons to keep `glow`:
 
-- The binary is about 5.7 MB smaller after strip and thin LTO.
+- The binary is smaller.
 - The dependency tree is smaller.
 - It works on old GL drivers and in virtual machines that have no Vulkan.
 
-Both fit the size limit by a wide margin. Cost of keeping both: the combined
-build is about 0.7 MB larger than the `wgpu` build.
+Cost of keeping both: the combined build is larger than the `wgpu` build.
 
 The `accesskit` feature of eframe is off in the spike. The real app must
 decide on it, because it adds screen reader support. This is an open item.
@@ -467,25 +426,6 @@ No new license was needed. `deny.toml` did not change. Crates with other
 licenses in the tree (`0BSD`, `BSD-2-Clause`, `Apache-2.0 WITH LLVM-exception`,
 `Unlicense`) are dual-licensed with an allowed option, so the check passes.
 The tree has only one `egui` (0.36.2).
-
-### Binary size
-
-The example, built with `cargo build --release --example stack_spike -p
-tarragon-app`. The limit is 60 MB (62,914,560 bytes). The strip and thin LTO
-column uses `CARGO_PROFILE_RELEASE_STRIP=true` and
-`CARGO_PROFILE_RELEASE_LTO=thin`. No release profile is set in the repository.
-
-| Build | Default release (bytes) | Strip and thin LTO (bytes) | Share of 60 MB |
-|-------|-------------------------|----------------------------|----------------|
-| glow only | 13,334,176 | 9,747,672 | 15.5% |
-| wgpu only | 20,536,744 | 15,431,152 | 24.5% |
-| both renderers | 21,297,320 | 16,079,680 | 25.6% |
-
-The share is the strip and thin LTO size over 60 MB. Every build is under the
-limit. The "both renderers" row is from the final example. The single-renderer
-rows come from a copy of the repository with one renderer only, and from an
-earlier example that was a few kilobytes smaller. The repository builds both
-renderers.
 
 ### glibc floor
 
@@ -576,8 +516,6 @@ Measured on a push run of this workflow (cold cache, version 0.2.0):
 |---------|--------|
 | Highest `GLIBC_` symbol | 2.30 (limit 2.31) |
 | `ldd` list | `linux-vdso.so.1`, `libm.so.6`, `libc.so.6`, `/lib64/ld-linux-x86-64.so.2`, `libpthread.so.0`, `libdl.so.2` |
-| Binary size (not stripped) | 23,756,480 bytes |
-| Workflow artifact (zip and sha256 file) | 9,766,125 bytes |
 | `cargo zigbuild --release` | 2 min 54 s |
 | Smoke in `ubuntu:20.04` and `debian:11` | `--version` prints `tarragon 0.2.0`, `--help` exits 0 |
 
@@ -689,11 +627,8 @@ more than 20 percent below `wgpu`, so `wgpu` stays the default.
 ## Reproduce
 
 ```sh
-rustup target list --installed
 cargo build --release
-stat -c '%s' target/release/tarragon
 cargo build --release --examples
-stat -c '%s' target/release/examples/grid_bench target/release/examples/jpeg_q90_check target/release/examples/stack_spike target/release/examples/psd_rss_bench
 ```
 
 ## End-to-end smoke test

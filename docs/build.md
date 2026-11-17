@@ -263,8 +263,9 @@ prints PASS or FAIL against 120 s (exit code 1 on FAIL, 2 on a bad folder).
 
 The spike checked the window stack before the app shell was wired in. The code
 is the example `crates/tarragon-app/examples/stack_spike/`. `eframe` is a normal
-dependency of `tarragon-app`, because the app window uses it. Only `egui_dock`
-is a dev-dependency, so the shipped app binary does not link it.
+dependency of `tarragon-app`, because the app window uses it. `tarragon-ui`
+depends on `egui_dock`, so the app binary links it. `tarragon-app` also lists it
+as a dev-dependency for the spike.
 
 The workspace pins `eframe =0.36.2` with default features off. The features
 are `glow`, `wgpu`, `x11`, and `wayland`. `default_fonts` stays off, and the
@@ -273,22 +274,17 @@ example picks the renderer at run time through `NativeOptions`.
 
 ### Renderer
 
-Decision: `wgpu` is the default renderer. `glow` stays as the fallback that
-the user can select. The decision is final. It follows the frame-time run
-below.
+Decision: `wgpu` is the default renderer. `glow` is the fallback: the app
+tries it when `wgpu` fails to start. The spike example picks either one with
+`--renderer`.
 
-Rule: `wgpu` stays the default unless one of these is true on the owner run:
+Rule: `wgpu` stays the default unless one of these is true on a frame-time run
+(see "Frame time"):
 
 - `wgpu` fails a limit (p99 of 33 ms or more, or a frame over 100 ms) and
   `glow` passes.
 - `glow` is clearly better: its p99 is more than 20 percent lower than the
   `wgpu` p99 on the same machine and in the same session type.
-
-Outcome: neither condition is true in either session type. `wgpu` passes
-both. `glow` has the higher p99 in both session types: 39.91 ms against
-27.83 ms on Wayland, where `glow` also fails the limit, and 21.21 ms against
-15.74 ms on X11. See the results in "Frame
-time".
 
 Reasons for `wgpu`:
 
@@ -306,24 +302,12 @@ Reasons to keep `glow`:
 
 Cost of keeping both: the combined build is larger than the `wgpu` build.
 
-The `accesskit` feature of eframe is off in the spike. The real app must
-decide on it, because it adds screen reader support. This is an open item.
+The `accesskit` feature of eframe is off. The app must decide on it, because
+it adds screen reader support. This is an open item.
 
 ### Dependency check
 
-`cargo deny check` on the full tree, with the eframe and `egui_dock` crates:
-
-| Check | Result |
-|-------|--------|
-| advisories | ok |
-| bans | ok, with six duplicate-version warnings (`getrandom`, `hashbrown`, `miniz_oxide`, `r-efi`, `syn`, `windows-sys`) |
-| licenses | ok, with one warning: the `BSL-1.0` allowance matches no crate |
-| sources | ok |
-
-No new license was needed. `deny.toml` did not change. Crates with other
-licenses in the tree (`0BSD`, `BSD-2-Clause`, `Apache-2.0 WITH LLVM-exception`,
-`Unlicense`) are dual-licensed with an allowed option, so the check passes.
-The tree has only one `egui` (0.36.2).
+`cargo deny check` runs in the quality gates and covers the whole tree.
 
 ### glibc floor
 
@@ -429,24 +413,17 @@ Limits of the test:
 
 ### egui_dock
 
-Verdict: `egui_dock 0.21.1` works with `egui =0.36.2`. Version 0.21 requires
-`egui ^0.36`, and the lock file has one `egui`. The example shows one tab
-("Stats") in a `DockArea`. A run under Xvfb drew the tab, the tab text in
-Roboto, and the grid, with both renderers and without a panic. Version 0.20
-needs `egui ^0.35` (crates.io data) and does not fit. The workspace pins
-`egui_dock =0.21.1`.
+The workspace pins `egui_dock =0.21.1`, which needs `egui ^0.36`.
 
 ### Frame time
 
-Status: done. The owner ran the measurement on a local desktop with a GPU.
-Do not measure over an SSH X forward. It usually renders in software and has
-no DRI3 direct path.
+Run the check on a local desktop with a GPU. Do not run it over an SSH X
+forward. That usually renders in software and has no DRI3 direct path.
 
 The example uploads 1000 textures of 256 by 256 pixels. All 1000 stay alive
 for the whole run. It scrolls the grid by itself, and only the visible rows
-draw. At 1280x800 about 70 tiles (7 percent) draw in each frame. A Xvfb run
-counted a mean of 67.5 and a maximum of 72. The log header records the mean
-and the maximum for each run.
+draw. The log header records the mean and the maximum number of tiles drawn in
+each frame.
 
 It records the time between frames for 30 s after a 5 s warm-up. It writes a
 log file and prints p50, p95, p99, max, the frame count, the renderer, and the
@@ -456,9 +433,9 @@ frame times), not only the configured duration. The exit code is 0 on a pass,
 log cannot be written. The limits are a p99 under 33 ms and no frame over
 100 ms (hard fail).
 
-Vsync is on. On a 60 Hz display one dropped frame takes 33.3 ms. So more than
-1 percent dropped frames puts the p99 at 33 ms or more, and the run fails. The
-logs do not record the refresh rate.
+Vsync is on. On a 60 Hz display one dropped frame takes two frame intervals.
+So more than 1 percent dropped frames puts the p99 at 33 ms or more, and the
+run fails. The logs do not record the refresh rate.
 
 Keep the window visible and not covered during each run. Do not minimize it
 and do not put another window over it. A minimized or covered window stops
@@ -493,34 +470,6 @@ Run one renderer by hand:
 cargo run --release --example stack_spike -p tarragon-app -- \
     --renderer wgpu --duration 30 --out frame-time-wgpu.log
 ```
-
-A smoke run under Xvfb with software rendering (`llvmpipe`) passed the code
-path. Those times are not GPU times. They are not the measurement.
-
-Results. Machine: NVIDIA GeForce RTX 4070 (discrete GPU), NVIDIA driver
-615.78.08, OpenGL 4.6.0, Vulkan device API 1.4.351. `glxinfo` reports direct
-rendering. Each run had 1000 textures, a 30 s span, a mean of 67.4 to 67.5 and
-a maximum of 72 tiles drawn per frame, and no lost focus. No frame was over
-100 ms.
-
-| Renderer | Session | Frames | p50 | p95 | p99 | max | Result |
-|----------|---------|--------|-----|-----|-----|-----|--------|
-| glow | Wayland | 1116 | 26.70 ms | 27.19 ms | 39.91 ms | 40.66 ms | FAIL |
-| wgpu | Wayland | 1703 | 13.58 ms | 27.31 ms | 27.83 ms | 28.17 ms | PASS |
-| glow | X11 | 2250 | 13.36 ms | 15.91 ms | 21.21 ms | 25.81 ms | PASS |
-| wgpu | X11 | 2250 | 13.37 ms | 14.96 ms | 15.74 ms | 18.11 ms | PASS |
-
-The `glow` log does not name the driver. It reads "OpenGL through glow".
-The `wgpu` logs name the adapter: `NVIDIA GeForce RTX 4070 (Vulkan,
-DiscreteGpu)`.
-
-On Wayland, the `glow` p50 of 26.70 ms is about two frame intervals. A few
-frames near 40 ms put its p99 over the 33 ms limit. The cause is not known.
-`wgpu` passes. Also on Wayland, `wgpu` has a p95 of 27.31 ms against a p50 of
-13.58 ms, so about a third of the frames take two intervals. The cause is not
-known. X11 shows no such effect. On X11, both pass and `wgpu` has the lower
-p99. The renderer rule compares only within one session type. `glow` is never
-more than 20 percent below `wgpu`, so `wgpu` stays the default.
 
 ## Reproduce
 

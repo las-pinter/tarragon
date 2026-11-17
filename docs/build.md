@@ -10,7 +10,7 @@ the measured binary sizes, and the 60 MB check.
 ```toml
 [toolchain]
 channel = "1.99.0"
-components = ["rustfmt", "clippy", "rust-analyzer"]
+components = ["rustfmt", "clippy"]
 ```
 
 The workspace sets `rust-version = "1.99"` and `edition = "2024"`.
@@ -31,12 +31,6 @@ cargo build --release
 ```
 
 The host release binary lands at `target/release/tarragon`.
-
-Musl release build:
-
-```sh
-cargo build --release --target x86_64-unknown-linux-musl
-```
 
 Windows and macOS run `cargo build --release` and `cargo test`. Two workflows
 exist:
@@ -104,24 +98,8 @@ All four gates pass on this branch.
 
 ## Link mode
 
-Link musl when every crate allows; otherwise link glibc and record the size.
-The result is glibc. The musl path stays the goal.
-
-Facts from this run:
-
-- The musl target is not installed. The toolchain directory lists only
-  `x86_64-unknown-linux-gnu`. The sandbox denies the `rustup` command, so
-  `rustup target list --installed` and `rustup target add
-  x86_64-unknown-linux-musl` did not run.
-- The musl build fails with `error[E0463]: can't find crate for 'core'` and
-  `can't find crate for 'std'`. The failure is the missing target std, not a
-  crate that needs glibc.
-- No crate is proven to block musl. The musl target must be installed before
-  the musl build can run.
-
-Note: `tarragon-db` will use `rusqlite` with `bundled`. A bundled C build
-for musl needs a musl C toolchain, such as `musl-gcc`. That toolchain is absent
-here. The `tarragon-db` crate has no dependency yet.
+The Linux release binary links glibc. CI builds it with `cargo zigbuild` for
+glibc 2.31. The pins and the build command are in "Release build".
 
 ## Grid thumbnail tier
 
@@ -136,8 +114,6 @@ Host release, glibc (`cargo build --release`):
 | Binary | Bytes | MiB |
 |--------|-------|-----|
 | `target/release/tarragon` | 444,704 | 0.42 |
-
-Musl release: not built. The target std is absent.
 
 ### Scope of the measurement
 

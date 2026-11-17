@@ -12,7 +12,16 @@
 #
 # Licences: only the repository licences are known (ag-psd MIT, Krita
 # GPL-3.0, psd-tools MIT). Upstream does not state the licence of each binary
-# file. For that reason the files are never committed.
+# file. For that reason the files are never committed, and neither is a bundle
+# of them. The folder tests/psd-corpus/ is ignored except this script.
+#
+# Use: after the download, export TARRAGON_PSD_CORPUS=<DIR>, then run
+#   cargo nextest run -p tarragon-render --test psd_corpus
+#   cargo nextest run -p tarragon-psd
+# With the variable unset, each corpus test prints "skip:" and passes. With it
+# set, a listed file that is missing fails the tarragon-render test, and the
+# message names this script. In tarragon-psd, the tests that read one file
+# print "skip:" and pass when that file is missing. CI does not run the corpus.
 set -eu
 
 usage() {

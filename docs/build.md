@@ -229,8 +229,8 @@ and the file was copied instead, and the first cache write error. `--help`
 lists the options.
 
 To run over real PSD files, fetch the corpus once, then pass its folder with
-`--source-dir`. The files are described in
-[`docs/psd-corpus.md`](psd-corpus.md). Every run also uses the valid fixtures in
+`--source-dir`. The header of `tests/psd-corpus/fetch.sh` describes the corpus.
+Every run also uses the valid fixtures in
 `tests/fixtures/psd/` (all but `truncated.psd`). `--source-dir` adds the PSD and
 PSB files directly inside its folder to them. A file that the decoder cannot
 read counts as a render error, and any render error makes the run FAIL.
@@ -529,4 +529,4 @@ as new as the one on the build machine. `VERSION` records the commit, the rustc
 version, and the libc.
 
 Never commit or publish the bundle. The licences of the corpus files are
-unknown (see `psd-corpus.md`).
+unknown (see the header of `tests/psd-corpus/fetch.sh`).

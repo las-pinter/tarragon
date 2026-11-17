@@ -13,7 +13,8 @@
 #   - The PSD corpus must already be fetched (sh tests/psd-corpus/fetch.sh
 #     tests/psd-corpus). Every file is checked against the sha256 in fetch.sh.
 #   - The bundle is for the user only. Never commit or publish it: the licences
-#     of the corpus files are unknown (docs/psd-corpus.md).
+#     of the corpus files are unknown (see the header of
+#     tests/psd-corpus/fetch.sh).
 #   - The staging folder and a half-written archive are removed on exit. A
 #     finished archive is not.
 #

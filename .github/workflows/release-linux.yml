@@ -20,6 +20,7 @@ env:
   ZIG_VERSION: 0.17.0
   ZIGBUILD_VERSION: 0.24.0
   GLIBC_TARGET: x86_64-unknown-linux-gnu.2.31
+  BINARY: target/x86_64-unknown-linux-gnu/release/tarragon
 
 jobs:
   build:
@@ -70,3 +71,51 @@ jobs:
           fi
       - name: Build
         run: cargo zigbuild --release --locked -p tarragon-app --target "$GLIBC_TARGET"
+      # The binary is not stripped, so objdump sees every dynamic symbol.
+      - name: Check the glibc floor
+        run: |
+          found=$(objdump -T "$BINARY" | grep -o 'GLIBC_[0-9][0-9.]*' | sort -u -V)
+          echo "GLIBC versions found:" $found
+          top=$(echo "$found" | tail -n 1)
+          top=${top#GLIBC_}
+          echo "Highest GLIBC version: ${top:-none}"
+          if [ -z "$top" ]; then
+            echo "No GLIBC version found. The binary or objdump output is wrong." >&2
+            exit 1
+          fi
+          if [ "$(printf '%s\n' "$top" 2.31 | sort -V | tail -n 1)" != 2.31 ]; then
+            echo "The binary needs GLIBC $top. The limit is 2.31. Versions found:" $found >&2
+            exit 1
+          fi
+      - name: Check the linked libraries
+        run: |
+          libs=$(ldd "$BINARY")
+          echo "$libs"
+          bad=0
+          for lib in $(echo "$libs" | awk '{print $1}'); do
+            case "${lib##*/}" in
+              linux-vdso.so.1|libc.so.6|libm.so.6|libpthread.so.0|libdl.so.2|ld-linux-x86-64.so.2) ;;
+              *)
+                echo "Unexpected library: $lib" >&2
+                bad=1
+                ;;
+            esac
+          done
+          exit "$bad"
+      - name: Check the binary size
+        run: |
+          size=$(stat -c %s "$BINARY")
+          echo "Binary size: $size bytes"
+          if [ "$size" -gt 62914560 ]; then
+            echo "The binary is larger than 62914560 bytes." >&2
+            exit 1
+          fi
+      - name: Check the version
+        run: |
+          version=$(cargo metadata --no-deps --locked --format-version 1 | python3 -c 'import json, sys; print(next(p["version"] for p in json.load(sys.stdin)["packages"] if p["name"] == "tarragon-app"))')
+          actual=$("$BINARY" --version)
+          echo "Binary version output: $actual"
+          if [ "$actual" != "tarragon $version" ]; then
+            echo "Expected: tarragon $version" >&2
+            exit 1
+          fi

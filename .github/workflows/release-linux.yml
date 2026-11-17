@@ -1,0 +1,72 @@
+name: Release Linux
+
+on:
+  push:
+    branches: [rust]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A newer run on the same ref cancels the older run. A tag run is never cancelled.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+# Fallback if Zig 0.17 fails: Zig 0.16.x with cargo-zigbuild 0.23.4.
+# Never mix a cargo-zigbuild below 0.23 with Zig 0.17.
+env:
+  ZIG_VERSION: 0.17.0
+  ZIGBUILD_VERSION: 0.24.0
+  GLIBC_TARGET: x86_64-unknown-linux-gnu.2.31
+
+jobs:
+  build:
+    name: Build (glibc 2.31)
+    runs-on: ubuntu-24.04
+    container: ubuntu:26.04
+    timeout-minutes: 60
+    steps:
+      # The image is bare. Install git first so that checkout uses git.
+      - name: Install packages
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            ca-certificates curl git build-essential binutils python3 python3-venv zip
+      - name: Check out
+        uses: actions/checkout@v7
+      - name: Install rustup
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain none --profile minimal
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+      # Without a toolchain name, rustup installs the toolchain that rust-toolchain.toml names.
+      - name: Install the pinned toolchain
+        run: rustup toolchain install --profile minimal
+      # The ziglang wheel ships no zig command, so cargo-zigbuild runs python3 -m ziglang.
+      # The venv bin directory goes first on PATH so that python3 is the venv python.
+      - name: Install Zig
+        run: |
+          python3 -m venv "$RUNNER_TEMP/zigvenv"
+          "$RUNNER_TEMP/zigvenv/bin/pip" install "ziglang==$ZIG_VERSION"
+          echo "$RUNNER_TEMP/zigvenv/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/zigvenv/bin/python3" -m ziglang version
+      - name: Install cargo-zigbuild
+        run: cargo install cargo-zigbuild --version "$ZIGBUILD_VERSION" --locked
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+      # The patterns use a bracket so that this file does not match itself.
+      - name: Guard the release flags
+        run: |
+          if grep -n -E 'linker-plugin-l[t]o|crt-stati[c]' \
+            .cargo/config.toml Cargo.toml crates/*/Cargo.toml xtask/Cargo.toml \
+            .github/workflows/release-linux.yml; then
+            echo "A release-breaking flag is set." >&2
+            exit 1
+          fi
+          if [ -n "${RUSTFLAGS:-}" ]; then
+            echo "RUSTFLAGS is set." >&2
+            exit 1
+          fi
+      - name: Build
+        run: cargo zigbuild --release --locked -p tarragon-app --target "$GLIBC_TARGET"

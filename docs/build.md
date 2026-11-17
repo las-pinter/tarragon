@@ -101,6 +101,30 @@ All four gates pass on this branch.
 The Linux release binary links glibc. CI builds it with `cargo zigbuild` for
 glibc 2.31. The pins and the build command are in "Release build".
 
+## Runtime packages
+
+These are run-time packages for any install of the app. They are not build
+packages. The binary loads the window and graphics libraries at run time, so
+the `ldd` check in "Release build" does not list them. Windows and macOS need
+no extra package. Copy and Paste in the grid use the Linux helper tools below.
+They are not supported yet on Windows and macOS.
+
+| Need | Ubuntu package | Arch package | Required |
+|------|----------------|--------------|----------|
+| X11 libraries | `libx11-6`, `libxcursor1`, `libxrandr2`, `libxi6` | `libx11`, `libxcursor`, `libxrandr`, `libxi` | Yes, on X11 |
+| Wayland client library | `libwayland-client0` | `wayland` | Yes, on Wayland |
+| Keyboard maps | `libxkbcommon0`, `libxkbcommon-x11-0` | `libxkbcommon`, `libxkbcommon-x11` | Yes (the X11 part on X11 only) |
+| EGL and OpenGL | `libegl1`, `libgl1`, `libgl1-mesa-dri` | `libglvnd`, `mesa` | One of this row or the Vulkan row: the fallback renderer |
+| Vulkan loader and one driver | `libvulkan1`, `mesa-vulkan-drivers` | `vulkan-icd-loader`, and one Vulkan driver for the GPU | One of this row or the EGL row: the default renderer |
+| Folder picker: portal and one backend | `xdg-desktop-portal`, `xdg-desktop-portal-gtk` | `xdg-desktop-portal`, `xdg-desktop-portal-gtk` | Yes, for the folder picker |
+| Open in editor and Show in file manager (`xdg-open`, `xdg-mime`) | `xdg-utils` | `xdg-utils` | Yes, for those items |
+| Copy and Paste in the grid menu | `xclip` (X11) or `wl-clipboard` (Wayland) | `xclip` (X11) or `wl-clipboard` (Wayland) | Optional |
+| CJK font | `fonts-noto-cjk` | `noto-fonts-cjk` | Optional |
+
+The folder picker talks to the desktop portal at run time. Without `xclip` or
+`wl-clipboard`, the app runs and shows a notice that names the missing package.
+Without a CJK font, CJK file names can show as boxes (see "Vendored font").
+
 ## Grid thumbnail tier
 
 The grid tier is 320 px on the longest edge, and its cache folder is `320`. A
@@ -316,12 +340,6 @@ glibc 2.31 whatever glibc the build image has. The release build reads the
 highest `GLIBC_` symbol version of the binary with `objdump -T` and fails when
 it is above 2.31 (see "Release build"). The system libraries that the binary
 loads at run time (X11, Wayland, EGL, Vulkan) are not in this number.
-
-Optional run-time packages, for any install of the app. They are not build
-packages. File Copy and Paste in the grid menu need `xclip` on X11 or
-`wl-clipboard` on Wayland. Without them the app runs and shows a notice that names
-the missing package. The Show in file manager item and the system opener start
-`xdg-open` on Linux (package `xdg-utils` on Debian and Ubuntu).
 
 #### Release build
 

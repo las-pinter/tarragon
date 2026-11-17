@@ -169,3 +169,45 @@ jobs:
             dist/${{ steps.package.outputs.zip_name }}.sha256
           if-no-files-found: error
           retention-days: 14
+
+  # The build job runs in a container that has no Docker access,
+  # so this job runs on the host runner.
+  # The test covers the start-up of the binary only. It runs no GUI.
+  # A GUI start on old distros and RHEL 8 (glibc 2.28) are not covered.
+  smoke:
+    name: Smoke (${{ matrix.image }})
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [ubuntu:20.04, debian:11]
+    steps:
+      - name: Download the package
+        uses: actions/download-artifact@v8
+        with:
+          name: tarragon-linux-portable
+          path: package
+      - name: Check the checksum and unpack
+        env:
+          ZIP_NAME: ${{ needs.build.outputs.zip_name }}
+        run: |
+          (cd package && sha256sum -c "$ZIP_NAME.sha256")
+          unzip -q "package/$ZIP_NAME" -d unpacked
+      - name: Run the binary
+        env:
+          ZIP_NAME: ${{ needs.build.outputs.zip_name }}
+          VERSION: ${{ needs.build.outputs.version }}
+          IMAGE: ${{ matrix.image }}
+        run: |
+          top=${ZIP_NAME%.zip}
+          actual=$(docker run --rm -v "$PWD/unpacked/$top:/app:ro" "$IMAGE" /app/tarragon --version)
+          echo "Version output: $actual"
+          if [ "$actual" != "tarragon $VERSION" ]; then
+            echo "Expected: tarragon $VERSION" >&2
+            exit 1
+          fi
+          docker run --rm -v "$PWD/unpacked/$top:/app:ro" "$IMAGE" /app/tarragon --help > /dev/null

@@ -1,7 +1,7 @@
 # Build
 
 This file records the pinned toolchain, the build commands, the link mode,
-and the measured results.
+and the benchmarks.
 
 ## Pinned toolchain
 
@@ -107,7 +107,7 @@ The grid tier is 320 px on the longest edge, and its cache folder is `320`. A
 grid cell of 160 pt at a display scale of 2.0 needs 320 px. The thumbnail is
 sharp up to scale 2.0, and soft above it.
 
-## Measured sizes
+## Benchmarks
 
 The `tarragon-app` binary parses the `--version` and `--help` flags. Without a
 flag it resolves the data directory, takes the single-instance guard, sets up
@@ -131,57 +131,16 @@ cached visible order.
 
 Warning: the run covers the simplified data set. A tile carries a file name, a
 badge derived from the path, and no texture. A real frame adds the uploaded
-thumbnails and the decoded images behind them to these numbers.
+thumbnails and the decoded images behind them to the measured cost.
 
 The text path is the vendored Roboto family, installed through
-`tarragon_ui::install`, so the numbers include the shipped text layout.
-
-Machine: Intel Core i7-12700K, 10 logical CPUs available, 3.6 GHz, Ubuntu
-24.04.4 LTS, kernel 6.17.0-35-generic, Rust 1.99.0. The run uses a release
-build and a measurement pool capped at four threads.
+`tarragon_ui::install`, so the measure includes the shipped text layout. Each
+pass runs 400 frames after 40 warmup frames. The command prints its results and
+asserts no bar.
 
 ```sh
 cargo run --release --example grid_bench -p tarragon-ui
 ```
-
-Grid container pass:
-
-| Metric | 874 pt grid | 1600 pt grid |
-|--------|-------------|--------------|
-| Items | 10,000 | 10,000 |
-| Grid (at the requested width) | 4 columns, 208 pt cells, 14 pt gap | 7 columns, 216.6 pt cells, 14 pt gap |
-| Cells built per frame | min 20, max 24, avg 20 | min 35, max 42, avg 35 |
-| Minimum frame time | 0.146 ms | 0.198 ms |
-| Average frame time | 0.172 ms | 0.240 ms |
-| Median frame time | 0.154 ms | 0.227 ms |
-| p95 frame time | 0.275 ms | 0.313 ms |
-| Max frame time | 0.580 ms | 0.657 ms |
-
-Gallery pass, 10,000 items in scope:
-
-| Metric | 874 pt grid | 1600 pt grid |
-|--------|-------------|--------------|
-| Visible items | 10,000 | 10,000 |
-| Tiles painted per frame | 16 | 28 |
-| Minimum frame time | 0.060 ms | 0.085 ms |
-| Average frame time | 0.072 ms | 0.093 ms |
-| Median frame time | 0.062 ms | 0.088 ms |
-| p95 frame time | 0.120 ms | 0.111 ms |
-| Max frame time | 0.144 ms | 0.273 ms |
-
-The frame count is 400 after 40 warmup frames. The painter stretches the cell
-width to the inner width after the scrollbar, so the painted cells are at most
-the stated width.
-
-The gallery keeps the display order in a cache, so a quiet frame rebuilds no
-list of 10,000 items. A scope, folder, sort, or applied-search change rebuilds
-that cache once. The quiet frame then costs 0.062 ms at 874 pt and 0.088 ms at
-1600 pt.
-
-Two frame limits apply. The interface targets 60 frames per second, so one frame
-has 16.7 ms. The hard gate for one frame is 100 ms. The slowest measured frame
-is 0.657 ms for the grid container and 0.273 ms for the whole gallery. The
-grid cost is 3.9% of the 16.7 ms budget and the gallery cost is 1.6% of it.
 
 ### Library of 100,000 rows
 
@@ -195,47 +154,16 @@ render.
 cargo nextest run --release -p tarragon-app --run-ignored only --no-capture library_of_100k
 ```
 
-Machine: Intel Core i7-12700K, 10 logical CPUs, 12 GiB RAM, Ubuntu 24.04,
-kernel 6.17.0-35-generic, release build. The median and p95 agreed within 5
-percent on two runs. The test asserts the five bars, so a regression fails it.
+The test asserts these bars, so a regression fails it:
 
-| Measure | Result | Bar | |
-|---------|--------|-----|-----|
-| `library_files` plus `open_library` (open thread) | 0.1 s (19 ms and 75 ms) | under 1 s | pass |
-| `set_items` plus first `refresh_view` (UI thread, once) | 70 ms | under 250 ms | pass |
-| Frame time, 301 frames while scrolling | median 17 ms, p95 20 ms, max 28 to 38 ms | under 100 ms | pass |
-| Resident memory added by the library | 137 MiB (144 MiB after the scroll) | under 150 MiB | pass |
-| Grid textures while scrolling | peak 252 MiB | under 256 MiB | pass |
+- Together, the two database reads on the open thread take under 1 s.
+- The load into the gallery on the UI thread takes under 250 ms.
+- No frame while scrolling takes 100 ms or more.
+- The resident memory added by the library, after the scroll, is under 150 MiB.
+- The peak grid textures stay at or under the 256 MiB grid texture budget.
 
-Notes:
-
-- The frame time is the whole app frame: result upload, `Gallery::show`,
-  `after_draw`, and tessellation. It has no GPU work. A quiet frame at 10,000
-  items costs under 1 ms in the grid benchmark, so the 17 ms median comes from
-  the scroll work. The cause is not measured. A likely cause is the queue
-  reorder that runs when the visible tiles change.
-- The memory bar is checked after the scroll (144 MiB), so the margin is
-  6 MiB. The memory includes the pipeline job table of 100,000 jobs. A larger
-  library passes the bar only if this table shrinks.
-- The seed stores one folder row for each folder. A scan stores the folder row
-  only for the folder that it opens, so a stored library can have rows without
-  a folder row. Causes are a trailing slash in the folder text, rows removed by
-  `cleanup_stale_folder_uuids`, and an old database. Each missing folder costs
-  one `get_or_create_folder_uuid` transaction. With one call for each folder,
-  1,000 folders without folder rows made `open_library` take about 12 s on its
-  first run. `open_library` now calls `get_or_create_folder_uuids`, which
-  creates the missing folder ids in one transaction. A second ignored test
-  (`library_of_100k_without_folder_rows_opens_fast`) seeds 1,000 folders with
-  no folder row. Its `open_library` took 98 to 108 ms on three runs, with a
-  bar of 1 s.
-- The database has one connection behind a mutex. The writer thread locks it
-  for each row. A library that opens during heavy row writes can wait for the
-  lock. One wait of 0.9 s was seen once. No test measures it. A later fix is a
-  batched writer transaction or a separate read connection.
-- The page cache is warm. No cold-cache run was done.
-- Follow-up: measure the queue reorder cost for each scroll step, to find the
-  cause of the 17 ms frame.
-- The test runs about 80 s, mostly seeding and scrolling.
+A second ignored test, `library_of_100k_without_folder_rows_opens_fast`, seeds
+1,000 folders with no folder row. Its `open_library` call must take under 1 s.
 
 ### PSD memory benchmark
 

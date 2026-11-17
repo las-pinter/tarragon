@@ -182,7 +182,7 @@ cargo run --release --example psd_rss_bench -p tarragon-render -- \
     [--source-dir DIR] [--large-psb FILE] [--work-dir DIR] [--no-write]
 ```
 
-PASS means the peak is under 2 GiB (2,048 MiB) and no file gave an error. The
+PASS means the peak is under 2 GiB (2,048 MiB) and no file fails to render. The
 exit code is 1 on FAIL. The figures come from `/proc/self/status`, so other
 systems print `n/a` and judge on errors alone. The workspace forbids unsafe
 code, so the bench cannot call a system API for the peak.
@@ -204,36 +204,18 @@ write cost. The run prints the cache size, a warning when a hard link failed
 and the file was copied instead, and the first cache write error. `--help`
 lists the options.
 
-Run over real PSD files, 2026-11-09, release build, Intel Core i7-12700K (10
-logical CPUs, no SMT, in a KVM guest), Ubuntu. The command used the 9 corpus files of
-[`docs/psd-corpus.md`](psd-corpus.md) and the 9 committed fixtures, 18 sources
-in all, with `--files 10000 --psd-percent 10 --source-dir DIR`. This run came
-after ZIP layer channels were decoded. The earlier run, before ZIP decoding,
-skipped the layers of `16bits.psd`. Its results are in the last column:
+To run over real PSD files, fetch the corpus once, then pass its folder with
+`--source-dir`. The files are described in
+[`docs/psd-corpus.md`](psd-corpus.md). Every run also uses the valid fixtures in
+`tests/fixtures/psd/` (all but `truncated.psd`). `--source-dir` adds the PSD and
+PSB files directly inside its folder to them. A file that the decoder cannot
+read counts as a render error, and any render error makes the run FAIL.
 
-| Measure | Result | Before ZIP decoding |
-| --- | --- | --- |
-| Files scanned, rendered | 10,000, 9,945 | 10,000, 9,945 |
-| Formats | 4,500 `.jpg`, 4,500 `.png`, 889 `.psd`, 111 `.psb` | the same |
-| Errors | 55, all of kind `Decode` | the same |
-| Scan time | 0.10 s | 0.26 s |
-| `render+write` | 2.92 s | 1.98 s |
-| `wall time` | 3.02 s | 2.24 s |
-| Render, summed over workers | 1.81 s | 1.06 s |
-| `VmHWM` (peak) | 35.3 MiB | 29.7 MiB |
-| `VmRSS` (current) | 18.4 MiB | 20.5 MiB |
-| Verdict | `FAIL` | `FAIL` |
-
-The peak is 35.3 MiB against the limit of 2,048 MiB. It rose by 5.6 MiB. The run
-did not measure the cause of the change in the memory figures or in the time
-figures. The FAIL verdict is not a
-memory failure. It follows from the 55 errors, because PASS needs zero errors.
-`32bits.psd` is the only corpus file that gives a `Decode` error: the decoder
-does not support 32-bit RGB. The bench reports errors by kind only. It cycles
-through its 18 sources, so 1,000 PSD and PSB files hold 55 copies of that file.
-This matches the 55 decode errors. The link is an inference, not a per-file
-count. The files and their outcomes are in
-[`docs/psd-corpus.md`](psd-corpus.md).
+```sh
+sh tests/psd-corpus/fetch.sh tests/psd-corpus
+cargo run --release --example psd_rss_bench -p tarragon-render -- \
+    --files 10000 --psd-percent 10 --source-dir tests/psd-corpus
+```
 
 ### Cold-cache scan of the 10k corpus
 
@@ -267,8 +249,8 @@ prints PASS or FAIL against 120 s (exit code 1 on FAIL, 2 on a bad folder).
    find /var/tmp/tarragon-10k -type f -exec dd if={} of=/dev/null iflag=nocache count=0 status=none \;
    ```
 
-5. Run the scan right after step 3 or 4. Run it a second time to get the warm
-   figure. Use the CPU list from step 2:
+5. Run the scan right after step 3 or 4. Run it a second time for the warm
+   case. Use the CPU list from step 2:
 
    ```sh
    taskset -c <list> cargo run --release --example scan_bench -p tarragon-scan -- \
@@ -276,18 +258,6 @@ prints PASS or FAIL against 120 s (exit code 1 on FAIL, 2 on a bad folder).
    ```
 
 6. Remove the corpus: `rm -r /var/tmp/tarragon-10k`.
-
-Machine: Intel Core i7-12700K, Ubuntu 24.04, kernel 6.17.0-35-generic,
-release build, 2026-11-04. This machine has no SMT (1 thread per core), so
-CPUs 0 to 3 are four cores and the list was `0,1,2,3`.
-
-| Cache state | Scan | Write | Total | Result (120 s) |
-|-------------|------|-------|-------|----------------|
-| Cold | not run: needs root | | | |
-| Partly cold (step 4) | 0.066 s | 0.038 s | 0.104 s | PASS |
-| Warm (next run) | 0.057 s | 0.036 s | 0.093 s | PASS |
-
-Do not read the partly cold row as a cold figure.
 
 ## GUI stack spike
 

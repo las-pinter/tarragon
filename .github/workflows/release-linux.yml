@@ -28,13 +28,16 @@ jobs:
     runs-on: ubuntu-24.04
     container: ubuntu:26.04
     timeout-minutes: 60
+    outputs:
+      version: ${{ steps.package.outputs.version }}
+      zip_name: ${{ steps.package.outputs.zip_name }}
     steps:
       # The image is bare. Install git first so that checkout uses git.
       - name: Install packages
         run: |
           apt-get update
           apt-get install -y --no-install-recommends \
-            ca-certificates curl git build-essential binutils python3 python3-venv zip
+            ca-certificates curl git build-essential binutils python3 python3-venv zip unzip
       - name: Check out
         uses: actions/checkout@v7
       - name: Install rustup
@@ -111,6 +114,7 @@ jobs:
             exit 1
           fi
       - name: Check the version
+        id: version
         run: |
           version=$(cargo metadata --no-deps --locked --format-version 1 | python3 -c 'import json, sys; print(next(p["version"] for p in json.load(sys.stdin)["packages"] if p["name"] == "tarragon-app"))')
           actual=$("$BINARY" --version)
@@ -119,3 +123,49 @@ jobs:
             echo "Expected: tarragon $version" >&2
             exit 1
           fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      # The version comes from the step above, so it is read once.
+      # A tag run must carry the version of the workspace.
+      - name: Package
+        id: package
+        env:
+          version: ${{ steps.version.outputs.version }}
+        run: |
+          if [ "${GITHUB_REF_TYPE:-}" = tag ] && [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "The tag $GITHUB_REF_NAME does not match version $version." >&2
+            exit 1
+          fi
+          name="tarragon-$version-linux-x86_64-portable"
+          rm -rf dist
+          mkdir -p "dist/$name/data"
+          cp "$BINARY" "dist/$name/tarragon"
+          cp README.md LICENSE "dist/$name/"
+          chmod 755 "dist/$name/tarragon" "dist/$name/data"
+          chmod 644 "dist/$name/README.md" "dist/$name/LICENSE"
+          (cd dist && zip -r -X "$name.zip" "$name")
+          (cd dist && sha256sum "$name.zip" > "$name.zip.sha256")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "zip_name=$name.zip" >> "$GITHUB_OUTPUT"
+      # The empty data folder turns on portable mode, so it must be in the zip.
+      - name: Check the zip
+        env:
+          ZIP_NAME: ${{ steps.package.outputs.zip_name }}
+        run: |
+          top=${ZIP_NAME%.zip}
+          expected=$(printf '%s\n' "$top/" "$top/tarragon" "$top/README.md" "$top/LICENSE" "$top/data/" | sort)
+          actual=$(unzip -Z1 "dist/$ZIP_NAME" | sort)
+          if [ "$actual" != "$expected" ]; then
+            echo "The zip holds the wrong entries:" >&2
+            echo "$actual" >&2
+            exit 1
+          fi
+          (cd dist && sha256sum -c "$ZIP_NAME.sha256")
+      - name: Upload the package
+        uses: actions/upload-artifact@v7
+        with:
+          name: tarragon-linux-portable
+          path: |
+            dist/${{ steps.package.outputs.zip_name }}
+            dist/${{ steps.package.outputs.zip_name }}.sha256
+          if-no-files-found: error
+          retention-days: 14

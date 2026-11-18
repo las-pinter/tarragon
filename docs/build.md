@@ -32,8 +32,8 @@ cargo build --release
 
 The host release binary lands at `target/release/tarragon`.
 
-Windows and macOS run `cargo build --release` and `cargo test`. Two workflows
-exist:
+Windows and macOS run `cargo build --release` and `cargo nextest run`. Two
+workflows exist:
 
 - `.github/workflows/rust.yml` runs the gates, the Windows and macOS builds,
   and the PSD jobs.

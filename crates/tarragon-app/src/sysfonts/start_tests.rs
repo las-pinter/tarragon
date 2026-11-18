@@ -7,7 +7,7 @@ use tarragon_ui::FallbackFont;
 use tracing::Level;
 use tracing_subscriber::layer::SubscriberExt;
 
-use super::{Found, NO_CJK, apply, discover, load, report, spawn};
+use super::{Found, NO_CJK, apply, discover, load, report, spawn_with};
 use crate::logging::ring::{LogRing, RingLayer};
 
 const ROBOTO: &[u8] = include_bytes!("../../../tarragon-ui/assets/fonts/Roboto-Regular.ttf");
@@ -176,7 +176,12 @@ fn spawn_loads_the_fonts_on_its_own_thread_and_asks_for_a_repaint() {
             .ok();
     });
 
-    spawn(&ctx);
+    // A fixed font list: the test checks the thread and the repaint, not the
+    // time a runner takes to scan its system fonts.
+    spawn_with(&ctx, || Found {
+        fonts: vec![face("fb-bold", ROBOTO_BOLD)],
+        cjk: false,
+    });
 
     let name = rx.recv_timeout(Duration::from_secs(20)).expect("a repaint");
     assert_eq!(name.as_deref(), Some("sysfonts"));

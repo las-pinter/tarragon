@@ -79,8 +79,14 @@ jobs:
         run: rustup toolchain install --profile minimal
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
+      # One process per test, as on Linux: a test that swaps the panic hook
+      # cannot hide another test's failure, and tests share no in-process state.
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: nextest
       - name: Test
-        run: cargo test --workspace
+        run: cargo nextest run --workspace
 
   psd-fixtures:
     name: Build the large PSB

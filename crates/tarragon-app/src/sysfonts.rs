@@ -205,10 +205,15 @@ fn load(ctx: &Context, find: impl FnOnce() -> Found) {
 /// The window shows Roboto first. The fallbacks arrive after one repaint. The
 /// thread is not joined: a failed start only costs the fallbacks.
 pub(crate) fn spawn(ctx: &Context) {
+    spawn_with(ctx, discover);
+}
+
+/// [`spawn`] with the font finder passed in, so a test needs no system fonts.
+fn spawn_with(ctx: &Context, find: impl FnOnce() -> Found + Send + 'static) {
     let ctx = ctx.clone();
     let started = thread::Builder::new()
         .name("sysfonts".to_owned())
-        .spawn(move || load(&ctx, discover));
+        .spawn(move || load(&ctx, find));
     if let Err(error) = started {
         tracing::warn!("cannot start the system font thread, using Roboto only: {error}");
     }

@@ -26,7 +26,9 @@ fn first_primary_then_forwarded<T: Transport>() {
     ));
     assert!(guard.take_activate_request());
     assert!(!guard.take_activate_request(), "the flag is taken once");
-    assert_eq!(woken.load(Ordering::SeqCst), 1);
+    // A slow reply makes the client send again, and each request wakes the
+    // primary; a repeat only raises the window again.
+    assert!(woken.load(Ordering::SeqCst) >= 1);
 }
 
 /// A second start with a folder hands it over; the last folder wins, and a

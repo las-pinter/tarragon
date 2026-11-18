@@ -1,3 +1,10 @@
+use std::ffi::c_void;
+use std::ptr::NonNull;
+
+use eframe::wgpu::rwh::{
+    WaylandDisplayHandle, WindowsDisplayHandle, XcbDisplayHandle, XlibDisplayHandle,
+};
+
 use super::*;
 
 const SEC: Duration = Duration::from_secs(1);
@@ -13,6 +20,7 @@ fn frame_at(now: Instant, loaded: bool, textures: usize) -> Frame {
         now,
         window: [1280.0, 800.0],
         renderer: "glow",
+        session: "x11",
         shown: loaded,
         loaded,
         textures,
@@ -21,13 +29,22 @@ fn frame_at(now: Instant, loaded: bool, textures: usize) -> Frame {
 }
 
 #[test]
-fn the_session_type_wins_and_the_display_variables_fill_in() {
-    assert_eq!(session_text(Some("wayland"), None, Some(":0")), "wayland");
-    assert_eq!(session_text(Some("x11"), Some("wayland-0"), None), "x11");
-    assert_eq!(session_text(None, Some("wayland-0"), Some(":0")), "wayland");
-    assert_eq!(session_text(None, None, Some(":0")), "x11");
-    assert_eq!(session_text(Some("tty"), None, Some(":0")), "x11");
-    assert_eq!(session_text(None, Some(""), Some("")), "unknown");
+fn the_session_comes_from_the_display_handle() {
+    let wayland = WaylandDisplayHandle::new(NonNull::<c_void>::dangling());
+    assert_eq!(session_text(Some(wayland.into())), "wayland");
+    assert_eq!(
+        session_text(Some(XlibDisplayHandle::new(None, 0).into())),
+        "x11"
+    );
+    assert_eq!(
+        session_text(Some(XcbDisplayHandle::new(None, 0).into())),
+        "x11"
+    );
+    assert_eq!(
+        session_text(Some(WindowsDisplayHandle::new().into())),
+        "other"
+    );
+    assert_eq!(session_text(None), "unknown");
 }
 
 #[test]

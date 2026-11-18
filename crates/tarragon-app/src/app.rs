@@ -486,14 +486,12 @@ impl eframe::App for App {
         if let Some(perf) = &mut self.perf {
             let size = ctx.content_rect().size();
             let now = Instant::now();
+            let (renderer, session) = perflog::window_facts(frame);
             let step = perf.frame(&perflog::Frame {
                 now,
                 window: [size.x, size.y],
-                renderer: if frame.wgpu_render_state().is_some() {
-                    "wgpu"
-                } else {
-                    "glow"
-                },
+                renderer,
+                session,
                 shown,
                 loaded: loaded.is_some(),
                 textures: self.thumbs.live_textures(),

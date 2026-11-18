@@ -8,6 +8,8 @@ use std::path::PathBuf;
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
+use eframe::wgpu::rwh::{HasDisplayHandle as _, RawDisplayHandle};
+
 use crate::framelog::{FrameRecorder, FrameReport, Phase};
 
 /// The frame run waits this long after the load before it records.
@@ -53,6 +55,9 @@ pub struct Frame {
     pub window: [f32; 2],
     /// The renderer that runs: `wgpu` or `glow`.
     pub renderer: &'static str,
+    /// The window system the window runs on, from [`window_facts`]. Only the
+    /// header reads it.
+    pub session: &'static str,
     /// True in the first frame whose grid shows the folder's tiles.
     pub shown: bool,
     /// True in the frame where every tile is settled.
@@ -115,12 +120,7 @@ impl PerfLog {
     /// Take one finished frame: write what is due and say what comes next.
     pub fn frame(&mut self, frame: &Frame) -> Step {
         if !self.created {
-            let session = session_text(
-                env("XDG_SESSION_TYPE").as_deref(),
-                env("WAYLAND_DISPLAY").as_deref(),
-                env("DISPLAY").as_deref(),
-            );
-            self.write(&header_lines(session, frame.renderer, frame.window));
+            self.write(&header_lines(frame.session, frame.renderer, frame.window));
         }
         // A load without a shown report (a failed open) still ends the cold start.
         if (frame.shown || frame.loaded) && self.shown_at.is_none() {
@@ -185,21 +185,26 @@ impl PerfLog {
     }
 }
 
-/// An environment value as text, or none when unset or not text.
-fn env(name: &str) -> Option<String> {
-    std::env::var(name).ok()
+/// The renderer and the session of the window that draws `frame`.
+pub fn window_facts(frame: &eframe::Frame) -> (&'static str, &'static str) {
+    let renderer = if frame.wgpu_render_state().is_some() {
+        "wgpu"
+    } else {
+        "glow"
+    };
+    let handle = frame.display_handle().ok().map(|handle| handle.as_raw());
+    (renderer, session_text(handle))
 }
 
-/// `wayland` or `x11`. The session type wins; when it is unset or says
-/// something else, the display variables decide, Wayland first.
-pub fn session_text(xdg: Option<&str>, wayland: Option<&str>, x11: Option<&str>) -> &'static str {
-    let set = |v: Option<&str>| v.is_some_and(|v| !v.is_empty());
-    match xdg {
-        Some("wayland") => "wayland",
-        Some("x11") => "x11",
-        _ if set(wayland) => "wayland",
-        _ if set(x11) => "x11",
-        _ => "unknown",
+/// `wayland` or `x11` from the display handle of the window, so an
+/// `XWayland` window says `x11` even inside a Wayland desktop. Any other
+/// window system says `other`; a missing handle says `unknown`.
+pub fn session_text(handle: Option<RawDisplayHandle>) -> &'static str {
+    match handle {
+        Some(RawDisplayHandle::Wayland(_)) => "wayland",
+        Some(RawDisplayHandle::Xlib(_) | RawDisplayHandle::Xcb(_)) => "x11",
+        Some(_) => "other",
+        None => "unknown",
     }
 }
 

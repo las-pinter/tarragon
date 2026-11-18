@@ -226,7 +226,8 @@ jobs:
 
   # This job gates the release: publish waits for it.
   # It runs the same binary as the release.
-  # It runs no window. It checks the start-up only.
+  # The first stage checks the start-up of the binary. The second stage opens
+  # the real window under Xvfb and loads a small folder.
   arch:
     name: Arch Linux check
     needs: build
@@ -234,7 +235,15 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
+    env:
+      IMAGE: archlinux:latest
     steps:
+      # The checkout is only for the fixture file. It goes first because it
+      # deletes everything in a workspace that is not a git clone.
+      - name: Check out
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - name: Download the package
         uses: actions/download-artifact@v8
         with:
@@ -252,13 +261,49 @@ jobs:
           VERSION: ${{ needs.build.outputs.version }}
         run: |
           top=${ZIP_NAME%.zip}
-          actual=$(docker run --rm -v "$PWD/unpacked/$top:/app:ro" archlinux:latest /app/tarragon --version)
+          actual=$(docker run --rm -v "$PWD/unpacked/$top:/app:ro" "$IMAGE" /app/tarragon --version)
           echo "Version output: $actual"
           if [ "$actual" != "tarragon $VERSION" ]; then
             echo "Expected: tarragon $VERSION" >&2
             exit 1
           fi
-          docker run --rm -v "$PWD/unpacked/$top:/app:ro" archlinux:latest /app/tarragon --help > /dev/null
+          docker run --rm -v "$PWD/unpacked/$top:/app:ro" "$IMAGE" /app/tarragon --help > /dev/null
+      # The image is bare, so the step installs the run-time packages first.
+      # The zip holds a data folder, so the app would run in portable mode and
+      # write beside the binary. The mount is read-only, so TARRAGON_DB points
+      # to a writable folder. The app closes by itself when every tile is done.
+      - name: Start the window under Xvfb
+        env:
+          ZIP_NAME: ${{ needs.build.outputs.zip_name }}
+        run: |
+          top=${ZIP_NAME%.zip}
+          pics="$RUNNER_TEMP/pics"
+          work="$RUNNER_TEMP/work"
+          mkdir -p "$pics" "$work"
+          cp tests/fixtures/psd/rgb_8bit.psd "$pics/one.psd"
+          cp tests/fixtures/psd/rgb_8bit.psd "$pics/two.psd"
+          status=0
+          docker run --rm \
+            -v "$PWD/unpacked/$top:/app:ro" \
+            -v "$pics:/pics:ro" \
+            -v "$work:/work" \
+            -e TARRAGON_CLOSE_WHEN_LOADED=1 \
+            -e TARRAGON_DB=/work/tarragon.db \
+            "$IMAGE" bash -c '
+              set -e
+              pacman -Syu --noconfirm --needed \
+                libx11 libxcursor libxrandr libxi libxkbcommon libxkbcommon-x11 \
+                libglvnd mesa vulkan-icd-loader vulkan-swrast \
+                xorg-server-xvfb xorg-xauth fontconfig
+              unset WAYLAND_DISPLAY
+              timeout 120 xvfb-run -a /app/tarragon /pics
+            ' || status=$?
+          echo "Exit code: $status"
+          if [ "$status" -ne 0 ] || ! grep -q '2 tiles settled, 0 failed' "$work/tarragon.log"; then
+            echo "The window did not load both tiles and exit." >&2
+            tail -n 40 "$work/tarragon.log" >&2 || echo "No log file." >&2
+            exit 1
+          fi
 
   # Only a tag run reaches this job. It is the only job that can write.
   # The release is always a draft. The owner reads it and publishes it by hand.

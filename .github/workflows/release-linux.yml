@@ -2,7 +2,7 @@ name: Release Linux
 
 on:
   push:
-    branches: [rust]
+    branches: [main]
     tags: ["v*"]
   workflow_dispatch:
 

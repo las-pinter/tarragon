@@ -347,7 +347,7 @@ loads at run time (X11, Wayland, EGL, Vulkan) are not in this number.
 #### Release build
 
 `.github/workflows/release-linux.yml` builds the Linux portable zip. It runs on
-a push to `rust`, on a `v*` tag, and by hand. It has four jobs:
+a push to `main`, on a `v*` tag, and by hand. It has four jobs:
 
 - `build` runs in an `ubuntu:26.04` container. On a `v*` tag it runs
   `cargo xtask attribution` before the build and fails when

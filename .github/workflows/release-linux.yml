@@ -272,6 +272,9 @@ jobs:
       # The zip holds a data folder, so the app would run in portable mode and
       # write beside the binary. The mount is read-only, so TARRAGON_DB points
       # to a writable folder. The app closes by itself when every tile is done.
+      # The CJK name is written as UTF-8 byte escapes, so that the result does
+      # not depend on the locale or the encoding of this file. The check reads
+      # the log. It does not read pixels.
       - name: Start the window under Xvfb
         env:
           ZIP_NAME: ${{ needs.build.outputs.zip_name }}
@@ -282,6 +285,7 @@ jobs:
           mkdir -p "$pics" "$work"
           cp tests/fixtures/psd/rgb_8bit.psd "$pics/one.psd"
           cp tests/fixtures/psd/rgb_8bit.psd "$pics/two.psd"
+          cp tests/fixtures/psd/rgb_8bit.psd "$pics/$(printf '\xe5\x9b\xb3\xe6\x9b\xb8\xe9\xa4\xa8').psd"
           status=0
           docker run --rm \
             -v "$PWD/unpacked/$top:/app:ro" \
@@ -294,16 +298,28 @@ jobs:
               pacman -Syu --noconfirm --needed \
                 libx11 libxcursor libxrandr libxi libxkbcommon libxkbcommon-x11 \
                 libglvnd mesa vulkan-icd-loader vulkan-swrast \
-                xorg-server-xvfb xorg-xauth fontconfig
+                xorg-server-xvfb xorg-xauth fontconfig noto-fonts-cjk
               unset WAYLAND_DISPLAY
               timeout 120 xvfb-run -a /app/tarragon /pics
             ' || status=$?
           echo "Exit code: $status"
-          if [ "$status" -ne 0 ] || ! grep -q '2 tiles settled, 0 failed' "$work/tarragon.log"; then
-            echo "The window did not load both tiles and exit." >&2
+          if [ "$status" -ne 0 ] || ! grep -q '3 tiles settled, 0 failed' "$work/tarragon.log"; then
+            echo "The window did not load all three tiles and exit." >&2
             tail -n 40 "$work/tarragon.log" >&2 || echo "No log file." >&2
             exit 1
           fi
+          if grep -q 'no system CJK font found' "$work/tarragon.log"; then
+            echo "The app found no system CJK font." >&2
+            tail -n 40 "$work/tarragon.log" >&2
+            exit 1
+          fi
+          fonts=$(grep 'system fallback fonts: .*Noto Sans CJK' "$work/tarragon.log" || true)
+          if [ -z "$fonts" ]; then
+            echo "The log has no fallback font line that names Noto Sans CJK." >&2
+            tail -n 40 "$work/tarragon.log" >&2 || echo "No log file." >&2
+            exit 1
+          fi
+          echo "$fonts"
 
   # Only a tag run reaches this job. It is the only job that can write.
   # The release is always a draft. The owner reads it and publishes it by hand.

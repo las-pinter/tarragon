@@ -300,9 +300,11 @@ fn logic_pass_sends_the_raise_commands_after_an_activate_request() {
 }
 
 #[test]
-fn a_forwarded_folder_opens_adds_a_root_and_raises_the_window() {
+fn a_forwarded_folder_opens_in_the_tree_and_raises_the_window() {
     let dir = short_dir();
-    let pics = dir.0.join("pics");
+    // The resolved path: on macOS `/tmp` is a link, and the open resolves it.
+    let base = dunce::canonicalize(&dir.0).expect("resolve the short dir");
+    let pics = base.join("pics");
     make_pngs(&pics, &["a.png", "b.png"]);
     let db_path = dir.0.join("tarragon.db");
     let Outcome::Primary(guard) = instance::acquire_under(&db_path, None, &dir.0) else {
@@ -334,7 +336,12 @@ fn a_forwarded_folder_opens_adds_a_root_and_raises_the_window() {
     let output = ctx.run_logic(&RawInput::default(), |c| app.logic(c, &mut frame));
     let commands = output.viewport_commands.get(&ViewportId::ROOT);
     assert_eq!(commands.map(Vec::len), Some(4), "{commands:?}");
-    assert!(app.shell.sidebar_mut().roots().contains(&pics));
+    // The folder is in the tree: under the home root, or added as a root.
+    let roots = app.shell.sidebar_mut().roots();
+    assert!(roots.iter().any(|root| pics.starts_with(root)), "{roots:?}");
+    if !sidebar::home_dir().is_some_and(|home| pics.starts_with(home)) {
+        assert!(roots.contains(&pics), "{roots:?}");
+    }
     run_until_idle(&mut app, &ctx, &mut frame);
     assert_eq!(app.shell.gallery_mut().folder(), Some(pics.as_path()));
     assert_eq!(app.shell.gallery_mut().visible_len(), 2);

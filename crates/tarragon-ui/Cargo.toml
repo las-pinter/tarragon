@@ -1,0 +1,23 @@
+[package]
+name = "tarragon-ui"
+description = "egui widgets and theme tokens for the tarragon interface."
+version.workspace = true
+edition.workspace = true
+publish = false
+license.workspace = true
+
+[dependencies]
+tarragon-core.workspace = true
+egui.workspace = true
+egui_dock = { workspace = true, features = ["serde"] }
+serde.workspace = true
+serde_json.workspace = true
+dunce.workspace = true
+skrifa.workspace = true
+
+[dev-dependencies]
+rayon.workspace = true
+tarragon-db.workspace = true
+
+[lints]
+workspace = true

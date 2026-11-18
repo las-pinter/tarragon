@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>D19 Grid context menu - Tarragon mockups</title>
+<link rel="stylesheet" href="theme.css">
+</head>
+<body>
+<main class="mock">
+<div class="window">
+  <div class="titlebar">
+    <span class="tb-title">Tarragon</span>
+    <span class="tb-controls"><i></i><i></i><i></i></span>
+  </div>
+  <div class="menubar">
+    <span class="menu-item">File</span>
+    <span class="menu-item">View</span>
+    <span class="menu-item">Settings</span>
+  </div>
+
+  <div class="workspace">
+    <aside class="sidebar">
+      <div class="panel-title">Library</div>
+      <div class="side-head">Folders</div>
+      <div class="tree"><div class="tree-row selected"><span class="ico-folder"></span>sketches</div></div>
+    </aside>
+
+    <div class="col-main">
+      <section class="gallery">
+        <div class="gallery-top">
+          <div class="tabs"><span class="tab active">Folder</span><span class="tab">All Images</span></div>
+          <div class="infobar"><span>sketches - 12 files</span></div>
+        </div>
+        <div class="grid" style="position:relative">
+          <div class="cell"><div class="thumb g1"><span class="thumb-badge badge-sage">JPG</span></div><div class="cell-name">ref_042.jpg</div></div>
+          <div class="cell selected"><div class="thumb g7"><span class="thumb-badge badge-navy">PNG</span></div><div class="cell-name">sketch_014.png</div></div>
+          <div class="cell">
+            <div class="thumb g8"><span class="thumb-badge badge-vinous">PSD</span></div><div class="cell-name">poster_v2.psd</div>
+            <div class="menu" style="top:150px;left:210px">
+              <div class="menu-row"><span class="lead">Regenerate Thumbnail</span></div>
+            </div>
+          </div>
+          <div class="cell"><div class="thumb g5"><span class="thumb-badge badge-teal">WEBP</span></div><div class="cell-name">palette.webp</div></div>
+          <div class="cell"><div class="thumb g3"><span class="thumb-badge badge-plum">GIF</span></div><div class="cell-name">doodle.gif</div></div>
+          <div class="cell"><div class="thumb g10"><span class="thumb-badge badge-umber">TIFF</span></div><div class="cell-name">scan_07.tiff</div></div>
+        </div>
+      </section>
+    </div>
+
+    <aside class="preview">
+      <div class="panel-title">Preview</div>
+      <div class="preview-body">
+        <div class="preview-img"><div class="thumb g7" style="width:70%;height:88%"></div></div>
+        <span style="color:var(--text-muted);font-size:11px">Right-click a cell to regenerate its thumbnail. The whole selection is regenerated when the clicked cell is selected.</span>
+      </div>
+    </aside>
+  </div>
+
+  <div class="statusbar"><span>Grid context menu</span></div>
+  <span class="sample">sample</span>
+</div>
+<p class="mock-note">D19 - Grid context menu. Regenerate Thumbnail action on the selected item. Sample data.</p>
+</main>
+</body>
+</html>

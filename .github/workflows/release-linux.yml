@@ -1,0 +1,356 @@
+name: Release Linux
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A newer run on the same ref cancels the older run. A tag run is never cancelled.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+# Fallback if Zig 0.17 fails: Zig 0.16.x with cargo-zigbuild 0.23.4.
+# Never mix a cargo-zigbuild below 0.23 with Zig 0.17.
+env:
+  ZIG_VERSION: 0.17.0
+  ZIGBUILD_VERSION: 0.24.0
+  GLIBC_TARGET: x86_64-unknown-linux-gnu.2.31
+  BINARY: target/x86_64-unknown-linux-gnu/release/tarragon
+
+jobs:
+  build:
+    name: Build (glibc 2.31)
+    runs-on: ubuntu-24.04
+    container: ubuntu:26.04
+    timeout-minutes: 60
+    outputs:
+      version: ${{ steps.package.outputs.version }}
+      zip_name: ${{ steps.package.outputs.zip_name }}
+    steps:
+      # The image is bare. Install git first so that checkout uses git.
+      - name: Install packages
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            ca-certificates curl git build-essential binutils python3 python3-venv zip unzip
+      - name: Check out
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Install rustup
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain none --profile minimal
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+      # Without a toolchain name, rustup installs the toolchain that rust-toolchain.toml names.
+      - name: Install the pinned toolchain
+        run: rustup toolchain install --profile minimal
+      # The ziglang wheel ships no zig command, so cargo-zigbuild runs python3 -m ziglang.
+      # The venv bin directory goes first on PATH so that python3 is the venv python.
+      - name: Install Zig
+        run: |
+          python3 -m venv "$RUNNER_TEMP/zigvenv"
+          "$RUNNER_TEMP/zigvenv/bin/pip" install "ziglang==$ZIG_VERSION"
+          echo "$RUNNER_TEMP/zigvenv/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/zigvenv/bin/python3" -m ziglang version
+      - name: Install cargo-zigbuild
+        run: cargo install cargo-zigbuild --version "$ZIGBUILD_VERSION" --locked
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+      # The patterns use a bracket so that this file does not match itself.
+      - name: Guard the release flags
+        run: |
+          if grep -n -E 'linker-plugin-l[t]o|crt-stati[c]' \
+            .cargo/config.toml Cargo.toml crates/*/Cargo.toml xtask/Cargo.toml \
+            .github/workflows/release-linux.yml; then
+            echo "A release-breaking flag is set." >&2
+            exit 1
+          fi
+          if [ -n "${RUSTFLAGS:-}" ]; then
+            echo "RUSTFLAGS is set." >&2
+            exit 1
+          fi
+      # The chart counts lines with git blame, so the checkout needs the full history.
+      # Only a tag run checks it. The chart is right only if nothing changed after it was made.
+      - name: Verify the attribution chart
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          cargo xtask attribution
+          if ! git diff --exit-code -- assets/attribution.svg; then
+            echo "The attribution chart is stale. Run cargo xtask attribution and commit the chart before tagging." >&2
+            exit 1
+          fi
+      - name: Build
+        run: cargo zigbuild --release --locked -p tarragon-app --target "$GLIBC_TARGET"
+      # The binary is not stripped, so objdump sees every dynamic symbol.
+      - name: Check the glibc floor
+        run: |
+          found=$(objdump -T "$BINARY" | grep -o 'GLIBC_[0-9][0-9.]*' | sort -u -V)
+          echo "GLIBC versions found:" $found
+          top=$(echo "$found" | tail -n 1)
+          top=${top#GLIBC_}
+          echo "Highest GLIBC version: ${top:-none}"
+          if [ -z "$top" ]; then
+            echo "No GLIBC version found. The binary or objdump output is wrong." >&2
+            exit 1
+          fi
+          if [ "$(printf '%s\n' "$top" 2.31 | sort -V | tail -n 1)" != 2.31 ]; then
+            echo "The binary needs GLIBC $top. The limit is 2.31. Versions found:" $found >&2
+            exit 1
+          fi
+      - name: Check the linked libraries
+        run: |
+          libs=$(ldd "$BINARY")
+          echo "$libs"
+          bad=0
+          for lib in $(echo "$libs" | awk '{print $1}'); do
+            case "${lib##*/}" in
+              linux-vdso.so.1|libc.so.6|libm.so.6|libpthread.so.0|libdl.so.2|ld-linux-x86-64.so.2) ;;
+              *)
+                echo "Unexpected library: $lib" >&2
+                bad=1
+                ;;
+            esac
+          done
+          exit "$bad"
+      - name: Check the binary size
+        run: |
+          size=$(stat -c %s "$BINARY")
+          echo "Binary size: $size bytes"
+          if [ "$size" -gt 62914560 ]; then
+            echo "The binary is larger than 62914560 bytes." >&2
+            exit 1
+          fi
+      - name: Check the version
+        id: version
+        run: |
+          version=$(cargo metadata --no-deps --locked --format-version 1 | python3 -c 'import json, sys; print(next(p["version"] for p in json.load(sys.stdin)["packages"] if p["name"] == "tarragon-app"))')
+          actual=$("$BINARY" --version)
+          echo "Binary version output: $actual"
+          if [ "$actual" != "tarragon $version" ]; then
+            echo "Expected: tarragon $version" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      # The version comes from the step above, so it is read once.
+      # A tag run must carry the version of the workspace.
+      - name: Package
+        id: package
+        env:
+          version: ${{ steps.version.outputs.version }}
+        run: |
+          if [ "${GITHUB_REF_TYPE:-}" = tag ] && [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "The tag $GITHUB_REF_NAME does not match version $version." >&2
+            exit 1
+          fi
+          name="tarragon-$version-linux-x86_64-portable"
+          rm -rf dist
+          mkdir -p "dist/$name/data"
+          cp "$BINARY" "dist/$name/tarragon"
+          cp README.md LICENSE "dist/$name/"
+          chmod 755 "dist/$name/tarragon" "dist/$name/data"
+          chmod 644 "dist/$name/README.md" "dist/$name/LICENSE"
+          (cd dist && zip -r -X "$name.zip" "$name")
+          (cd dist && sha256sum "$name.zip" > "$name.zip.sha256")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "zip_name=$name.zip" >> "$GITHUB_OUTPUT"
+      # The empty data folder turns on portable mode, so it must be in the zip.
+      - name: Check the zip
+        env:
+          ZIP_NAME: ${{ steps.package.outputs.zip_name }}
+        run: |
+          top=${ZIP_NAME%.zip}
+          expected=$(printf '%s\n' "$top/" "$top/tarragon" "$top/README.md" "$top/LICENSE" "$top/data/" | sort)
+          actual=$(unzip -Z1 "dist/$ZIP_NAME" | sort)
+          if [ "$actual" != "$expected" ]; then
+            echo "The zip holds the wrong entries:" >&2
+            echo "$actual" >&2
+            exit 1
+          fi
+          (cd dist && sha256sum -c "$ZIP_NAME.sha256")
+      - name: Upload the package
+        uses: actions/upload-artifact@v7
+        with:
+          name: tarragon-linux-portable
+          path: |
+            dist/${{ steps.package.outputs.zip_name }}
+            dist/${{ steps.package.outputs.zip_name }}.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+  # The build job runs in a container that has no Docker access,
+  # so this job runs on the host runner.
+  # The test covers the start-up of the binary only. It runs no GUI.
+  # A GUI start on old distros and RHEL 8 (glibc 2.28) are not covered.
+  smoke:
+    name: Smoke (${{ matrix.image }})
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [ubuntu:20.04, debian:11]
+    steps:
+      - name: Download the package
+        uses: actions/download-artifact@v8
+        with:
+          name: tarragon-linux-portable
+          path: package
+      - name: Check the checksum and unpack
+        env:
+          ZIP_NAME: ${{ needs.build.outputs.zip_name }}
+        run: |
+          (cd package && sha256sum -c "$ZIP_NAME.sha256")
+          unzip -q "package/$ZIP_NAME" -d unpacked
+      - name: Run the binary
+        env:
+          ZIP_NAME: ${{ needs.build.outputs.zip_name }}
+          VERSION: ${{ needs.build.outputs.version }}
+          IMAGE: ${{ matrix.image }}
+        run: |
+          top=${ZIP_NAME%.zip}
+          actual=$(docker run --rm -v "$PWD/unpacked/$top:/app:ro" "$IMAGE" /app/tarragon --version)
+          echo "Version output: $actual"
+          if [ "$actual" != "tarragon $VERSION" ]; then
+            echo "Expected: tarragon $VERSION" >&2
+            exit 1
+          fi
+          docker run --rm -v "$PWD/unpacked/$top:/app:ro" "$IMAGE" /app/tarragon --help > /dev/null
+
+  # This job gates the release: publish waits for it.
+  # It runs the same binary as the release.
+  # The first stage checks the start-up of the binary. The second stage opens
+  # the real window under Xvfb and loads a small folder.
+  arch:
+    name: Arch Linux check
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    env:
+      IMAGE: archlinux:latest
+    steps:
+      # The checkout is only for the fixture file. It goes first because it
+      # deletes everything in a workspace that is not a git clone.
+      - name: Check out
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Download the package
+        uses: actions/download-artifact@v8
+        with:
+          name: tarragon-linux-portable
+          path: package
+      - name: Check the checksum and unpack
+        env:
+          ZIP_NAME: ${{ needs.build.outputs.zip_name }}
+        run: |
+          (cd package && sha256sum -c "$ZIP_NAME.sha256")
+          unzip -q "package/$ZIP_NAME" -d unpacked
+      - name: Run the binary
+        env:
+          ZIP_NAME: ${{ needs.build.outputs.zip_name }}
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          top=${ZIP_NAME%.zip}
+          actual=$(docker run --rm -v "$PWD/unpacked/$top:/app:ro" "$IMAGE" /app/tarragon --version)
+          echo "Version output: $actual"
+          if [ "$actual" != "tarragon $VERSION" ]; then
+            echo "Expected: tarragon $VERSION" >&2
+            exit 1
+          fi
+          docker run --rm -v "$PWD/unpacked/$top:/app:ro" "$IMAGE" /app/tarragon --help > /dev/null
+      # The image is bare, so the step installs the run-time packages first.
+      # The zip holds a data folder, so the app would run in portable mode and
+      # write beside the binary. The mount is read-only, so TARRAGON_DB points
+      # to a writable folder. The app closes by itself when every tile is done.
+      # The CJK name is written as UTF-8 byte escapes, so that the result does
+      # not depend on the locale or the encoding of this file. The check reads
+      # the log. It does not read pixels.
+      - name: Start the window under Xvfb
+        env:
+          ZIP_NAME: ${{ needs.build.outputs.zip_name }}
+        run: |
+          top=${ZIP_NAME%.zip}
+          pics="$RUNNER_TEMP/pics"
+          work="$RUNNER_TEMP/work"
+          mkdir -p "$pics" "$work"
+          cp tests/fixtures/psd/rgb_8bit.psd "$pics/one.psd"
+          cp tests/fixtures/psd/rgb_8bit.psd "$pics/two.psd"
+          cp tests/fixtures/psd/rgb_8bit.psd "$pics/$(printf '\xe5\x9b\xb3\xe6\x9b\xb8\xe9\xa4\xa8').psd"
+          status=0
+          docker run --rm \
+            -v "$PWD/unpacked/$top:/app:ro" \
+            -v "$pics:/pics:ro" \
+            -v "$work:/work" \
+            -e TARRAGON_CLOSE_WHEN_LOADED=1 \
+            -e TARRAGON_DB=/work/tarragon.db \
+            "$IMAGE" bash -c '
+              set -e
+              pacman -Syu --noconfirm --needed \
+                libx11 libxcursor libxrandr libxi libxkbcommon libxkbcommon-x11 \
+                libglvnd mesa vulkan-icd-loader vulkan-swrast \
+                xorg-server-xvfb xorg-xauth fontconfig noto-fonts-cjk
+              unset WAYLAND_DISPLAY
+              timeout 120 xvfb-run -a /app/tarragon /pics
+            ' || status=$?
+          echo "Exit code: $status"
+          if [ "$status" -ne 0 ] || ! grep -q '3 tiles settled, 0 failed' "$work/tarragon.log"; then
+            echo "The window did not load all three tiles and exit." >&2
+            tail -n 40 "$work/tarragon.log" >&2 || echo "No log file." >&2
+            exit 1
+          fi
+          if grep -q 'no system CJK font found' "$work/tarragon.log"; then
+            echo "The app found no system CJK font." >&2
+            tail -n 40 "$work/tarragon.log" >&2
+            exit 1
+          fi
+          fonts=$(grep 'system fallback fonts: .*Noto Sans CJK' "$work/tarragon.log" || true)
+          if [ -z "$fonts" ]; then
+            echo "The log has no fallback font line that names Noto Sans CJK." >&2
+            tail -n 40 "$work/tarragon.log" >&2 || echo "No log file." >&2
+            exit 1
+          fi
+          echo "$fonts"
+
+  # Only a tag run reaches this job. It is the only job that can write.
+  # The release is always a draft. The owner reads it and publishes it by hand.
+  # --verify-tag stops the command from making a tag that does not exist.
+  publish:
+    name: Draft release
+    needs: [build, smoke, arch]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Download the package
+        uses: actions/download-artifact@v8
+        with:
+          name: tarragon-linux-portable
+          path: package
+      - name: Check the checksum
+        env:
+          ZIP_NAME: ${{ needs.build.outputs.zip_name }}
+        run: (cd package && sha256sum -c "$ZIP_NAME.sha256")
+      # The job has no checkout, so gh gets the repository from GH_REPO.
+      - name: Create the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ZIP_NAME: ${{ needs.build.outputs.zip_name }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --draft --verify-tag \
+            --title "$GITHUB_REF_NAME" \
+            --notes "Portable Linux x86_64 build. It needs glibc 2.31 or newer." \
+            "package/$ZIP_NAME" "package/$ZIP_NAME.sha256"

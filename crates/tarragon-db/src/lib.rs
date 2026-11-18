@@ -1,0 +1,151 @@
+//! SQLite storage layer for tarragon: schema and repositories.
+//!
+//! The crate uses `rusqlite` with the `bundled` feature. It performs I/O. It
+//! depends on `tarragon-core` only and does not depend on the GUI.
+//!
+//! The app keeps one connection on one database thread. [`Database`] guards
+//! that connection with a mutex so the type is `Send + Sync`.
+
+use std::path::{Path, PathBuf};
+use std::sync::{Mutex, MutexGuard};
+use std::time::Duration;
+
+use rusqlite::Connection;
+
+mod like;
+pub mod query;
+pub mod repository;
+pub mod schema;
+pub mod settings;
+
+#[cfg(test)]
+mod tests;
+
+/// A database error.
+#[derive(Debug, thiserror::Error)]
+pub enum DbError {
+    /// SQLite refused a statement.
+    #[error("sqlite error: {0}")]
+    Sqlite(#[from] rusqlite::Error),
+    /// The database file cannot open.
+    #[error("cannot open database {path}: {source}")]
+    Open {
+        /// The database file path.
+        path: PathBuf,
+        /// The cause.
+        #[source]
+        source: rusqlite::Error,
+    },
+    /// WAL journal mode did not turn on.
+    #[error("could not enable WAL journal mode, got {0}")]
+    Wal(String),
+    /// The stored schema generation is not the one this build uses.
+    #[error("database schema generation is {found}, this build needs {expected}")]
+    SchemaVersion {
+        /// The stored generation marker.
+        found: i64,
+        /// The generation this build creates and reads.
+        expected: i64,
+    },
+    /// The tag is built in and cannot be changed.
+    #[error("tag {0} is built in and cannot be changed")]
+    ProtectedTag(String),
+    /// A user tag name is a color bucket name or `transparent`.
+    #[error("tag name {0} is reserved")]
+    ReservedTagName(String),
+    /// A tag name is empty or too long.
+    #[error("invalid tag name: {0}")]
+    InvalidTagName(tarragon_core::tag_name::TagNameError),
+    /// No tag has this id.
+    #[error("tag {0} does not exist")]
+    TagNotFound(i64),
+    /// Another tag already uses this name.
+    #[error("tag name {0} is already used")]
+    TagNameTaken(String),
+    /// The shared connection lock is poisoned after a panic.
+    #[error("database connection lock is poisoned")]
+    LockPoisoned,
+    /// A shared domain value is invalid.
+    #[error(transparent)]
+    Core(#[from] tarragon_core::error::CoreError),
+    /// The stored window state text is not valid window state.
+    #[error("invalid window state: {0}")]
+    WindowState(#[from] serde_json::Error),
+}
+
+/// One SQLite connection with the fixed connection settings.
+///
+/// This type is the only connect site. Opening sets WAL, `foreign_keys=ON`,
+/// and a five second busy timeout.
+pub struct Database {
+    conn: Mutex<Connection>,
+}
+
+impl Database {
+    /// Open the database file at `path` and configure the connection.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DbError::Open`] when the file cannot open. Returns
+    /// [`DbError::Wal`] when WAL does not turn on. Returns
+    /// [`DbError::Sqlite`] when a pragma fails.
+    pub fn open(path: impl AsRef<Path>) -> Result<Self, DbError> {
+        let path = path.as_ref();
+        let conn = Connection::open(path).map_err(|source| DbError::Open {
+            path: path.to_path_buf(),
+            source,
+        })?;
+        Self::configure(&conn)?;
+        Ok(Self {
+            conn: Mutex::new(conn),
+        })
+    }
+
+    /// Set WAL, turn foreign keys on, set the busy timeout, and set
+    /// `synchronous` to NORMAL.
+    ///
+    /// Under WAL, NORMAL skips the fsync on each commit. An application crash
+    /// loses no committed data. An operating system crash or a power loss can
+    /// lose the last commits, but it cannot corrupt the file.
+    fn configure(conn: &Connection) -> Result<(), DbError> {
+        // The timeout comes first: switching to WAL needs a lock, and a second
+        // instance would otherwise fail at once with a busy error.
+        conn.busy_timeout(Duration::from_secs(5))?;
+        let mode: String = conn.query_row("PRAGMA journal_mode=WAL", [], |row| row.get(0))?;
+        if !mode.eq_ignore_ascii_case("wal") {
+            return Err(DbError::Wal(mode));
+        }
+        conn.pragma_update(None, "foreign_keys", "ON")?;
+        conn.pragma_update(None, "synchronous", "NORMAL")?;
+        Ok(())
+    }
+
+    /// Create the schema and stamp the generation marker.
+    ///
+    /// The call is idempotent. It returns the stored generation.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DbError::Sqlite`] when a statement fails. Returns
+    /// [`DbError::SchemaVersion`] when the stored generation is not the
+    /// current one.
+    pub fn initialize(&self) -> Result<i64, DbError> {
+        let mut conn = self.lock()?;
+        schema::initialize(&mut conn)
+    }
+
+    /// Lock the shared connection.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DbError::LockPoisoned`] after a panic poisoned the lock.
+    pub(crate) fn lock(&self) -> Result<MutexGuard<'_, Connection>, DbError> {
+        self.conn.lock().map_err(|_| DbError::LockPoisoned)
+    }
+}
+
+impl std::fmt::Debug for Database {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.debug_struct("Database").finish_non_exhaustive()
+    }
+}

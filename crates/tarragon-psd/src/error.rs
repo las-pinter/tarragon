@@ -1,0 +1,240 @@
+//! Errors for the PSD and PSB parser.
+//!
+//! Malformed input returns a [`PsdError`] and does not panic. The conversion to
+//! the shared render error sits at the composite boundary.
+
+use std::path::{Path, PathBuf};
+
+use tarragon_core::error::RenderError;
+
+use crate::model::ColorMode;
+
+/// A PSD or PSB parse failed.
+#[derive(Debug, thiserror::Error)]
+pub enum PsdError {
+    /// The file cannot be read.
+    #[error("cannot read {path}: {source}")]
+    Io {
+        /// The file path.
+        path: PathBuf,
+        /// The cause.
+        #[source]
+        source: std::io::Error,
+    },
+    /// The file signature is not `8BPS`.
+    #[error("not a PSD or PSB file: signature {found:?}")]
+    BadSignature {
+        /// The four signature bytes.
+        found: [u8; 4],
+    },
+    /// The version is not 1 (PSD) nor 2 (PSB).
+    #[error("unsupported PSD version: {0}")]
+    UnsupportedVersion(u16),
+    /// The file ends before a field is complete.
+    #[error("truncated file at offset {offset}: want {wanted} bytes, {remaining} left")]
+    Truncated {
+        /// The offset where the field starts.
+        offset: u64,
+        /// The number of bytes the field needs.
+        wanted: usize,
+        /// The number of bytes left in the file.
+        remaining: usize,
+    },
+    /// A layer record does not carry the `8BIM` signature.
+    #[error("bad layer blend signature: {found:?}")]
+    BadBlendSignature {
+        /// The four signature bytes.
+        found: [u8; 4],
+    },
+    /// A section length does not fit the address space.
+    #[error("section length {length} is too large")]
+    LengthTooLarge {
+        /// The declared length in bytes.
+        length: u64,
+    },
+    /// The parse deadline expired before the work finished.
+    #[error("PSD parse timed out")]
+    Timeout,
+    /// The caller cancelled the work through the cancel flag.
+    #[error("PSD parse cancelled")]
+    Cancelled,
+    /// Group dividers nest deeper than the compositor accepts.
+    #[error("layer groups nest deeper than {limit} levels")]
+    GroupsTooDeep {
+        /// The deepest nesting accepted.
+        limit: usize,
+    },
+    /// The render would need more memory than the render budget.
+    #[error(
+        "the render needs about {estimated} bytes, over the {budget} byte budget \
+         ({max_tile_pixels} pixels fit)"
+    )]
+    OverBudget {
+        /// The estimated bytes.
+        estimated: u64,
+        /// The budget in bytes.
+        budget: u64,
+        /// The most working pixels the budget allows for this document. This
+        /// counts the padding when a group has effects.
+        max_tile_pixels: u64,
+    },
+    /// A header or a layer record declares more channels than the format allows.
+    #[error("{count} channels exceed the limit of {limit}")]
+    TooManyChannels {
+        /// The declared channel count.
+        count: usize,
+        /// The most channels accepted.
+        limit: usize,
+    },
+    /// The color mode and depth pair has no channel reader.
+    #[error("unsupported PSD color mode {mode:?} at depth {depth}")]
+    UnsupportedColorMode {
+        /// The file color mode.
+        mode: ColorMode,
+        /// The bit depth per channel.
+        depth: u16,
+    },
+    /// The channel compression code is not raw, RLE, ZIP, nor ZIP with
+    /// prediction.
+    #[error("unsupported PSD channel compression: {0}")]
+    UnsupportedCompression(u16),
+    /// A ZIP channel holds bad zlib data, ends before its rows are full, or
+    /// inflates past its size.
+    #[error("corrupt PSD channel data with compression code {code}")]
+    CorruptChannelData {
+        /// The channel compression code.
+        code: u16,
+    },
+    /// The requested viewport is empty or outside the canvas.
+    #[error("invalid viewport ({left}, {top})-({right}, {bottom}) for {width}x{height}")]
+    InvalidViewport {
+        /// The left edge.
+        left: u32,
+        /// The top edge.
+        top: u32,
+        /// The right edge.
+        right: u32,
+        /// The bottom edge.
+        bottom: u32,
+        /// The canvas width.
+        width: u32,
+        /// The canvas height.
+        height: u32,
+    },
+    /// A single decode would exceed the full-tier long-edge cap.
+    #[error("image edge {edge} px exceeds the {cap} px full-tier cap")]
+    CapExceeded {
+        /// The requested long edge in pixels.
+        edge: u32,
+        /// The allowed cap in pixels.
+        cap: u32,
+    },
+    /// A layer index is out of range.
+    #[error("layer index {index} is out of range for {count} layers")]
+    LayerOutOfRange {
+        /// The requested index.
+        index: usize,
+        /// The number of layers.
+        count: usize,
+    },
+    /// The image dimensions are outside the Adobe spec limit.
+    #[error("image dimensions {width}x{height} exceed the {limit} px limit")]
+    BadDimensions {
+        /// The header width.
+        width: u32,
+        /// The header height.
+        height: u32,
+        /// The allowed limit in pixels.
+        limit: u32,
+    },
+}
+
+impl PsdError {
+    /// True when the failure says nothing about the file.
+    ///
+    /// A timeout or a cancel depends on the caller, so a caller must not record
+    /// it as a permanent decode failure.
+    #[must_use]
+    pub const fn is_transient(&self) -> bool {
+        matches!(self, Self::Timeout | Self::Cancelled)
+    }
+
+    /// Convert to the shared render error and tag the file path.
+    ///
+    /// The composite path returns [`RenderError`], so the parser error
+    /// crosses the crate boundary through this method. A timeout and a cancel
+    /// keep their own variants, so a caller can tell them from a decode
+    /// failure and does not record them as a permanent fault.
+    #[must_use]
+    pub fn into_render_error(self, path: &Path) -> RenderError {
+        match self {
+            PsdError::Io { source, .. } => RenderError::Io {
+                path: path.to_path_buf(),
+                source,
+            },
+            PsdError::CapExceeded { edge, cap } => RenderError::TooLarge { edge, cap },
+            PsdError::Timeout => RenderError::Timeout {
+                path: path.to_path_buf(),
+            },
+            PsdError::Cancelled => RenderError::Cancelled {
+                path: path.to_path_buf(),
+            },
+            other => RenderError::Decode {
+                path: path.to_path_buf(),
+                reason: other.to_string(),
+            },
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use tarragon_core::error::RenderError;
+
+    use crate::error::PsdError;
+
+    #[test]
+    fn a_parse_error_becomes_a_decode_error_with_the_path() {
+        let error = PsdError::UnsupportedVersion(9);
+        let rendered = error.into_render_error(Path::new("deep.psb"));
+        assert!(
+            matches!(&rendered, RenderError::Decode { path, .. } if path == Path::new("deep.psb"))
+        );
+        assert!(rendered.to_string().contains("version"));
+    }
+
+    #[test]
+    fn a_corrupt_channel_becomes_a_decode_error_with_the_path() {
+        let rendered =
+            PsdError::CorruptChannelData { code: 3 }.into_render_error(Path::new("bad.psd"));
+        assert!(
+            matches!(&rendered, RenderError::Decode { path, .. } if path == Path::new("bad.psd"))
+        );
+        assert!(rendered.to_string().contains("corrupt"));
+    }
+
+    #[test]
+    fn a_timeout_maps_to_the_timeout_variant() {
+        let rendered = PsdError::Timeout.into_render_error(Path::new("slow.psd"));
+        assert!(
+            matches!(&rendered, RenderError::Timeout { path } if path == Path::new("slow.psd"))
+        );
+    }
+
+    #[test]
+    fn a_cancel_maps_to_the_cancelled_variant() {
+        let rendered = PsdError::Cancelled.into_render_error(Path::new("stop.psd"));
+        assert!(
+            matches!(&rendered, RenderError::Cancelled { path } if path == Path::new("stop.psd"))
+        );
+    }
+
+    #[test]
+    fn a_timeout_and_a_cancel_are_transient() {
+        assert!(PsdError::Timeout.is_transient());
+        assert!(PsdError::Cancelled.is_transient());
+        assert!(!PsdError::UnsupportedVersion(9).is_transient());
+    }
+}

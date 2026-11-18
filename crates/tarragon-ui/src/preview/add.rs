@@ -1,0 +1,242 @@
+//! The "+ add" control: a ghost button, a menu of known tags, and the inline
+//! input for a new tag name.
+
+use egui::{
+    Area, CornerRadius, FontId, Frame, Id, Key, Margin, Order, Rect, Response, ScrollArea, Stroke,
+    StrokeKind, TextEdit, Ui, text::LayoutJob, text_edit::TextEditState, vec2,
+};
+
+use tarragon_core::tag_name::{TagNameError, validate_tag_name};
+
+use self::menu_layout::{MENU_ROWS, SEPARATOR, menu_height};
+use super::PreviewEvent;
+use crate::popup::{menu_frame, menu_placement, row_frame, text_width};
+use crate::theme::points;
+use crate::tokens;
+use crate::widgets::ghost_button;
+
+mod menu_layout;
+
+/// The label of the menu row that opens the name input.
+pub const CREATE_NEW: &str = "Create new...";
+
+/// Which part of the control is open.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub enum AddState {
+    /// Only the "+ add" button shows.
+    #[default]
+    Closed,
+    /// The menu of known tags is open under the button.
+    Menu,
+    /// The button is swapped for the name input.
+    Input {
+        /// The text typed so far.
+        text: String,
+        /// Whether the input has asked for focus yet; losing focus before
+        /// that is not a cancel.
+        focused: bool,
+        /// Why Enter was refused; it clears when the text changes.
+        error: Option<TagNameError>,
+    },
+}
+
+/// Draw the ghost button. A click opens the menu, or closes it when open.
+pub fn show_button(ui: &mut Ui, state: &mut AddState) -> Response {
+    let response = ghost_button(ui, "+ add");
+    if response.clicked() {
+        *state = if *state == AddState::Menu {
+            AddState::Closed
+        } else {
+            AddState::Menu
+        };
+    }
+    response
+}
+
+/// Draw the menu next to `button`, the rect that it opens from. A row applies
+/// its tag; "Create new..." opens the input. Escape or a press outside closes
+/// it with no event.
+pub fn show_menu(
+    ui: &Ui,
+    id: Id,
+    button: Rect,
+    choices: &[&str],
+    state: &mut AddState,
+    events: &mut Vec<PreviewEvent>,
+) {
+    let bounds = ui.ctx().content_rect().shrink(tokens::MENU_EDGE_MARGIN);
+    let (pos, pivot) = menu_placement(button, menu_height(choices.len()), bounds);
+    let room = ui.max_rect().right() - pos.x;
+    let area = Area::new(id)
+        .order(Order::Foreground)
+        .fixed_pos(pos)
+        .pivot(pivot)
+        .constrain_to(bounds)
+        .show(ui.ctx(), |ui| {
+            menu_frame()
+                .show(ui, |ui| {
+                    // The rows touch each other, as in the stylesheet.
+                    ui.spacing_mut().item_spacing.y = 0.0;
+                    let mut next = None;
+                    // The rows share the width of the longest one. Filling the
+                    // free width would stretch the menu to the screen edge.
+                    // A long name must not push the menu past the pane, so rows
+                    // cap at the room left in the pane and truncate with an ellipsis.
+                    let width = (choices
+                        .iter()
+                        .chain([&CREATE_NEW])
+                        .map(|text| text_width(ui, text))
+                        .fold(0.0, f32::max)
+                        + 2.0 * tokens::MENU_ROW_PAD_X)
+                        .min(
+                            room - tokens::STROKE_WIDTH * 2.0
+                                - 2.0 * tokens::SPACING_XS
+                                - ui.spacing().scroll.allocated_width(),
+                        )
+                        // A very narrow pane must not give a negative width.
+                        .max(2.0 * tokens::MENU_ROW_PAD_X);
+                    // Only the tags scroll, so "Create new..." stays reachable
+                    // however many tags there are.
+                    ScrollArea::vertical()
+                        .max_height(MENU_ROWS * tokens::MENU_ROW_HEIGHT)
+                        .auto_shrink([true, true])
+                        .show(ui, |ui| {
+                            for name in choices {
+                                if menu_row(ui, name, width).clicked() {
+                                    events.push(PreviewEvent::TagApplied((*name).to_owned()));
+                                    next = Some(AddState::Closed);
+                                }
+                            }
+                        });
+                    if !choices.is_empty() {
+                        ui.add(egui::Separator::default().spacing(SEPARATOR));
+                    }
+                    if menu_row(ui, CREATE_NEW, width).clicked() {
+                        next = Some(AddState::Input {
+                            text: String::new(),
+                            focused: false,
+                            error: None,
+                        });
+                    }
+                    next
+                })
+                .inner
+        });
+    if let Some(next) = area.inner {
+        *state = next;
+        return;
+    }
+    let escape = ui.input(|i| i.key_pressed(Key::Escape));
+    let outside = ui.input(|i| {
+        i.pointer.any_pressed()
+            && i.pointer
+                .interact_pos()
+                .is_some_and(|p| !area.response.rect.contains(p) && !button.contains(p))
+    });
+    if escape || outside {
+        *state = AddState::Closed;
+    }
+}
+
+/// One menu row, `width` wide so the whole row takes the click.
+fn menu_row(ui: &mut Ui, text: &str, width: f32) -> Response {
+    let font = FontId::proportional(tokens::SIZE_BODY);
+    let pad_x = tokens::MENU_ROW_PAD_X;
+    let mut job = LayoutJob::simple(
+        text.to_owned(),
+        font,
+        tokens::TEXT_PRIMARY,
+        (width - 2.0 * pad_x).max(0.0),
+    );
+    job.wrap.max_rows = 1;
+    job.wrap.break_anywhere = true;
+    let galley = ui.painter().layout_job(job);
+    let (rect, response, color) = row_frame(ui, width);
+    let at = rect.min + vec2(pad_x, (rect.height() - galley.size().y) / 2.0);
+    ui.painter().galley(at, galley, color);
+    response
+}
+
+/// Draw the name input and its hint. Enter applies a valid trimmed name. A
+/// refused name keeps the input open, focused, with the reason below it.
+/// Escape and losing focus close it with no event.
+pub fn show_input(ui: &mut Ui, id: Id, state: &mut AddState, events: &mut Vec<PreviewEvent>) {
+    let AddState::Input {
+        text,
+        focused,
+        error,
+    } = state
+    else {
+        return;
+    };
+    if !*focused {
+        // Reset paths only clear `text`; egui keeps the cursor and undo history
+        // under this id, so a fresh input drops them or Ctrl+Z restores old text.
+        ui.data_mut(|d| d.remove::<TextEditState>(id));
+    }
+    let response = ui.add(
+        TextEdit::singleline(text)
+            .id(id)
+            .hint_text("Tag name...")
+            .desired_width(f32::INFINITY)
+            .frame(
+                Frame::new()
+                    .fill(tokens::BG_TERTIARY)
+                    .corner_radius(CornerRadius::same(tokens::RADIUS_S))
+                    .inner_margin(Margin::symmetric(
+                        points(tokens::SPACING_S),
+                        points(tokens::SPACING_XS),
+                    )),
+            ),
+    );
+    ui.painter().rect_stroke(
+        response.rect,
+        CornerRadius::same(tokens::RADIUS_S),
+        Stroke::new(tokens::STROKE_WIDTH, tokens::CORAL_STRONG),
+        StrokeKind::Inside,
+    );
+    // The refusal text takes the hint's place, so the layout does not jump.
+    let (note, color) = match error {
+        Some(error) => (error.to_string(), tokens::TAG_ERROR_TEXT),
+        None => (
+            "Press Enter to add. Escape or focus loss cancels.".to_owned(),
+            tokens::TEXT_MUTED,
+        ),
+    };
+    ui.label(
+        egui::RichText::new(note)
+            .size(tokens::SIZE_SMALL)
+            .color(color),
+    );
+    if !*focused {
+        response.request_focus();
+        *focused = true;
+        return;
+    }
+    if response.changed() {
+        *error = None;
+    }
+    if response.lost_focus() {
+        let enter = ui.input(|i| i.key_pressed(Key::Enter));
+        if !enter {
+            *state = AddState::Closed;
+            return;
+        }
+        match validate_tag_name(text) {
+            Ok(name) => {
+                events.push(PreviewEvent::TagApplied(name));
+                *state = AddState::Closed;
+            }
+            Err(refusal) => {
+                // Enter took the focus away; keep typing without a click.
+                response.request_focus();
+                *error = Some(refusal);
+                // The note above was drawn before this frame learned the error.
+                ui.ctx().request_repaint();
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests;

@@ -1,0 +1,145 @@
+name: Rust
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A newer run on the same ref cancels the older run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gates:
+    name: Gates (ubuntu)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+      # Without a toolchain name, rustup installs the toolchain that rust-toolchain.toml names.
+      - name: Install the pinned toolchain
+        run: rustup toolchain install --profile minimal
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+      - name: Install cargo-nextest and cargo-deny
+        uses: taiki-e/install-action@v2
+        with:
+          tool: nextest,cargo-deny
+      - name: Check formatting
+        run: cargo fmt --check
+      - name: Lint
+        run: cargo clippy --all-targets -- -D warnings
+      - name: Test
+        run: cargo nextest run
+      - name: Check dependencies
+        run: cargo deny check
+      # The default fonts crate carries licenses that are off the allowlist.
+      - name: Check that the default fonts crate is absent
+        run: |
+          cargo tree --workspace --target all --prefix none > "$RUNNER_TEMP/tree.txt"
+          ! grep -q '^epaint_default_fonts ' "$RUNNER_TEMP/tree.txt"
+
+  release-build:
+    name: Release build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+      - name: Install the pinned toolchain
+        run: rustup toolchain install --profile minimal
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+      - name: Build
+        run: cargo build --release --workspace
+
+  tests:
+    name: Tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+      - name: Install the pinned toolchain
+        run: rustup toolchain install --profile minimal
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+      - name: Test
+        run: cargo test --workspace
+
+  psd-fixtures:
+    name: Build the large PSB
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Install psd-tools
+        run: pip install -r tests/fixtures/psd/requirements.txt
+      - name: Build the large PSB
+        run: sh tests/fixtures/psd/build_large_psb.sh "${{ runner.temp }}/large.psb"
+      - name: Verify the large PSB
+        env:
+          LARGE_PSB: ${{ runner.temp }}/large.psb
+        run: |
+          python3 - <<'PY'
+          import os
+
+          from psd_tools import PSDImage
+
+          image = PSDImage.open(os.environ["LARGE_PSB"])
+          size = (image.width, image.height)
+          assert size == (9000, 9000), size
+          print(f"large PSB reopens: {image.width}x{image.height}")
+          PY
+
+  psd-goldens:
+    name: PSD golden images
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+      - name: Install the pinned toolchain
+        run: rustup toolchain install --profile minimal
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: nextest
+      # This run includes the golden tests. They read the committed PNG files.
+      - name: Run the PSD tests
+        run: cargo nextest run -p tarragon-psd
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Install psd-tools
+        run: pip install -r tests/fixtures/psd/requirements.txt
+      # The check renders each fixture in memory and compares pixels. It writes nothing.
+      - name: Check the golden files
+        run: python3 tests/fixtures/psd/generate_goldens.py --check

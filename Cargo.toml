@@ -1,0 +1,120 @@
+[workspace]
+resolver = "3"
+members = ["crates/*", "xtask"]
+
+[workspace.package]
+version = "0.2.0"
+edition = "2024"
+rust-version = "1.99"
+license = "MIT"
+
+[workspace.dependencies]
+# Internal crates. The `version` key stops `cargo deny` from reading a bare
+# path dependency as a wildcard. `tarragon-db` depends on `tarragon-core`
+# only.
+tarragon-core = { path = "crates/tarragon-core", version = "0.2.0" }
+# The render crate reads PSD and PSB files through the parser crate.
+tarragon-psd = { path = "crates/tarragon-psd", version = "0.2.0" }
+# The interface reads the stored window state in its tests today. The app
+# crate owns the production wiring.
+tarragon-db = { path = "crates/tarragon-db", version = "0.2.0" }
+tarragon-ui = { path = "crates/tarragon-ui", version = "0.2.0" }
+# The app crate runs the render pipeline: scan, cache, and render.
+tarragon-cache = { path = "crates/tarragon-cache", version = "0.2.0" }
+tarragon-render = { path = "crates/tarragon-render", version = "0.2.0" }
+tarragon-scan = { path = "crates/tarragon-scan", version = "0.2.0" }
+# egui/eframe 0.36.2. One pin, shared by every crate. tarragon-ui uses
+# egui only and never eframe.
+#
+# Default fonts are off. The `epaint_default_fonts` crate carries the
+# `OFL-1.1` and `Ubuntu-font-1.0` licenses, which are off the allowlist.
+# The app must ship a font that passes the allowlist. `tarragon-ui` vendors
+# the Roboto family and installs it in every target, examples included.
+egui = { version = "=0.36.2", default-features = false }
+# The app binary and the GUI stack spike use eframe 0.36.2. The main window
+# dock in tarragon-ui and the spike use egui_dock 0.21. Both renderers and
+# both Linux window backends are on, so one binary picks the renderer at run
+# time. Default features are off:
+# `default_fonts` would bring the OFL-1.1 and Ubuntu-font-1.0 fonts.
+eframe = { version = "=0.36.2", default-features = false, features = ["glow", "wgpu", "x11", "wayland"] }
+egui_dock = "=0.21.1"
+# Paths from canonicalize without the Windows verbatim prefix.
+dunce = "=1.0.5"
+# Checks a fallback font before egui sees it, because egui panics on a bad
+# font file. This is the version egui's epaint already uses. Change it with
+# eframe, so that `cargo tree -i skrifa` shows one version.
+skrifa = { version = "=0.44.0", default-features = false, features = ["std"] }
+# Finds system fallback fonts (CJK and symbols). `std`, `fs` and `memmap`
+# scan the fixed font folders and read a face without copying the file twice.
+# `fontconfig` is off: it only adds folders from config files and pulls an
+# XML parser.
+fontdb = { version = "=0.24.0", default-features = false, features = ["std", "fs", "memmap"] }
+# The app matches the winit errors that eframe returns. This is the version
+# eframe already uses; no features are added.
+winit = { version = "=0.30.13", default-features = false }
+# rayon handles CPU-bound work. The grid example caps its pool at four threads.
+rayon = "1.11"
+# The render pipeline sends results from worker threads to the UI over a
+# crossbeam channel. The exact pin keeps `cargo deny` wildcards happy.
+crossbeam-channel = "=0.5.17"
+# Shared error types. `tarragon-core` owns the error enums; the other crates
+# depend on them through core.
+thiserror = "2"
+# SQLite access uses `rusqlite` 0.41 with the `bundled` feature. The
+# bundled SQLite keeps the build self-contained. `tarragon-db` is the only
+# crate that links SQLite.
+rusqlite = { version = "0.41", features = ["bundled"] }
+# Settings values store as JSON text, and the hidden `window_state` key
+# holds a JSON blob. Only `tarragon-db` parses them.
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# One shared entry for every crate that decodes images, and for the PSD golden
+# tests. Each crate turns on only its codecs. The `0.25` range lets a patch
+# update arrive through `Cargo.lock`.
+image = { version = "0.25", default-features = false }
+# Krita `.kra` documents are ZIP archives. Real Krita archives may compress
+# their members, so the reader enables the `flate2` deflate backend. The other
+# features stay off so the dependency tree stays small. `deflate-zopfli` stays
+# off: zopfli only compresses on write and the renderer only reads.
+zip = { version = "=9.2.2", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+# The PSD layer decoder inflates ZIP channels with `flate2`. Default features
+# are off and `zlib-rs` is on, the same backend `zip` already uses, so the
+# lockfile gains no new crate. The pin is the version already locked.
+flate2 = { version = "=1.1.10", default-features = false, features = ["zlib-rs"] }
+
+# Logging. `tracing` matches the version already in the lockfile.
+# `tracing-subscriber` keeps default features off: no ANSI codes reach the
+# log file, and the level filter needs no regex. `tracing-appender` supplies
+# only the `non_blocking` writer; size rotation lives in the app crate.
+tracing = { version = "=0.1.44", default-features = false, features = ["std"] }
+tracing-subscriber = { version = "=0.3.23", default-features = false, features = ["std", "fmt", "registry"] }
+tracing-appender = { version = "=0.2.5", default-features = false }
+# The `log` bridge: wgpu, egui, winit and eframe log through the `log` crate.
+tracing-log = { version = "=0.2.0", default-features = false, features = ["std", "log-tracer"] }
+log = "=0.4.34"
+# Local time for log lines. Only the offset lookup and the date fields are
+# used; no formatting features.
+time = { version = "=0.3.55", default-features = false, features = ["std", "local-offset"] }
+
+# The native folder dialog. `rfd` is MIT licensed. Only the `xdg-portal`
+# backend is on, so the dialog talks to the desktop portal at run time and
+# the build links no GTK. `gtk3` and the other defaults stay off.
+rfd = { version = "=0.17.2", default-features = false, features = ["xdg-portal"] }
+
+# Moves a file to the desktop trash, with the freedesktop backend on Linux, the
+# native backend on macOS and the Windows backend (COM multithreaded) on Windows.
+# `chrono` writes the `DeletionDate` line of the trash info file. Other defaults stay off.
+trash = { version = "=5.3.0", default-features = false, features = ["freedesktop", "coinit_multithreaded", "chrono"] }
+
+# Dependencies build optimized in dev and test, so image decoding and egui
+# code do not run at opt-level 0. The workspace crates keep fast rebuilds.
+[profile.dev.package."*"]
+opt-level = 2
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[workspace.lints.clippy]
+all = "warn"
+pedantic = "warn"

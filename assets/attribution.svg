@@ -1,23 +1,15 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 140" width="100%" role="img" aria-label="AI wrote 80.7 percent of the surviving lines; humans wrote 19.3 percent" preserveAspectRatio="xMidYMid meet">
-  <title>AI wrote 80.7 percent of the surviving lines; humans wrote 19.3 percent</title>
-  <style>
-    .bg { fill: #ffffff; }
-    .track { fill: #e6e8ee; }
-    .text { fill: #1b1f27; }
-    .muted { fill: #5b6472; }
-    .label { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-    @media (prefers-color-scheme: dark) {
-      .bg { fill: #0d1117; }
-      .track { fill: #262c36; }
-      .text { fill: #e6edf3; }
-      .muted { fill: #9aa4b2; }
-    }
-  </style>
-  <rect class="bg" x="0" y="0" width="960" height="140" />
-  <rect class="track" x="24" y="44" width="912" height="48" rx="24" />
-  <rect x="24" y="44" width="733.14" height="48" rx="24" fill="#6C5CE7" />
-  <rect x="761.14" y="44" width="174.86" height="48" rx="24" fill="#F2A03D" />
-  <text class="label" x="390.57" y="69.00" text-anchor="middle" dominant-baseline="central" font-size="19" font-weight="700" fill="#ffffff">AI 80.7%</text>
-  <text class="label text" x="848.57" y="30" text-anchor="middle" font-size="16" font-weight="600">Human 19.3%</text>
-  <text class="label muted" x="24" y="122" font-size="15">Lines surviving in the code today</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="130" viewBox="0 0 600 130" role="img" aria-labelledby="title desc">
+<title id="title">AI and human lines</title>
+<desc id="desc">AI: 100.0% (120718 lines); Human: 0.0% (0 lines); 120718 lines in total</desc>
+<rect x="0.5" y="0.5" width="599" height="129" rx="8" fill="#ffffff" stroke="#d0d7de"/>
+<g font-family="Verdana, DejaVu Sans, sans-serif" fill="#1f2328">
+<text x="20" y="30" font-size="16" font-weight="bold">AI and human lines</text>
+<text x="580" y="30" font-size="13" text-anchor="end">120718 lines</text>
+<rect x="20" y="46" width="560" height="28" fill="#eaeef2"/>
+<rect x="20" y="46" width="560" height="28" fill="#6639ba"/>
+<rect x="20" y="95" width="14" height="14" fill="#6639ba"/>
+<text x="42" y="107" font-size="13">AI: 100.0% (120718 lines)</text>
+<rect x="300" y="95" width="14" height="14" fill="#1a7f37"/>
+<text x="322" y="107" font-size="13">Human: 0.0% (0 lines)</text>
+</g>
 </svg>

@@ -1,0 +1,770 @@
+//! Dominant-color tag computation for the color filter.
+//!
+//! This module is pure CPU work: it takes a decoded image and the three
+//! color-tag settings, and returns bare bucket names. The `image` crate owns
+//! the decode.
+//!
+//! The forced-square 64x64 resize is a separate resize path, distinct from
+//! the aspect-preserving cache resize.
+//!
+//! This module always computes. It does not read the settings and it does not
+//! check `color_tag_enabled`. The caller owns that gate.
+
+#![allow(clippy::module_name_repetitions)]
+
+use std::collections::{BTreeMap, BTreeSet};
+
+use image::imageops::{self, FilterType};
+use image::{DynamicImage, Rgb, RgbaImage};
+use tarragon_core::color::ColorBucket;
+
+use crate::color_classify::classify;
+
+/// The forced-square edge for the palette downsample.
+const PALETTE_EDGE: u32 = 64;
+
+/// Resized pixels below this alpha are mostly see-through and do not count.
+const MIN_ALPHA: u8 = 128;
+
+/// A share of clear pixels at or above this marks the image as transparent.
+const TRANSPARENT_SHARE: f64 = 0.25;
+
+/// The three color-tag settings, passed in as parameters.
+///
+/// The caller reads these from the typed settings registry and builds this
+/// struct. The registry bounds them (`palette_size` 2..32, shares 0.0..1.0).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ColorTagConfig {
+    /// Median-cut palette size. The default is 8.
+    pub palette_size: usize,
+    /// Minimum bucket share for a tag. The default is 0.10.
+    pub min_share: f64,
+    /// Saturation at or below this value is neutral. The default is 0.15.
+    pub neutral_s_threshold: f64,
+}
+
+impl Default for ColorTagConfig {
+    fn default() -> Self {
+        Self {
+            palette_size: 8,
+            min_share: 0.10,
+            neutral_s_threshold: 0.15,
+        }
+    }
+}
+
+/// The color tags of one image.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ColorTags {
+    /// The dominant color buckets.
+    pub buckets: BTreeSet<ColorBucket>,
+    /// True when a quarter or more of the image is clear.
+    pub transparent: bool,
+}
+
+/// Return the dominant-color tags for `image` as `ColorTags`.
+///
+/// The algorithm downsamples the image to a 64x64 square, median-cut
+/// quantizes to `config.palette_size` colors, maps each palette color to a
+/// bucket, and keeps buckets at or above `config.min_share`. An empty image
+/// has no tags. Pixels below half alpha are skipped. Pass a thumbnail-sized
+/// image: the alpha path copies the whole input. An all-clear image gives
+/// empty buckets with `transparent` true.
+#[must_use]
+pub fn extract_dominant_colors(image: &DynamicImage, config: ColorTagConfig) -> ColorTags {
+    if image.width() == 0 || image.height() == 0 {
+        return ColorTags::default();
+    }
+
+    // The resize does not premultiply, so do it first or clear pixels bleed
+    // colour. Opaque images keep the plain resize to stay bit-for-bit equal.
+    let small = if image.color().has_alpha() {
+        let mut rgba = image.to_rgba8();
+        for pixel in rgba.pixels_mut() {
+            let alpha = pixel[3];
+            for i in 0..3 {
+                pixel[i] = premultiply(pixel[i], alpha);
+            }
+        }
+        imageops::resize(&rgba, PALETTE_EDGE, PALETTE_EDGE, FilterType::Lanczos3)
+    } else {
+        image
+            .resize_exact(PALETTE_EDGE, PALETTE_EDGE, FilterType::Lanczos3)
+            .to_rgba8()
+    };
+    let (histogram, clear) = histogram(&small);
+    let transparent =
+        f64::from(clear) / f64::from(PALETTE_EDGE * PALETTE_EDGE) >= TRANSPARENT_SHARE;
+    let total: u32 = histogram.iter().map(|color| color.count).sum();
+    if total == 0 {
+        return ColorTags {
+            transparent,
+            ..ColorTags::default()
+        };
+    }
+
+    let palette = median_cut(&histogram, config.palette_size);
+    let mut bucket_counts: BTreeMap<ColorBucket, u32> = BTreeMap::new();
+    for palette_box in &palette {
+        let bucket = classify(palette_box.average(), config.neutral_s_threshold);
+        *bucket_counts.entry(bucket).or_insert(0) += palette_box.count();
+    }
+
+    // Sum integer counts and divide once; this is more exact at the min-share
+    // boundary than a float share sum.
+    let buckets = bucket_counts
+        .into_iter()
+        .filter(|(_, count)| f64::from(*count) / f64::from(total) >= config.min_share)
+        .map(|(bucket, _)| bucket)
+        .collect();
+    ColorTags {
+        buckets,
+        transparent,
+    }
+}
+
+/// One distinct RGB color and how many pixels it covers.
+#[derive(Debug, Clone, Copy)]
+struct ColorCount {
+    red: u8,
+    green: u8,
+    blue: u8,
+    count: u32,
+}
+
+/// A median-cut box: a group of colors that share one palette entry.
+#[derive(Debug, Clone)]
+struct PaletteBox {
+    colors: Vec<ColorCount>,
+}
+
+impl PaletteBox {
+    /// The total pixel count of the box.
+    fn count(&self) -> u32 {
+        self.colors.iter().map(|color| color.count).sum()
+    }
+
+    /// The weighted mean color of the box, rounded per channel.
+    fn average(&self) -> Rgb<u8> {
+        let total = u64::from(self.count());
+        if total == 0 {
+            return Rgb([0, 0, 0]);
+        }
+        let mut red = 0u64;
+        let mut green = 0u64;
+        let mut blue = 0u64;
+        for color in &self.colors {
+            let count = u64::from(color.count);
+            red += u64::from(color.red) * count;
+            green += u64::from(color.green) * count;
+            blue += u64::from(color.blue) * count;
+        }
+        let half = total / 2;
+        Rgb([
+            round_channel(red, total, half),
+            round_channel(green, total, half),
+            round_channel(blue, total, half),
+        ])
+    }
+
+    /// The widest channel and its spread, as a 0, 1, or 2 channel index.
+    fn widest_channel(&self) -> (usize, u8) {
+        let mut min = [u8::MAX; 3];
+        let mut max = [u8::MIN; 3];
+        for color in &self.colors {
+            let channels = [color.red, color.green, color.blue];
+            for (index, value) in channels.into_iter().enumerate() {
+                min[index] = min[index].min(value);
+                max[index] = max[index].max(value);
+            }
+        }
+        let mut best = 0usize;
+        let mut best_range = 0u8;
+        for index in 0..3 {
+            let range = max[index] - min[index];
+            if range > best_range {
+                best_range = range;
+                best = index;
+            }
+        }
+        (best, best_range)
+    }
+
+    /// Return true when the box holds more than one color and has a spread.
+    fn can_split(&self) -> bool {
+        self.colors.len() > 1 && self.widest_channel().1 > 0
+    }
+
+    /// Split the box at the median of its widest channel.
+    ///
+    /// Both sides hold at least one color.
+    fn split(mut self) -> (Self, Self) {
+        let (channel, _) = self.widest_channel();
+        self.colors
+            .sort_by_key(|color| channel_value(*color, channel));
+        let total = self.count();
+        let mut running = 0u32;
+        let mut split_at = self.colors.len() - 1;
+        for (index, color) in self.colors.iter().enumerate() {
+            running += color.count;
+            if running.saturating_mul(2) >= total {
+                split_at = index + 1;
+                break;
+            }
+        }
+        // Keep the left side non-empty and leave one color on the right.
+        let split_at = split_at.clamp(1, self.colors.len() - 1);
+        let right = self.colors.split_off(split_at);
+        (
+            Self {
+                colors: self.colors,
+            },
+            Self { colors: right },
+        )
+    }
+}
+
+/// Divide a weighted channel sum by the pixel total with rounding.
+fn round_channel(sum: u64, total: u64, half: u64) -> u8 {
+    let value = (sum + half) / total;
+    u8::try_from(value).unwrap_or(u8::MAX)
+}
+
+/// Return the 0, 1, or 2 channel value of a color.
+fn channel_value(color: ColorCount, channel: usize) -> u8 {
+    match channel {
+        0 => color.red,
+        1 => color.green,
+        _ => color.blue,
+    }
+}
+
+/// Scale a color channel by alpha, rounded.
+fn premultiply(channel: u8, alpha: u8) -> u8 {
+    u8::try_from((u32::from(channel) * u32::from(alpha) + 127) / 255).unwrap_or(u8::MAX)
+}
+
+/// Undo `premultiply`. Resize overshoot can push the result past 255, so clamp.
+fn unpremultiply(channel: u8, alpha: u8) -> u8 {
+    let alpha = u32::from(alpha);
+    u8::try_from((u32::from(channel) * 255 + alpha / 2) / alpha).unwrap_or(u8::MAX)
+}
+
+/// Count the distinct colors of an RGBA image, and the clear pixels it skips.
+fn histogram(image: &RgbaImage) -> (Vec<ColorCount>, u32) {
+    let mut counts: BTreeMap<[u8; 3], u32> = BTreeMap::new();
+    let mut clear = 0;
+    for pixel in image.pixels() {
+        let alpha = pixel[3];
+        if alpha < MIN_ALPHA {
+            clear += 1;
+            continue;
+        }
+        // Undo the premultiply so a faint red still reads as red.
+        let key = [0, 1, 2].map(|i| unpremultiply(pixel[i], alpha));
+        *counts.entry(key).or_insert(0) += 1;
+    }
+    let colors = counts
+        .into_iter()
+        .map(|([red, green, blue], count)| ColorCount {
+            red,
+            green,
+            blue,
+            count,
+        })
+        .collect();
+    (colors, clear)
+}
+
+/// Reduce the histogram to at most `palette_size` boxes by median cut.
+fn median_cut(histogram: &[ColorCount], palette_size: usize) -> Vec<PaletteBox> {
+    if histogram.is_empty() || palette_size == 0 {
+        return Vec::new();
+    }
+    let mut boxes = vec![PaletteBox {
+        colors: histogram.to_vec(),
+    }];
+    while boxes.len() < palette_size {
+        let mut best: Option<usize> = None;
+        for (index, palette_box) in boxes.iter().enumerate() {
+            if !palette_box.can_split() {
+                continue;
+            }
+            let better = best.is_none_or(|current| palette_box.count() > boxes[current].count());
+            if better {
+                best = Some(index);
+            }
+        }
+        let Some(index) = best else { break };
+        let palette_box = boxes.swap_remove(index);
+        let (left, right) = palette_box.split();
+        boxes.push(left);
+        boxes.push(right);
+    }
+    boxes
+}
+
+#[cfg(test)]
+mod tests {
+    // Casts here build test images; the library code avoids them.
+    #![allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        clippy::cast_precision_loss
+    )]
+
+    use std::collections::BTreeSet;
+
+    use image::{DynamicImage, Rgb, RgbImage, Rgba, RgbaImage};
+    use tarragon_core::color::ColorBucket;
+
+    use super::{ColorTagConfig, ColorTags, extract_dominant_colors};
+
+    /// The buckets of `image`.
+    fn buckets_of(image: &DynamicImage, config: ColorTagConfig) -> BTreeSet<ColorBucket> {
+        extract_dominant_colors(image, config).buckets
+    }
+
+    /// Build a 64x64 image with `clear` clear pixels first, then opaque red. The
+    /// size matches the resize target, so the clear count stays exact.
+    fn with_clear(clear: u32) -> ColorTags {
+        let red = Rgba([200, 30, 30, 255]);
+        let image = RgbaImage::from_fn(64, 64, |x, y| {
+            if y * 64 + x < clear {
+                Rgba([30, 200, 30, 0])
+            } else {
+                red
+            }
+        });
+        extract_dominant_colors(&DynamicImage::ImageRgba8(image), ColorTagConfig::default())
+    }
+
+    /// Round a 0..1 channel to 8 bits.
+    fn channel(value: f64) -> u8 {
+        (value * 255.0).round() as u8
+    }
+
+    /// Convert HSV to an 8-bit RGB color.
+    fn hsv_to_rgb(hue: f64, saturation: f64, value: f64) -> Rgb<u8> {
+        let c = value * saturation;
+        let x = c * (1.0 - ((hue / 60.0) % 2.0 - 1.0).abs());
+        let m = value - c;
+        let (red, green, blue) = if hue < 60.0 {
+            (c, x, 0.0)
+        } else if hue < 120.0 {
+            (x, c, 0.0)
+        } else if hue < 180.0 {
+            (0.0, c, x)
+        } else if hue < 240.0 {
+            (0.0, x, c)
+        } else if hue < 300.0 {
+            (x, 0.0, c)
+        } else {
+            (c, 0.0, x)
+        };
+        Rgb([channel(red + m), channel(green + m), channel(blue + m)])
+    }
+
+    /// Build a solid 100x100 image from HSV values.
+    fn solid(hue: f64, saturation: f64, value: f64) -> DynamicImage {
+        DynamicImage::ImageRgb8(RgbImage::from_pixel(
+            100,
+            100,
+            hsv_to_rgb(hue, saturation, value),
+        ))
+    }
+
+    /// Build a solid 100x100 image from an 8-bit RGB color.
+    fn solid_rgb(color: [u8; 3]) -> DynamicImage {
+        DynamicImage::ImageRgb8(RgbImage::from_pixel(100, 100, Rgb(color)))
+    }
+
+    /// Build a left/right split of two RGBA colors.
+    fn split_rgba(left: Rgba<u8>, right: Rgba<u8>) -> DynamicImage {
+        let image = RgbaImage::from_fn(100, 100, |x, _| if x < 50 { left } else { right });
+        DynamicImage::ImageRgba8(image)
+    }
+
+    /// Build a horizontal split: the top `ratio` is `top`, the rest is `bottom`.
+    fn split(top: Rgb<u8>, bottom: Rgb<u8>, ratio: f64) -> DynamicImage {
+        let (width, height) = (100u32, 100u32);
+        let split_y = (f64::from(height) * ratio) as u32;
+        let mut image = RgbImage::new(width, height);
+        for y in 0..height {
+            let color = if y < split_y { top } else { bottom };
+            for x in 0..width {
+                image.put_pixel(x, y, color);
+            }
+        }
+        DynamicImage::ImageRgb8(image)
+    }
+
+    /// Build four color quadrants in TL, TR, BL, BR order.
+    fn quad(colors: [Rgb<u8>; 4]) -> DynamicImage {
+        let size = 100u32;
+        let half = size / 2;
+        let positions = [(0, 0), (half, 0), (0, half), (half, half)];
+        let mut image = RgbImage::new(size, size);
+        for (color, (x0, y0)) in colors.iter().zip(positions) {
+            for y in y0..y0 + half {
+                for x in x0..x0 + half {
+                    image.put_pixel(x, y, *color);
+                }
+            }
+        }
+        DynamicImage::ImageRgb8(image)
+    }
+
+    #[test]
+    fn a_solid_red_image_yields_red() {
+        let tags = buckets_of(&solid(10.0, 0.8, 0.7), ColorTagConfig::default());
+        assert_eq!(tags, BTreeSet::from([ColorBucket::Red]));
+    }
+
+    #[test]
+    fn a_solid_blue_image_yields_blue() {
+        let tags = buckets_of(&solid(240.0, 0.8, 0.7), ColorTagConfig::default());
+        assert_eq!(tags, BTreeSet::from([ColorBucket::Blue]));
+    }
+
+    #[test]
+    fn pure_colors_yield_their_own_bucket() {
+        let cases = [
+            ([255, 0, 0], ColorBucket::Red),
+            ([255, 128, 0], ColorBucket::Orange),
+            ([255, 255, 0], ColorBucket::Yellow),
+            ([0, 255, 0], ColorBucket::Green),
+            ([0, 255, 255], ColorBucket::Cyan),
+            ([0, 0, 255], ColorBucket::Blue),
+            ([255, 0, 255], ColorBucket::Magenta),
+        ];
+        for (color, expected) in cases {
+            let tags = buckets_of(&solid_rgb(color), ColorTagConfig::default());
+            assert_eq!(tags, BTreeSet::from([expected]), "{color:?}");
+        }
+    }
+
+    #[test]
+    fn a_hue_of_180_yields_cyan() {
+        let tags = buckets_of(&solid_rgb([20, 200, 200]), ColorTagConfig::default());
+        assert_eq!(tags, BTreeSet::from([ColorBucket::Cyan]));
+    }
+
+    #[test]
+    fn pastel_pink_colors_yield_pink() {
+        for color in [[255, 128, 171], [255, 160, 160], [255, 200, 200]] {
+            let tags = buckets_of(&solid_rgb(color), ColorTagConfig::default());
+            assert_eq!(tags, BTreeSet::from([ColorBucket::Pink]), "{color:?}");
+        }
+    }
+
+    #[test]
+    fn strong_pink_hues_yield_magenta_or_red() {
+        let magenta = buckets_of(&solid_rgb([233, 30, 99]), ColorTagConfig::default());
+        assert_eq!(magenta, BTreeSet::from([ColorBucket::Magenta]));
+        let red = buckets_of(&solid_rgb([231, 76, 60]), ColorTagConfig::default());
+        assert_eq!(red, BTreeSet::from([ColorBucket::Red]));
+    }
+
+    #[test]
+    fn a_nearly_white_pink_is_neutral() {
+        let tags = buckets_of(&solid_rgb([255, 235, 235]), ColorTagConfig::default());
+        assert_eq!(tags, BTreeSet::from([ColorBucket::Neutral]));
+    }
+
+    #[test]
+    fn a_gray_image_is_neutral() {
+        let tags = buckets_of(&solid_rgb([128, 128, 128]), ColorTagConfig::default());
+        assert_eq!(tags, BTreeSet::from([ColorBucket::Neutral]));
+    }
+
+    #[test]
+    fn a_low_saturation_color_is_neutral() {
+        let tags = buckets_of(&solid(30.0, 0.1, 0.7), ColorTagConfig::default());
+        assert_eq!(tags, BTreeSet::from([ColorBucket::Neutral]));
+    }
+
+    #[test]
+    fn a_very_bright_low_saturation_color_is_neutral() {
+        let tags = buckets_of(&solid(10.0, 0.05, 0.95), ColorTagConfig::default());
+        assert_eq!(tags, BTreeSet::from([ColorBucket::Neutral]));
+    }
+
+    #[test]
+    fn full_value_red_yields_red() {
+        let tags = buckets_of(&solid_rgb([255, 0, 0]), ColorTagConfig::default());
+        assert_eq!(tags, BTreeSet::from([ColorBucket::Red]));
+    }
+
+    #[test]
+    fn white_and_near_white_are_neutral() {
+        for color in [[255, 255, 255], [250, 245, 240]] {
+            let tags = buckets_of(&solid_rgb(color), ColorTagConfig::default());
+            assert_eq!(tags, BTreeSet::from([ColorBucket::Neutral]), "{color:?}");
+        }
+    }
+
+    #[test]
+    fn full_value_full_saturation_yellow_is_not_neutral() {
+        let tags = buckets_of(&solid_rgb([255, 240, 0]), ColorTagConfig::default());
+        assert_eq!(tags, BTreeSet::from([ColorBucket::Yellow]));
+    }
+
+    #[test]
+    fn a_very_dark_color_is_neutral() {
+        let tags = buckets_of(&solid(10.0, 0.8, 0.05), ColorTagConfig::default());
+        assert_eq!(tags, BTreeSet::from([ColorBucket::Neutral]));
+    }
+
+    #[test]
+    fn a_strong_hue_between_magenta_and_red_is_magenta() {
+        let tags = buckets_of(&solid(320.0, 0.8, 0.7), ColorTagConfig::default());
+        assert_eq!(tags, BTreeSet::from([ColorBucket::Magenta]));
+    }
+
+    #[test]
+    fn the_neutral_threshold_changes_the_bucket() {
+        let image = solid(30.0, 0.2, 0.7);
+        let loose = ColorTagConfig {
+            neutral_s_threshold: 0.25,
+            ..ColorTagConfig::default()
+        };
+        let strict = ColorTagConfig {
+            neutral_s_threshold: 0.05,
+            ..ColorTagConfig::default()
+        };
+        assert_eq!(
+            buckets_of(&image, loose),
+            BTreeSet::from([ColorBucket::Neutral])
+        );
+        assert_eq!(
+            buckets_of(&image, strict),
+            BTreeSet::from([ColorBucket::Orange])
+        );
+    }
+
+    #[test]
+    fn a_green_and_blue_split_yields_two_tags() {
+        let image = split(
+            hsv_to_rgb(120.0, 0.8, 0.7),
+            hsv_to_rgb(240.0, 0.8, 0.7),
+            0.6,
+        );
+        let tags = buckets_of(&image, ColorTagConfig::default());
+        assert!(
+            tags.contains(&ColorBucket::Green),
+            "green is missing: {tags:?}"
+        );
+        assert!(
+            tags.contains(&ColorBucket::Blue),
+            "blue is missing: {tags:?}"
+        );
+        assert_eq!(tags.len(), 2, "unexpected tags: {tags:?}");
+    }
+
+    #[test]
+    fn a_tiny_accent_below_the_min_share_is_dropped() {
+        let image = split(hsv_to_rgb(0.0, 0.0, 0.5), hsv_to_rgb(10.0, 0.8, 0.7), 0.95);
+        let tags = buckets_of(&image, ColorTagConfig::default());
+        assert!(
+            !tags.contains(&ColorBucket::Red),
+            "red slipped in: {tags:?}"
+        );
+        assert!(
+            tags.contains(&ColorBucket::Neutral),
+            "neutral is missing: {tags:?}"
+        );
+    }
+
+    /// The chromatic share is about 12%, just above the default 0.10 min
+    /// share. The expected set follows the tagger rules.
+    #[test]
+    fn a_split_near_the_min_share_keeps_both_buckets() {
+        let image = split(hsv_to_rgb(10.0, 0.8, 0.7), hsv_to_rgb(0.0, 0.0, 0.5), 0.12);
+        let tags = buckets_of(&image, ColorTagConfig::default());
+        assert_eq!(
+            tags,
+            BTreeSet::from([ColorBucket::Red, ColorBucket::Neutral])
+        );
+    }
+
+    #[test]
+    fn an_empty_image_returns_no_tags() {
+        let image = DynamicImage::ImageRgb8(RgbImage::new(0, 0));
+        assert!(buckets_of(&image, ColorTagConfig::default()).is_empty());
+    }
+
+    #[test]
+    fn transparent_pixels_do_not_count() {
+        let image = split_rgba(Rgba([200, 30, 30, 255]), Rgba([30, 200, 30, 0]));
+        let tags = buckets_of(&image, ColorTagConfig::default());
+        assert_eq!(tags, BTreeSet::from([ColorBucket::Red]));
+    }
+
+    #[test]
+    fn a_fully_transparent_image_has_no_tags() {
+        let clear = Rgba([200, 30, 30, 0]);
+        let tags = buckets_of(&split_rgba(clear, clear), ColorTagConfig::default());
+        assert!(tags.is_empty(), "unexpected tags: {tags:?}");
+    }
+
+    #[test]
+    fn a_half_transparent_red_still_reads_as_red() {
+        let faint = Rgba([200, 30, 30, 200]);
+        let tags = buckets_of(&split_rgba(faint, faint), ColorTagConfig::default());
+        assert_eq!(tags, BTreeSet::from([ColorBucket::Red]));
+    }
+
+    #[test]
+    fn clear_pixels_do_not_tint_their_visible_neighbours() {
+        let red = Rgba([200, 30, 30, 255]);
+        let clear = Rgba([30, 200, 30, 0]);
+        let image = RgbaImage::from_fn(100, 100, |x, y| if (x + y) % 2 == 0 { red } else { clear });
+        let tags = buckets_of(&DynamicImage::ImageRgba8(image), ColorTagConfig::default());
+        assert_eq!(tags, BTreeSet::from([ColorBucket::Red]));
+    }
+
+    #[test]
+    fn alpha_127_is_skipped_and_alpha_128_is_kept() {
+        let at = |alpha| {
+            let color = Rgba([200, 30, 30, alpha]);
+            buckets_of(&split_rgba(color, color), ColorTagConfig::default())
+        };
+        assert!(at(127).is_empty(), "alpha 127 was kept");
+        assert_eq!(at(128), BTreeSet::from([ColorBucket::Red]));
+    }
+
+    #[test]
+    fn a_quarter_clear_is_transparent() {
+        assert!(with_clear(1024).transparent);
+    }
+
+    #[test]
+    fn just_under_a_quarter_clear_is_not_transparent() {
+        assert!(!with_clear(1023).transparent);
+    }
+
+    #[test]
+    fn an_all_clear_image_is_transparent_with_no_buckets() {
+        let tags = with_clear(64 * 64);
+        assert!(tags.transparent);
+        assert!(tags.buckets.is_empty());
+    }
+
+    #[test]
+    fn opaque_images_are_not_transparent() {
+        assert!(!with_clear(0).transparent);
+        let rgb = extract_dominant_colors(&solid_rgb([200, 30, 30]), ColorTagConfig::default());
+        assert!(!rgb.transparent);
+        let empty = DynamicImage::ImageRgb8(RgbImage::new(0, 0));
+        let none = extract_dominant_colors(&empty, ColorTagConfig::default());
+        assert_eq!(none, ColorTags::default());
+    }
+
+    #[test]
+    fn a_dark_faint_red_is_not_darkened_to_neutral() {
+        let faint = Rgba([40, 13, 5, 128]);
+        let tags = buckets_of(&split_rgba(faint, faint), ColorTagConfig::default());
+        assert_eq!(tags, BTreeSet::from([ColorBucket::Red]));
+    }
+
+    #[test]
+    fn every_chromatic_bucket_is_reachable() {
+        let cases = [
+            (0.0, 0.8, 0.7, ColorBucket::Red),
+            (30.0, 0.8, 0.7, ColorBucket::Orange),
+            (60.0, 0.8, 0.7, ColorBucket::Yellow),
+            (120.0, 0.8, 0.7, ColorBucket::Green),
+            (165.0, 0.8, 0.7, ColorBucket::Teal),
+            (185.0, 0.8, 0.7, ColorBucket::Cyan),
+            (240.0, 0.8, 0.7, ColorBucket::Blue),
+            (270.0, 0.8, 0.7, ColorBucket::Purple),
+            (300.0, 0.8, 0.7, ColorBucket::Magenta),
+            (340.0, 0.5, 1.0, ColorBucket::Pink),
+        ];
+        for (hue, saturation, value, expected) in cases {
+            let image = solid(hue, saturation, value);
+            let tags = buckets_of(&image, ColorTagConfig::default());
+            assert_eq!(tags, BTreeSet::from([expected]), "hue {hue}");
+        }
+    }
+
+    #[test]
+    fn a_larger_palette_keeps_more_buckets() {
+        let image = quad([
+            hsv_to_rgb(10.0, 0.8, 0.7),
+            hsv_to_rgb(120.0, 0.8, 0.7),
+            hsv_to_rgb(240.0, 0.8, 0.7),
+            hsv_to_rgb(300.0, 0.8, 0.7),
+        ]);
+        let few = buckets_of(
+            &image,
+            ColorTagConfig {
+                palette_size: 2,
+                ..ColorTagConfig::default()
+            },
+        );
+        let many = buckets_of(
+            &image,
+            ColorTagConfig {
+                palette_size: 8,
+                ..ColorTagConfig::default()
+            },
+        );
+        assert!(few.len() <= many.len(), "few {few:?} many {many:?}");
+        assert_eq!(many.len(), 4, "palette 8 did not keep four: {many:?}");
+        assert!(few.len() < many.len(), "palette size changed nothing");
+    }
+
+    #[test]
+    fn min_share_filters_smaller_buckets() {
+        let image = split(
+            hsv_to_rgb(120.0, 0.8, 0.7),
+            hsv_to_rgb(240.0, 0.8, 0.7),
+            0.7,
+        );
+        let low = buckets_of(
+            &image,
+            ColorTagConfig {
+                min_share: 0.10,
+                ..ColorTagConfig::default()
+            },
+        );
+        assert!(low.contains(&ColorBucket::Green), "green missing: {low:?}");
+        assert!(low.contains(&ColorBucket::Blue), "blue missing: {low:?}");
+
+        let mid = buckets_of(
+            &image,
+            ColorTagConfig {
+                min_share: 0.50,
+                ..ColorTagConfig::default()
+            },
+        );
+        assert!(mid.contains(&ColorBucket::Green), "green missing: {mid:?}");
+        assert!(
+            !mid.contains(&ColorBucket::Blue),
+            "blue slipped in: {mid:?}"
+        );
+
+        let high = buckets_of(
+            &image,
+            ColorTagConfig {
+                min_share: 0.80,
+                ..ColorTagConfig::default()
+            },
+        );
+        assert!(high.is_empty(), "a high min share kept tags: {high:?}");
+    }
+
+    #[test]
+    fn tags_are_bare_names_without_a_prefix() {
+        let tags = buckets_of(&solid(10.0, 0.8, 0.7), ColorTagConfig::default());
+        assert!(tags.contains(&ColorBucket::Red));
+        for tag in &tags {
+            assert!(
+                !tag.as_str().contains("color:"),
+                "bucket name carries a prefix: {tag}"
+            );
+        }
+    }
+}

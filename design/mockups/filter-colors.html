@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>D13 Filter colors - Tarragon mockups</title>
+<link rel="stylesheet" href="theme.css">
+</head>
+<body>
+<main class="mock">
+<div class="window">
+  <div class="titlebar">
+    <span class="tb-title">Tarragon</span>
+    <span class="tb-controls"><i></i><i></i><i></i></span>
+  </div>
+  <div class="menubar">
+    <span class="menu-item">File</span>
+    <span class="menu-item">View</span>
+    <span class="menu-item">Settings</span>
+  </div>
+
+  <div class="workspace">
+    <aside class="sidebar">
+      <div class="panel-title">Library</div>
+      <div class="side-head">Folders</div>
+      <div class="tree"><div class="tree-row selected"><span class="ico-folder"></span>sketches</div></div>
+    </aside>
+
+    <div class="col-main">
+      <section class="gallery">
+        <div class="gallery-top">
+          <div class="infobar"><span>sketches - 12 files</span><span class="pill">2 filters active</span></div>
+          <div class="filterbar">
+            <div class="swatches">
+              <span class="swatch active" style="background:var(--bucket-red)"></span>
+              <span class="swatch" style="background:var(--bucket-orange)"></span>
+              <span class="swatch" style="background:var(--bucket-yellow)"></span>
+              <span class="swatch hover" style="background:var(--bucket-green)"></span>
+              <span class="swatch" style="background:var(--bucket-teal)"></span>
+              <span class="swatch" style="background:var(--bucket-cyan)"></span>
+              <span class="swatch active" style="background:var(--bucket-blue)"></span>
+              <span class="swatch" style="background:var(--bucket-purple)"></span>
+              <span class="swatch" style="background:var(--bucket-magenta)"></span>
+              <span class="swatch" style="background:var(--bucket-neutral)"></span>
+            </div>
+          </div>
+        </div>
+        <div style="padding:16px;display:flex;flex-direction:column;gap:10px;color:var(--text-secondary);font-size:11px">
+          <div><span class="swatch active" style="background:var(--bucket-red);vertical-align:middle"></span> active - 2 px amber border</div>
+          <div><span class="swatch hover" style="background:var(--bucket-green);vertical-align:middle"></span> hover - 1 px text-primary border</div>
+          <div><span class="swatch" style="background:var(--bucket-orange);vertical-align:middle"></span> inactive - 1 px #555555 border</div>
+          <div>Ten buckets: red, orange, yellow, green, teal, cyan, blue, purple, magenta, neutral.</div>
+        </div>
+      </section>
+    </div>
+
+    <aside class="preview">
+      <div class="panel-title">Preview - color squares</div>
+      <div class="preview-body">
+        <div class="sec-head">Color squares use the same 10 buckets with opacity:</div>
+        <div class="color-squares" style="flex-wrap:wrap">
+          <span class="sq on" style="background:var(--bucket-red)"></span>
+          <span class="sq off" style="background:var(--bucket-orange)"></span>
+          <span class="sq off" style="background:var(--bucket-yellow)"></span>
+          <span class="sq off" style="background:var(--bucket-green)"></span>
+          <span class="sq off" style="background:var(--bucket-teal)"></span>
+          <span class="sq half" style="background:var(--bucket-cyan)"></span>
+          <span class="sq on" style="background:var(--bucket-blue)"></span>
+          <span class="sq off" style="background:var(--bucket-purple)"></span>
+          <span class="sq off" style="background:var(--bucket-magenta)"></span>
+          <span class="sq off" style="background:var(--bucket-neutral)"></span>
+        </div>
+        <div class="meta-grid">
+          <span class="meta-key">opacity 1.0</span><span class="meta-val">all selected files have the color</span>
+          <span class="meta-key">opacity 0.5</span><span class="meta-val">some selected files have the color</span>
+          <span class="meta-key">opacity 0.3</span><span class="meta-val">no selected file has the color</span>
+        </div>
+      </div>
+    </aside>
+  </div>
+  <div class="statusbar"><span>Color filters</span></div>
+  <span class="sample">sample</span>
+</div>
+<p class="mock-note">D13 - Filter colors. Ten color chips in active, hover, and inactive states. Sample data.</p>
+</main>
+</body>
+</html>

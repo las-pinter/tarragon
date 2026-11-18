@@ -2,144 +2,100 @@
 
 **Browse thousands of images instantly, without moving a single file.**
 
-Tarragon is a fast, free image browser built for artists who are drowning in reference images, sketches, and PSD files. Point it at a folder, and start browsing immediately. No importing. No copying. No waiting.
-
-Your files stay exactly where they are on your hard drive. Tarragon just reads them, fast.
-
-## Why Tarragon?
-
-You know the feeling. You have 10,000 reference images scattered across a dozen folders. You need to find *that one* blue-toned landscape you saved last month. You're scrolling through file explorers, opening Photoshop just to preview a PSD, and wasting time instead of making art.
-
-Tarragon fixes that.
-
-Open a folder of 5,000 PSDs and browse them instantly as thumbnails. Find images by the colors they contain. Tag your favorites. Double-click to open in Photoshop, GIMP, or Krita. It's the image browser that actually understands how artists work.
+Tarragon is a free image browser for artists who have too many reference
+images, sketches, and PSD files. Point it at a folder and start browsing. No
+importing. No copying. Your files stay where they are on your disk.
 
 ## Features
 
-### 🖼️ Instant Browsing
+- **Thumbnails.** JPEG, PNG, WebP, TIFF, PSD, and PSB files, plus Krita (KRA)
+  and Clip Studio (CLIP) files. Thumbnails are cached, so they load fast the
+  second time.
+- **PSD preview.** See layered PSD and PSB files in the Preview panel without
+  opening Photoshop. The panel shows file name, size, and format.
+- **Find by color.** Tarragon finds the dominant color of each image. Click a
+  swatch to filter the folder.
+- **Your own tags.** Add tags to any image and filter by them. Manage tags
+  lets you rename or delete a tag.
+- **Favorites.** Add a folder to the Favorites sidebar and open it in one
+  click.
+- **Open in your editor.** Tarragon opens the file with the app your system
+  uses for that file type. Krita and GIMP are two examples.
+- **File operations.** Rename, duplicate, copy, paste, and delete. Delete
+  moves a file to the Trash, or you can choose Delete permanently.
+- **Search and sort.** Search by file name. Sort by name or by date.
+- **Dark theme.** Easy on the eyes for long sessions.
 
-Point Tarragon at any folder and see your images as thumbnails, immediately. JPEG, PNG, WebP, TIFF, and even PSD/PSB files. No importing, no copying, no waiting for a library to build. Your files stay right where they are.
-
-### 🎨 Find Images by Color
-
-Remember saving an image because of its color palette? Tarragon does too. It automatically detects the dominant colors in every image: red, blue, green, purple, and more. Click a color swatch to filter your collection and find exactly what you're looking for.
-
-### 📂 Photoshop Files Without Photoshop
-
-Preview layered PSD and PSB files without launching Photoshop. See thumbnails, check dimensions, and browse your PSD collections as easily as regular images. When you're ready to edit, double-click to open in your editor of choice.
-
-### 🏷️ Organize Your Way
-
-Create your own tags and apply them to any image. Build a tagging system that makes sense for *your* workflow: by project, by subject, by mood, by client. Filter by multiple tags at once to narrow down your search.
-
-### ⭐ Favorites
-
-Got folders you open every day? Add them to your Favorites sidebar for one-click access. Your reference library, your WIP folder, your client deliverables, all just a click away.
-
-### ✏️ Open in Your Editor
-
-Double-click any image to open it in Photoshop, GIMP, Krita, or whatever you use. Configure custom editor commands for different file types, or just let Tarragon use your system default.
-
-### 🌙 Dark Theme
-
-A dark, easy-on-the-eyes interface designed for long work sessions. Because staring at a bright white window for eight hours isn't doing anyone any favors.
-
-### ⚡ Actually Fast
-
-Tarragon is a compiled native application, not a web app running in a browser. Thumbnails are cached so they load instantly the second time. Large folders with thousands of files stay responsive. It's built to handle real-world art collections.
-
-## Quick Start
-
-1. **Install Tarragon** (see below)
-2. **Launch it**: you'll see the Library, Gallery, and Preview panels
-3. **Open a folder**: File → Open Folder, and pick any directory with images
-4. **Browse**: scroll through thumbnails, click to preview, double-click to open in your editor
-5. **Organize**: add tags, mark favorites, filter by color
-
-That's it. No library to set up. No database to configure. Just open a folder and go.
-
-## Installation
-
-### From Source (Developer Setup)
-
-Tarragon requires Python 3.12 or later. We recommend [uv](https://docs.astral.sh/uv/) for fast dependency management.
-
-#### Using uv (recommended)
-
-```bash
-# Clone the repository
-git clone https://github.com/las-pinter/tarragon.git
-cd tarragon
-
-# Install uv (if not already installed)
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Create virtual environment and install (including the dev tooling group)
-uv sync
-
-# Launch Tarragon
-uv run python -m tarragon
-```
-
-#### Using pip
-
-```bash
-# Clone the repository
-git clone https://github.com/las-pinter/tarragon.git
-cd tarragon
-
-# Create and activate a virtual environment
-python -m venv .venv
-source .venv/bin/activate        # Linux/macOS
-# .venv\Scripts\activate         # Windows
-
-# Install in editable mode
-pip install -e .
-
-# Launch Tarragon
-python -m tarragon
-```
-
-### Pre-built Binaries
-
-Standalone binaries for Windows, macOS, and Linux are coming soon. These won't require Python, just download and run.
-
-### Build Your Own Binary
-
-See [Release Build Instructions](docs/release.md) for how to build a standalone binary.
-
-## For Developers
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for developer setup, project architecture, and contribution guidelines.
-
-## Data & Schema
-
-Tarragon stores its library in a local SQLite database. The schema uses a
-single generation marker (`schema_version`) rather than a versioned migration
-chain; there is intentionally no migration framework at version 0.1.0.
-
-On every startup, `MigrationRunner.run()` calls `init_schema()`, which creates
-any missing tables (`CREATE TABLE IF NOT EXISTS`) and applies idempotent
-`ALTER` guards for older databases, then re-stamps the stored version marker
-to the current generation. Existing installs are upgraded in place, at startup,
-with no user action required.
-
-If you change `INITIAL_SCHEMA`, you must (a) bump the `schema_version` marker
-and (b) carry an idempotent `ALTER`-upgrade guard for existing databases — the
-`file_tags.source` column guard is the precedent. A real migration framework
-becomes warranted at the first schema delta a guard cannot express, or the
-first user-installed database that needs an upgrade.
+Copy and Paste in the grid work on Linux only for now.
 
 ## Screenshots
 
-*Coming soon, we're polishing the interface for its close-up.*
+![The Gallery panel shows a folder of images as thumbnails. The Library tree and Favorites are on the left, the Preview panel on the right.](docs/screenshots/gallery.png)
 
-## Attribution
+![One color swatch is selected in the Gallery. The grid shows only the images with that color.](docs/screenshots/color-filter.png)
 
-![AI vs human code split](assets/attribution.svg)
+![The Filter Tags menu lists the tags moodboard and reference, with a Manage tags entry.](docs/screenshots/tags.png)
 
-Every commit is classified in [`AI-ATTRIBUTION.yaml`](AI-ATTRIBUTION.yaml).
+![A layered PSD file in the Preview panel, with its dimensions, size, and format.](docs/screenshots/psd-preview.png)
+
+## Install (Linux)
+
+Download `tarragon-0.2.0-linux-x86_64-portable.zip` and its `.sha256` file
+from the [GitHub Releases](https://github.com/las-pinter/tarragon/releases)
+page. Then run:
+
+```sh
+sha256sum -c tarragon-0.2.0-linux-x86_64-portable.zip.sha256
+unzip tarragon-0.2.0-linux-x86_64-portable.zip
+cd tarragon-0.2.0-linux-x86_64-portable
+./tarragon
+```
+
+The `data/` folder in the zip turns on portable mode. Tarragon then keeps its
+database in that folder, next to the program.
+
+Tarragon needs a few system packages at run time. See
+[Runtime packages](docs/build.md#runtime-packages) for the list.
+
+Windows and macOS are not released yet.
+
+## Quick start
+
+1. Launch Tarragon. You see the Library, Gallery, and Preview panels.
+2. Choose File, then Open Folder..., and pick a folder with images.
+3. Browse. Click a thumbnail to preview it. Double-click to open it in your
+   editor. Right-click for more actions.
+4. Tag. Right-click an image and choose Add tag..., or use the + add button in
+   the Preview panel.
+5. Filter by color. Click a color swatch above the grid. Click it again to
+   clear the filter.
+
+To save a folder, select it and choose Add Current Folder under Favorites.
+
+You can also name a folder on the command line: `tarragon <folder>`. When
+Tarragon already runs, the folder opens in that window instead.
+
+## Build from source
+
+```sh
+git clone https://github.com/las-pinter/tarragon.git
+cd tarragon
+cargo build --release
+```
+
+The binary is at `target/release/tarragon`. See [docs/build.md](docs/build.md)
+for the toolchain and the other build steps.
 
 ## License
 
-Tarragon is open source software licensed under the [MIT License](LICENSE). Free to use, modify, and share.
+Tarragon is released under the MIT license. See [LICENSE](LICENSE).
+
+## Attribution
+
+![Share of AI and human lines](assets/attribution.svg)
+
+Lines are counted with `git blame` over the tracked text files. A line is AI
+when its commit heading starts with `ai:` (or the older `ai-`). Every other
+line is human, and lines not yet committed count as human. Files under the
+top-level `assets/` folder and binary files are left out. The command
+`cargo xtask attribution` makes the chart. It is refreshed before each release.

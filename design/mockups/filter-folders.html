@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>D15 Filter folders - Tarragon mockups</title>
+<link rel="stylesheet" href="theme.css">
+</head>
+<body>
+<main class="mock">
+<div class="window">
+  <div class="titlebar">
+    <span class="tb-title">Tarragon</span>
+    <span class="tb-controls"><i></i><i></i><i></i></span>
+  </div>
+  <div class="menubar">
+    <span class="menu-item">File</span>
+    <span class="menu-item">View</span>
+    <span class="menu-item">Settings</span>
+  </div>
+
+  <div class="workspace">
+    <aside class="sidebar">
+      <div class="panel-title">Library</div>
+      <div class="side-head">Folders</div>
+      <div class="tree"><div class="tree-row"><span class="ico-folder"></span>sketches</div></div>
+    </aside>
+
+    <div class="col-main">
+      <section class="gallery">
+        <div class="gallery-top">
+          <div class="tabs"><span class="tab">Folder</span><span class="tab active">All Images</span></div>
+          <div class="infobar"><span>All Images - 3,204 files</span><span class="pill">2 filters active</span></div>
+
+          <div style="padding:6px 8px 0;color:var(--text-muted);font-size:10px">Global scope - Filter Folders button and chips</div>
+          <div class="filterbar">
+            <button class="btn small">Filter Folders</button>
+            <div class="chips">
+              <span class="chip">sketches/2026-10 <span class="x">x</span></span>
+              <span class="chip">studies/color <span class="x">x</span></span>
+            </div>
+          </div>
+
+          <div style="padding:8px 8px 0;color:var(--text-muted);font-size:10px">Local scope - the button is hidden, chips stay if folders are selected</div>
+          <div class="filterbar">
+            <div class="chips">
+              <span class="chip">sketches/2026-10 <span class="x">x</span></span>
+            </div>
+            <span style="color:var(--text-muted);font-size:10px">folder scope uses the navigated folder</span>
+          </div>
+
+          <div style="padding:8px 8px 0;color:var(--text-muted);font-size:10px">Empty bar - no folder filters, no chips</div>
+          <div class="filterbar">
+            <span style="color:var(--text-muted);font-size:10px">no folder filters</span>
+          </div>
+        </div>
+
+        <div class="empty">
+          <div class="hint">Folder chips show the last two path parts, for example "sketches/2026-10". Click x to remove a chip and re-run the query.</div>
+        </div>
+      </section>
+    </div>
+
+    <aside class="preview">
+      <div class="panel-title">Preview</div>
+      <div class="preview-body"><div class="preview-img"><span style="color:var(--text-muted)">No preview</span></div></div>
+    </aside>
+  </div>
+  <div class="statusbar"><span>Folder filters</span></div>
+  <span class="sample">sample</span>
+</div>
+<p class="mock-note">D15 - Filter folders. Folder chips, hidden button in local scope, and the empty bar state. Sample data.</p>
+</main>
+</body>
+</html>

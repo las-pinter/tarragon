@@ -1,0 +1,21 @@
+[package]
+name = "tarragon-db"
+description = "SQLite storage layer: schema and repositories."
+version.workspace = true
+edition.workspace = true
+publish = false
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+tarragon-core.workspace = true
+rusqlite.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+rusqlite = { workspace = true, features = ["hooks", "trace"] }

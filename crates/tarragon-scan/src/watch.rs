@@ -1,0 +1,506 @@
+//! A live folder watcher with a 500 ms debounce.
+//!
+//! The watcher runs only while a folder is open. One burst of filesystem
+//! events gives one rescan callback after [`DEBOUNCE`]. The watch is
+//! non-recursive: only direct children of the folder report events.
+//!
+//! The backend `notify` handler sends a small message to a debounce thread.
+//! The thread waits out the quiet window, then calls the rescan callback.
+//! Stopping the watcher drops the backend and joins the thread, so a stale
+//! rescan cannot escape after the folder closes.
+
+use std::panic::{AssertUnwindSafe, catch_unwind};
+use std::path::{Path, PathBuf};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
+use std::thread::{self, JoinHandle};
+use std::time::{Duration, Instant};
+
+use notify::event::ModifyKind;
+use notify::{EventKind, RecommendedWatcher, RecursiveMode, Watcher};
+use tarragon_core::error::ScanError;
+
+/// The debounce window: one burst of events gives one rescan after 500 ms.
+pub const DEBOUNCE: Duration = Duration::from_millis(500);
+
+/// The longest a steady stream of events can delay the rescan.
+///
+/// Without it, a large copy that writes less than [`DEBOUNCE`] apart would
+/// hold the rescan back until the copy ends.
+pub const MAX_WAIT: Duration = Duration::from_secs(5);
+
+/// A running watcher for one open folder.
+///
+/// Drop the value, or call [`FolderWatcher::stop`], to end the watch. The
+/// backend drops first, then the debounce thread is joined.
+pub struct FolderWatcher {
+    folder: PathBuf,
+    backend: Option<RecommendedWatcher>,
+    debounce: Option<JoinHandle<()>>,
+}
+
+impl FolderWatcher {
+    /// Start a non-recursive watch on `folder`.
+    ///
+    /// `on_rescan` runs on the debounce thread after each quiet window. The
+    /// callback must not block for long, because it holds up the next window.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ScanError::Watch`] when the backend cannot watch the folder
+    /// or the debounce thread cannot start.
+    pub fn start<F>(folder: &Path, on_rescan: F) -> Result<Self, ScanError>
+    where
+        F: FnMut() + Send + 'static,
+    {
+        let (sender, receiver) = mpsc::channel::<()>();
+        let mut backend =
+            notify::recommended_watcher(move |event: notify::Result<notify::Event>| {
+                // A backend error can mean lost events, so it asks for a
+                // rescan like a change does.
+                if event.map_or(true, |event| is_change(&event)) {
+                    // A send fault means the debounce thread already stopped.
+                    let _ = sender.send(());
+                }
+            })
+            .map_err(|error| watch_error(folder, &error))?;
+        backend
+            .watch(folder, RecursiveMode::NonRecursive)
+            .map_err(|error| watch_error(folder, &error))?;
+        let debounce = thread::Builder::new()
+            .name("tarragon-watch".to_owned())
+            .spawn(move || debounce_loop(&receiver, on_rescan, DEBOUNCE, MAX_WAIT))
+            .map_err(|error| watch_error(folder, &error))?;
+        Ok(Self {
+            folder: folder.to_path_buf(),
+            backend: Some(backend),
+            debounce: Some(debounce),
+        })
+    }
+
+    /// The watched folder.
+    #[must_use]
+    pub fn folder(&self) -> &Path {
+        &self.folder
+    }
+
+    /// Return true while the backend watch is live.
+    #[must_use]
+    pub fn is_running(&self) -> bool {
+        self.backend.is_some()
+    }
+
+    /// Stop the watch. Safe to call more than once.
+    ///
+    /// The backend drops first, so no new event reaches the thread. The call
+    /// then joins the thread and drops a pending debounce.
+    pub fn stop(&mut self) {
+        self.backend = None;
+        if let Some(handle) = self.debounce.take() {
+            // The loop catches a panicking callback, so the join result holds
+            // nothing the caller needs.
+            let _ = handle.join();
+        }
+    }
+}
+
+impl Drop for FolderWatcher {
+    fn drop(&mut self) {
+        self.stop();
+    }
+}
+
+/// Wrap a backend or thread fault as a scan error.
+fn watch_error(folder: &Path, reason: impl std::fmt::Display) -> ScanError {
+    ScanError::Watch {
+        path: folder.to_path_buf(),
+        reason: reason.to_string(),
+    }
+}
+
+/// Return true when the event can change the folder contents.
+///
+/// Access events are dropped, because our own rescan reads the folder. A
+/// content or metadata change on a subfolder is dropped too: some backends
+/// report it when a file deeper down changes, and the rescan lists only image
+/// files. Create, remove, and rename of a subfolder still count.
+/// Keep `Other` and `Any`, because they can carry the rescan-on-drop signal.
+fn is_change(event: &notify::Event) -> bool {
+    match event.kind {
+        EventKind::Access(_) => false,
+        EventKind::Modify(ModifyKind::Name(_)) => true,
+        EventKind::Modify(_) => {
+            event.paths.is_empty() || !event.paths.iter().all(|path| path.is_dir())
+        }
+        _ => true,
+    }
+}
+
+/// Coalesce events and call `on_rescan` once per quiet window.
+///
+/// A burst ends after `quiet` with no event, or after `max_wait` from its
+/// first event, whichever comes first. A panic in `on_rescan` is caught, so
+/// the thread keeps serving later bursts.
+///
+/// A disconnected channel means the backend dropped, so the thread returns
+/// without calling `on_rescan`.
+fn debounce_loop<F: FnMut()>(
+    receiver: &Receiver<()>,
+    mut on_rescan: F,
+    quiet: Duration,
+    max_wait: Duration,
+) {
+    loop {
+        // Block for the first event of a burst.
+        if receiver.recv().is_err() {
+            return;
+        }
+        let started = Instant::now();
+        // Wait out the quiet window. Each new event restarts the window, up to
+        // the maximum wait.
+        while let Some(left) = max_wait.checked_sub(started.elapsed()) {
+            match receiver.recv_timeout(quiet.min(left)) {
+                Ok(()) => {}
+                Err(RecvTimeoutError::Timeout) => break,
+                Err(RecvTimeoutError::Disconnected) => return,
+            }
+        }
+        let _ = catch_unwind(AssertUnwindSafe(&mut on_rescan));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::{Path, PathBuf};
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+    use std::time::{Duration, Instant};
+
+    use super::{DEBOUNCE, FolderWatcher, is_change};
+    use crate::scan::scan_folder;
+    use notify::EventKind;
+    use notify::event::{AccessKind, CreateKind, ModifyKind, RemoveKind, RenameMode};
+
+    /// The longest a test waits for a debounced callback.
+    const WAIT_TIMEOUT: Duration = Duration::from_secs(10);
+
+    /// Extra quiet time for a negative assert on a slow CI machine.
+    const NEGATIVE_MARGIN: Duration = Duration::from_millis(1500);
+
+    /// A short wait inside the debounce window, so work is still pending.
+    const PARTIAL_WINDOW: Duration = Duration::from_millis(100);
+
+    /// A temporary folder that removes itself on drop.
+    struct TempDir {
+        path: PathBuf,
+    }
+
+    impl TempDir {
+        /// Create a unique temp folder with the given tag.
+        fn new(tag: &str) -> Self {
+            static NEXT: AtomicU64 = AtomicU64::new(0);
+            let id = NEXT.fetch_add(1, Ordering::Relaxed);
+            let path = std::env::temp_dir()
+                .join(format!("tarragon-watch-{tag}-{}-{id}", std::process::id()));
+            std::fs::create_dir_all(&path).expect("create the temp folder");
+            Self { path }
+        }
+
+        /// Return the folder path.
+        fn path(&self) -> &Path {
+            &self.path
+        }
+    }
+
+    impl Drop for TempDir {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.path);
+        }
+    }
+
+    /// Build a callback that counts its calls.
+    fn counter() -> (Arc<AtomicUsize>, impl FnMut() + Send + 'static) {
+        let count = Arc::new(AtomicUsize::new(0));
+        let handle = Arc::clone(&count);
+        let callback = move || {
+            handle.fetch_add(1, Ordering::SeqCst);
+        };
+        (count, callback)
+    }
+
+    /// Wait until the counter reaches `target`, or the timeout runs out.
+    fn wait_for(count: &Arc<AtomicUsize>, target: usize) -> bool {
+        let deadline = Instant::now() + WAIT_TIMEOUT;
+        while Instant::now() < deadline {
+            if count.load(Ordering::SeqCst) >= target {
+                return true;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        count.load(Ordering::SeqCst) >= target
+    }
+
+    /// Wait one debounce window plus a margin, to catch a late callback.
+    fn settle() {
+        std::thread::sleep(DEBOUNCE + Duration::from_millis(300));
+    }
+
+    /// Wait well past the window, so a slow machine cannot fake a quiet watch.
+    fn settle_long() {
+        std::thread::sleep(DEBOUNCE + NEGATIVE_MARGIN);
+    }
+
+    #[test]
+    fn one_create_triggers_one_rescan() {
+        let temp = TempDir::new("create");
+        let (count, callback) = counter();
+        let _watcher = FolderWatcher::start(temp.path(), callback).expect("start the watch");
+        std::fs::write(temp.path().join("new.png"), b"x").expect("write the file");
+        assert!(wait_for(&count, 1), "no rescan after a create");
+        settle();
+        assert_eq!(
+            count.load(Ordering::SeqCst),
+            1,
+            "the create gave extra rescans"
+        );
+    }
+
+    #[test]
+    fn one_modify_triggers_one_rescan() {
+        let temp = TempDir::new("modify");
+        let file = temp.path().join("art.png");
+        std::fs::write(&file, b"x").expect("write the file");
+        let (count, callback) = counter();
+        let _watcher = FolderWatcher::start(temp.path(), callback).expect("start the watch");
+        std::fs::write(&file, b"changed").expect("modify the file");
+        assert!(wait_for(&count, 1), "no rescan after a modify");
+        settle();
+        assert_eq!(
+            count.load(Ordering::SeqCst),
+            1,
+            "the modify gave extra rescans"
+        );
+    }
+
+    #[test]
+    fn one_delete_triggers_one_rescan() {
+        let temp = TempDir::new("delete");
+        let file = temp.path().join("art.png");
+        std::fs::write(&file, b"x").expect("write the file");
+        let (count, callback) = counter();
+        let _watcher = FolderWatcher::start(temp.path(), callback).expect("start the watch");
+        std::fs::remove_file(&file).expect("delete the file");
+        assert!(wait_for(&count, 1), "no rescan after a delete");
+        settle();
+        assert_eq!(
+            count.load(Ordering::SeqCst),
+            1,
+            "the delete gave extra rescans"
+        );
+    }
+
+    #[test]
+    fn a_burst_within_the_window_gives_one_rescan() {
+        let temp = TempDir::new("burst");
+        let (count, callback) = counter();
+        let _watcher = FolderWatcher::start(temp.path(), callback).expect("start the watch");
+        for index in 0..20 {
+            std::fs::write(temp.path().join(format!("burst{index}.png")), b"x").expect("write");
+        }
+        assert!(wait_for(&count, 1), "no rescan after the burst");
+        settle();
+        assert_eq!(
+            count.load(Ordering::SeqCst),
+            1,
+            "the burst gave more than one rescan"
+        );
+    }
+
+    #[test]
+    fn a_rescan_that_reads_the_folder_does_not_self_trigger() {
+        let temp = TempDir::new("selftrigger");
+        let folder = temp.path().to_path_buf();
+        let count = Arc::new(AtomicUsize::new(0));
+        let handle = Arc::clone(&count);
+        let callback = move || {
+            // A real rescan reads the folder; that read must not trigger again.
+            let _ = scan_folder(&folder);
+            handle.fetch_add(1, Ordering::SeqCst);
+        };
+        let _watcher = FolderWatcher::start(temp.path(), callback).expect("start the watch");
+        std::fs::write(temp.path().join("new.png"), b"x").expect("write the file");
+        assert!(wait_for(&count, 1), "no rescan after a create");
+        settle_long();
+        assert_eq!(
+            count.load(Ordering::SeqCst),
+            1,
+            "the rescan retriggered itself"
+        );
+    }
+
+    #[test]
+    fn two_writes_past_the_window_give_two_rescans() {
+        let temp = TempDir::new("twoburst");
+        let (count, callback) = counter();
+        let _watcher = FolderWatcher::start(temp.path(), callback).expect("start the watch");
+        std::fs::write(temp.path().join("first.png"), b"x").expect("write the first file");
+        assert!(wait_for(&count, 1), "no rescan after the first write");
+        settle();
+        std::fs::write(temp.path().join("second.png"), b"x").expect("write the second file");
+        assert!(wait_for(&count, 2), "the watch stopped after one burst");
+    }
+
+    #[test]
+    fn stop_ends_the_watch_and_drops_pending_work() {
+        let temp = TempDir::new("stop");
+        let (count, callback) = counter();
+        let mut watcher = FolderWatcher::start(temp.path(), callback).expect("start the watch");
+        assert!(watcher.is_running(), "the watch did not start");
+        // Write inside the window, wait a little, then stop before it fires.
+        std::fs::write(temp.path().join("pending.png"), b"x").expect("write the file");
+        std::thread::sleep(PARTIAL_WINDOW);
+        watcher.stop();
+        assert!(
+            !watcher.is_running(),
+            "the watch is still running after stop"
+        );
+        settle_long();
+        assert_eq!(
+            count.load(Ordering::SeqCst),
+            0,
+            "a stopped watch called back"
+        );
+    }
+
+    #[test]
+    fn a_nested_change_is_ignored() {
+        let temp = TempDir::new("nested");
+        let nested = temp.path().join("sub");
+        std::fs::create_dir_all(&nested).expect("make the subfolder");
+        let file = nested.join("art.png");
+        std::fs::write(&file, b"x").expect("write the nested file");
+        let (count, callback) = counter();
+        let _watcher = FolderWatcher::start(temp.path(), callback).expect("start the watch");
+        std::fs::write(&file, b"changed").expect("modify the nested file");
+        settle_long();
+        assert_eq!(
+            count.load(Ordering::SeqCst),
+            0,
+            "the watch is not non-recursive"
+        );
+    }
+
+    #[test]
+    fn the_debounce_window_is_500_ms() {
+        assert_eq!(DEBOUNCE, Duration::from_millis(500));
+    }
+
+    /// Build an event of `kind` for `path`.
+    fn event(kind: EventKind, path: &Path) -> notify::Event {
+        notify::Event::new(kind).add_path(path.to_path_buf())
+    }
+
+    #[test]
+    fn only_access_events_are_dropped() {
+        let temp = TempDir::new("kinds");
+        let file = temp.path().join("art.png");
+        assert!(
+            !is_change(&event(EventKind::Access(AccessKind::Any), &file)),
+            "an access event must be dropped"
+        );
+        assert!(
+            is_change(&event(EventKind::Create(CreateKind::Any), &file)),
+            "a create event must rescan"
+        );
+        assert!(
+            is_change(&event(EventKind::Modify(ModifyKind::Any), &file)),
+            "a modify event must rescan"
+        );
+        assert!(
+            is_change(&event(EventKind::Remove(RemoveKind::Any), &file)),
+            "a remove event must rescan"
+        );
+        assert!(
+            is_change(&event(EventKind::Other, &file)),
+            "an other event must rescan"
+        );
+        assert!(
+            is_change(&event(EventKind::Any, &file)),
+            "an any event must rescan"
+        );
+    }
+
+    #[test]
+    fn a_subfolder_modify_is_dropped_but_its_other_changes_count() {
+        let temp = TempDir::new("dirkinds");
+        let dir = temp.path();
+        assert!(
+            !is_change(&event(EventKind::Modify(ModifyKind::Any), dir)),
+            "a subfolder modify must be dropped"
+        );
+        assert!(
+            is_change(&event(
+                EventKind::Modify(ModifyKind::Name(RenameMode::To)),
+                dir
+            )),
+            "a subfolder rename must rescan"
+        );
+        assert!(
+            is_change(&event(EventKind::Create(CreateKind::Folder), dir)),
+            "a subfolder create must rescan"
+        );
+        assert!(
+            is_change(&event(EventKind::Remove(RemoveKind::Folder), dir)),
+            "a subfolder remove must rescan"
+        );
+    }
+
+    #[test]
+    fn a_steady_stream_still_fires_after_the_max_wait() {
+        let (sender, receiver) = std::sync::mpsc::channel::<()>();
+        let (count, callback) = counter();
+        let thread = std::thread::spawn(move || {
+            super::debounce_loop(
+                &receiver,
+                callback,
+                Duration::from_millis(200),
+                Duration::from_millis(300),
+            );
+        });
+        // Events arrive faster than the quiet window and never let it expire.
+        let started = Instant::now();
+        while started.elapsed() < Duration::from_millis(900) {
+            sender.send(()).expect("send");
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        let fired = count.load(Ordering::SeqCst);
+        drop(sender);
+        thread.join().expect("join");
+        assert!(fired >= 1, "the max wait must force a rescan mid-stream");
+    }
+
+    #[test]
+    fn a_panicking_callback_does_not_kill_the_thread() {
+        let (sender, receiver) = std::sync::mpsc::channel::<()>();
+        let (count, mut inner) = counter();
+        let mut first = true;
+        let callback = move || {
+            assert!(!std::mem::take(&mut first), "callback fault");
+            inner();
+        };
+        let thread = std::thread::spawn(move || {
+            super::debounce_loop(
+                &receiver,
+                callback,
+                Duration::from_millis(20),
+                Duration::from_millis(100),
+            );
+        });
+        sender.send(()).expect("send the first burst");
+        std::thread::sleep(Duration::from_millis(150));
+        sender.send(()).expect("send the second burst");
+        std::thread::sleep(Duration::from_millis(150));
+        drop(sender);
+        thread.join().expect("the thread must not have panicked");
+        assert_eq!(count.load(Ordering::SeqCst), 1);
+    }
+}

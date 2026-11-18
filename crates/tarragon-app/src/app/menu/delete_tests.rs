@@ -112,8 +112,14 @@ fn a_trash_keeps_the_tags_of_the_file_and_drops_its_thumbnail_row() {
     let bin = new_dir();
     let b = dir.join("b.png");
     let key = db_key(&b);
-    frames_until(&mut rig, "the thumbnail row", |rig| {
-        rig.app.db.thumbnail(&key).expect("read").is_some()
+    // Start from a rendered row with its cache links, so the trash is checked
+    // on a real stored thumbnail and not on the bare scan row.
+    frames_until(&mut rig, "the render of the file", |rig| {
+        rig.app
+            .db
+            .thumbnail(&key)
+            .expect("read")
+            .is_some_and(|row| row.thumbnail_cache_path.is_some())
     });
     let tag = rig.app.db.ensure_tag("keep", TagSource::User).expect("tag");
     rig.app

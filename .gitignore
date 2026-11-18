@@ -2,10 +2,6 @@
 /target/
 **/*.rs.bk
 
-# Legacy application source still on disk
-/src/
-/scripts/
-
 # Fixture corpus is tracked. Caches are ignored by the rules below.
 .venv/
 __pycache__/

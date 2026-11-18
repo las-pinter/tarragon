@@ -38,7 +38,8 @@ exist:
 - `.github/workflows/rust.yml` runs the gates, the Windows and macOS builds,
   and the PSD jobs.
 - `.github/workflows/release-linux.yml` builds the Linux portable zip with
-  `cargo zigbuild`, smoke-tests it, and, on a tag only, makes a draft release.
+  `cargo zigbuild`, checks it on old distros and on Arch Linux, and, on a tag
+  only, makes a draft release.
 
 ## Portable data folder
 
@@ -344,7 +345,7 @@ loads at run time (X11, Wayland, EGL, Vulkan) are not in this number.
 #### Release build
 
 `.github/workflows/release-linux.yml` builds the Linux portable zip. It runs on
-a push to `rust`, on a `v*` tag, and by hand. It has three jobs:
+a push to `rust`, on a `v*` tag, and by hand. It has four jobs:
 
 - `build` runs in an `ubuntu:26.04` container. On a `v*` tag it runs
   `cargo xtask attribution` before the build and fails when
@@ -352,9 +353,18 @@ a push to `rust`, on a `v*` tag, and by hand. It has three jobs:
   and packs the zip, and uploads the zip and its sha256 file as one workflow
   artifact.
 - `smoke` starts the unpacked binary in `ubuntu:20.04` and `debian:11`.
-- `publish` runs only on a `v*` tag, after `build` and `smoke` pass. It
+- `arch` (Arch Linux check) runs the unpacked binary in `archlinux:latest`. It
+  checks `--version` and `--help`. Then it installs the run-time packages with
+  `pacman`, starts the window under Xvfb on a small folder, and checks that the
+  app finds a system CJK font. The job gates the release.
+- `publish` runs only on a `v*` tag, after `build`, `smoke`, and `arch` pass. It
   creates a draft release. A maintainer reviews the draft and publishes it by
   hand.
+
+A red `arch` job stops the draft release. Nothing skips it. If `pacman` fails
+on a mirror error, run the job again. For any other failure, fix the cause (for
+example a package name in the job), do the steps in "Before a release tag"
+again, and make a new tag.
 
 Before a release tag, do these steps in this order:
 
@@ -409,6 +419,9 @@ Limits of the test:
 - RHEL 8 (glibc 2.28) is not covered. The floor is glibc 2.31.
 - The smoke test runs `--version` and `--help` only. A GUI start on old
   distros is not tested.
+- The Arch check starts a window under X11 (Xvfb) only. Wayland, a real
+  graphics driver, and the folder picker are not covered there. A real GUI
+  check stays by hand.
 - The window and graphics libraries (X11, Wayland, EGL, Vulkan) load at run
   time. The `ldd` check does not see them.
 

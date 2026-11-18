@@ -1,10 +1,11 @@
 //! The single-instance guard.
 //!
-//! The first start takes an OS file lock and listens for a one-line
-//! "activate" request. A later start finds the lock held, sends that line,
-//! and exits. The OS drops the lock when its process dies, so a crashed
-//! primary never blocks the next start. The guard is best effort: any
-//! problem with it means the app starts without one.
+//! The first start takes an OS file lock and listens for one-line requests.
+//! A later start finds the lock held, sends "open" with its folder
+//! argument or "activate" without one, and exits. The OS drops the lock
+//! when its process dies, so a crashed primary never blocks the next start.
+//! The guard is best effort: any problem with it means the app starts
+//! without one.
 
 mod dir;
 mod paths;
@@ -40,8 +41,8 @@ type Waker = Arc<dyn Fn() + Send + Sync>;
 pub enum Outcome {
     /// This process is the first one. Keep the guard until the end.
     Primary(Guard),
-    /// Another instance runs. It was asked to show its window, or the ask
-    /// failed and was logged.
+    /// Another instance runs. It was asked to open the folder or to show its
+    /// window, or the ask failed and was logged.
     Forwarded,
     /// The guard could not be set up. The app runs without one.
     Unguarded(String),
@@ -52,13 +53,19 @@ pub enum Outcome {
 struct Delivery {
     /// Set when a second start asked for the window.
     flag: Arc<AtomicBool>,
+    /// The folder of the last open request not yet taken.
+    folder: Arc<Mutex<Option<PathBuf>>>,
     /// Called after the flag is set.
     waker: Arc<Mutex<Option<Waker>>>,
 }
 
 impl Delivery {
-    /// Record a request and wake the UI.
-    fn signal(&self) {
+    /// Record a request, with the folder to open if any, and wake the UI.
+    /// A later folder replaces one not yet taken.
+    fn signal(&self, folder: Option<PathBuf>) {
+        if folder.is_some() {
+            *self.folder.lock().unwrap_or_else(PoisonError::into_inner) = folder;
+        }
         self.flag.store(true, Ordering::Release);
         // Clone it out so no lock is held while it runs: it may call
         // `set_waker`. A panic in it must not end the listener thread.
@@ -102,6 +109,16 @@ impl Guard {
         self.delivery.flag.swap(false, Ordering::AcqRel)
     }
 
+    /// The folder a second start asked to open since the last call. Every
+    /// open request also sets the activate request.
+    pub fn take_open_request(&self) -> Option<PathBuf> {
+        self.delivery
+            .folder
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .take()
+    }
+
     /// Set the function the listener calls after it records a request, for
     /// example one that asks the UI for a repaint. It runs on the listener
     /// thread. A later call replaces the earlier function.
@@ -136,12 +153,15 @@ impl Drop for Guard {
     }
 }
 
-/// Take the guard for the instance that owns `db_path`.
+/// Take the guard for the instance that owns `db_path`. When another
+/// instance holds it, ask that one to open `folder`, or to show its window
+/// when there is none.
 ///
 /// Two starts share an instance when their database files share a folder.
-pub fn acquire(db_path: &Path) -> Outcome {
+pub fn acquire(db_path: &Path, folder: Option<&Path>) -> Outcome {
     acquire_in(
         db_path,
+        folder,
         std::env::var_os("XDG_RUNTIME_DIR"),
         &std::env::temp_dir(),
         current_owner,
@@ -181,6 +201,7 @@ fn current_owner(_temp: &Path) -> Owner {
 /// the temp folder is used.
 fn acquire_in(
     db_path: &Path,
+    folder: Option<&Path>,
     xdg_runtime_dir: Option<std::ffi::OsString>,
     temp: &Path,
     owner: impl FnOnce(&Path) -> Owner,
@@ -200,14 +221,14 @@ fn acquire_in(
             layout.sock.display()
         ));
     }
-    prepare_and_acquire::<Platform>(&location, uid, &layout)
+    prepare_and_acquire::<Platform>(&location, uid, &layout, folder)
 }
 
 /// [`acquire`] with a private folder under `root`, for tests that must not
 /// touch the runtime folder.
 #[cfg(test)]
-pub(crate) fn acquire_under(db_path: &Path, root: &Path) -> Outcome {
-    acquire_in(db_path, None, root, current_owner)
+pub(crate) fn acquire_under(db_path: &Path, folder: Option<&Path>, root: &Path) -> Outcome {
+    acquire_in(db_path, folder, None, root, current_owner)
 }
 
 /// The folder of the database file, as a canonical path when possible.
@@ -224,11 +245,12 @@ fn prepare_and_acquire<T: Transport>(
     location: &Location,
     uid: Option<u32>,
     layout: &Layout,
+    folder: Option<&Path>,
 ) -> Outcome {
     if let Err(error) = dir::prepare(location, uid) {
         return Outcome::Unguarded(format!("cannot use {}: {error}", location.dir().display()));
     }
-    acquire_with::<T>(layout)
+    acquire_with::<T>(layout, folder)
 }
 
 /// Open the lock file, creating it when it is missing.
@@ -241,8 +263,8 @@ fn open_lock(path: &Path) -> std::io::Result<File> {
 }
 
 /// Take the lock. The holder becomes the primary. Any other process sends
-/// the activate request to the primary.
-fn acquire_with<T: Transport>(layout: &Layout) -> Outcome {
+/// its request to the primary.
+fn acquire_with<T: Transport>(layout: &Layout, folder: Option<&Path>) -> Outcome {
     let lock = match open_lock(&layout.lock) {
         Ok(lock) => lock,
         Err(error) => {
@@ -254,16 +276,35 @@ fn acquire_with<T: Transport>(layout: &Layout) -> Outcome {
     };
     match lock.try_lock() {
         Ok(()) => start::<T>(layout, lock),
-        Err(TryLockError::WouldBlock) => match transport::forward::<T>(layout, &lock) {
-            Forwarded::Sent => Outcome::Forwarded,
-            Forwarded::TookLock => start::<T>(layout, lock),
-            Forwarded::Failed(error) => {
-                tracing::warn!("cannot ask the running instance to show its window: {error}");
-                Outcome::Forwarded
+        Err(TryLockError::WouldBlock) => {
+            match transport::forward::<T>(layout, &lock, sendable(folder)) {
+                Forwarded::Sent => Outcome::Forwarded,
+                Forwarded::TookLock => start::<T>(layout, lock),
+                Forwarded::Failed(error) => {
+                    tracing::warn!("cannot hand this start to the running instance: {error}");
+                    Outcome::Forwarded
+                }
             }
-        },
+        }
         Err(TryLockError::Error(error)) => {
             Outcome::Unguarded(format!("cannot lock {}: {error}", layout.lock.display()))
+        }
+    }
+}
+
+/// The folder as request text. A folder that cannot travel is logged and
+/// dropped, so the request only shows the window.
+fn sendable(folder: Option<&Path>) -> Option<&str> {
+    let folder = folder?;
+    match proto::sendable_path(folder) {
+        Ok(text) => Some(text),
+        Err(reason) => {
+            tracing::warn!(
+                "cannot send the folder {} to the running instance: {reason}; \
+                 asking it to show its window instead",
+                folder.display()
+            );
+            None
         }
     }
 }

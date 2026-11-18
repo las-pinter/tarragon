@@ -12,7 +12,7 @@ use super::{TempDir, primary};
 fn first_primary_then_forwarded<T: Transport>() {
     let dir = TempDir::new();
     let layout = dir.layout();
-    let guard = primary(acquire_with::<T>(&layout));
+    let guard = primary(acquire_with::<T>(&layout, None));
     let woken = Arc::new(AtomicUsize::new(0));
     let counter = Arc::clone(&woken);
     guard.set_waker(move || {
@@ -20,10 +20,56 @@ fn first_primary_then_forwarded<T: Transport>() {
     });
     assert!(!guard.take_activate_request());
 
-    assert!(matches!(acquire_with::<T>(&layout), Outcome::Forwarded));
+    assert!(matches!(
+        acquire_with::<T>(&layout, None),
+        Outcome::Forwarded
+    ));
     assert!(guard.take_activate_request());
     assert!(!guard.take_activate_request(), "the flag is taken once");
     assert_eq!(woken.load(Ordering::SeqCst), 1);
+}
+
+/// A second start with a folder hands it over; the last folder wins, and a
+/// folder that cannot travel only raises the window.
+fn folder_is_forwarded<T: Transport>() {
+    let dir = TempDir::new();
+    let layout = dir.layout();
+    let guard = primary(acquire_with::<T>(&layout, None));
+    assert_eq!(guard.take_open_request(), None);
+
+    // Absolute on every system; the folders need not exist.
+    let first = &std::env::temp_dir().join("ref one");
+    let second = &std::env::temp_dir().join("ref two");
+    assert!(matches!(
+        acquire_with::<T>(&layout, Some(first)),
+        Outcome::Forwarded
+    ));
+    assert!(matches!(
+        acquire_with::<T>(&layout, Some(second)),
+        Outcome::Forwarded
+    ));
+    assert!(guard.take_activate_request());
+    assert_eq!(guard.take_open_request().as_deref(), Some(second.as_path()));
+    assert_eq!(guard.take_open_request(), None, "the folder is taken once");
+
+    let long = std::env::temp_dir().join("x".repeat(proto::MAX_PATH_BYTES));
+    assert!(matches!(
+        acquire_with::<T>(&layout, Some(&long)),
+        Outcome::Forwarded
+    ));
+    assert!(guard.take_activate_request(), "a bad folder still raises");
+    assert_eq!(guard.take_open_request(), None);
+}
+
+#[cfg(unix)]
+#[test]
+fn unix_folder_is_forwarded() {
+    folder_is_forwarded::<unix::UnixTransport>();
+}
+
+#[test]
+fn tcp_folder_is_forwarded() {
+    folder_is_forwarded::<TcpTransport>();
 }
 
 #[cfg(unix)]
@@ -48,9 +94,9 @@ fn stale_socket_without_a_lock_holder_is_removed() {
         "dropping the listener leaves the file"
     );
 
-    let guard = primary(acquire_with::<unix::UnixTransport>(&layout));
+    let guard = primary(acquire_with::<unix::UnixTransport>(&layout, None));
     assert!(matches!(
-        acquire_with::<unix::UnixTransport>(&layout),
+        acquire_with::<unix::UnixTransport>(&layout, None),
         Outcome::Forwarded
     ));
     assert!(guard.take_activate_request());
@@ -61,7 +107,7 @@ fn stale_port_file_is_replaced() {
     let dir = TempDir::new();
     let layout = dir.layout();
     std::fs::write(&layout.port, proto::format_port_file(9, "old")).expect("write");
-    let guard = primary(acquire_with::<TcpTransport>(&layout));
+    let guard = primary(acquire_with::<TcpTransport>(&layout, None));
     let text = std::fs::read_to_string(&layout.port).expect("read");
     let (port, token) = proto::parse_port_file(&text).expect("parse");
     assert_ne!(port, 9);
@@ -93,7 +139,7 @@ fn race<T: Transport>() {
             let barrier = Arc::clone(&barrier);
             std::thread::spawn(move || {
                 barrier.wait();
-                acquire_with::<T>(&layout)
+                acquire_with::<T>(&layout, None)
             })
         })
         .collect();
@@ -133,7 +179,7 @@ fn tcp_eight_racing_starts_make_one_primary() {
 fn listener_stops_on_drop<T: Transport>() {
     let dir = TempDir::new();
     let layout = dir.layout();
-    let guard = primary(acquire_with::<T>(&layout));
+    let guard = primary(acquire_with::<T>(&layout, None));
     drop(guard);
     assert!(T::connect(&layout).is_err(), "nothing listens after drop");
     for file in T::files(&layout) {
@@ -141,7 +187,7 @@ fn listener_stops_on_drop<T: Transport>() {
     }
     assert!(layout.lock.exists(), "the lock file stays");
     // The lock is free again.
-    drop(primary(acquire_with::<T>(&layout)));
+    drop(primary(acquire_with::<T>(&layout, None)));
 }
 
 #[cfg(unix)]
@@ -161,7 +207,7 @@ fn unreadable_lock_path_gives_unguarded() {
     let mut layout = dir.layout();
     layout.lock = dir.0.join("missing").join("x.lock");
     assert!(matches!(
-        acquire_with::<TcpTransport>(&layout),
+        acquire_with::<TcpTransport>(&layout, None),
         Outcome::Unguarded(_)
     ));
 }
@@ -182,8 +228,11 @@ fn bind_failure_is_unguarded_and_frees_the_lock<T: Transport>() {
     let mut bad = good.clone();
     bad.sock = dir.0.join("missing").join("x.sock");
     bad.port = dir.0.join("missing").join("x.port");
-    assert!(matches!(acquire_with::<T>(&bad), Outcome::Unguarded(_)));
-    drop(primary(acquire_with::<T>(&good)));
+    assert!(matches!(
+        acquire_with::<T>(&bad, None),
+        Outcome::Unguarded(_)
+    ));
+    drop(primary(acquire_with::<T>(&good, None)));
 }
 
 #[cfg(unix)]
@@ -204,6 +253,7 @@ fn over_long_socket_path_is_unguarded() {
     let db = std::env::temp_dir().join("x.db");
     let outcome = acquire_in(
         &db,
+        None,
         Some(long.into_os_string()),
         &std::env::temp_dir(),
         |_| Owner {
@@ -268,7 +318,7 @@ fn forward_takes_the_lock_when_the_holder_quits_after_a_failed_try() {
     HOLDER.with(|slot| *slot.borrow_mut() = Some(holder));
     let ours = open_lock(&layout.lock).expect("open");
     assert!(matches!(
-        transport::forward::<QuitsOnConnect>(&layout, &ours),
+        transport::forward::<QuitsOnConnect>(&layout, &ours, None),
         Forwarded::TookLock
     ));
 }
@@ -282,7 +332,7 @@ fn forward_fails_when_the_holder_stays_and_nothing_answers() {
     let ours = open_lock(&layout.lock).expect("open");
     // No holder is stored for the connect to drop, so it keeps the lock.
     assert!(matches!(
-        transport::forward::<QuitsOnConnect>(&layout, &ours),
+        transport::forward::<QuitsOnConnect>(&layout, &ours, None),
         Forwarded::Failed(_)
     ));
     drop(holder);
@@ -296,10 +346,10 @@ fn start_after_taking_the_lock_gives_a_working_primary() {
     holder.try_lock().expect("lock");
     HOLDER.with(|slot| *slot.borrow_mut() = Some(holder));
 
-    let guard = primary(acquire_with::<QuitsOnConnect>(&layout));
+    let guard = primary(acquire_with::<QuitsOnConnect>(&layout, None));
     assert!(!guard.take_activate_request());
     assert!(matches!(
-        acquire_with::<QuitsOnConnect>(&layout),
+        acquire_with::<QuitsOnConnect>(&layout, None),
         Outcome::Forwarded
     ));
     assert!(guard.take_activate_request());

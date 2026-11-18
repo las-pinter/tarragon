@@ -138,7 +138,9 @@ The `tarragon-app` binary parses the `--version` and `--help` flags. Without a
 flag it resolves the data directory, takes the single-instance guard, sets up
 logging, and opens the database, then opens the shell window with eframe. It
 tries the wgpu renderer first and falls back to glow. A second start ends after
-the guard, before the log file is opened or rolled.
+the guard, before the log file is opened or rolled. It asks the running
+instance to open its folder argument, or only to show its window when it has
+none.
 
 ### Grid benchmark
 

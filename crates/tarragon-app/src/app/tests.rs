@@ -19,7 +19,7 @@ impl Drop for TempDir {
 /// An app that owns the guard, and a second start that already asked for the window.
 fn app_with_pending_request(dir: &TempDir) -> App {
     let db_path = dir.0.join("tarragon.db");
-    let guard = match instance::acquire_under(&db_path, &dir.0) {
+    let guard = match instance::acquire_under(&db_path, None, &dir.0) {
         Outcome::Primary(guard) => guard,
         Outcome::Forwarded => panic!("expected a primary guard, got Forwarded"),
         Outcome::Unguarded(reason) => panic!("expected a primary guard: {reason}"),
@@ -41,7 +41,7 @@ fn app_with_pending_request(dir: &TempDir) -> App {
     )
     .expect("open the app");
     assert!(matches!(
-        instance::acquire_under(&db_path, &dir.0),
+        instance::acquire_under(&db_path, None, &dir.0),
         Outcome::Forwarded
     ));
     app
@@ -297,6 +297,48 @@ fn logic_pass_sends_the_raise_commands_after_an_activate_request() {
 
     let again = ctx.run_logic(&RawInput::default(), |c| app.logic(c, &mut frame));
     assert!(again.viewport_commands.is_empty(), "the flag is taken once");
+}
+
+#[test]
+fn a_forwarded_folder_opens_adds_a_root_and_raises_the_window() {
+    let dir = short_dir();
+    let pics = dir.0.join("pics");
+    make_pngs(&pics, &["a.png", "b.png"]);
+    let db_path = dir.0.join("tarragon.db");
+    let Outcome::Primary(guard) = instance::acquire_under(&db_path, None, &dir.0) else {
+        panic!("expected a primary guard");
+    };
+    let (_filter, control) = LogControl::new_filter();
+    let startup = Startup {
+        folder: None,
+        close_when_loaded: false,
+        exit_wait: ExitWait::default(),
+        crash_dir: None,
+        perf_log: None,
+        frame_run: false,
+    };
+    let mut app = App::open(
+        &db_path,
+        LogRing::new(),
+        control,
+        Some(Arc::new(guard)),
+        startup,
+    )
+    .expect("open the app");
+    let second = instance::acquire_under(&db_path, Some(&pics), &dir.0);
+    assert!(matches!(second, Outcome::Forwarded));
+    let ctx = Context::default();
+    tarragon_ui::install(&ctx);
+    let mut frame = Frame::_new_kittest();
+
+    let output = ctx.run_logic(&RawInput::default(), |c| app.logic(c, &mut frame));
+    let commands = output.viewport_commands.get(&ViewportId::ROOT);
+    assert_eq!(commands.map(Vec::len), Some(4), "{commands:?}");
+    assert!(app.shell.sidebar_mut().roots().contains(&pics));
+    run_until_idle(&mut app, &ctx, &mut frame);
+    assert_eq!(app.shell.gallery_mut().folder(), Some(pics.as_path()));
+    assert_eq!(app.shell.gallery_mut().visible_len(), 2);
+    assert_eq!(app.shell.sidebar_mut().open_folder(), Some(pics.as_path()));
 }
 
 #[test]

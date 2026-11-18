@@ -72,6 +72,9 @@ Windows and macOS are not released yet.
 
 To save a folder, select it and choose Add Current Folder under Favorites.
 
+You can also name a folder on the command line: `tarragon <folder>`. When
+Tarragon already runs, the folder opens in that window instead.
+
 ## Build from source
 
 ```sh

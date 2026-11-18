@@ -28,12 +28,15 @@ fn raw_exchange<T: Transport>(
 fn ignores_unknown_and_bad_lines<T: Transport>(bad: impl FnOnce(Option<&str>) -> String) {
     let dir = TempDir::new();
     let layout = dir.layout();
-    let guard = primary(acquire_with::<T>(&layout));
+    let guard = primary(acquire_with::<T>(&layout, None));
     assert_eq!(raw_exchange::<T>(&layout, |_| "hello\n".into()), "");
     assert_eq!(raw_exchange::<T>(&layout, bad), "");
     assert!(!guard.take_activate_request());
     // The listener still works after the bad input.
-    assert!(matches!(acquire_with::<T>(&layout), Outcome::Forwarded));
+    assert!(matches!(
+        acquire_with::<T>(&layout, None),
+        Outcome::Forwarded
+    ));
     assert!(guard.take_activate_request());
 }
 
@@ -45,18 +48,18 @@ fn unix_unknown_line_gives_no_activation() {
 
 #[test]
 fn tcp_unknown_line_and_wrong_token_give_no_activation() {
-    ignores_unknown_and_bad_lines::<TcpTransport>(|_| proto::request_line(Some("wrong")));
+    ignores_unknown_and_bad_lines::<TcpTransport>(|_| proto::request_line(Some("wrong"), None));
 }
 
 #[test]
 fn hung_client_does_not_block_the_listener() {
     let dir = TempDir::new();
     let layout = dir.layout();
-    let guard = primary(acquire_with::<TcpTransport>(&layout));
+    let guard = primary(acquire_with::<TcpTransport>(&layout, None));
     // A silent client must not block the listener from serving the next one.
     let (_hung, _) = TcpTransport::connect(&layout).expect("connect");
     assert!(matches!(
-        acquire_with::<TcpTransport>(&layout),
+        acquire_with::<TcpTransport>(&layout, None),
         Outcome::Forwarded
     ));
     assert!(guard.take_activate_request());
@@ -69,17 +72,17 @@ fn a_panicking_waker_does_not_end_the_listener() {
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     let dir = TempDir::new();
     let layout = dir.layout();
-    let guard = primary(acquire_with::<TcpTransport>(&layout));
+    let guard = primary(acquire_with::<TcpTransport>(&layout, None));
     guard.set_waker(|| panic!("waker panic on purpose"));
     assert!(matches!(
-        acquire_with::<TcpTransport>(&layout),
+        acquire_with::<TcpTransport>(&layout, None),
         Outcome::Forwarded
     ));
     assert!(guard.take_activate_request());
     // The listener lives: a second request still works.
     guard.set_waker(|| {});
     assert!(matches!(
-        acquire_with::<TcpTransport>(&layout),
+        acquire_with::<TcpTransport>(&layout, None),
         Outcome::Forwarded
     ));
     assert!(guard.take_activate_request());
@@ -89,11 +92,11 @@ fn a_panicking_waker_does_not_end_the_listener() {
 fn a_waker_may_replace_itself() {
     let dir = TempDir::new();
     let layout = dir.layout();
-    let guard = Arc::new(primary(acquire_with::<TcpTransport>(&layout)));
+    let guard = Arc::new(primary(acquire_with::<TcpTransport>(&layout, None)));
     let inner = Arc::clone(&guard);
     guard.set_waker(move || inner.set_waker(|| {}));
     assert!(matches!(
-        acquire_with::<TcpTransport>(&layout),
+        acquire_with::<TcpTransport>(&layout, None),
         Outcome::Forwarded
     ));
     assert!(guard.take_activate_request());
@@ -105,7 +108,7 @@ fn a_waker_may_replace_itself() {
 fn dribbling_client_is_cut_off<T: Transport>() {
     let dir = TempDir::new();
     let layout = dir.layout();
-    let guard = primary(acquire_with::<T>(&layout));
+    let guard = primary(acquire_with::<T>(&layout, None));
     let (mut slow, _) = T::connect(&layout).expect("connect");
     let dribble = std::thread::spawn(move || {
         for _ in 0..50 {
@@ -116,7 +119,10 @@ fn dribbling_client_is_cut_off<T: Transport>() {
         }
     });
     std::thread::sleep(Duration::from_millis(150));
-    assert!(matches!(acquire_with::<T>(&layout), Outcome::Forwarded));
+    assert!(matches!(
+        acquire_with::<T>(&layout, None),
+        Outcome::Forwarded
+    ));
     assert!(guard.take_activate_request());
     drop(guard);
     dribble.join().expect("dribble");

@@ -85,10 +85,10 @@ fn main() -> ExitCode {
         logging::install_panic_hook(found.crash_dir.clone());
     }
     let outcome = logging::with_stderr(offset, || {
-        let outcome = instance::acquire(&db_path);
+        let outcome = instance::acquire(&db_path, folder.as_deref());
         match &outcome {
             instance::Outcome::Forwarded => {
-                tracing::info!("another instance is running; asked it to show its window");
+                tracing::info!("another instance is running; handed this start to it");
             }
             instance::Outcome::Unguarded(reason) => {
                 tracing::warn!("starting without a single-instance guard: {reason}");

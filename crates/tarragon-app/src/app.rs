@@ -400,6 +400,11 @@ impl eframe::App for App {
     // A minimized or hidden window runs no `ui`, but eframe still calls this,
     // so the activate request is taken here and only here.
     fn logic(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
+        if let Some(folder) = self.guard.as_deref().and_then(Guard::take_open_request) {
+            let folder = sidebar::normalize(&folder);
+            sidebar::add_folder_root(&mut self.shell, &folder);
+            self.navigate(&folder);
+        }
         window::raise_if_requested(ctx, self.guard.as_deref());
     }
 

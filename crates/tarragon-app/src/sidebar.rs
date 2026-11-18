@@ -102,6 +102,16 @@ pub fn refresh_roots(shell: &mut Shell, db: &Database, home: Option<&Path>) {
     shell.sidebar_mut().set_roots(all);
 }
 
+/// Add `folder` as the last tree root when it is under none of the roots, as
+/// the command line folder is at the start. The root is not saved.
+pub fn add_folder_root(shell: &mut Shell, folder: &Path) {
+    let mut roots = shell.sidebar_mut().roots().to_vec();
+    if !roots.iter().any(|root| folder.starts_with(root)) {
+        roots.push(folder.to_path_buf());
+        shell.sidebar_mut().set_roots(roots);
+    }
+}
+
 /// Set the roots, load the favorites, and mark the open folder.
 ///
 /// The folder is normalized first, so a `..` in it cannot hide it from the tree.

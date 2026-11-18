@@ -104,6 +104,21 @@ fn refresh_roots_keeps_the_command_line_folder_last() {
 }
 
 #[test]
+fn a_forwarded_folder_becomes_a_root_only_outside_the_roots() {
+    let dir = new_dir();
+    let db = db_with_favorites(&dir);
+    let home = dir.0.join("home");
+    let mut shell = Shell::new();
+    init(&mut shell, &db, Some(&home), None);
+    add_folder_root(&mut shell, &home.join("pics"));
+    assert_eq!(shell.sidebar_mut().roots(), std::slice::from_ref(&home));
+    let outside = dir.0.join("a");
+    add_folder_root(&mut shell, &outside);
+    add_folder_root(&mut shell, &outside);
+    assert_eq!(shell.sidebar_mut().roots(), [home, outside]);
+}
+
+#[test]
 fn init_sets_the_roots_the_favorites_and_the_open_folder() {
     let dir = new_dir();
     let db = db_with_favorites(&dir);

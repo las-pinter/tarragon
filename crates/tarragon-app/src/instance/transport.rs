@@ -137,19 +137,21 @@ fn serve<T: Transport>(mut stream: T::Stream, token: Option<&str>, delivery: &De
             return;
         }
     };
-    match proto::parse_request(&line, token) {
-        Request::Activate => {
-            delivery.signal();
-            if let Err(error) = stream.write_all(proto::REPLY.as_bytes()) {
-                tracing::debug!("instance listener: cannot send the reply: {error}");
-            }
-        }
+    let folder = match proto::parse_request(&line, token) {
+        Request::Activate => None,
+        Request::Open(folder) => Some(folder),
         Request::BadToken => {
             tracing::warn!("instance listener: ignored a request with a bad token");
+            return;
         }
         Request::Unknown => {
             tracing::warn!("instance listener: ignored an unknown request");
+            return;
         }
+    };
+    delivery.signal(folder);
+    if let Err(error) = stream.write_all(proto::REPLY.as_bytes()) {
+        tracing::debug!("instance listener: cannot send the reply: {error}");
     }
 }
 
@@ -163,14 +165,14 @@ pub enum Forwarded {
     Failed(io::Error),
 }
 
-/// Send the activate request to the primary, retrying for a short time
-/// because it may still be binding. After each failed try the lock is tried
-/// too: if the primary quit meanwhile, this start must become the primary
-/// rather than leave nothing running.
-pub fn forward<T: Transport>(layout: &Layout, lock: &File) -> Forwarded {
+/// Send the request to the primary: open `folder`, or only show the window.
+/// Retry for a short time, because the primary may still be binding. After
+/// each failed try the lock is tried too: if the primary quit meanwhile, this
+/// start must become the primary rather than leave nothing running.
+pub fn forward<T: Transport>(layout: &Layout, lock: &File, folder: Option<&str>) -> Forwarded {
     let deadline = Instant::now() + FORWARD_WINDOW;
     loop {
-        let error = match try_once::<T>(layout) {
+        let error = match try_once::<T>(layout, folder) {
             Ok(()) => return Forwarded::Sent,
             Err(error) => error,
         };
@@ -185,9 +187,9 @@ pub fn forward<T: Transport>(layout: &Layout, lock: &File) -> Forwarded {
 }
 
 /// One attempt: connect, send the line, wait for `ok`.
-fn try_once<T: Transport>(layout: &Layout) -> io::Result<()> {
+fn try_once<T: Transport>(layout: &Layout, folder: Option<&str>) -> io::Result<()> {
     let (mut stream, token) = T::connect(layout)?;
-    stream.write_all(proto::request_line(token.as_deref()).as_bytes())?;
+    stream.write_all(proto::request_line(token.as_deref(), folder).as_bytes())?;
     stream.flush()?;
     if read_request::<T>(&mut stream)? == proto::REPLY {
         Ok(())

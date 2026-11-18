@@ -2,34 +2,66 @@
 //! except [`new_token`] and [`read_line`].
 
 use std::io::{self, BufRead, BufReader, Read};
+use std::path::{Path, PathBuf};
 
-/// The request text without the token.
+/// The activate request text without the token.
 const ACTIVATE: &str = "tarragon/1 activate";
+
+/// The open request text without the token and the folder.
+const OPEN: &str = "tarragon/1 open";
+
+/// The longest folder path an open request carries, in bytes.
+pub const MAX_PATH_BYTES: usize = 4096;
 
 /// The reply to a valid request, with its line end.
 pub const REPLY: &str = "ok\n";
 
-/// The longest line we read. Longer input is cut off and ignored.
-const MAX_LINE_BYTES: u64 = 256;
+/// The longest line we read: the longest path and room for the rest. A line
+/// that reaches it without a line end is refused.
+const MAX_LINE_BYTES: u64 = 4352;
 
 /// What a received line asks for.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Request {
     /// Show the window.
     Activate,
-    /// An activate request with a missing or wrong token.
+    /// Open this absolute folder and show the window.
+    Open(PathBuf),
+    /// A request with a missing or wrong token.
     BadToken,
     /// Anything else.
     Unknown,
 }
 
-/// The request line to send, with its line end.
+/// The request line to send, with its line end. With a folder it is an open
+/// request; the folder must have passed [`sendable_path`].
 #[must_use]
-pub fn request_line(token: Option<&str>) -> String {
-    match token {
-        Some(token) => format!("{ACTIVATE} {token}\n"),
-        None => format!("{ACTIVATE}\n"),
+pub fn request_line(token: Option<&str>, folder: Option<&str>) -> String {
+    let head = if folder.is_some() { OPEN } else { ACTIVATE };
+    let mut line = head.to_owned();
+    for part in [token, folder].into_iter().flatten() {
+        line.push(' ');
+        line.push_str(part);
     }
+    line.push('\n');
+    line
+}
+
+/// The folder as line text, or why it cannot travel in a request.
+///
+/// # Errors
+///
+/// Returns the reason when the path is not UTF-8, holds a line break, or is
+/// longer than [`MAX_PATH_BYTES`].
+pub fn sendable_path(folder: &Path) -> Result<&str, String> {
+    let text = folder.to_str().ok_or("the path is not UTF-8")?;
+    if text.contains(['\r', '\n']) {
+        return Err("the path holds a line break".into());
+    }
+    if text.len() > MAX_PATH_BYTES {
+        return Err(format!("the path is longer than {MAX_PATH_BYTES} bytes"));
+    }
+    Ok(text)
 }
 
 /// Compare two strings in time that does not depend on where they differ.
@@ -47,15 +79,33 @@ fn same_token(given: &str, expected: &str) -> bool {
 #[must_use]
 pub fn parse_request(line: &str, token: Option<&str>) -> Request {
     let line = line.trim_end_matches(['\r', '\n']);
-    match (token, line.strip_prefix(ACTIVATE)) {
-        (None, Some("")) => Request::Activate,
-        (Some(expected), Some(rest)) => match rest.strip_prefix(' ') {
-            Some(given) if same_token(given, expected) => Request::Activate,
-            Some(_) => Request::BadToken,
-            None if rest.is_empty() => Request::BadToken,
-            None => Request::Unknown,
+    if let Some(rest) = line.strip_prefix(ACTIVATE) {
+        return match (token, rest.strip_prefix(' ')) {
+            (None, _) if rest.is_empty() => Request::Activate,
+            (Some(expected), Some(given)) if same_token(given, expected) => Request::Activate,
+            (Some(_), Some(_)) => Request::BadToken,
+            (Some(_), None) if rest.is_empty() => Request::BadToken,
+            _ => Request::Unknown,
+        };
+    }
+    let Some(rest) = line
+        .strip_prefix(OPEN)
+        .and_then(|rest| rest.strip_prefix(' '))
+    else {
+        return Request::Unknown;
+    };
+    let folder = match token {
+        None => rest,
+        Some(expected) => match rest.split_once(' ') {
+            Some((given, folder)) if same_token(given, expected) => folder,
+            _ => return Request::BadToken,
         },
-        _ => Request::Unknown,
+    };
+    let folder = Path::new(folder);
+    if folder.is_absolute() {
+        Request::Open(folder.to_path_buf())
+    } else {
+        Request::Unknown
     }
 }
 
@@ -63,10 +113,17 @@ pub fn parse_request(line: &str, token: Option<&str>) -> Request {
 ///
 /// # Errors
 ///
-/// Returns the read error, including a timeout.
+/// Returns the read error, including a timeout, and an error for a line that
+/// fills the cap without a line end or is not UTF-8.
 pub fn read_line<R: Read>(reader: &mut R) -> io::Result<String> {
     let mut line = String::new();
-    BufReader::new(reader.take(MAX_LINE_BYTES)).read_line(&mut line)?;
+    let read = BufReader::new(reader.take(MAX_LINE_BYTES)).read_line(&mut line)?;
+    if read as u64 == MAX_LINE_BYTES && !line.ends_with('\n') {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "the request has no line end within the size cap",
+        ));
+    }
     Ok(line)
 }
 
@@ -123,14 +180,14 @@ mod tests {
 
     #[test]
     fn request_line_round_trips_without_a_token() {
-        let line = request_line(None);
+        let line = request_line(None, None);
         assert_eq!(line, "tarragon/1 activate\n");
         assert_eq!(parse_request(&line, None), Request::Activate);
     }
 
     #[test]
     fn request_line_round_trips_with_a_token() {
-        let line = request_line(Some("abc"));
+        let line = request_line(Some("abc"), None);
         assert_eq!(line, "tarragon/1 activate abc\n");
         assert_eq!(parse_request(&line, Some("abc")), Request::Activate);
     }
@@ -149,6 +206,62 @@ mod tests {
             parse_request("tarragon/1 activate abcd", Some("abc")),
             Request::BadToken
         );
+    }
+
+    #[test]
+    fn open_line_round_trips_with_and_without_a_token() {
+        // An absolute path on every system, with a space and a non-ASCII name.
+        let base = std::env::temp_dir().join("a b").join("ref ü");
+        let folder = base.to_str().expect("a UTF-8 temp path");
+        let line = request_line(None, Some(folder));
+        assert_eq!(line, format!("tarragon/1 open {folder}\n"));
+        assert_eq!(parse_request(&line, None), Request::Open(folder.into()));
+        let line = request_line(Some("abc"), Some(folder));
+        assert_eq!(line, format!("tarragon/1 open abc {folder}\n"));
+        assert_eq!(
+            parse_request(&line, Some("abc")),
+            Request::Open(folder.into())
+        );
+    }
+
+    #[test]
+    fn open_with_a_bad_token_or_folder_is_refused() {
+        assert_eq!(
+            parse_request("tarragon/1 open bad /x", Some("abc")),
+            Request::BadToken
+        );
+        assert_eq!(
+            parse_request("tarragon/1 open /x", Some("abc")),
+            Request::BadToken
+        );
+        assert_eq!(parse_request("tarragon/1 open x", None), Request::Unknown);
+        assert_eq!(parse_request("tarragon/1 open ", None), Request::Unknown);
+        assert_eq!(parse_request("tarragon/1 open", None), Request::Unknown);
+        assert_eq!(parse_request("tarragon/1 openx /x", None), Request::Unknown);
+    }
+
+    #[test]
+    fn only_a_short_utf8_path_without_line_breaks_is_sendable() {
+        assert_eq!(sendable_path(Path::new("/a b")), Ok("/a b"));
+        assert!(sendable_path(Path::new("/a\nb")).is_err());
+        assert!(sendable_path(Path::new("/a\rb")).is_err());
+        let longest = format!("/{}", "x".repeat(MAX_PATH_BYTES - 1));
+        assert!(sendable_path(Path::new(&longest)).is_ok());
+        assert!(sendable_path(Path::new(&format!("{longest}x"))).is_err());
+        #[cfg(unix)]
+        {
+            use std::os::unix::ffi::OsStrExt;
+            let bytes = std::ffi::OsStr::from_bytes(b"/a\xffb");
+            assert!(sendable_path(Path::new(bytes)).is_err());
+        }
+    }
+
+    #[test]
+    fn the_longest_open_line_fits_the_cap() {
+        let longest = format!("/{}", "x".repeat(MAX_PATH_BYTES - 1));
+        let line = request_line(Some(&"f".repeat(32)), Some(&longest));
+        let mut input: &[u8] = line.as_bytes();
+        assert_eq!(read_line(&mut input).expect("read"), line);
     }
 
     #[test]
@@ -184,11 +297,12 @@ mod tests {
     }
 
     #[test]
-    fn read_line_stops_at_the_line_end_and_the_size_cap() {
+    fn read_line_stops_at_the_line_end_and_refuses_a_line_over_the_cap() {
         let mut input: &[u8] = b"one\ntwo\n";
         assert_eq!(read_line(&mut input).expect("read"), "one\n");
-        let long = vec![b'x'; 1000];
+        let long = vec![b'x'; 5000];
         let mut input: &[u8] = &long;
-        assert_eq!(read_line(&mut input).expect("read").len(), 256);
+        let error = read_line(&mut input).expect_err("too long");
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
     }
 }

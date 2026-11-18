@@ -68,9 +68,10 @@ rusqlite = { version = "0.41", features = ["bundled"] }
 # holds a JSON blob. Only `tarragon-db` parses them.
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-# PNG decoding for the golden image tests. One pin, shared with
-# `tarragon-cache` and `tarragon-render`. Each crate turns on only its codecs.
-image = { version = "=0.25.10", default-features = false }
+# One shared entry for every crate that decodes images, and for the PSD golden
+# tests. Each crate turns on only its codecs. The `0.25` range lets a patch
+# update arrive through `Cargo.lock`.
+image = { version = "0.25", default-features = false }
 # Krita `.kra` documents are ZIP archives. Real Krita archives may compress
 # their members, so the reader enables the `flate2` deflate backend. The other
 # features stay off so the dependency tree stays small. `deflate-zopfli` stays

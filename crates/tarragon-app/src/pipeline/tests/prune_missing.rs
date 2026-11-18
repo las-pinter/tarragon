@@ -201,3 +201,36 @@ fn a_folder_that_differs_only_in_case_keeps_its_rows() {
         assert!(cache_files(row).iter().all(|file| file.exists()));
     }
 }
+
+#[test]
+fn a_file_deleted_during_its_render_keeps_no_row() {
+    let dir = TempDir::new();
+    let folder = dir.sub("pics");
+    for name in ["a.png", "b.png"] {
+        write_png(&folder.join(name), 255);
+    }
+    let (entered_tx, entered_rx) = crossbeam_channel::unbounded::<()>();
+    let (release_tx, release_rx) = crossbeam_channel::unbounded::<()>();
+    let render: RenderFn = Arc::new(move |path| {
+        if path.file_name().is_some_and(|name| name == "b.png") {
+            entered_tx.send(()).expect("signal");
+            // A timeout only frees the worker if an assert failed first.
+            let _ = release_rx.recv_timeout(WAIT);
+        }
+        Ok(DynamicImage::ImageRgba8(RgbaImage::new(4, 4)))
+    });
+    let mut setup = start(dir, 2, render);
+    setup.pipeline.open_folder(&folder).expect("open");
+    entered_rx.recv_timeout(WAIT).expect("the render started");
+
+    std::fs::remove_file(folder.join("b.png")).expect("delete the source");
+    setup.pipeline.open_folder(&folder).expect("open again");
+    collect(&setup.results, 1);
+    release_tx.send(()).expect("release");
+    setup.pipeline.drain();
+    setup.pipeline.flush();
+
+    let rows = stored(&setup.db, &folder);
+    assert!(rows.iter().all(|row| !row.path.ends_with("b.png")));
+    assert_eq!(rows.len(), 1);
+}

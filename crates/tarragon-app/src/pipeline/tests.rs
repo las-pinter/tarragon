@@ -630,7 +630,7 @@ impl WriterRig {
             counter.fetch_add(1, Ordering::Relaxed);
         });
         let handle = std::thread::spawn(move || {
-            super::writer::run(&db, &receiver, &thread_epoch, &repaint);
+            super::writer::run(&db, &receiver, &AtomicU64::new(0), &thread_epoch, &repaint);
         });
         Self {
             sender: Some(sender),
@@ -748,7 +748,10 @@ fn the_epoch_goes_up_after_a_stored_row_and_not_after_a_bare_flush() {
     assert_eq!(rig.epoch(), 0, "a flush stores nothing");
     assert_eq!(rig.repaints(), 0);
 
-    rig.send(Message::Row(row_write("/a/one.png")));
+    rig.send(Message::Row {
+        generation: 0,
+        row: row_write("/a/one.png"),
+    });
     rig.flush();
     assert!(rig.epoch() > 0);
 }
@@ -758,7 +761,10 @@ fn the_repaint_runs_once_per_pass_that_stored_data() {
     let dir = TempDir::new();
     let db = open_db(&dir, true);
     let rig = WriterRig::new(&db);
-    rig.send(Message::Row(row_write("/a/one.png")));
+    rig.send(Message::Row {
+        generation: 0,
+        row: row_write("/a/one.png"),
+    });
     rig.flush();
     assert_eq!(rig.repaints(), 1);
     assert_eq!(rig.epoch(), 1);

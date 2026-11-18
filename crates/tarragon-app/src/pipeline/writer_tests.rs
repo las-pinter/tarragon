@@ -9,6 +9,17 @@ use tarragon_db::repository::{ThumbnailWrite, WriteBatch, WriteReport};
 use super::{Message, run_with};
 use crate::pipeline::Repaint;
 
+/// The generation the writer sees in these tests.
+const CURRENT: u64 = 5;
+
+/// A row message of the current generation.
+fn current_row(path: &str) -> Message {
+    Message::Row {
+        generation: CURRENT,
+        row: row(path),
+    }
+}
+
 /// Build a rendered row for `path`.
 fn row(path: &str) -> ThumbnailWrite {
     ThumbnailWrite {
@@ -41,13 +52,14 @@ fn drive(
         sender.send(message).expect("queue the message");
     }
     drop(sender);
+    let generation = AtomicU64::new(CURRENT);
     let epoch = AtomicU64::new(0);
     let repaints = Arc::new(AtomicUsize::new(0));
     let counter = Arc::clone(&repaints);
     let repaint: Repaint = Arc::new(move || {
         counter.fetch_add(1, Ordering::SeqCst);
     });
-    run_with(store, &receiver, &epoch, &repaint);
+    run_with(store, &receiver, &generation, &epoch, &repaint);
     Outcome {
         epoch: epoch.load(Ordering::SeqCst),
         repaints: repaints.load(Ordering::SeqCst),
@@ -68,7 +80,7 @@ fn recorder(
 /// Queue `count` row messages.
 fn rows(count: usize) -> Vec<Message> {
     (0..count)
-        .map(|index| Message::Row(row(&format!("/pics/{index}"))))
+        .map(|index| current_row(&format!("/pics/{index}")))
         .collect()
 }
 
@@ -144,10 +156,7 @@ fn a_flush_ack_arrives_after_the_store_call() {
         })
     };
 
-    drive(
-        vec![Message::Row(row("/a")), Message::Flush(ack_tx)],
-        &store,
-    );
+    drive(vec![current_row("/a"), Message::Flush(ack_tx)], &store);
 
     assert_eq!(*acked_early.borrow(), Some(false));
     assert!(ack_rx.try_recv().is_ok());
@@ -160,10 +169,7 @@ fn a_flush_ack_arrives_when_the_store_fails() {
     let (ack_tx, ack_rx) = unbounded();
     let store = |_: &WriteBatch| Err(DbError::LockPoisoned);
 
-    let outcome = drive(
-        vec![Message::Row(row("/a")), Message::Flush(ack_tx)],
-        &store,
-    );
+    let outcome = drive(vec![current_row("/a"), Message::Flush(ack_tx)], &store);
 
     assert!(ack_rx.try_recv().is_ok());
     assert_eq!(outcome.epoch, 0);
@@ -203,4 +209,27 @@ fn the_loop_goes_on_after_a_failed_pass() {
     assert_eq!(call.get(), 2);
     assert_eq!(outcome.epoch, 1);
     assert_eq!(outcome.repaints, 1);
+}
+
+/// A row of an old generation is not stored, a current one is, and a flush
+/// after both still gets its ack.
+#[test]
+fn a_row_of_an_old_generation_is_dropped() {
+    let (ack_tx, ack_rx) = unbounded();
+    let calls = RefCell::new(Vec::new());
+    let old = Message::Row {
+        generation: CURRENT - 1,
+        row: row("/old"),
+    };
+
+    drive(
+        vec![old, current_row("/new"), Message::Flush(ack_tx)],
+        &recorder(&calls, true),
+    );
+
+    let calls = calls.borrow();
+    assert_eq!(calls.len(), 1);
+    let paths: Vec<&str> = calls[0].rows.iter().map(|row| row.path.as_str()).collect();
+    assert_eq!(paths, ["/new"]);
+    assert!(ack_rx.try_recv().is_ok());
 }

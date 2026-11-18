@@ -7,6 +7,7 @@
 //! never touch the database: one writer thread stores the rows they make.
 //! Each open (folder or library) bumps a generation. A job from an older generation is
 //! skipped when a worker takes it, and the consumer drops an older result.
+//! A row from an older generation is dropped by the writer.
 //! A render that is already running is not stopped. `drain` drops the queued
 //! jobs and waits for the running ones to end.
 
@@ -223,6 +224,7 @@ impl Pipeline {
         let store_epoch = Arc::new(AtomicU64::new(0));
         let writer_epoch = Arc::clone(&store_epoch);
         let writer_repaint = Arc::clone(&repaint);
+        let writer_generation = Arc::clone(&generation);
 
         let mut pipeline = Self {
             db: Arc::clone(&db),
@@ -240,7 +242,15 @@ impl Pipeline {
         pipeline.writer = Some(
             std::thread::Builder::new()
                 .name("tarragon-writer".to_owned())
-                .spawn(move || writer::run(&db, &row_rx, &writer_epoch, &writer_repaint))?,
+                .spawn(move || {
+                    writer::run(
+                        &db,
+                        &row_rx,
+                        &writer_generation,
+                        &writer_epoch,
+                        &writer_repaint,
+                    );
+                })?,
         );
         let shared = Arc::new(Shared {
             queue,
@@ -280,6 +290,10 @@ impl Pipeline {
     /// It returns the new generation and the files. Jobs of the old folder are
     /// dropped.
     ///
+    /// The order is: bump the generation, flush the writer, read the rows
+    /// again, then prune. A render of an old open stores no row after the
+    /// flush, and a row stored before it is in the rows that the prune reads.
+    ///
     /// The scan and the row write run on the calling thread. Stored rows and
     /// cache files of direct-child files that are no longer in the folder are
     /// deleted; their tags stay. A scan that finds no files deletes nothing.
@@ -303,9 +317,35 @@ impl Pipeline {
             .into_iter()
             .map(|row| (row.path.clone(), row))
             .collect();
-        // An empty scan prunes nothing: a missing folder and an unmounted
-        // mount point both scan as empty.
-        prune::prune_missing(&self.db, &self.cache_root, folder, &rows, &files);
+        // The generation moves under the failures lock, so a worker never
+        // records a failure of an old job after the retried set is reset.
+        // Every call that can fail is done, so an error keeps the old folder.
+        let generation = {
+            let _failures = self
+                .failures
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let generation = self.generation.fetch_add(1, Ordering::AcqRel) + 1;
+            self.retried
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clear();
+            generation
+        };
+        // Rows stored before the bump are committed once the flush returns, so the prune reads again.
+        self.flush();
+        match self.db.thumbnails_for_folder(&folder_text) {
+            Ok(fresh) => {
+                let fresh: HashMap<String, _> = fresh
+                    .into_iter()
+                    .map(|row| (row.path.clone(), row))
+                    .collect();
+                // An empty scan prunes nothing: a missing folder and an unmounted
+                // mount point both scan as empty.
+                prune::prune_missing(&self.db, &self.cache_root, folder, &fresh, &files);
+            }
+            Err(error) => tracing::warn!("cannot read the rows to prune {folder_text}: {error}"),
+        }
         let color_state = ColorState::read(&self.db);
         let folder_name = folder.file_name().map_or_else(
             || "root".to_owned(),
@@ -316,13 +356,6 @@ impl Pipeline {
             .failures
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        // The generation moves under the failures lock, so a worker never
-        // records a failure of an old job after the retried set is reset.
-        let generation = self.generation.fetch_add(1, Ordering::AcqRel) + 1;
-        self.retried
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clear();
         // Drop failures of files that are not in this folder.
         let present: HashSet<&PathBuf> = files.iter().map(|file| &file.path).collect();
         failures.retain(|path, _| present.contains(path));

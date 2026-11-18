@@ -198,7 +198,10 @@ fn process(shared: &Shared, job: &Job) -> Result<RgbaImage, ThumbError> {
     match shared.cache.write_all(&image, &job.folder, &job.uuid, name) {
         Ok(entry) => {
             // The row goes first, so a received result means a queued row.
-            let _ = shared.rows.send(Message::Row(row_for(job, &image, &entry)));
+            let _ = shared.rows.send(Message::Row {
+                generation: job.generation,
+                row: row_for(job, &image, &entry),
+            });
         }
         // The image is fine; only the cache failed, so the cell still shows.
         Err(error) => tracing::warn!("cannot cache {}: {error}", job.path.display()),

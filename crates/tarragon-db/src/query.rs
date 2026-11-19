@@ -40,12 +40,12 @@ fn push_name_group(conditions: &mut Vec<String>, params: &mut Vec<Value>, names:
     ));
 }
 
-/// Build the filtered SELECT and its bound values.
+/// Build the filtered SELECT of `columns` and its bound values.
 ///
 /// The conditions join with AND. The folder terms join with OR inside one
 /// condition. A whitespace-only text is not empty, so it adds one condition
 /// and is not trimmed.
-fn filter_sql(filters: &FilterState) -> (String, Vec<Value>) {
+fn filter_sql(columns: &str, filters: &FilterState) -> (String, Vec<Value>) {
     let mut conditions: Vec<String> = Vec::new();
     let mut params: Vec<Value> = Vec::new();
 
@@ -87,7 +87,7 @@ fn filter_sql(filters: &FilterState) -> (String, Vec<Value>) {
         push_name_group(&mut conditions, &mut params, &names);
     }
 
-    let mut sql = format!("SELECT {THUMBNAIL_COLUMNS} FROM thumbnails");
+    let mut sql = format!("SELECT {columns} FROM thumbnails");
     if !conditions.is_empty() {
         sql.push_str(" WHERE ");
         sql.push_str(&conditions.join(" AND "));
@@ -110,7 +110,7 @@ impl Database {
     /// Returns [`DbError::Sqlite`] when the read fails. Returns
     /// [`DbError::LockPoisoned`] after a panic poisoned the lock.
     pub fn filter_thumbnails(&self, filters: &FilterState) -> Result<Vec<Thumbnail>, DbError> {
-        let (sql, params) = filter_sql(filters);
+        let (sql, params) = filter_sql(THUMBNAIL_COLUMNS, filters);
         let conn = self.lock()?;
         let mut stmt = conn.prepare(&sql)?;
         let rows = stmt.query_map(rusqlite::params_from_iter(params), row_to_thumbnail)?;
@@ -120,5 +120,22 @@ impl Database {
         }
         out.sort_by(|left, right| natural_path_cmp(Path::new(&left.path), Path::new(&right.path)));
         Ok(out)
+    }
+
+    /// Return the stored paths of the rows that match every active filter.
+    ///
+    /// The filters work as in [`Database::filter_thumbnails`], but only the
+    /// path column is read and the paths come back in no set order.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DbError::Sqlite`] when the read fails. Returns
+    /// [`DbError::LockPoisoned`] after a panic poisoned the lock.
+    pub fn filter_paths(&self, filters: &FilterState) -> Result<Vec<String>, DbError> {
+        let (sql, params) = filter_sql("path", filters);
+        let conn = self.lock()?;
+        let mut stmt = conn.prepare(&sql)?;
+        let rows = stmt.query_map(rusqlite::params_from_iter(params), |row| row.get(0))?;
+        rows.collect::<Result<_, _>>().map_err(DbError::from)
     }
 }

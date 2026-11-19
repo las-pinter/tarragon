@@ -4,7 +4,6 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 
 use tarragon_core::filter_state::{FilterScope, FilterState};
-use tarragon_db::repository::Thumbnail;
 use tarragon_db::settings::{SettingKey, SettingValue, Settings};
 use tarragon_db::{Database, DbError};
 use tarragon_ui::gallery::Gallery;
@@ -27,7 +26,7 @@ pub fn filter_paths(
     state: &FilterState,
     scope: FilterScope,
 ) -> Result<Option<HashSet<PathBuf>>, DbError> {
-    filter_with(state, scope, |query| db.filter_thumbnails(query))
+    filter_with(state, scope, |query| db.filter_paths(query))
 }
 
 /// Like [`filter_paths`], with the database read as a parameter. The read does
@@ -35,7 +34,7 @@ pub fn filter_paths(
 fn filter_with(
     state: &FilterState,
     scope: FilterScope,
-    read: impl FnOnce(&FilterState) -> Result<Vec<Thumbnail>, DbError>,
+    read: impl FnOnce(&FilterState) -> Result<Vec<String>, DbError>,
 ) -> Result<Option<HashSet<PathBuf>>, DbError> {
     let mut query = state.clone();
     query.text.clear();
@@ -46,7 +45,7 @@ fn filter_with(
         return Ok(None);
     }
     let rows = read(&query)?;
-    Ok(Some(rows.iter().map(|row| item_path(&row.path)).collect()))
+    Ok(Some(rows.iter().map(|path| item_path(path)).collect()))
 }
 
 /// Run the filter change that the gallery reports, if there is one.

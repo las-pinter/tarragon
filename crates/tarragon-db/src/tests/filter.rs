@@ -78,14 +78,22 @@ fn populate_filter_fixture(temp: &TempDb) {
     attach_tags(temp, "/test/other/beach.png", &[&beach, &warm]);
 }
 
-/// Run the filter engine and return the stored paths.
+/// Run the filter engine and return the stored paths. The paths-only query
+/// must find the same set.
 fn filter_paths(temp: &TempDb, filters: &FilterState) -> Vec<String> {
-    temp.db
+    let rows: Vec<String> = temp
+        .db
         .filter_thumbnails(filters)
         .expect("run the filter query")
         .into_iter()
         .map(|row| row.path)
-        .collect()
+        .collect();
+    let mut only = temp.db.filter_paths(filters).expect("run the paths query");
+    let mut sorted = rows.clone();
+    only.sort();
+    sorted.sort();
+    assert_eq!(only, sorted, "the paths query differs from the rows");
+    rows
 }
 
 #[test]

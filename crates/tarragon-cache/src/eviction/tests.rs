@@ -272,7 +272,8 @@ fn remove_entry_files_reports_the_bytes_it_removed() {
     seed(&entry, 100);
     let before = store.total_size().expect("total");
 
-    let removed = super::remove_entry_files(&entry, store.root()).expect("remove the tier files");
+    let (removed, error) = super::remove_entry_files(&entry, store.root());
+    assert!(error.is_none());
 
     assert!(removed.any, "the helper must report a removal");
     assert_eq!(removed.bytes, 300, "the helper must report every tier byte");
@@ -292,9 +293,15 @@ fn evicting_exactly_two_sources_keeps_the_running_total() {
 
     // A cap of 300 forces exactly the two oldest sources out. The running
     // total after the pass is 300, and the final walk must agree.
-    let (evicted, running, final_total) = store
+    let super::Pass {
+        evicted,
+        running,
+        final_total,
+        error,
+    } = store
         .evict_pass(300, &[old.clone(), mid.clone(), new.clone()])
         .expect("evict");
+    assert!(error.is_none());
 
     assert_eq!(evicted, vec![old, mid], "two sources must go");
     assert_eq!(
@@ -327,8 +334,8 @@ fn remove_entry_files_skips_a_path_outside_the_root() {
         full: victim.clone(),
     };
 
-    let removed = super::remove_entry_files(&entry, store.root())
-        .expect("the helper must skip the outside path");
+    let (removed, error) = super::remove_entry_files(&entry, store.root());
+    assert!(error.is_none(), "the helper must skip the outside path");
 
     assert!(!removed.any, "a path outside the root must not be removed");
     assert_eq!(removed.bytes, 0, "an outside path removes no bytes");
@@ -386,4 +393,25 @@ fn an_exhausted_lru_list_returns_over_cap() {
         outcome.remaining_bytes > 500,
         "an exhausted list may leave the cache over the cap"
     );
+}
+
+#[cfg(unix)]
+#[test]
+fn a_failed_remove_keeps_the_removed_sources_and_goes_on() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let temp = TempDir::new("failed-remove");
+    let store = CacheStore::new(temp.path());
+    let [old, mid, new] = three_sources(&store, 100);
+    // A folder with no write bit keeps the full tier file of `old`.
+    let locked = old.path(Tier::Full).parent().expect("a tier folder");
+    std::fs::set_permissions(locked, std::fs::Permissions::from_mode(0o555)).expect("lock");
+
+    let outcome = store.evict_to_cap(1, &[old.clone(), mid.clone(), new.clone()]);
+    std::fs::set_permissions(locked, std::fs::Permissions::from_mode(0o755)).expect("unlock");
+    let outcome = outcome.expect("the size walks work");
+
+    assert!(outcome.error.is_some(), "the failed remove is reported");
+    assert_eq!(outcome.evicted, vec![old, mid.clone(), new.clone()]);
+    assert!(!any_file_exists(&mid) && !any_file_exists(&new));
 }

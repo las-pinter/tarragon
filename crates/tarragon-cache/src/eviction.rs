@@ -17,13 +17,17 @@ use crate::CacheError;
 use crate::store::{CacheEntry, CacheStore};
 
 /// The result of one eviction pass.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct EvictionOutcome {
     /// The sources whose tier files were removed, least recently accessed
-    /// first.
+    /// first. A source that lost only some of its files is listed too, so its
+    /// row does not point at a removed file.
     pub evicted: Vec<CacheEntry>,
     /// The total cache bytes after the pass.
     pub remaining_bytes: u64,
+    /// The first remove error, when a file could not be removed. The pass
+    /// goes on with the next source after it.
+    pub error: Option<CacheError>,
 }
 
 impl CacheStore {
@@ -64,54 +68,74 @@ impl CacheStore {
     /// pass returns `Ok` with `remaining_bytes > cap_bytes`. The cap is best
     /// effort, not a hard promise.
     ///
+    /// A file that cannot be removed does not stop the pass: the first such
+    /// error comes back in [`EvictionOutcome::error`], next to the sources
+    /// that were removed.
+    ///
     /// # Errors
     ///
-    /// Returns [`CacheError::Io`] when a size read or a file remove fails. A
-    /// failed remove still attempts every tier of the entry, so the on-disk
-    /// state stays deterministic. The first remove error returns.
+    /// Returns [`CacheError::Io`] when a size walk fails.
     pub fn evict_to_cap(
         &self,
         cap_bytes: u64,
         lru_order: &[CacheEntry],
     ) -> Result<EvictionOutcome, CacheError> {
-        let (evicted, _running, final_total) = self.evict_pass(cap_bytes, lru_order)?;
+        let pass = self.evict_pass(cap_bytes, lru_order)?;
         Ok(EvictionOutcome {
-            evicted,
-            remaining_bytes: final_total,
+            evicted: pass.evicted,
+            remaining_bytes: pass.final_total,
+            error: pass.error,
         })
     }
 
-    /// Run one eviction pass and return the evicted entries, the running
-    /// total, and the final size walk.
+    /// Run one eviction pass.
     ///
     /// The running total and the final walk agree unless a concurrent writer
     /// changed the tree. The final walk is the reported total. The two values
     /// are separate, so a test can prove the running total.
-    fn evict_pass(
-        &self,
-        cap_bytes: u64,
-        lru_order: &[CacheEntry],
-    ) -> Result<(Vec<CacheEntry>, u64, u64), CacheError> {
+    fn evict_pass(&self, cap_bytes: u64, lru_order: &[CacheEntry]) -> Result<Pass, CacheError> {
         let mut remaining = self.total_size()?;
-        let mut evicted = Vec::new();
+        let mut pass = Pass {
+            evicted: Vec::new(),
+            running: remaining,
+            final_total: remaining,
+            error: None,
+        };
         if cap_bytes == 0 {
-            return Ok((evicted, remaining, remaining));
+            return Ok(pass);
         }
         for entry in lru_order {
             if remaining <= cap_bytes {
                 break;
             }
-            let removed = remove_entry_files(entry, self.root())?;
+            let (removed, error) = remove_entry_files(entry, self.root());
             if removed.any {
                 remaining = remaining.saturating_sub(removed.bytes);
-                evicted.push(entry.clone());
+                pass.evicted.push(entry.clone());
+            }
+            if pass.error.is_none() {
+                pass.error = error;
             }
         }
+        pass.running = remaining;
         // One final walk guards drift from a concurrent atomic write or a
         // byte that the running total missed.
-        let final_total = self.total_size()?;
-        Ok((evicted, remaining, final_total))
+        pass.final_total = self.total_size()?;
+        Ok(pass)
     }
+}
+
+/// What one eviction pass did.
+#[derive(Debug)]
+struct Pass {
+    /// The sources that lost at least one file.
+    evicted: Vec<CacheEntry>,
+    /// The total the pass kept while it removed files.
+    running: u64,
+    /// The total of the final size walk.
+    final_total: u64,
+    /// The first remove error.
+    error: Option<CacheError>,
 }
 
 /// The byte total and progress of one entry removal.
@@ -131,14 +155,10 @@ struct Removed {
 /// each tier file size before removal, so the caller keeps a running total.
 ///
 /// The helper attempts every tier. A later failure does not stop an earlier
-/// removal, so the on-disk state stays deterministic. It returns the first
-/// remove error after the loop.
-///
-/// # Errors
-///
-/// Returns [`CacheError::Io`] when a remove fails for a reason other than a
-/// missing file.
-fn remove_entry_files(entry: &CacheEntry, root: &Path) -> Result<Removed, CacheError> {
+/// removal, so the on-disk state stays deterministic. Next to what it removed,
+/// it returns the first error of a size read or a remove that failed for a
+/// reason other than a missing file.
+fn remove_entry_files(entry: &CacheEntry, root: &Path) -> (Removed, Option<CacheError>) {
     let canonical_root = dunce::canonicalize(root).ok();
     let mut result = Removed::default();
     let mut first_error: Option<CacheError> = None;
@@ -180,7 +200,7 @@ fn remove_entry_files(entry: &CacheEntry, root: &Path) -> Result<Removed, CacheE
             }
         }
     }
-    first_error.map_or(Ok(result), Err)
+    (result, first_error)
 }
 
 /// Return true when the canonical `path` is under the canonical `root`.

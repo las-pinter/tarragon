@@ -96,6 +96,9 @@ fn evict_bytes(
         order.push(entry);
     }
     let outcome = cache.evict_to_cap(cap_bytes, &order)?;
+    if let Some(error) = &outcome.error {
+        tracing::warn!("cannot remove every evicted cache file: {error}");
+    }
     let mut deleted = 0;
     for entry in &outcome.evicted {
         let Some(path) = row_of.get(entry.thumb320.as_path()) else {

@@ -62,7 +62,7 @@ pub fn read_file_with_options(path: &Path, options: &ParseOptions) -> Result<Psd
 ///
 /// Returns a parse error when the bytes are malformed or truncated.
 pub fn read_bytes(data: &[u8]) -> Result<PsdFile, PsdError> {
-    parse(&Source::memory(data.to_vec()), &ParseOptions::default())
+    parse(&Source::memory(data), &ParseOptions::default())
 }
 
 /// Read from a byte slice with explicit options.
@@ -71,7 +71,7 @@ pub fn read_bytes(data: &[u8]) -> Result<PsdFile, PsdError> {
 ///
 /// Returns a parse error when the bytes are malformed or truncated.
 pub fn read_bytes_with_options(data: &[u8], options: &ParseOptions) -> Result<PsdFile, PsdError> {
-    parse(&Source::memory(data.to_vec()), options)
+    parse(&Source::memory(data), options)
 }
 
 /// Read from a byte slice and keep the layers when only the merged image is bad.
@@ -87,7 +87,7 @@ pub fn read_bytes_with_options(data: &[u8], options: &ParseOptions) -> Result<Ps
 /// merged image, when the merged image is bad and the file has no layers, or
 /// when the work timed out or was cancelled.
 pub fn read_bytes_lenient(data: &[u8], options: &ParseOptions) -> Result<PsdFile, PsdError> {
-    parse_with(&Source::memory(data.to_vec()), options, true)
+    parse_with(&Source::memory(data), options, true)
 }
 
 /// Walk every file section.

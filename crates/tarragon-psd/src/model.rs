@@ -324,7 +324,7 @@ impl PsdFile {
         viewport: Viewport,
         options: &ParseOptions,
     ) -> Result<ImageRegion, PsdError> {
-        self.read_merged_region_from(&Source::memory(data.to_vec()), viewport, options)
+        self.read_merged_region_from(&Source::memory(data), viewport, options)
     }
 
     /// Decode the merged image over `viewport`, keeping every `step`th pixel,
@@ -342,7 +342,7 @@ impl PsdFile {
         step: u32,
         options: &ParseOptions,
     ) -> Result<ImageRegion, PsdError> {
-        self.read_merged_strided_from(&Source::memory(data.to_vec()), viewport, step, options)
+        self.read_merged_strided_from(&Source::memory(data), viewport, step, options)
     }
 
     /// Decode one layer's channels over `viewport` from bytes in memory. See
@@ -360,7 +360,7 @@ impl PsdFile {
         viewport: Viewport,
         options: &ParseOptions,
     ) -> Result<ImageRegion, PsdError> {
-        self.read_layer_region_from(&Source::memory(data.to_vec()), index, viewport, options)
+        self.read_layer_region_from(&Source::memory(data), index, viewport, options)
     }
 
     /// Validate a viewport against the canvas and the full-tier cap.

@@ -72,10 +72,11 @@ impl Source {
         ))
     }
 
-    /// Wrap owned bytes.
-    pub(crate) fn memory(data: Vec<u8>) -> Self {
+    /// Wrap bytes. A slice is copied once, straight into the shared buffer.
+    pub(crate) fn memory(data: impl Into<Arc<[u8]>>) -> Self {
+        let data: Arc<[u8]> = data.into();
         let len = data.len() as u64;
-        Self::new(Inner::Memory(Arc::from(data)), len)
+        Self::new(Inner::Memory(data), len)
     }
 
     fn new(inner: Inner, len: u64) -> Self {

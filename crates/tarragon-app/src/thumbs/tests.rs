@@ -17,6 +17,25 @@ impl Drop for TempDir {
     }
 }
 
+/// A started pipeline over a fresh temp folder named after `name`, which the
+/// caller holds.
+pub(super) fn test_pipeline(name: &str) -> (TempDir, Pipeline) {
+    let dir = TempDir(std::env::temp_dir().join(format!(
+        "tarragon-handoff-{name}-{}",
+        tarragon_core::testing::run_tag()
+    )));
+    std::fs::create_dir_all(&dir.0).expect("make the folder");
+    let db = Arc::new(Database::open(dir.0.join("t.db")).expect("open the db"));
+    db.initialize().expect("initialize the db");
+    let config = Config {
+        cache: CacheStore::new(dir.0.join("cache")),
+        workers: 1,
+        render: Arc::new(|_| Ok(DynamicImage::ImageRgba8(RgbaImage::new(8, 8)))),
+    };
+    let (pipeline, _results) = Pipeline::new(config, db, Arc::new(|| {})).expect("start");
+    (dir, pipeline)
+}
+
 #[test]
 fn a_folder_with_a_real_pipeline_settles_all_tiles() {
     let dir = TempDir(std::env::temp_dir().join(format!(

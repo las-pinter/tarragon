@@ -15,7 +15,8 @@ use tarragon_ui::texture_budget::GRID_BUDGET_BYTES;
 use crate::feed::{Feed, Tiles};
 use crate::pipeline::{Opened, Pipeline, PipelineError, Repaint, Results, ThumbError};
 pub use exit::{ExitClear, ExitWait};
-use work::{Queued, WorkDone};
+use handoff::Answer;
+use work::Queued;
 pub use work::{Work, WorkOutcome};
 
 /// Results applied per frame. Every result is a 320 px image, so each costs
@@ -43,13 +44,6 @@ impl Tiles for Gallery {
     fn mark_failed(&mut self, key: &Path, error: TileError) -> bool {
         Self::mark_failed(self, key, error)
     }
-}
-
-/// What the open thread hands back. The pipeline comes back with it, because
-/// `open_folder` needs `&mut` and only one open may run at a time.
-struct Done {
-    pipeline: Pipeline,
-    result: Result<Opened, PipelineError>,
 }
 
 /// What an open loads.
@@ -91,12 +85,12 @@ enum Slot {
     /// Inside the open thread.
     Opening {
         target: Target,
-        done: Receiver<Done>,
+        done: Receiver<Answer<Result<Opened, PipelineError>>>,
     },
     /// Inside the work thread.
     Working {
         work: Work,
-        done: Receiver<WorkDone>,
+        done: Receiver<Answer<Result<WorkOutcome, String>>>,
     },
     /// Lost to a failed thread start, or taken at exit.
     Gone,
@@ -362,7 +356,7 @@ impl Thumbs {
 
     /// Move the pipeline into a short-lived thread that loads `target`.
     fn start_open(&mut self, target: Target) {
-        let Slot::Idle(mut pipeline) = std::mem::replace(&mut self.slot, Slot::Gone) else {
+        let Slot::Idle(pipeline) = std::mem::replace(&mut self.slot, Slot::Gone) else {
             tracing::warn!("an open is already running; ignoring {target}");
             return;
         };
@@ -376,26 +370,23 @@ impl Thumbs {
         } else if !self.announced {
             self.started = Instant::now();
         }
-        let (sender, done) = crossbeam_channel::bounded(1);
         let repaint = Arc::clone(&self.repaint);
         let job = target.clone();
-        let spawned = std::thread::Builder::new()
-            .name("tarragon-open".to_owned())
-            .spawn(move || {
-                // This stat runs here, not on the UI thread: a dead mount can stall it.
-                let result = match job {
-                    Target::Folder(folder) if folder.is_dir() => pipeline.open_folder(&folder),
-                    Target::Folder(_) => Err(PipelineError::NotAFolder),
-                    Target::Library => pipeline.open_library(),
-                };
-                // A closed window drops the answer, and the pipeline with it.
-                let _ = sender.send(Done { pipeline, result });
-                repaint();
-            });
+        let spawned = handoff::spawn("tarragon-open", pipeline, repaint, move |pipeline| {
+            // This stat runs here, not on the UI thread: a dead mount can stall it.
+            match job {
+                Target::Folder(folder) if folder.is_dir() => pipeline.open_folder(&folder),
+                Target::Folder(_) => Err(PipelineError::NotAFolder),
+                Target::Library => pipeline.open_library(),
+            }
+        });
         match spawned {
-            Ok(_) => self.slot = Slot::Opening { target, done },
-            Err(error) => {
-                tracing::error!("cannot start the open thread: {error}");
+            Ok(done) => self.slot = Slot::Opening { target, done },
+            Err(failed) => {
+                tracing::error!("cannot start the open thread: {}", failed.error);
+                if let Some(pipeline) = failed.pipeline {
+                    self.slot = Slot::Idle(pipeline);
+                }
                 if matches!(target, Target::Folder(_)) {
                     self.opened = true;
                     self.changed = true;
@@ -429,17 +420,18 @@ impl Thumbs {
             return;
         };
         self.slot = Slot::Idle(answer.pipeline);
+        let result = answer.result.unwrap_or(Err(PipelineError::Panicked));
         let folder = match target {
             Target::Folder(folder) => folder,
             Target::Library => {
-                self.finish_library(gallery, answer.result);
+                self.finish_library(gallery, result);
                 return;
             }
         };
         // A newer request waits: the highlight already shows it, so do not
         // snap it back to this folder.
         let report = self.pending.is_none();
-        match answer.result {
+        match result {
             Ok(opened) => {
                 let keys = opened.files.iter().map(|file| file.path.clone());
                 self.feed.reset(opened.generation, keys);
@@ -501,6 +493,7 @@ pub(crate) fn color_image(image: &RgbaImage) -> ColorImage {
 }
 
 mod exit;
+mod handoff;
 #[cfg(test)]
 mod library_tests;
 mod opening;

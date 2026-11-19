@@ -90,6 +90,9 @@ pub enum PipelineError {
     /// A cache call failed, for example a purge of an unsafe root.
     #[error(transparent)]
     Cache(#[from] tarragon_cache::CacheError),
+    /// A pipeline thread panicked. The pipeline is kept for the next call.
+    #[error("a pipeline thread panicked")]
+    Panicked,
 }
 
 /// What the pipeline needs to start.

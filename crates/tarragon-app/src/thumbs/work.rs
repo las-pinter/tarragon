@@ -13,7 +13,7 @@ use crossbeam_channel::TryRecvError;
 use tarragon_cache::purge::PurgeOutcome;
 use tarragon_cache::store::CacheStore;
 
-use super::{Library, Slot, Thumbs};
+use super::{Library, Slot, Thumbs, handoff};
 use crate::maintenance::{self, Evicted};
 use crate::pipeline::Pipeline;
 
@@ -37,12 +37,6 @@ pub enum WorkOutcome {
     Evicted(Evicted),
     /// How many files were queued to render again.
     Regenerated(usize),
-}
-
-/// What the work thread hands back, with the pipeline it borrowed.
-pub(super) struct WorkDone {
-    pipeline: Pipeline,
-    result: Result<WorkOutcome, String>,
 }
 
 /// A request that waits for an idle pipeline.
@@ -184,24 +178,22 @@ impl Thumbs {
         let Some(queued) = self.queued.take() else {
             return;
         };
-        let Slot::Idle(mut pipeline) = std::mem::replace(&mut self.slot, Slot::Gone) else {
+        let Slot::Idle(pipeline) = std::mem::replace(&mut self.slot, Slot::Gone) else {
             return;
         };
         let work = queued.work();
-        let (sender, done) = crossbeam_channel::bounded(1);
         let repaint = Arc::clone(&self.repaint);
-        let spawned = std::thread::Builder::new()
-            .name("tarragon-work".to_owned())
-            .spawn(move || {
-                let result = queued.run(&mut pipeline);
-                // A closed window drops the answer, and the pipeline with it.
-                let _ = sender.send(WorkDone { pipeline, result });
-                repaint();
-            });
+        let spawned = handoff::spawn("tarragon-work", pipeline, repaint, move |pipeline| {
+            queued.run(pipeline)
+        });
         match spawned {
-            Ok(_) => self.slot = Slot::Working { work, done },
-            Err(error) => {
-                tracing::error!("cannot start the work thread: {error}");
+            Ok(done) => self.slot = Slot::Working { work, done },
+            Err(failed) => {
+                tracing::error!("cannot start the work thread: {}", failed.error);
+                let error = failed.error;
+                if let Some(pipeline) = failed.pipeline {
+                    self.slot = Slot::Idle(pipeline);
+                }
                 self.finished = Some((work, Err(error.to_string())));
             }
         }
@@ -225,10 +217,13 @@ impl Thumbs {
             }
         };
         self.slot = Slot::Idle(answer.pipeline);
+        let result = answer
+            .result
+            .unwrap_or_else(|| Err("the work thread panicked".to_owned()));
         if work == Work::Purge {
             self.reopen_after_purge();
         }
-        self.finished = Some((work, answer.result));
+        self.finished = Some((work, result));
     }
 
     /// A purge moved the pipeline generation and deleted every cache file, so

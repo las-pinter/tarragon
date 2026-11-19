@@ -437,6 +437,28 @@ fn thumbnails_for_folder_does_not_match_a_sibling_name() {
 }
 
 #[test]
+fn delete_thumbnails_removes_only_the_listed_rows() {
+    let temp = TempDb::new();
+    temp.db
+        .write_scan_group(&[
+            file("/refs", "a.png", 1, 10),
+            file("/refs", "b.png", 2, 20),
+            file("/refs", "c.png", 3, 30),
+        ])
+        .expect("write the group");
+
+    let removed = temp
+        .db
+        .delete_thumbnails(&["/refs/a.png", "/refs/c.png", "/refs/gone.png"])
+        .expect("delete the rows");
+    assert_eq!(removed, 2);
+    assert!(temp.db.thumbnail("/refs/a.png").expect("read").is_none());
+    assert!(temp.db.thumbnail("/refs/b.png").expect("read").is_some());
+    assert!(temp.db.thumbnail("/refs/c.png").expect("read").is_none());
+    assert_eq!(temp.db.delete_thumbnails(&[]).expect("delete none"), 0);
+}
+
+#[test]
 fn delete_thumbnails_by_folder_removes_every_descendant() {
     let temp = TempDb::new();
     temp.db

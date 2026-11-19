@@ -9,7 +9,10 @@ use tarragon_core::sorting::natural_cmp;
 use crate::like::{folder_range, normalize_path};
 use crate::{Database, DbError};
 
-use super::{LibraryFile, THUMBNAIL_COLUMNS, Thumbnail, ThumbnailWrite, row_to_thumbnail};
+use super::{
+    LibraryFile, PATH_CHUNK, THUMBNAIL_COLUMNS, Thumbnail, ThumbnailWrite, placeholders,
+    row_to_thumbnail,
+};
 
 /// The upsert for one scan row. A conflict keeps the stored `mtime` and
 /// `size` so a later render can detect a source change.
@@ -236,6 +239,37 @@ impl Database {
             "DELETE FROM thumbnails WHERE path = ?1",
             [normalize_path(path)],
         )?;
+        Ok(changed)
+    }
+
+    /// Delete the thumbnail rows of `paths` in one transaction.
+    ///
+    /// The paths are deleted in chunks of `PATH_CHUNK`, so a long list cannot
+    /// exceed the SQLite variable limit. Either every row goes or none does.
+    /// The method returns the number of rows deleted and leaves the
+    /// `file_tags` rows alone.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DbError::Sqlite`] when a statement fails, and then deletes
+    /// nothing. Returns [`DbError::LockPoisoned`] after a panic poisoned the
+    /// lock.
+    pub fn delete_thumbnails(&self, paths: &[&str]) -> Result<usize, DbError> {
+        if paths.is_empty() {
+            return Ok(0);
+        }
+        let normalized: Vec<String> = paths.iter().map(|path| normalize_path(path)).collect();
+        let mut conn = self.lock()?;
+        let tx = conn.transaction()?;
+        let mut changed = 0;
+        for chunk in normalized.chunks(PATH_CHUNK) {
+            let sql = format!(
+                "DELETE FROM thumbnails WHERE path IN ({})",
+                placeholders(chunk.len())
+            );
+            changed += tx.execute(&sql, rusqlite::params_from_iter(chunk))?;
+        }
+        tx.commit()?;
         Ok(changed)
     }
 

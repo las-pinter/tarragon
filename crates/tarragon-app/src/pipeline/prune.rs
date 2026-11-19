@@ -16,10 +16,10 @@ use tarragon_db::repository::Thumbnail;
 /// `rows` holds rows of this folder only. A row still counts only when its
 /// parent is `folder` exactly. This second guard keeps a delete from reaching
 /// a row of another folder if the caller passes other rows. The `file_tags`
-/// rows stay, so a file that comes back keeps its tags. A failure is logged
-/// and skipped.
-/// A cache file is kept when its row could not be deleted, and when it does
-/// not resolve inside `cache_root`. A cache file that is already gone is not
+/// rows stay, so a file that comes back keeps its tags. The rows go in one
+/// transaction; when it fails, it is logged, nothing is deleted, and every
+/// cache file is kept. A cache file is also kept when it does not resolve
+/// inside `cache_root`. A cache file that is already gone is not
 /// an error.
 ///
 /// An empty scan deletes nothing: an unmounted mount point looks like an
@@ -38,18 +38,26 @@ pub(super) fn prune_missing(
         .iter()
         .map(|file| file.path.to_string_lossy().replace('\\', "/"))
         .collect();
-    let canonical_root = dunce::canonicalize(cache_root).ok();
-    let mut pruned = 0;
-    let stale = rows
+    let stale: Vec<(&String, &Thumbnail)> = rows
         .iter()
         .filter(|(path, _)| Path::new(path.as_str()).parent() == Some(folder))
-        .filter(|(path, _)| !present.contains(*path));
-    for (path, row) in stale {
-        if let Err(error) = db.delete_thumbnail(path) {
-            tracing::warn!("cannot delete the thumbnail row for {path}: {error}");
-            continue;
+        .filter(|(path, _)| !present.contains(*path))
+        .collect();
+    if stale.is_empty() {
+        return 0;
+    }
+    // One transaction for all rows: a folder of many deleted files would
+    // otherwise wait for one commit per file.
+    let paths: Vec<&str> = stale.iter().map(|(path, _)| path.as_str()).collect();
+    let pruned = match db.delete_thumbnails(&paths) {
+        Ok(pruned) => pruned,
+        Err(error) => {
+            tracing::warn!("cannot delete the thumbnail rows of files that left: {error}");
+            return 0;
         }
-        pruned += 1;
+    };
+    let canonical_root = dunce::canonicalize(cache_root).ok();
+    for (_, row) in stale {
         for cache in [
             &row.thumbnail_cache_path,
             &row.preview_cache_path,

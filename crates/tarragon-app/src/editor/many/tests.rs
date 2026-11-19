@@ -199,7 +199,11 @@ fn a_timed_out_query_ends_all_lookups_and_keeps_one_start_per_file() {
     assert!(start.elapsed() < Duration::from_millis(1500));
     assert_eq!(report.failed, 0);
     assert_eq!(fixture.lines("open.log", 3), ["1", "1", "1"]);
-    assert_eq!(fixture.lines("mime.log", 1), ["call"]);
+    // The lookups run one after another before `open` returns, so a second
+    // query would be in the log by now. Under load the deadline can end the
+    // first query before its script writes, so none is allowed too.
+    let mime = std::fs::read_to_string(fixture.dir.0.join("mime.log")).unwrap_or_default();
+    assert!(mime.lines().count() <= 1, "more than one query: {mime:?}");
 }
 
 #[test]

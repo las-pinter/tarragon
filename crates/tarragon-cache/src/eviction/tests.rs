@@ -406,6 +406,13 @@ fn a_failed_remove_keeps_the_removed_sources_and_goes_on() {
     // A folder with no write bit keeps the full tier file of `old`.
     let locked = old.path(Tier::Full).parent().expect("a tier folder");
     std::fs::set_permissions(locked, std::fs::Permissions::from_mode(0o555)).expect("lock");
+    // A root user writes through the lock; then there is no failure to test.
+    let probe = locked.join("probe");
+    if std::fs::write(&probe, b"x").is_ok() {
+        let _ = std::fs::remove_file(&probe);
+        std::fs::set_permissions(locked, std::fs::Permissions::from_mode(0o755)).expect("unlock");
+        return;
+    }
 
     let outcome = store.evict_to_cap(1, &[old.clone(), mid.clone(), new.clone()]);
     std::fs::set_permissions(locked, std::fs::Permissions::from_mode(0o755)).expect("unlock");

@@ -43,7 +43,7 @@ impl Fixture {
         db.initialize().expect("create the schema");
         let folder = dir.0.join("pics");
         fs::create_dir_all(&folder).expect("create the folder");
-        db.upsert_folder_uuid(&db_text(&folder), UUID)
+        db.upsert_folder_uuid(&path_key(&folder), UUID)
             .expect("store the folder id");
         let cache = CacheStore::new(dir.0.join("cache"));
         Self {
@@ -58,7 +58,7 @@ impl Fixture {
     fn add_file(&self, name: &str) -> (PathBuf, Vec<PathBuf>) {
         let path = self.folder.join(name);
         fs::write(&path, name.as_bytes()).expect("write the file");
-        let text = db_text(&path);
+        let text = path_key(&path);
         let tiers = self.add_tiers(name);
         self.db
             .upsert_thumbnail(&ThumbnailWrite {
@@ -68,9 +68,9 @@ impl Fixture {
                 width: 4,
                 height: 4,
                 cache_uuid: UUID.to_owned(),
-                thumbnail_cache_path: Some(db_text(&tiers[0])),
-                preview_cache_path: Some(db_text(&tiers[1])),
-                full_cache_path: Some(db_text(&tiers[2])),
+                thumbnail_cache_path: Some(path_key(&tiers[0])),
+                preview_cache_path: Some(path_key(&tiers[1])),
+                full_cache_path: Some(path_key(&tiers[2])),
                 last_accessed: 0,
             })
             .expect("write the row");
@@ -107,7 +107,7 @@ impl Fixture {
 
     /// The tag names and the thumbnail row of a path.
     fn tags_and_row(&self, path: &Path) -> (Vec<String>, Option<Thumbnail>) {
-        let text = db_text(path);
+        let text = path_key(path);
         let tags = self
             .db
             .tags_for_files(std::slice::from_ref(&text))
@@ -122,7 +122,7 @@ impl Fixture {
 
     /// The tag names, the favorite sort order, and the thumbnail row of a path.
     fn rows(&self, path: &Path) -> (Vec<String>, Option<i64>, Option<Thumbnail>) {
-        let text = db_text(path);
+        let text = path_key(path);
         let (tags, row) = self.tags_and_row(path);
         let favorite = self
             .db
@@ -287,15 +287,15 @@ fn old_tier_files_and_stale_row_tier_files_are_deleted_after_success() {
     let stale_tiers = fx.add_tiers("b.png");
     fx.db
         .upsert_thumbnail(&ThumbnailWrite {
-            path: db_text(&fx.folder.join("b.png")),
+            path: path_key(&fx.folder.join("b.png")),
             mtime: 1,
             size: 1,
             width: 1,
             height: 1,
             cache_uuid: UUID.to_owned(),
-            thumbnail_cache_path: Some(db_text(&stale_tiers[0])),
-            preview_cache_path: Some(db_text(&stale_tiers[1])),
-            full_cache_path: Some(db_text(&stale_tiers[2])),
+            thumbnail_cache_path: Some(path_key(&stale_tiers[0])),
+            preview_cache_path: Some(path_key(&stale_tiers[1])),
+            full_cache_path: Some(path_key(&stale_tiers[2])),
             last_accessed: 0,
         })
         .expect("write the stale row");

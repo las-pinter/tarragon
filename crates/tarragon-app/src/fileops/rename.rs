@@ -8,6 +8,7 @@ use tarragon_cache::store::CacheStore;
 use tarragon_core::file_name::{
     FileNameError, MAX_FILE_NAME_BYTES, split_file_name, validate_file_stem,
 };
+use tarragon_core::path_key::path_key;
 use tarragon_db::Database;
 
 use super::{FileOpError, io_error};
@@ -78,8 +79,8 @@ fn rename_with(
         return Err(FileNameError::TooLong.into());
     }
 
-    let old_text = db_text(old);
-    let new_text = db_text(&new);
+    let old_text = path_key(old);
+    let new_text = path_key(&new);
     let leftovers = tier_files(db, cache, folder, &[name, &new_name])?;
 
     before_move(&new);
@@ -106,11 +107,6 @@ fn rename_with(
     Ok(new)
 }
 
-/// The path text the database stores: forward slashes.
-fn db_text(path: &Path) -> String {
-    tarragon_core::path_key::path_key(path)
-}
-
 /// The cache tier files of each named file in `folder`. A folder with no cache
 /// id has none. A failed probe is logged and gives no files for that name.
 fn tier_files(
@@ -119,7 +115,7 @@ fn tier_files(
     folder: &Path,
     names: &[&str],
 ) -> Result<Vec<PathBuf>, FileOpError> {
-    let Some(uuid) = db.folder_uuid(&db_text(folder))? else {
+    let Some(uuid) = db.folder_uuid(&path_key(folder))? else {
         return Ok(Vec::new());
     };
     let folder_name = folder.file_name().map_or_else(

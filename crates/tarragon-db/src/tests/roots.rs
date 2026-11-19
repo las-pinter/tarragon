@@ -94,13 +94,20 @@ fn removing_with_a_trailing_slash_removes_the_root() {
     assert_eq!(temp.db.list_library_roots().expect("list").len(), 0);
 }
 
-#[cfg(windows)]
 #[test]
-fn a_filesystem_root_and_a_bare_drive_keep_their_slash() {
+fn a_filesystem_root_keeps_its_slash() {
     let temp = TempDb::new();
     temp.db.add_library_root("/").expect("add");
+    assert_eq!(temp.db.list_library_roots().expect("list"), ["/"]);
+    assert_eq!(temp.db.remove_library_root("/").expect("remove"), 1);
+}
+
+#[cfg(windows)]
+#[test]
+fn a_bare_drive_keeps_its_slash() {
+    let temp = TempDb::new();
     temp.db.add_library_root("C:\\").expect("add");
-    assert_eq!(temp.db.list_library_roots().expect("list"), ["/", "C:/"]);
+    assert_eq!(temp.db.list_library_roots().expect("list"), ["C:/"]);
     assert_eq!(temp.db.remove_library_root("C:/").expect("remove"), 1);
 }
 

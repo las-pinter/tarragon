@@ -76,7 +76,7 @@ fn choose_open_folder(rig: &mut Rig) {
 
 /// The text of `path` as the database stores it.
 fn stored_text(path: &Path) -> String {
-    path.to_string_lossy().replace('\\', "/")
+    tarragon_core::path_key::path_key(path)
 }
 
 fn roots_in_db(rig: &Rig) -> Vec<String> {

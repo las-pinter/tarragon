@@ -112,7 +112,6 @@ impl RenameDialog {
         if ctx.input_mut(|input| input.consume_key(Modifiers::NONE, Key::Escape)) {
             return Step::Close;
         }
-        let verdict = self.verdict(taken);
         let mut step = Step::Stay;
         egui::Window::new("Rename")
             .order(egui::Order::Foreground)
@@ -150,6 +149,9 @@ impl RenameDialog {
                         response
                     })
                     .inner;
+                // Checked after the field, so a change and Enter in one frame
+                // send the name that was checked.
+                let verdict = self.verdict(&taken);
                 if let Verdict::Refused(text) = &verdict {
                     ui.label(
                         RichText::new(text)

@@ -151,6 +151,37 @@ fn enter_on_a_new_name_raises_rename_to_with_the_stem_only() {
 }
 
 #[test]
+fn a_bad_name_typed_with_enter_in_one_frame_is_not_sent() {
+    let (ctx, mut gallery) = open("a.png");
+    texts(
+        &ctx,
+        &mut gallery,
+        vec![Event::Text("a/b".to_owned()), key(Key::Enter)],
+    );
+    texts(&ctx, &mut gallery, Vec::new());
+    assert_eq!(gallery.take_menu_events(), vec![]);
+    assert!(gallery.rename_open(), "the dialog stays open");
+}
+
+#[test]
+fn a_new_name_typed_with_enter_in_one_frame_is_sent() {
+    let (ctx, mut gallery) = open("a.png");
+    texts(
+        &ctx,
+        &mut gallery,
+        vec![Event::Text("new".to_owned()), key(Key::Enter)],
+    );
+    texts(&ctx, &mut gallery, Vec::new());
+    assert_eq!(
+        gallery.take_menu_events(),
+        vec![GridMenuEvent::RenameTo {
+            path: PathBuf::from("/images/a.png"),
+            new_stem: "new".to_owned(),
+        }]
+    );
+}
+
+#[test]
 fn ok_on_a_new_name_raises_rename_to() {
     let (ctx, mut gallery) = open("a.png");
     type_name(&ctx, &mut gallery, "new");

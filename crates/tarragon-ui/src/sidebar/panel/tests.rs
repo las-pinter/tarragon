@@ -319,6 +319,50 @@ fn expanding_an_unlisted_node_asks_once_even_after_two_clicks() {
 }
 
 #[test]
+fn expanding_a_listed_node_again_asks_for_a_fresh_listing() {
+    let mut sidebar = unlisted();
+    sidebar.set_children(Path::new("/r"), vec![PathBuf::from("/r/a")]);
+    sidebar.tree_mut().set_expanded(Path::new("/r"), true);
+    sidebar.set_children(Path::new("/r/a"), vec![PathBuf::from("/r/a/old")]);
+    let ctx = ready();
+    let to_caret = -(GAP + ICON_WIDTH + GAP + CARET_SLOT / 2.0);
+    click(&ctx, &mut sidebar, "a", vec2(to_caret, 5.0));
+    assert_eq!(sidebar.take_events(), [list("/r/a")]);
+    let texts = frame(&ctx, &mut sidebar, Vec::new());
+    find(&texts, "old");
+    sidebar.set_children(
+        Path::new("/r/a"),
+        vec![PathBuf::from("/r/a/old"), PathBuf::from("/r/a/new")],
+    );
+    let texts = frame(&ctx, &mut sidebar, Vec::new());
+    find(&texts, "new");
+}
+
+#[test]
+fn a_fresh_listing_keeps_a_folder_the_user_collapsed_on_the_way_to_the_open_folder() {
+    let mut sidebar = Sidebar::default();
+    sidebar.set_roots(vec![PathBuf::from("/r")]);
+    sidebar.set_open_folder(Some(PathBuf::from("/r/a/b/c")));
+    sidebar.set_children(Path::new("/r"), vec![PathBuf::from("/r/a")]);
+    sidebar.set_children(Path::new("/r/a"), vec![PathBuf::from("/r/a/b")]);
+    sidebar.set_children(Path::new("/r/a/b"), vec![PathBuf::from("/r/a/b/c")]);
+    sidebar.take_events();
+    sidebar.tree_mut().set_expanded(Path::new("/r/a/b"), false);
+    let ctx = ready();
+    let to_caret = -(GAP + ICON_WIDTH + GAP + CARET_SLOT / 2.0);
+    click(&ctx, &mut sidebar, "a", vec2(to_caret, 5.0));
+    click(&ctx, &mut sidebar, "a", vec2(to_caret, 5.0));
+    assert_eq!(sidebar.take_events(), [list("/r/a")]);
+    sidebar.set_children(Path::new("/r/a"), vec![PathBuf::from("/r/a/b")]);
+    let texts = frame(&ctx, &mut sidebar, Vec::new());
+    find(&texts, "b");
+    assert!(
+        !texts.iter().any(|t| t.string == "c"),
+        "the collapsed /r/a/b stayed collapsed"
+    );
+}
+
+#[test]
 fn set_children_answers_the_request_and_shows_the_rows() {
     let mut sidebar = unlisted();
     sidebar.tree_mut().set_expanded(Path::new("/r"), true);

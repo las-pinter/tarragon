@@ -88,14 +88,18 @@ impl Sidebar {
     }
 
     /// Store the listed children of a folder and answer its pending request.
+    ///
+    /// Only a first listing continues the walk to the open folder. A fresh
+    /// listing of a folder the user expanded again keeps the user's collapses.
     pub fn set_children(&mut self, path: &Path, children: Vec<PathBuf>) {
+        let first = !self.tree.is_listed(path);
         self.tree.set_children(path, children);
         let was_pending = self.pending.remove(path);
         let below = self
             .state
             .selected()
             .is_some_and(|open| open != path && open.starts_with(path));
-        if was_pending && below {
+        if was_pending && first && below {
             self.reveal();
         }
         self.dirty = true;
@@ -281,7 +285,9 @@ impl Sidebar {
                             RowAction::Toggle => {
                                 self.tree.toggle(&row.path);
                                 if !row.expanded {
-                                    ask_listing(
+                                    // A listed folder is asked again, so folders made
+                                    // since the last listing show.
+                                    ask_relisting(
                                         &self.tree,
                                         &mut self.pending,
                                         &mut self.events,
@@ -329,6 +335,19 @@ fn ask_listing(
     path: &Path,
 ) {
     if tree.is_known(path) && !tree.is_listed(path) && pending.insert(path.to_path_buf()) {
+        events.push(SidebarEvent::ListChildren(path.to_path_buf()));
+    }
+}
+
+/// Queue a `ListChildren` for a known folder that is not asked for yet, even
+/// when it is listed already.
+fn ask_relisting(
+    tree: &TreeModel,
+    pending: &mut HashSet<PathBuf>,
+    events: &mut Vec<SidebarEvent>,
+    path: &Path,
+) {
+    if tree.is_known(path) && pending.insert(path.to_path_buf()) {
         events.push(SidebarEvent::ListChildren(path.to_path_buf()));
     }
 }

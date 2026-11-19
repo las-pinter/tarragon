@@ -93,6 +93,16 @@ fn the_trash_confirm_shows_the_count_and_enter_confirms_without_permanent() {
 }
 
 #[test]
+fn enter_on_a_focused_cancel_in_the_trash_confirm_cancels() {
+    let (ctx, mut gallery) = open(&["a.png"], trash);
+    tap(&ctx, &mut gallery, Key::Tab);
+    assert!(gallery.delete_open(), "Tab did not close the dialog");
+    tap(&ctx, &mut gallery, Key::Enter);
+    assert_eq!(gallery.take_menu_events(), vec![]);
+    assert!(!gallery.delete_open(), "Enter on Cancel closed the dialog");
+}
+
+#[test]
 fn the_trash_confirm_names_a_single_file() {
     let (ctx, mut gallery) = open(&["a.png"], trash);
     let seen = texts(&ctx, &mut gallery, Vec::new());

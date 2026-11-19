@@ -4,7 +4,8 @@
 //! There are three kinds. The Trash confirm defaults to "Move to Trash". The
 //! permanent confirm and the "instead" prompt default to "Cancel". Enter never
 //! confirms a permanent delete. Only the "Delete permanently" button does, by
-//! click, or by Tab then Space.
+//! click, or by Tab then Space. In the Trash confirm, Enter on a focused
+//! Cancel cancels.
 //!
 //! The dialog acts on the paths it was opened with. A change of the selection
 //! while it is open does not change them.
@@ -39,6 +40,10 @@ pub(super) struct DeleteDialog {
     kind: Kind,
     /// Set until the default button has focus. Enter does nothing meanwhile.
     fresh: bool,
+    /// The id of the Cancel button from the last frame, so Enter on a focused
+    /// Cancel cancels. Only the Trash confirm reads it; in the other kinds
+    /// Enter always closes.
+    cancel_id: Option<egui::Id>,
 }
 
 /// What one frame of the dialog decided.
@@ -67,6 +72,7 @@ impl DeleteDialog {
             paths,
             kind,
             fresh: true,
+            cancel_id: None,
         }
     }
 
@@ -91,12 +97,15 @@ impl DeleteDialog {
         }
     }
 
-    /// What Enter does, whatever widget has the focus: the Trash confirm
-    /// confirms, and the permanent kinds close with no event.
-    fn enter_step(&self) -> Step {
+    /// What Enter does: the Trash confirm confirms unless Cancel has the
+    /// focus, and the permanent kinds close with no event.
+    fn enter_step(&self, ctx: &Context) -> Step {
+        let on_cancel = self
+            .cancel_id
+            .is_some_and(|id| ctx.memory(|memory| memory.has_focus(id)));
         match self.kind {
-            Kind::Trash => Step::Confirm,
-            Kind::Permanent | Kind::Instead => Step::Close,
+            Kind::Trash if !on_cancel => Step::Confirm,
+            Kind::Trash | Kind::Permanent | Kind::Instead => Step::Close,
         }
     }
 
@@ -108,9 +117,11 @@ impl DeleteDialog {
             return Step::Close;
         }
         // Only a new press counts, never a repeat of a key that was already
-        // down, and nothing counts before the default button has focus.
+        // down, and nothing counts before the default button has focus. This
+        // runs before the buttons are drawn, so the focus and `cancel_id` it
+        // reads are from the frame the user saw.
         if take_enter(ctx) && !self.fresh {
-            return self.enter_step();
+            return self.enter_step(ctx);
         }
         let mut step = Step::Stay;
         let title = match self.kind {
@@ -148,6 +159,7 @@ impl DeleteDialog {
                             default.request_focus();
                         }
                     }
+                    self.cancel_id = Some(if trash { other.id } else { default.id });
                     let (confirm, cancel) = if trash {
                         (default.clicked(), other.clicked())
                     } else {

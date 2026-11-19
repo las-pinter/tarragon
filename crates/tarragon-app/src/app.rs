@@ -86,6 +86,9 @@ pub struct App {
     cache_root: PathBuf,
     /// The window context for worker threads, set once the window exists.
     repaint_ctx: Arc<OnceLock<Context>>,
+    /// The `PATH` for the system opener, or none to inherit the process one.
+    /// Tests point it at a stand-in so no real application starts.
+    opener_path: Option<std::ffi::OsString>,
     /// Close the window when the grid is done.
     close_when_loaded: bool,
     /// Lets `main` wait for the pipeline after the window closes.
@@ -187,6 +190,7 @@ impl App {
             data_root: data_dir::data_root(path),
             cache_root,
             repaint_ctx,
+            opener_path: None,
             close_when_loaded: startup.close_when_loaded,
             exit_wait: startup.exit_wait,
             seen_selection: 0,

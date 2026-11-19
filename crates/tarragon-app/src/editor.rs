@@ -154,7 +154,25 @@ pub fn open_folder_in_manager(file: &Path) -> Result<(), OpenError> {
 
 /// [`open_folder_in_manager`] with an optional `PATH` for the child.
 fn open_folder_with_path(file: &Path, path: Option<&OsStr>) -> Result<(), OpenError> {
-    let launch = system_opener(file.parent().unwrap_or(file));
+    open_system_with_path(file.parent().unwrap_or(file), path)
+}
+
+/// Open `file` in the default application of the system, without waiting.
+///
+/// The editor templates are not read, so a text file such as a crash report
+/// never opens in an image editor that the `*` template names. `path` is the
+/// `PATH` for the child, or none to inherit the process one.
+///
+/// # Errors
+///
+/// Returns [`OpenError::Spawn`] when the program does not start.
+pub fn open_with_system(file: &Path, path: Option<&OsStr>) -> Result<(), OpenError> {
+    open_system_with_path(file, path)
+}
+
+/// Start the system opener on `target` with an optional `PATH` for the child.
+fn open_system_with_path(target: &Path, path: Option<&OsStr>) -> Result<(), OpenError> {
+    let launch = system_opener(target);
     spawn_with_path(&launch, path).map_err(|source| OpenError::Spawn {
         program: launch.program.to_string_lossy().into_owned(),
         source,

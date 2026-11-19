@@ -168,21 +168,44 @@ fn a_report_that_cannot_be_renamed_does_not_keep_the_card_open() {
 
 #[cfg(unix)]
 #[test]
-fn open_report_runs_the_editor_for_the_file_and_keeps_the_card_open() {
+fn open_report_runs_the_system_opener_not_the_editor_template_and_keeps_the_card_open() {
+    use std::os::unix::fs::PermissionsExt;
     let mut rig = Rig::new();
-    let out = rig.dir.0.join("opened.txt");
-    let template = format!("sh -c \"echo $0 > {}\" {{file}}", out.display());
+    // An image editor template for every extension must not get the report.
+    let editor_out = rig.dir.0.join("editor.txt");
+    let template = format!("sh -c \"echo $0 > {}\" {{file}}", editor_out.display());
     rig.app
         .db
-        .upsert_editor_association("txt", &template)
+        .upsert_editor_association("*", &template)
         .expect("store the template");
+    // A stand-in `xdg-open`, so no real application starts.
+    let bin = rig.dir.0.join("bin");
+    std::fs::create_dir_all(&bin).expect("create the bin folder");
+    let out = rig.dir.0.join("opened.txt");
+    let opener = if cfg!(target_os = "macos") {
+        "open"
+    } else {
+        "xdg-open"
+    };
+    let script = bin.join(opener);
+    std::fs::write(
+        &script,
+        format!("#!/bin/sh\necho \"$1\" > {}\n", out.display()),
+    )
+    .expect("write the stand-in");
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755))
+        .expect("make the stand-in executable");
+    rig.app.opener_path = Some(bin.into_os_string());
     rig.press("Open report");
     let want = format!("{}\n", rig.crashes(NEW).display());
     let end = std::time::Instant::now() + std::time::Duration::from_secs(10);
     while std::fs::read_to_string(&out).map_or(true, |text| text != want) {
-        assert!(std::time::Instant::now() < end, "timed out: editor ran");
+        assert!(std::time::Instant::now() < end, "timed out: the opener ran");
         std::thread::sleep(std::time::Duration::from_millis(10));
     }
+    // The stand-in ran, so the system opener was chosen; the template would
+    // have been instead of it, not as well.
+    assert!(!editor_out.exists(), "the editor template got the report");
     assert!(rig.card_shown());
     assert!(rig.crashes(NEW).exists());
 }

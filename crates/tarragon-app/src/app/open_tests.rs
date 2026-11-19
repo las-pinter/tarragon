@@ -83,10 +83,11 @@ impl Rig {
         while self.app.shell.take_open_request().is_some() {}
     }
 
-    /// Draw one headless frame.
-    fn frame(&mut self) {
+    /// Draw one headless frame and return its painted texts.
+    fn frame(&mut self) -> Vec<String> {
         let (app, frame) = (&mut self.app, &mut self.frame);
-        test_ui::frame(&self.ctx, Vec::new(), &mut |ui| app.ui(ui, frame));
+        let painted = test_ui::frame(&self.ctx, Vec::new(), &mut |ui| app.ui(ui, frame));
+        painted.texts.into_iter().map(|text| text.0).collect()
     }
 
     /// Store `command` as the template for every extension.
@@ -152,6 +153,21 @@ fn a_missing_program_does_not_panic_and_the_request_is_consumed() {
         assert!(!rig.out.exists(), "the failed request came back");
         std::thread::sleep(Duration::from_millis(10));
     }
+}
+
+#[test]
+fn a_missing_program_shows_its_error_in_the_notice() {
+    let mut rig = Rig::new();
+    rig.set_template("tarragon-no-such-editor-program {file}");
+    rig.queue();
+    rig.app.apply_open_request();
+    let texts = rig.frame();
+    assert!(
+        texts
+            .iter()
+            .any(|text| text.contains("tarragon-no-such-editor-program")),
+        "no notice names the program: {texts:?}"
+    );
 }
 
 #[test]

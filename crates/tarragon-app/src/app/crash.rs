@@ -22,8 +22,10 @@ impl App {
                     let Some(path) = &self.crash_path else {
                         continue;
                     };
-                    if let Err(error) = editor::open(&self.db, path) {
-                        tracing::warn!("cannot open the crash report: {error}");
+                    // The report is text; the editor templates are for images.
+                    if let Err(error) = editor::open_with_system(path, self.opener_path.as_deref())
+                    {
+                        self.notice_failure("cannot open the crash report", &error);
                     }
                 }
             }

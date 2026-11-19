@@ -35,7 +35,7 @@ impl App {
                 PreviewEvent::RetryRender => self.thumbs.retry(&HashSet::from([path])),
                 PreviewEvent::OpenInEditor => {
                     if let Err(error) = editor::open(&self.db, &path) {
-                        tracing::warn!("cannot open the file in an editor: {error}");
+                        self.notice_failure("cannot open the file in an editor", &error);
                     }
                 }
                 _ => {}

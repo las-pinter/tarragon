@@ -186,8 +186,6 @@ pub const SIDEBAR_WIDTH: f32 = 220.0;
 pub const PREVIEW_WIDTH: f32 = 490.0;
 /// `.preview-img` min-height: the Preview image box height, in points.
 pub const PREVIEW_IMAGE_HEIGHT: f32 = 260.0;
-/// `.mosaic-cell` height: one Preview mosaic cell, in points.
-pub const PREVIEW_MOSAIC_CELL_HEIGHT: f32 = 120.0;
 /// `.mosaic` padding (`--space-s`): the room between the Preview mosaic grid
 /// and the panel padding, in points.
 pub const PREVIEW_MOSAIC_PADDING: f32 = SPACING_S;

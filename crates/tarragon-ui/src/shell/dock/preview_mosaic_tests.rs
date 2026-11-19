@@ -142,3 +142,36 @@ fn a_big_selection_with_one_picture_ready_shows_a_one_cell_mosaic() {
     assert!(text.iter().any(|t| t == "+2 more"), "{text:?}");
     assert!(!text.iter().any(|t| t == crate::preview::EMPTY_HINT));
 }
+
+#[test]
+fn five_pictures_fill_two_rows_of_the_same_width() {
+    let ctx = Context::default();
+    apply_theme(&ctx);
+    let mut shell = Shell::new();
+    shell.preview.set_mosaic(images(5), 5);
+    let (found, _) = settle(&ctx, &mut shell);
+    let mut tops: Vec<f32> = found.iter().map(|(_, r)| r.min.y.round()).collect();
+    tops.dedup();
+    assert_eq!(tops.len(), 2, "{found:?}");
+    let span = |top: f32| {
+        let row: Vec<_> = found
+            .iter()
+            .filter(|(_, r)| (r.min.y.round() - top).abs() < 0.5)
+            .collect();
+        let left = row
+            .iter()
+            .map(|(_, r)| r.min.x)
+            .fold(f32::INFINITY, f32::min);
+        let right = row
+            .iter()
+            .map(|(_, r)| r.max.x)
+            .fold(f32::NEG_INFINITY, f32::max);
+        (row.len(), left, right)
+    };
+    let (first, second) = (span(tops[0]), span(tops[1]));
+    assert_eq!((first.0, second.0), (3, 2));
+    assert!(
+        (first.1 - second.1).abs() < 0.5 && (first.2 - second.2).abs() < 0.5,
+        "{first:?} {second:?}"
+    );
+}

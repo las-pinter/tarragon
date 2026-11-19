@@ -65,7 +65,8 @@ fn aspect((width, height): (u32, u32)) -> f32 {
 /// one padding inside them and is as tall as its rows. Each cell has the
 /// shape of its picture, and the cells of a row share the full width, so the
 /// row height follows. A row taller than `MAX_ROW_HEIGHT` keeps that height
-/// and is centred. An area with no width gives no cells.
+/// and is centred. An area too narrow for the gaps of its widest row gives
+/// no cells.
 #[must_use]
 #[expect(
     clippy::cast_precision_loss,
@@ -79,14 +80,20 @@ pub fn grid_cells(sizes: &[(u32, u32)], cap: usize, area: Rect) -> Vec<Rect> {
         return Vec::new();
     }
     let gap = tokens::SPACING_S;
+    let rows = row_sizes(n);
+    let widest = rows.iter().copied().max().unwrap_or(1);
+    if width <= gap * (widest - 1) as f32 {
+        // A pane narrower than the gaps of the widest row has no room for pictures.
+        return Vec::new();
+    }
     let (mut cells, mut first, mut y) = (Vec::with_capacity(n), 0, area.min.y + pad);
-    for count in row_sizes(n) {
+    for count in rows {
         let aspects: Vec<f32> = sizes[first..first + count]
             .iter()
             .map(|s| aspect(*s))
             .collect();
         let gaps = gap * (count - 1) as f32;
-        let room = (width - gaps).max(0.0);
+        let room = width - gaps;
         let height = (room / aspects.iter().sum::<f32>()).min(MAX_ROW_HEIGHT);
         let used: f32 = aspects.iter().map(|a| a * height).sum::<f32>() + gaps;
         let mut x = area.min.x + pad + (width - used).max(0.0) / 2.0;
@@ -129,6 +136,8 @@ pub fn show(ui: &mut Ui, images: &[PreviewImage], total: usize, cap: usize) {
     let probe = Rect::from_min_size(ui.cursor().min, vec2(ui.available_width(), 0.0));
     let height = grid_height(&grid_cells(&sizes, cap, probe), probe);
     let (area, _) = ui.allocate_exact_size(vec2(probe.width(), height), Sense::hover());
+    // The cells are laid out again on the allocated rect, which can differ
+    // from the probe when the layout moves the allocation.
     for (cell, image) in grid_cells(&sizes, cap, area).into_iter().zip(images) {
         let painter = ui.painter();
         painter.rect_filled(

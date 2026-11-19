@@ -109,12 +109,25 @@ fn twelve_images_are_cut_to_the_cap_of_nine() {
 }
 
 #[test]
-fn no_images_no_cap_or_no_width_give_no_cells() {
+fn no_images_no_cap_or_too_little_width_give_no_cells() {
     let none: Vec<Rect> = Vec::new();
     let thin = Rect::from_min_size(pos2(0.0, 0.0), vec2(16.0, 500.0));
     assert_eq!(grid_cells(&[], 9, area()), none);
     assert_eq!(grid_cells(&squares(4), 0, area()), none);
     assert_eq!(grid_cells(&squares(4), 9, thin), none);
+    // 10 pt inside the padding, less than the 16 pt of gaps in a row of three.
+    let narrow = Rect::from_min_size(pos2(0.0, 0.0), vec2(26.0, 0.0));
+    assert_eq!(grid_cells(&squares(6), 9, narrow), none);
+}
+
+#[test]
+fn the_widest_row_sets_the_least_width() {
+    // Five pictures make rows of 3 and 2; the row of 3 has 16 pt of gaps.
+    let inner = |width: f32| Rect::from_min_size(pos2(0.0, 0.0), vec2(width + 16.0, 0.0));
+    assert_eq!(grid_cells(&squares(5), 9, inner(16.0)), Vec::<Rect>::new());
+    let cells = grid_cells(&squares(5), 9, inner(17.0));
+    assert_eq!(cells.len(), 5);
+    assert!(cells.iter().all(|c| c.width() > 0.0 && c.height() > 0.0));
 }
 
 #[test]

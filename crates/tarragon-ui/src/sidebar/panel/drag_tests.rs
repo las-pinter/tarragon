@@ -314,6 +314,11 @@ fn a_dropped_row_settles_in_its_new_place_after_set_favorites() {
 
 /// The slot for a pointer at `y` over three 27 point rows from y = 100, with the whole screen as clip.
 fn slot_at(y: f32) -> Option<usize> {
+    slot_in_clip(y, Rect::from_min_size(Pos2::ZERO, vec2(400.0, 300.0)))
+}
+
+/// The slot for a pointer at `y` over the same rows, with `clip` as the clip rect.
+fn slot_in_clip(y: f32, clip: Rect) -> Option<usize> {
     let ctx = ready();
     let spans = [(100.0, 127.0), (127.0, 154.0), (154.0, 181.0)];
     let mut slot = None;
@@ -324,6 +329,7 @@ fn slot_at(y: f32) -> Option<usize> {
             ..Default::default()
         };
         let output = ctx.run_ui(raw, |ui| {
+            ui.set_clip_rect(clip);
             slot = super::favorites::pointer_slot(ui, &spans);
         });
         output.drop_without_applying_deltas();
@@ -344,4 +350,47 @@ fn a_pointer_below_the_list_inside_the_clip_means_the_last_slot() {
 #[test]
 fn a_pointer_on_a_row_keeps_its_slot() {
     assert_eq!(slot_at(130.0), Some(1));
+}
+
+#[test]
+fn a_pointer_outside_the_clip_has_no_slot() {
+    let clip = Rect::from_min_max(pos2(0.0, 90.0), pos2(400.0, 190.0));
+    assert_eq!(slot_in_clip(250.0, clip), None);
+    // The control: inside the narrowed clip, below the list still gives a slot.
+    assert_eq!(slot_in_clip(185.0, clip), Some(3));
+}
+
+/// The y of each label in `names` below the FAVORITES heading, in one frame.
+///
+/// The favorites panel sits at the bottom and shrinks with the list, so
+/// heights are measured from its heading.
+fn below_head(ctx: &Context, sidebar: &mut Sidebar, names: &[&str]) -> Vec<f32> {
+    let texts = frame(ctx, sidebar, Vec::new());
+    let head = find(&texts, "FAVORITES").pos.y;
+    names
+        .iter()
+        .map(|name| find(&texts, name).pos.y - head)
+        .collect()
+}
+
+#[test]
+fn the_rows_below_a_removed_favorite_slide_up() {
+    let (ctx, mut sidebar) = (ready(), three());
+    warm_up(&ctx, &mut sidebar);
+    let before = below_head(&ctx, &mut sidebar, &["fa", "fb", "fc"]);
+    let rest = sidebar.state.favorites()[1..].to_vec();
+    sidebar.set_favorites(rest);
+    let first = below_head(&ctx, &mut sidebar, &["fb"])[0];
+    assert!(
+        first > before[0] + 0.01,
+        "fb jumped to its new place: {first}"
+    );
+    assert!(
+        first <= before[1] + 0.01,
+        "fb starts below its old place: {first}"
+    );
+    settle(&ctx, &mut sidebar);
+    let after = below_head(&ctx, &mut sidebar, &["fb", "fc"]);
+    assert!((after[0] - before[0]).abs() < 0.01, "{after:?} {before:?}");
+    assert!((after[1] - before[1]).abs() < 0.01, "{after:?} {before:?}");
 }

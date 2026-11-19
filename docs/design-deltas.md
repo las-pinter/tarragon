@@ -338,8 +338,8 @@ rows slide to the places they take if the row is dropped there; the gap they
 leave is the drop target, so no drop line is drawn. Inside the favorites area,
 a pointer above or below the list means the first or the last place. On
 release, Escape, or a drop outside the favorites area, the rows slide to their
-final places. The dashed border
-of the lifted row has square corners.
+final places. Rows also slide up when a favorite above them is removed. The
+dashed border of the lifted row has square corners.
 
 Reason: the grip is the only drag handle, so it shows on every row. egui 0.36.2
 has no helper for a rounded dashed rectangle. A dashed path needs hand-built arc

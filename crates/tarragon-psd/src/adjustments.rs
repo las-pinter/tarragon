@@ -409,6 +409,7 @@ fn legacy_brightness_contrast(value: f32, brightness: f32, contrast: f32) -> f32
     } else {
         (0.0, brightness)
     };
+    let value = value.clamp(0.0, 1.0);
     ((value + pre - LEGACY_PIVOT) * scale + LEGACY_PIVOT + post).clamp(0.0, 1.0)
 }
 

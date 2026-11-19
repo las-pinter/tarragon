@@ -264,7 +264,8 @@ fn read_descriptor(reader: &mut Reader<'_>, depth: usize) -> Option<Descriptor> 
     let count = reader.u32()?;
     // Every item needs at least eight bytes (four for the key, four for the type).
     let count = usize::try_from(count).ok()?;
-    if count.checked_mul(8)? > reader.remaining() {
+    // A count over the value budget fails before any room is reserved.
+    if count.checked_mul(8)? > reader.remaining() || count > reader.budget {
         return None;
     }
     let mut items = Vec::with_capacity(count);
@@ -298,7 +299,7 @@ fn read_value(reader: &mut Reader<'_>, depth: usize) -> Option<Value> {
         b"Objc" | b"GlbO" => Value::Descriptor(read_descriptor(reader, depth + 1)?),
         b"VlLs" => {
             let count = usize::try_from(reader.u32()?).ok()?;
-            if count.checked_mul(4)? > reader.remaining() {
+            if count.checked_mul(4)? > reader.remaining() || count > reader.budget {
                 return None;
             }
             let mut items = Vec::with_capacity(count);

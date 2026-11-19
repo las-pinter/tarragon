@@ -445,6 +445,13 @@ impl Pipeline {
     /// render, and an error of the running one is neither sent nor remembered.
     /// Unknown paths are skipped. It returns how many jobs it queued.
     pub fn retry(&mut self, keys: &HashSet<PathBuf>) -> usize {
+        // The stats run before the locks are taken: a dead mount can stall a
+        // stat for seconds, and every worker records its result under them.
+        let stats: HashMap<&PathBuf, _> = keys
+            .iter()
+            .filter(|key| self.jobs.contains_key(*key))
+            .filter_map(|key| stat_file(key).map(|info| (key, info)))
+            .collect();
         let mut failures = self
             .failures
             .lock()
@@ -462,7 +469,7 @@ impl Pipeline {
             *retried.entry(key.clone()).or_default() += 1;
             // The user may have replaced the file since the scan. The row of the
             // retry render must carry the size of the file it renders.
-            if let Some(info) = stat_file(key) {
+            if let Some(info) = stats.get(key) {
                 job.stamp = SourceStamp {
                     mtime: info.mtime,
                     size: info.size,

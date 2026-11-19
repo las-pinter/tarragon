@@ -22,6 +22,8 @@
 )]
 
 use crate::decode::Viewport;
+use crate::error::PsdError;
+use crate::limits::ParseOptions;
 use crate::vector_flatten::flatten_subpath;
 use crate::vector_mask::{PathOp, VectorMask};
 
@@ -59,13 +61,18 @@ impl Edge {
 /// The coverage of a vector mask over a viewport, row-major, `0.0..=1.0`.
 ///
 /// The document size scales the path fractions to pixels.
-#[must_use]
+///
+/// # Errors
+///
+/// Returns the error of `options` when the deadline passes or the work is
+/// cancelled; it is checked once per row.
 pub(crate) fn rasterize(
     mask: &VectorMask,
     doc_width: u32,
     doc_height: u32,
     viewport: Viewport,
-) -> Vec<f32> {
+    options: &ParseOptions,
+) -> Result<Vec<f32>, PsdError> {
     let width = usize::try_from(viewport.width()).unwrap_or(0);
     let height = usize::try_from(viewport.height()).unwrap_or(0);
     let scale = (f64::from(doc_width), f64::from(doc_height));
@@ -84,13 +91,13 @@ pub(crate) fn rasterize(
             op: subpath.op,
         })
         .collect();
-    let mut coverage = coverage(&components, mask.initial_fill, width, height);
+    let mut coverage = coverage_with(&components, mask.initial_fill, width, height, options)?;
     if mask.invert {
         for value in &mut coverage {
             *value = 1.0 - *value;
         }
     }
-    coverage
+    Ok(coverage)
 }
 
 /// Whether a point is inside the folded shape, given each winding number.
@@ -151,6 +158,8 @@ struct Scratch {
     cuts: Vec<f64>,
     /// The x range of each active edge inside the row.
     spans: Vec<(f64, f64)>,
+    /// The positions in `spans`, sorted by left end.
+    sweep: Vec<usize>,
     /// The edges of one band: mid x, x at the top, x at the bottom, index.
     band: Vec<(f64, f64, f64, usize)>,
     /// One winding number per component.
@@ -158,16 +167,20 @@ struct Scratch {
 }
 
 /// The coverage of a set of components over a `width` by `height` grid.
-#[must_use]
-pub(crate) fn coverage(
+///
+/// # Errors
+///
+/// Returns the error of `options`, checked once per row.
+pub(crate) fn coverage_with(
     components: &[Component],
     initial_fill: bool,
     width: usize,
     height: usize,
-) -> Vec<f32> {
+    options: &ParseOptions,
+) -> Result<Vec<f32>, PsdError> {
     let mut out = vec![0.0f32; width * height];
     if width == 0 || height == 0 {
-        return out;
+        return Ok(out);
     }
     let edges = build_edges(components);
     let mut order: Vec<usize> = (0..edges.len()).collect();
@@ -178,6 +191,7 @@ pub(crate) fn coverage(
     let mut cells = vec![0.0f64; width + 2];
     let mut scratch = Scratch::default();
     for (row, line) in out.chunks_exact_mut(width).enumerate() {
+        options.check()?;
         let top = row as f64;
         let bottom = top + 1.0;
         while next < order.len() && edges[order[next]].y0 < bottom {
@@ -225,13 +239,15 @@ pub(crate) fn coverage(
             *value = sum.clamp(0.0, 1.0) as f32;
         }
     }
-    out
+    Ok(out)
 }
 
 /// Fill `scratch.cuts` with the band boundaries of one row: its ends, the
 /// edge ends, and the crossings. Edges whose x ranges miss are not tested.
 fn find_bands(edges: &[Edge], active: &[usize], top: f64, bottom: f64, scratch: &mut Scratch) {
-    let Scratch { cuts, spans, .. } = scratch;
+    let Scratch {
+        cuts, spans, sweep, ..
+    } = scratch;
     cuts.clear();
     cuts.extend([top, bottom]);
     spans.clear();
@@ -246,13 +262,18 @@ fn find_bands(edges: &[Edge], active: &[usize], top: f64, bottom: f64, scratch: 
         let (xa, xb) = (e.x_at(low), e.x_at(high));
         spans.push((xa.min(xb), xa.max(xb)));
     }
-    for (position, &first) in active.iter().enumerate() {
-        for (offset, &second) in active[position + 1..].iter().enumerate() {
-            let (a, b) = (spans[position], spans[position + 1 + offset]);
-            if a.1 < b.0 || b.1 < a.0 {
-                continue;
+    // Sorted by left end, the edges that can meet one edge follow it until
+    // the first one that starts right of its right end.
+    sweep.clear();
+    sweep.extend(0..active.len());
+    sweep.sort_by(|&a, &b| spans[a].0.total_cmp(&spans[b].0));
+    for (position, &first) in sweep.iter().enumerate() {
+        let right = spans[first].1;
+        for &second in &sweep[position + 1..] {
+            if spans[second].0 > right {
+                break;
             }
-            if let Some(y) = crossing(&edges[first], &edges[second], top, bottom) {
+            if let Some(y) = crossing(&edges[active[first]], &edges[active[second]], top, bottom) {
                 cuts.push(y);
             }
         }
@@ -343,6 +364,23 @@ fn add_piece(cells: &mut [f64], xa: f64, xb: f64, area: f64) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// [`coverage_with`] with no deadline.
+    fn coverage(
+        components: &[Component],
+        initial_fill: bool,
+        width: usize,
+        height: usize,
+    ) -> Vec<f32> {
+        coverage_with(
+            components,
+            initial_fill,
+            width,
+            height,
+            &ParseOptions::none(),
+        )
+        .expect("no deadline")
+    }
     use crate::vector_mask::{Knot, Subpath};
 
     /// A rectangle component.
@@ -477,12 +515,73 @@ mod tests {
             disabled: false,
             initial_fill: false,
         };
-        let full = rasterize(&mask, 32, 32, Viewport::full(32, 32));
-        let tile = rasterize(&mask, 32, 32, Viewport::new(8, 4, 24, 20));
+        let none = ParseOptions::none();
+        let full = rasterize(&mask, 32, 32, Viewport::full(32, 32), &none).expect("full");
+        let tile = rasterize(&mask, 32, 32, Viewport::new(8, 4, 24, 20), &none).expect("tile");
         for y in 0..16 {
             for x in 0..16 {
                 let want = full[(y + 4) * 32 + x + 8];
                 assert!((tile[y * 16 + x] - want).abs() < 1e-5, "({x}, {y})");
+            }
+        }
+        let cancelled = ParseOptions::none().with_cancel(std::sync::Arc::new(
+            std::sync::atomic::AtomicBool::new(true),
+        ));
+        assert!(matches!(
+            rasterize(&mask, 32, 32, Viewport::full(32, 32), &cancelled),
+            Err(PsdError::Cancelled)
+        ));
+    }
+
+    /// The non-zero winding number of `points` at `(x, y)`.
+    fn winding_at(points: &[(f64, f64)], x: f64, y: f64) -> i32 {
+        let mut winding = 0;
+        for (index, &(xa, ya)) in points.iter().enumerate() {
+            let (xb, yb) = points[(index + 1) % points.len()];
+            if (ya <= y) != (yb <= y) {
+                let cross = xa + (y - ya) * (xb - xa) / (yb - ya);
+                if cross > x {
+                    winding += if yb > ya { 1 } else { -1 };
+                }
+            }
+        }
+        winding
+    }
+
+    #[test]
+    fn edges_that_cross_inside_a_row_match_a_supersampled_cover() {
+        // The two long edges of this bowtie cross at (1.5, 1.5), inside a
+        // pixel, and the five-point star crosses itself inside rows too.
+        let star: Vec<(f64, f64)> = (0..5)
+            .map(|step| {
+                let angle = f64::from(step * 2) * std::f64::consts::TAU / 5.0;
+                (5.0 + 4.3 * angle.sin(), 5.2 - 4.3 * angle.cos())
+            })
+            .collect();
+        let bowtie = vec![(0.0, 0.0), (3.0, 3.0), (3.0, 0.0), (0.0, 3.0)];
+        let samples = 64;
+        for (points, size) in [(bowtie, 3), (star, 10)] {
+            let shape = Component {
+                points: points.clone(),
+                op: PathOp::Combine,
+            };
+            let grid = coverage(&[shape], false, size, size);
+            for y in 0..size {
+                for x in 0..size {
+                    let mut hits = 0;
+                    for sy in 0..samples {
+                        for sx in 0..samples {
+                            let px = x as f64 + (f64::from(sx) + 0.5) / f64::from(samples);
+                            let py = y as f64 + (f64::from(sy) + 0.5) / f64::from(samples);
+                            if winding_at(&points, px, py) != 0 {
+                                hits += 1;
+                            }
+                        }
+                    }
+                    let want = f64::from(hits) / f64::from(samples * samples);
+                    let got = f64::from(grid[y * size + x]);
+                    assert!((got - want).abs() < 0.02, "({x}, {y}): {got} vs {want}");
+                }
             }
         }
     }

@@ -58,7 +58,7 @@ pub(crate) fn read_layer(
     };
     let shape = shape_from(&region, layer.bounds, viewport, count, scale);
     let mask = mask_from(&region, layer, viewport, count, scale);
-    let mask = with_vector_mask(mask, layer, document, viewport);
+    let mask = with_vector_mask(mask, layer, document, viewport, options)?;
     Ok(LayerRead { color, shape, mask })
 }
 
@@ -191,26 +191,32 @@ fn mask_from(
 /// Fold the vector mask coverage into the raster mask.
 ///
 /// The two multiply. A disabled or missing vector mask leaves the mask as is.
+///
+/// # Errors
+///
+/// Returns the error of `options` when the rasterizer passes the deadline or
+/// is cancelled.
 fn with_vector_mask(
     mask: Option<Vec<f32>>,
     layer: &LayerRecord,
     document: &PsdDocument,
     viewport: Viewport,
-) -> Option<Vec<f32>> {
+    options: &ParseOptions,
+) -> Result<Option<Vec<f32>>, PsdError> {
     let Some(vector) = layer.vector_mask.as_ref().filter(|v| !v.disabled) else {
-        return mask;
+        return Ok(mask);
     };
     let header = &document.file().header;
-    let coverage = rasterize(vector, header.width, header.height, viewport);
-    match mask {
+    let coverage = rasterize(vector, header.width, header.height, viewport, options)?;
+    Ok(Some(match mask {
         Some(mut raster) => {
             for (value, factor) in raster.iter_mut().zip(&coverage) {
                 *value *= *factor;
             }
-            Some(raster)
+            raster
         }
-        None => Some(coverage),
-    }
+        None => coverage,
+    }))
 }
 
 /// Build a constant RGB plane from a straight RGBA color.

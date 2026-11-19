@@ -179,8 +179,8 @@ pub fn spawn(launch: &Launch) -> io::Result<()> {
 /// [`spawn`] with an optional `PATH` for the child.
 fn spawn_with_path(launch: &Launch, path: Option<&OsStr>) -> io::Result<()> {
     let mut command = Command::new(&launch.program);
+    add_args(&mut command, launch);
     command
-        .args(&launch.args)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
@@ -278,13 +278,52 @@ fn split_template(text: &str) -> Vec<String> {
     parts
 }
 
+/// Add the arguments of `launch` to `command`.
+///
+/// `explorer.exe` reads a comma as a switch separator, and the standard
+/// library quotes only an argument with a space or a tab. Its arguments are
+/// quoted here instead; a Windows path cannot hold a `"`.
+fn add_args(command: &mut Command, launch: &Launch) {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        if launch.program == OsStr::new(WINDOWS_OPENER) {
+            for arg in &launch.args {
+                command.raw_arg(quoted(arg));
+            }
+            return;
+        }
+    }
+    command.args(&launch.args);
+}
+
+/// `arg` in double quotes.
+#[cfg_attr(
+    not(any(windows, test)),
+    expect(dead_code, reason = "only the Windows opener quotes")
+)]
+fn quoted(arg: &OsStr) -> OsString {
+    let mut text = OsString::from("\"");
+    text.push(arg);
+    text.push("\"");
+    text
+}
+
+/// The program that opens a file in its default application on Windows.
+const WINDOWS_OPENER: &str = "explorer.exe";
+
 /// The opener the operating system ships for the default application.
+///
+/// On Windows it is `explorer.exe`, not `cmd /C start`: `cmd` parses the
+/// path, so a name with `&` would run a second command. `add_args` quotes the
+/// path, so a comma in it is not a switch separator. The exit code is not
+/// read, so the code `explorer.exe` returns does not matter.
 fn system_opener(file: &Path) -> Launch {
     let path = file.as_os_str().to_owned();
     if cfg!(target_os = "windows") {
         Launch {
-            program: "cmd".into(),
-            args: vec!["/C".into(), "start".into(), "".into(), path],
+            program: WINDOWS_OPENER.into(),
+            args: vec![path],
         }
     } else if cfg!(target_os = "macos") {
         Launch {

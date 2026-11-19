@@ -81,6 +81,16 @@ fn no_template_gives_the_system_opener() {
     assert_eq!(launch.args, os(&["/a/x.png"]));
 }
 
+#[cfg(target_os = "windows")]
+#[test]
+fn the_windows_opener_passes_the_path_to_explorer_with_no_shell() {
+    let (_dir, db) = db_with(&[]);
+    let path = Path::new(r"C:\a\b&calc.png");
+    let launch = resolve(&db, path).expect("resolve");
+    assert_eq!(launch.program, OsString::from("explorer.exe"));
+    assert_eq!(launch.args, vec![path.as_os_str().to_owned()]);
+}
+
 #[cfg(target_os = "linux")]
 #[test]
 fn blank_template_gives_the_system_opener() {
@@ -346,4 +356,12 @@ fn only_the_first_files_argument_is_the_slot() {
     };
     assert_eq!(line.before.len(), 0);
     assert_eq!(line.after, ["{files}"]);
+}
+
+#[test]
+fn quoted_wraps_the_argument_in_double_quotes() {
+    assert_eq!(
+        super::quoted(OsStr::new(r"C:\a,b.png")),
+        OsString::from(r#""C:\a,b.png""#)
+    );
 }

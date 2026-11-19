@@ -365,3 +365,11 @@ fn quoted_wraps_the_argument_in_double_quotes() {
         OsString::from(r#""C:\a,b.png""#)
     );
 }
+
+#[test]
+fn quoted_doubles_trailing_backslashes_so_the_quote_stays_closing() {
+    assert_eq!(
+        super::quoted(OsStr::new(r"C:\")),
+        OsString::from(r#""C:\\""#)
+    );
+}

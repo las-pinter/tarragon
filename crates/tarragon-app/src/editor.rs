@@ -316,13 +316,23 @@ fn add_args(command: &mut Command, launch: &Launch) {
 }
 
 /// `arg` in double quotes.
+///
+/// Trailing backslashes are doubled, so a drive root such as `C:\` does not
+/// escape the closing quote.
 #[cfg_attr(
     not(any(windows, test)),
     expect(dead_code, reason = "only the Windows opener quotes")
 )]
 fn quoted(arg: &OsStr) -> OsString {
+    let trailing = arg
+        .as_encoded_bytes()
+        .iter()
+        .rev()
+        .take_while(|&&byte| byte == b'\\')
+        .count();
     let mut text = OsString::from("\"");
     text.push(arg);
+    text.push("\\".repeat(trailing));
     text.push("\"");
     text
 }

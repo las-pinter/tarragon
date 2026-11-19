@@ -380,6 +380,11 @@ mod tests {
         std::fs::write(&file, b"x").expect("write the nested file");
         let (count, callback) = counter();
         let _watcher = FolderWatcher::start(temp.path(), callback).expect("start the watch");
+        // FSEvents can deliver the creation of `sub`, made just before the
+        // start, and `sub` is a direct child of the root. Let that late event
+        // fire, then count only the nested change.
+        settle_long();
+        count.store(0, Ordering::SeqCst);
         std::fs::write(&file, b"changed").expect("modify the nested file");
         settle_long();
         assert_eq!(

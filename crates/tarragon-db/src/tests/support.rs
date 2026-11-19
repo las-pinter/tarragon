@@ -6,9 +6,21 @@ use tarragon_core::entity::FileInfo;
 use crate::Database;
 
 /// A temporary database file that removes itself on drop.
+///
+/// Fields drop in order, so the connection closes before the folder goes.
+/// Windows cannot delete a folder that holds an open database.
 pub(super) struct TempDb {
-    dir: PathBuf,
     pub(super) db: Database,
+    dir: DirGuard,
+}
+
+/// Removes the folder when dropped.
+struct DirGuard(PathBuf);
+
+impl Drop for DirGuard {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
 }
 
 impl TempDb {
@@ -18,21 +30,26 @@ impl TempDb {
         let id = NEXT.fetch_add(1, Ordering::Relaxed);
         let dir =
             std::env::temp_dir().join(format!("tarragon-db-test-{}-{id}", std::process::id()));
+        // An earlier test process with the same pid may have left this folder.
+        // A folder that cannot go would hand this test old rows, so fail.
+        match std::fs::remove_dir_all(&dir) {
+            Err(error) if error.kind() != std::io::ErrorKind::NotFound => {
+                panic!("cannot remove the stale folder {}: {error}", dir.display());
+            }
+            _ => {}
+        }
         std::fs::create_dir_all(&dir).expect("create the temp dir");
         let db = Database::open(dir.join("tarragon.db")).expect("open the temp database");
         db.initialize().expect("create the schema");
-        Self { dir, db }
+        Self {
+            db,
+            dir: DirGuard(dir),
+        }
     }
 
     /// The database file path, for a second connection.
     pub(super) fn path(&self) -> PathBuf {
-        self.dir.join("tarragon.db")
-    }
-}
-
-impl Drop for TempDb {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.dir);
+        self.dir.0.join("tarragon.db")
     }
 }
 

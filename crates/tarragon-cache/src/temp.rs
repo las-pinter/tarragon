@@ -50,7 +50,7 @@ impl CacheStore {
 fn sweep_folder(folder: &Path, age: Duration) -> Result<u64, CacheError> {
     let mut removed = 0;
     for item in read_dir_or_empty(folder)? {
-        let is_temp = item.file_name().to_string_lossy().starts_with(TEMP_PREFIX);
+        let is_temp = is_temp_name(&item.file_name());
         let is_file = item.file_type().is_ok_and(|kind| kind.is_file());
         if !is_temp || !is_file {
             continue;
@@ -66,6 +66,21 @@ fn sweep_folder(folder: &Path, age: Duration) -> Result<u64, CacheError> {
         }
     }
     Ok(removed)
+}
+
+/// Whether `name` is a temp name of a write: the prefix, the process id, a
+/// dash, and a sequence number. A cache file always ends in a format
+/// extension, so one made from a source called `.tmp-x.png` does not match.
+fn is_temp_name(name: &std::ffi::OsStr) -> bool {
+    let Some(rest) = name
+        .to_str()
+        .and_then(|text| text.strip_prefix(TEMP_PREFIX))
+    else {
+        return false;
+    };
+    let digits = |part: &str| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit());
+    rest.split_once('-')
+        .is_some_and(|(pid, seq)| digits(pid) && digits(seq))
 }
 
 /// List a directory. A missing directory gives an empty list.
@@ -107,8 +122,11 @@ mod tests {
         std::fs::create_dir_all(&folder).expect("make the folder");
         let orphan = folder.join(".tmp-1-0");
         let real = folder.join("art.jpg.jpg");
-        std::fs::write(&orphan, b"x").expect("write the orphan");
-        std::fs::write(&real, b"x").expect("write the real file");
+        // The cache file of a source whose name starts like a temp.
+        let lookalike = folder.join(".tmp-1-0.png.jpg");
+        for file in [&orphan, &real, &lookalike] {
+            std::fs::write(file, b"x").expect("write the file");
+        }
         let store = CacheStore::new(&root);
 
         // A fresh temp may belong to a live write, so the real sweep keeps it.
@@ -120,7 +138,22 @@ mod tests {
         assert_eq!(removed, 1);
         assert!(!orphan.exists());
         assert!(real.is_file());
+        assert!(lookalike.is_file());
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn only_the_exact_temp_pattern_is_a_temp_name() {
+        for (name, temp) in [
+            (".tmp-12-3", true),
+            (".tmp-12-3.jpg", false),
+            (".tmp-x.png.jpg", false),
+            (".tmp-12-", false),
+            (".tmp--3", false),
+            ("tmp-12-3", false),
+        ] {
+            assert_eq!(super::is_temp_name(name.as_ref()), temp, "{name}");
+        }
     }
 
     #[test]

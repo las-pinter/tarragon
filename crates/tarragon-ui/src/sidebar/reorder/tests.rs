@@ -116,3 +116,20 @@ fn slot_with_rows_at_an_offset() {
     assert_eq!(drop_slot(&rows, 120.0), Some(2));
     assert_eq!(drop_slot(&rows, 121.0), None);
 }
+
+#[test]
+fn moving_down_slides_the_rows_between_up() {
+    assert_eq!(new_places(4, 0, 3), vec![2, 0, 1, 3]);
+}
+
+#[test]
+fn moving_up_slides_the_rows_between_down() {
+    assert_eq!(new_places(4, 3, 1), vec![0, 2, 3, 1]);
+}
+
+#[test]
+fn a_no_op_move_keeps_every_place() {
+    assert_eq!(new_places(3, 1, 1), vec![0, 1, 2]);
+    assert_eq!(new_places(3, 1, 2), vec![0, 1, 2]);
+    assert_eq!(new_places(3, 5, 0), vec![0, 1, 2]);
+}

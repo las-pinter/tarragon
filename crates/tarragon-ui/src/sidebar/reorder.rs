@@ -35,3 +35,20 @@ pub fn reordered<T: Clone>(items: &[T], from: usize, slot: usize) -> Option<Vec<
     moved.insert(if slot > from { slot - 1 } else { slot }, item);
     Some(moved)
 }
+
+/// The place of each item after moving item `from` to insertion slot `slot`.
+///
+/// Entry `i` is where item `i` stands in the new order. A no-op or invalid
+/// move leaves every item in its own place.
+#[must_use]
+pub fn new_places(count: usize, from: usize, slot: usize) -> Vec<usize> {
+    let items: Vec<usize> = (0..count).collect();
+    let Some(order) = reordered(&items, from, slot) else {
+        return items;
+    };
+    let mut places = vec![0; count];
+    for (place, item) in order.into_iter().enumerate() {
+        places[item] = place;
+    }
+    places
+}

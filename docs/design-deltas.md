@@ -332,9 +332,14 @@ line. The lifted row (`.fav-row.dragging`, lines 424-428) has a dashed border
 that follows the row radius.
 
 After: every favorite row shows the grip. The head reads FAVORITES, and no hint
-line is drawn. The drop line overlays the row edge and takes no layout, so rows
-stay still during a drag. The dashed border of the lifted row has square
-corners.
+line is drawn. The cursor is a grab hand over the grip and a closed hand during
+a drag. The lifted row follows the pointer, held inside the list, and the other
+rows slide to the places they take if the row is dropped there; the gap they
+leave is the drop target, so no drop line is drawn. Inside the favorites area,
+a pointer above or below the list means the first or the last place. On
+release, Escape, or a drop outside the favorites area, the rows slide to their
+final places. The dashed border
+of the lifted row has square corners.
 
 Reason: the grip is the only drag handle, so it shows on every row. egui 0.36.2
 has no helper for a rounded dashed rectangle. A dashed path needs hand-built arc

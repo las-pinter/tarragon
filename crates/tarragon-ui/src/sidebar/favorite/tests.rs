@@ -27,7 +27,7 @@ fn frame(ctx: &Context, raw: RawInput, count: usize, selected: bool, missing: bo
     let (mut actions, mut rects) = (Vec::new(), Vec::new());
     let output = ctx.run_ui(raw, |ui| {
         for salt in 0..count {
-            actions.push(show_favorite_row(ui, "same", selected, missing, false, salt).0);
+            actions.push(show_favorite_row(ui, "same", selected, missing, false, salt, 0.0).0);
             rects.push(ctx.read_response(row_id(ui, salt)).expect("row").rect);
         }
     });
@@ -174,7 +174,7 @@ fn the_fill_is_inset_6_on_each_side() {
     let output = ctx.run_ui(input(Vec::new()), |ui| {
         min_x = ui.max_rect().min.x;
         avail = ui.available_width();
-        show_favorite_row(ui, "same", true, false, false, 0);
+        show_favorite_row(ui, "same", true, false, false, 0, 0.0);
     });
     let fill = output
         .shapes
@@ -190,12 +190,17 @@ fn the_fill_is_inset_6_on_each_side() {
 }
 
 /// The painted shapes of two rows, the first one lifted when `lift` is set.
+///
+/// Like the panel, the lifted row is painted last with `paint_lifted_row`.
 fn two_rows(lift: bool) -> Vec<Shape> {
     let ctx = Context::default();
     crate::apply_theme(&ctx);
     let output = ctx.run_ui(input(Vec::new()), |ui| {
-        show_favorite_row(ui, "same", false, false, lift, 0);
-        show_favorite_row(ui, "same", false, false, false, 1);
+        let (_, first) = show_favorite_row(ui, "same", false, false, lift, 0, 0.0);
+        show_favorite_row(ui, "same", false, false, false, 1, 0.0);
+        if lift {
+            paint_lifted_row(ui, "same", false, false, first);
+        }
     });
     let shapes = output.shapes.iter().map(|c| c.shape.clone()).collect();
     output.drop_without_applying_deltas();
@@ -245,4 +250,75 @@ fn the_row_after_a_lifted_row_is_not_dimmed() {
     let (plain, lifted) = (count(&two_rows(false)), count(&two_rows(true)));
     assert!(plain > 0);
     assert_eq!(lifted * 2, plain);
+}
+
+#[test]
+fn a_lifted_row_paints_nothing_itself() {
+    let ctx = Context::default();
+    crate::apply_theme(&ctx);
+    let output = ctx.run_ui(input(Vec::new()), |ui| {
+        show_favorite_row(ui, "same", false, false, true, 0, 0.0);
+    });
+    let empty = output.shapes.is_empty();
+    output.drop_without_applying_deltas();
+    assert!(empty);
+}
+
+#[test]
+fn a_shift_moves_the_row_but_not_its_place() {
+    let ctx = Context::default();
+    crate::apply_theme(&ctx);
+    let (mut home, mut fill) = (Rect::NOTHING, None);
+    let output = ctx.run_ui(input(Vec::new()), |ui| {
+        home = show_favorite_row(ui, "same", true, false, false, 0, 40.0).1;
+    });
+    for clipped in &output.shapes {
+        if let Shape::Rect(rect) = &clipped.shape
+            && rect.fill == tokens::BG_TERTIARY
+        {
+            fill = Some(rect.rect);
+        }
+    }
+    output.drop_without_applying_deltas();
+    assert_eq!(
+        fill.expect("the fill painted"),
+        home.translate(vec2(0.0, 40.0))
+    );
+}
+
+/// The cursor after hovering the grip of one row, with the button down when `press` is set.
+fn cursor_over_grip(press: bool) -> egui::CursorIcon {
+    let ctx = ready(1);
+    let at = pos2(6.0 + crate::sidebar::row::ROW_PAD + 2.0, 13.0);
+    let button = |pressed| Event::PointerButton {
+        pos: at,
+        button: PointerButton::Primary,
+        pressed,
+        modifiers: Modifiers::NONE,
+    };
+    let mut steps = vec![vec![Event::PointerMoved(at)], Vec::new()];
+    if press {
+        steps.push(vec![button(true)]);
+        steps.push(vec![Event::PointerMoved(at + vec2(0.0, 8.0))]);
+        steps.push(Vec::new());
+    }
+    let mut cursor = egui::CursorIcon::Default;
+    for events in steps {
+        let output = ctx.run_ui(input(events), |ui| {
+            show_favorite_row(ui, "same", false, false, false, 0, 0.0);
+        });
+        cursor = output.platform_output.cursor_icon;
+        output.drop_without_applying_deltas();
+    }
+    cursor
+}
+
+#[test]
+fn the_cursor_is_a_grab_hand_over_the_grip() {
+    assert_eq!(cursor_over_grip(false), egui::CursorIcon::Grab);
+}
+
+#[test]
+fn the_cursor_is_a_closed_hand_while_dragging_the_grip() {
+    assert_eq!(cursor_over_grip(true), egui::CursorIcon::Grabbing);
 }

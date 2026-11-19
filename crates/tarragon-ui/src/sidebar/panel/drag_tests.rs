@@ -1,6 +1,5 @@
-//! Tests for the favorite drag, the drop line, and `drop_line_rect`.
+//! Tests for the favorite drag: reorder, slide, and the lifted row.
 
-use super::favorites::drop_line_rect;
 use super::tests::{click, find, frame, ready, warm_up};
 use super::*;
 use egui::{
@@ -145,52 +144,6 @@ fn escape_cancels_the_drag() {
     assert_eq!(sidebar.take_events(), Vec::<SidebarEvent>::new());
 }
 
-/// Run one frame and return the 2 px amber rects, which are the drop lines.
-fn drop_lines(ctx: &Context, sidebar: &mut Sidebar) -> Vec<Rect> {
-    let raw = RawInput {
-        screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(400.0, 300.0))),
-        ..Default::default()
-    };
-    let output = ctx.run_ui(raw, |ui| sidebar.show(ui));
-    let lines = output
-        .shapes
-        .iter()
-        .filter_map(|clipped| match &clipped.shape {
-            Shape::Rect(r)
-                if r.fill == tokens::AMBER_ACCENT && (r.rect.height() - 2.0).abs() < 0.01 =>
-            {
-                Some(r.rect)
-            }
-            _ => None,
-        })
-        .collect();
-    output.drop_without_applying_deltas();
-    lines
-}
-
-#[test]
-fn the_drop_line_is_painted_amber_while_dragging() {
-    let (ctx, mut sidebar) = (ready(), three());
-    let top = label_y(&ctx, &mut sidebar, "fa");
-    drag_to(&ctx, &mut sidebar, 2, top - 3.0);
-    assert_eq!(drop_lines(&ctx, &mut sidebar).len(), 1);
-}
-
-#[test]
-fn no_drop_line_is_painted_when_not_dragging() {
-    let (ctx, mut sidebar) = (ready(), three());
-    frame(&ctx, &mut sidebar, Vec::new());
-    assert_eq!(drop_lines(&ctx, &mut sidebar).len(), 0);
-}
-
-#[test]
-fn the_drop_line_is_hidden_on_a_no_op_slot() {
-    let (ctx, mut sidebar) = (ready(), three());
-    let own = label_y(&ctx, &mut sidebar, "fc");
-    drag_to(&ctx, &mut sidebar, 2, own - 3.0);
-    assert_eq!(drop_lines(&ctx, &mut sidebar).len(), 0);
-}
-
 #[test]
 fn set_favorites_during_a_drag_ends_it() {
     let (ctx, mut sidebar) = (ready(), three());
@@ -211,50 +164,6 @@ fn a_drag_with_no_button_down_ends() {
     frame(&ctx, &mut sidebar, Vec::new());
     assert_eq!(sidebar.dragging, None);
     assert_eq!(sidebar.take_events(), Vec::<SidebarEvent>::new());
-}
-
-/// Three stacked 27 point rows from y = 10, x from 6 to 194.
-fn stack() -> Vec<Rect> {
-    (0..3)
-        .map(|n| {
-            let top = 10.0 + 27.0 * f32::from(u8::try_from(n).unwrap());
-            Rect::from_min_max(pos2(6.0, top), pos2(194.0, top + 27.0))
-        })
-        .collect()
-}
-
-#[test]
-fn the_first_drop_slot_is_centred_on_the_top_of_row_0() {
-    let line = drop_line_rect(&stack(), 0).unwrap();
-    assert_eq!((line.min.y, line.max.y), (9.0, 11.0));
-}
-
-#[test]
-fn the_last_drop_slot_is_centred_on_the_bottom_of_the_last_row() {
-    let line = drop_line_rect(&stack(), 3).unwrap();
-    assert_eq!((line.min.y, line.max.y), (90.0, 92.0));
-}
-
-#[test]
-fn a_middle_drop_slot_is_centred_on_the_top_of_its_row() {
-    let line = drop_line_rect(&stack(), 1).unwrap();
-    assert_eq!(line.center().y, 37.0);
-}
-
-#[test]
-fn the_drop_line_spans_the_row_x_range() {
-    let line = drop_line_rect(&stack(), 2).unwrap();
-    assert_eq!((line.min.x, line.max.x), (6.0, 194.0));
-}
-
-#[test]
-fn an_empty_list_has_no_drop_line() {
-    assert_eq!(drop_line_rect(&[], 0), None);
-}
-
-#[test]
-fn a_slot_past_the_end_has_no_drop_line() {
-    assert_eq!(drop_line_rect(&stack(), 4), None);
 }
 
 /// Run one frame and return the painted shapes in paint order.
@@ -304,4 +213,135 @@ fn the_lifted_border_is_painted_after_the_selected_row_fill() {
             }
         }
     }
+}
+
+/// Run frames with the pointer held until every slide has ended.
+fn settle(ctx: &Context, sidebar: &mut Sidebar) {
+    for _ in 0..20 {
+        frame(ctx, sidebar, Vec::new());
+    }
+}
+
+/// The y of each label in `names`, in one frame.
+fn label_ys(ctx: &Context, sidebar: &mut Sidebar, names: [&str; 3]) -> [f32; 3] {
+    let texts = frame(ctx, sidebar, Vec::new());
+    names.map(|name| find(&texts, name).pos.y)
+}
+
+/// The distance between two favorite rows.
+const PITCH: f32 = 27.0;
+
+#[test]
+fn the_rows_between_slide_down_while_a_row_is_dragged_up() {
+    let (ctx, mut sidebar) = (ready(), three());
+    warm_up(&ctx, &mut sidebar);
+    let before = label_ys(&ctx, &mut sidebar, ["fa", "fb", "fc"]);
+    drag_to(&ctx, &mut sidebar, 2, before[0] - 3.0);
+    settle(&ctx, &mut sidebar);
+    let after = label_ys(&ctx, &mut sidebar, ["fa", "fb", "fc"]);
+    assert!((after[0] - (before[0] + PITCH)).abs() < 0.01, "{after:?}");
+    assert!((after[1] - (before[1] + PITCH)).abs() < 0.01, "{after:?}");
+}
+
+#[test]
+fn the_lifted_row_follows_the_pointer() {
+    let (ctx, mut sidebar) = (ready(), three());
+    warm_up(&ctx, &mut sidebar);
+    let before = label_ys(&ctx, &mut sidebar, ["fa", "fb", "fc"]);
+    let texts = frame(&ctx, &mut sidebar, Vec::new());
+    let grip_y = texts.iter().find(|t| t.string == "::").unwrap().pos.y + 5.0;
+    drag_to(&ctx, &mut sidebar, 0, grip_y + 20.0);
+    let after = label_ys(&ctx, &mut sidebar, ["fa", "fb", "fc"]);
+    assert!((after[0] - (before[0] + 20.0)).abs() < 0.01, "{after:?}");
+}
+
+#[test]
+fn the_lifted_row_stays_inside_the_list() {
+    let (ctx, mut sidebar) = (ready(), three());
+    warm_up(&ctx, &mut sidebar);
+    let before = label_ys(&ctx, &mut sidebar, ["fa", "fb", "fc"]);
+    drag_to(&ctx, &mut sidebar, 0, 290.0);
+    settle(&ctx, &mut sidebar);
+    let after = label_ys(&ctx, &mut sidebar, ["fa", "fb", "fc"]);
+    assert!((after[0] - before[2]).abs() < 0.01, "{after:?}");
+    assert!(
+        (after[1] - before[1]).abs() < 0.01,
+        "outside the list nothing slides: {after:?}"
+    );
+}
+
+#[test]
+fn escape_slides_the_rows_back() {
+    let (ctx, mut sidebar) = (ready(), three());
+    warm_up(&ctx, &mut sidebar);
+    let before = label_ys(&ctx, &mut sidebar, ["fa", "fb", "fc"]);
+    drag_to(&ctx, &mut sidebar, 2, before[0] - 3.0);
+    settle(&ctx, &mut sidebar);
+    let escape = Event::Key {
+        key: Key::Escape,
+        physical_key: None,
+        pressed: true,
+        repeat: false,
+        modifiers: Modifiers::NONE,
+    };
+    frame(&ctx, &mut sidebar, vec![escape]);
+    settle(&ctx, &mut sidebar);
+    assert_eq!(label_ys(&ctx, &mut sidebar, ["fa", "fb", "fc"]), before);
+}
+
+#[test]
+fn a_dropped_row_settles_in_its_new_place_after_set_favorites() {
+    let (ctx, mut sidebar) = (ready(), three());
+    warm_up(&ctx, &mut sidebar);
+    let before = label_ys(&ctx, &mut sidebar, ["fa", "fb", "fc"]);
+    let end = drag_to(&ctx, &mut sidebar, 2, before[0] - 3.0);
+    settle(&ctx, &mut sidebar);
+    release(&ctx, &mut sidebar, end);
+    let Some(SidebarEvent::Reorder(paths)) = sidebar.take_events().pop() else {
+        panic!("no reorder");
+    };
+    let mut rows = sidebar.state.favorites().to_vec();
+    rows.sort_by_key(|row| paths.iter().position(|p| *p == row.path));
+    sidebar.set_favorites(rows);
+    let moved = label_ys(&ctx, &mut sidebar, ["fc", "fa", "fb"]);
+    assert!(
+        (moved[1] - before[1]).abs() < 0.01,
+        "no jump for fa: {moved:?}"
+    );
+    settle(&ctx, &mut sidebar);
+    assert_eq!(label_ys(&ctx, &mut sidebar, ["fc", "fa", "fb"]), before);
+}
+
+/// The slot for a pointer at `y` over three 27 point rows from y = 100, with the whole screen as clip.
+fn slot_at(y: f32) -> Option<usize> {
+    let ctx = ready();
+    let spans = [(100.0, 127.0), (127.0, 154.0), (154.0, 181.0)];
+    let mut slot = None;
+    for events in [vec![Event::PointerMoved(pos2(50.0, y))], Vec::new()] {
+        let raw = RawInput {
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(400.0, 300.0))),
+            events,
+            ..Default::default()
+        };
+        let output = ctx.run_ui(raw, |ui| {
+            slot = super::favorites::pointer_slot(ui, &spans);
+        });
+        output.drop_without_applying_deltas();
+    }
+    slot
+}
+
+#[test]
+fn a_pointer_above_the_list_inside_the_clip_means_the_first_slot() {
+    assert_eq!(slot_at(40.0), Some(0));
+}
+
+#[test]
+fn a_pointer_below_the_list_inside_the_clip_means_the_last_slot() {
+    assert_eq!(slot_at(250.0), Some(3));
+}
+
+#[test]
+fn a_pointer_on_a_row_keeps_its_slot() {
+    assert_eq!(slot_at(130.0), Some(1));
 }

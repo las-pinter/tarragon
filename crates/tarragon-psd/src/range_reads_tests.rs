@@ -33,7 +33,7 @@ impl TempFile {
     fn new(name: &str, bytes: &[u8]) -> Self {
         let dir = std::env::temp_dir().join(format!(
             "tarragon-range-{}-{}",
-            std::process::id(),
+            tarragon_core::testing::run_tag(),
             NEXT_DIR.fetch_add(1, Ordering::Relaxed)
         ));
         std::fs::create_dir_all(&dir).expect("temp dir");

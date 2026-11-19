@@ -27,7 +27,7 @@ impl TempDatabase {
         let id = NEXT.fetch_add(1, Ordering::Relaxed);
         let path = std::env::temp_dir().join(format!(
             "tarragon-clip-check-{}-{id}.sqlite",
-            std::process::id()
+            tarragon_core::testing::run_tag()
         ));
         let offset = clip
             .windows(SQLITE_HEADER.len())

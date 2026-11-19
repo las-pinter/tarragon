@@ -278,8 +278,10 @@ mod tests {
         let mut spec = DocumentSpec::new(4, 4, 8, 3);
         spec.layers.push(LayerSpec::opaque((0, 0, 4, 4), [1, 2, 3]));
         spec.merged_section = Some(Vec::new());
-        let dir =
-            std::env::temp_dir().join(format!("tarragon-psd-unusable-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!(
+            "tarragon-psd-unusable-{}",
+            tarragon_core::testing::run_tag()
+        ));
         std::fs::create_dir_all(&dir).expect("folder");
         let path = dir.join("a.psd");
         std::fs::write(&path, build_psd(&spec)).expect("write");

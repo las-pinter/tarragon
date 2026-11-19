@@ -19,6 +19,8 @@ pub mod paths;
 pub mod render_scope;
 pub mod sorting;
 pub mod tag_name;
+#[doc(hidden)]
+pub mod testing;
 pub mod tier;
 
 #[cfg(test)]

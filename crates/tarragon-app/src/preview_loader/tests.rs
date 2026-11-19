@@ -16,7 +16,7 @@ impl TempDir {
     fn new(name: &str) -> Self {
         let dir = std::env::temp_dir().join(format!(
             "tarragon-preview-loader-{name}-{}",
-            std::process::id()
+            tarragon_core::testing::run_tag()
         ));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("create the temp dir");

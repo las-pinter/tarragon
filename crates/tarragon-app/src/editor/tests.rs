@@ -15,7 +15,10 @@ impl Drop for TempDir {
 fn db_with(rows: &[(&str, &str)]) -> (TempDir, Database) {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let id = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let dir = std::env::temp_dir().join(format!("tarragon-app-editor-{}-{id}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!(
+        "tarragon-app-editor-{}-{id}",
+        tarragon_core::testing::run_tag()
+    ));
     std::fs::create_dir_all(&dir).expect("create the temp dir");
     let dir = TempDir(dir);
     let db = Database::open(dir.0.join("t.db")).expect("open");

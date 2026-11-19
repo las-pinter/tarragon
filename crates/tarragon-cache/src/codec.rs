@@ -322,7 +322,10 @@ mod tests {
     #[test]
     fn the_thumb_helper_matches_the_320_tier_file() {
         let large = synthetic_rgba(600, 300);
-        let dir = std::env::temp_dir().join(format!("tarragon-thumb-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!(
+            "tarragon-thumb-{}",
+            tarragon_core::testing::run_tag()
+        ));
         let store = CacheStore::new(&dir);
         let entry = store
             .write_all(&large, "gallery", "abcd1234", "art.png")

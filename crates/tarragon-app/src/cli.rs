@@ -166,7 +166,10 @@ mod tests {
 
     #[test]
     fn a_file_fails_the_check() {
-        let file = std::env::temp_dir().join(format!("tarragon-cli-file-{}", std::process::id()));
+        let file = std::env::temp_dir().join(format!(
+            "tarragon-cli-file-{}",
+            tarragon_core::testing::run_tag()
+        ));
         std::fs::write(&file, b"x").expect("write a file");
         let result = check_folder(&file);
         let _ = std::fs::remove_file(&file);

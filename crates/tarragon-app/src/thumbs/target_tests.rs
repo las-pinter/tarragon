@@ -10,7 +10,10 @@ use crate::pipeline::Config;
 
 /// A thumbs on an empty database, and a weak handle to see when it is gone.
 fn thumbs_on_empty_db(name: &str) -> (Thumbs, Weak<Database>, PathBuf) {
-    let dir = std::env::temp_dir().join(format!("tarragon-target-{name}-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!(
+        "tarragon-target-{name}-{}",
+        tarragon_core::testing::run_tag()
+    ));
     std::fs::create_dir_all(&dir).expect("make the temp dir");
     let db = Arc::new(Database::open(dir.join("t.db")).expect("open the db"));
     db.initialize().expect("initialize the db");
@@ -45,7 +48,10 @@ fn shutdown_during(target: Target, name: &str) {
 
 #[test]
 fn shutdown_joins_an_opening_folder() {
-    let dir = std::env::temp_dir().join(format!("tarragon-target-dir-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!(
+        "tarragon-target-dir-{}",
+        tarragon_core::testing::run_tag()
+    ));
     std::fs::create_dir_all(&dir).expect("make the folder");
     shutdown_during(Target::Folder(dir.clone()), "folder");
     let _ = std::fs::remove_dir_all(dir);

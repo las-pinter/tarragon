@@ -10,7 +10,10 @@ use super::*;
 const SEC: Duration = Duration::from_secs(1);
 
 fn temp_file(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("tarragon-perflog-{}-{name}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!(
+        "tarragon-perflog-{}-{name}",
+        tarragon_core::testing::run_tag()
+    ));
     std::fs::create_dir_all(&dir).expect("create the temp dir");
     dir.join("perf.txt")
 }

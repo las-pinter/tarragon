@@ -60,7 +60,10 @@ fn set_folder_normalizes_the_path_once() {
     // A real folder is needed, because canonicalization reads the file system.
     let base = dunce::canonicalize(std::env::temp_dir())
         .expect("the temp dir exists")
-        .join(format!("tarragon-ui-folder-{}", std::process::id()));
+        .join(format!(
+            "tarragon-ui-folder-{}",
+            tarragon_core::testing::run_tag()
+        ));
     let child = base.join("child");
     std::fs::create_dir_all(&child).expect("create the test folder");
 
@@ -148,7 +151,10 @@ fn a_nonexistent_item_inside_the_folder_stays_in_scope() {
 fn a_symlinked_image_stays_in_the_folder_that_holds_the_link() {
     let base = dunce::canonicalize(std::env::temp_dir())
         .expect("the temp dir exists")
-        .join(format!("tarragon-ui-symlink-{}", std::process::id()));
+        .join(format!(
+            "tarragon-ui-symlink-{}",
+            tarragon_core::testing::run_tag()
+        ));
     let folder = base.join("folder");
     let elsewhere = base.join("elsewhere");
     std::fs::create_dir_all(&folder).expect("create the folder");
@@ -172,7 +178,10 @@ fn a_symlinked_image_stays_in_the_folder_that_holds_the_link() {
 fn linked_folder(tag: &str) -> (PathBuf, PathBuf, PathBuf) {
     let base = dunce::canonicalize(std::env::temp_dir())
         .expect("the temp dir exists")
-        .join(format!("tarragon-ui-{tag}-{}", std::process::id()));
+        .join(format!(
+            "tarragon-ui-{tag}-{}",
+            tarragon_core::testing::run_tag()
+        ));
     let real = base.join("real");
     std::fs::create_dir_all(&real).expect("create the folder");
     let link = base.join("link");

@@ -99,7 +99,10 @@ mod tests {
 
     #[test]
     fn creates_the_folder_with_mode_0700_and_accepts_it_again() {
-        let base = std::env::temp_dir().join(format!("tarragon-dir-test-{}", std::process::id()));
+        let base = std::env::temp_dir().join(format!(
+            "tarragon-dir-test-{}",
+            tarragon_core::testing::run_tag()
+        ));
         std::fs::create_dir_all(&base).expect("base");
         let dir: PathBuf = base.join("private");
         let location = Location::Private(dir.clone());
@@ -124,7 +127,10 @@ mod tests {
 
     #[test]
     fn refuses_a_link_in_place_of_the_folder() {
-        let base = std::env::temp_dir().join(format!("tarragon-dir-link-{}", std::process::id()));
+        let base = std::env::temp_dir().join(format!(
+            "tarragon-dir-link-{}",
+            tarragon_core::testing::run_tag()
+        ));
         std::fs::create_dir_all(&base).expect("base");
         let target = base.join("target");
         std::fs::create_dir(&target).expect("target");
@@ -139,7 +145,10 @@ mod tests {
 
     #[test]
     fn refuses_a_file_in_place_of_the_folder() {
-        let base = std::env::temp_dir().join(format!("tarragon-dir-file-{}", std::process::id()));
+        let base = std::env::temp_dir().join(format!(
+            "tarragon-dir-file-{}",
+            tarragon_core::testing::run_tag()
+        ));
         std::fs::create_dir_all(&base).expect("base");
         let path = base.join("private");
         std::fs::write(&path, b"x").expect("file");
@@ -149,7 +158,10 @@ mod tests {
 
     #[test]
     fn refuses_a_private_folder_when_the_own_uid_is_unknown() {
-        let base = std::env::temp_dir().join(format!("tarragon-dir-nouid-{}", std::process::id()));
+        let base = std::env::temp_dir().join(format!(
+            "tarragon-dir-nouid-{}",
+            tarragon_core::testing::run_tag()
+        ));
         std::fs::create_dir_all(&base).expect("base");
         let result = prepare(&Location::Private(base.join("private")), None);
         assert!(result.is_err());

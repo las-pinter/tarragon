@@ -92,7 +92,10 @@ fn poll_uploads_a_decoded_file_and_gives_it_to_the_preview() {
         let _ = signal.send(());
     });
     let loader = PreviewLoader::new(repaint).expect("start the loader");
-    let dir = std::env::temp_dir().join(format!("tarragon-feed-poll-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!(
+        "tarragon-feed-poll-{}",
+        tarragon_core::testing::run_tag()
+    ));
     std::fs::create_dir_all(&dir).expect("create the temp dir");
     let tier = dir.join("a.png");
     picture(40, 30).save(&tier).expect("write the png");

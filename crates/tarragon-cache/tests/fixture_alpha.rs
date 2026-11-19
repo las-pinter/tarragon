@@ -19,7 +19,7 @@ impl TempDir {
     fn new(tag: &str) -> Self {
         let path = std::env::temp_dir().join(format!(
             "tarragon-cache-fixture-{tag}-{}",
-            std::process::id()
+            tarragon_core::testing::run_tag()
         ));
         std::fs::create_dir_all(&path).expect("create the temp folder");
         Self(path)

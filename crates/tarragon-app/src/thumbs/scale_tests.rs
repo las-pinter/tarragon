@@ -234,7 +234,10 @@ fn report(n: &Numbers) {
 #[test]
 #[ignore = "measurement run: needs a release build and about a minute"]
 fn library_of_100k_meets_the_bars() {
-    let dir = TempDir(std::env::temp_dir().join(format!("tarragon-scale-{}", std::process::id())));
+    let dir = TempDir(std::env::temp_dir().join(format!(
+        "tarragon-scale-{}",
+        tarragon_core::testing::run_tag()
+    )));
     std::fs::create_dir_all(&dir.0).expect("make the temp dir");
     let db = Arc::new(Database::open(dir.0.join("t.db")).expect("open the db"));
     db.initialize().expect("initialize the db");
@@ -317,8 +320,10 @@ const MISSING_OPEN_BAR: f64 = 1.0;
 #[test]
 #[ignore = "measurement run: needs a release build"]
 fn library_of_100k_without_folder_rows_opens_fast() {
-    let dir =
-        TempDir(std::env::temp_dir().join(format!("tarragon-missing-{}", std::process::id())));
+    let dir = TempDir(std::env::temp_dir().join(format!(
+        "tarragon-missing-{}",
+        tarragon_core::testing::run_tag()
+    )));
     std::fs::create_dir_all(&dir.0).expect("make the temp dir");
     let db = Arc::new(Database::open(dir.0.join("t.db")).expect("open the db"));
     db.initialize().expect("initialize the db");

@@ -15,12 +15,25 @@ impl TempDir {
     pub(super) fn new() -> Self {
         static NEXT: AtomicU64 = AtomicU64::new(0);
         let id = NEXT.fetch_add(1, Ordering::Relaxed);
-        let dir = std::env::temp_dir().join(format!(
-            "tarragon-instance-test-{}-{id}",
-            std::process::id()
-        ));
+        // A short path: the unix tests bind a socket in this folder, and the
+        // macOS temp folder is long, so unix uses `/tmp`.
+        let base = if cfg!(unix) {
+            PathBuf::from("/tmp")
+        } else {
+            std::env::temp_dir()
+        };
+        let dir = base.join(format!("ti-{}-{id}", tarragon_core::testing::run_tag()));
         std::fs::create_dir_all(&dir).expect("create the temp dir");
-        Self(dir)
+        let made = Self(dir);
+        // Only unix binds a socket in this folder.
+        if cfg!(unix) {
+            assert!(
+                made.layout().socket_path_fits(),
+                "the socket path is too long: {}",
+                made.layout().sock.display()
+            );
+        }
+        made
     }
 
     /// The instance files for this folder.

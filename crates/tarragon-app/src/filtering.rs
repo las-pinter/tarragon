@@ -129,9 +129,10 @@ pub(crate) mod tests {
     pub(crate) fn seeded() -> (Database, TempDir) {
         static NEXT: AtomicU64 = AtomicU64::new(0);
         let id = NEXT.fetch_add(1, Ordering::Relaxed);
-        let dir = TempDir(
-            std::env::temp_dir().join(format!("tarragon-filtering-{}-{id}", std::process::id())),
-        );
+        let dir = TempDir(std::env::temp_dir().join(format!(
+            "tarragon-filtering-{}-{id}",
+            tarragon_core::testing::run_tag()
+        )));
         std::fs::create_dir_all(&dir.0).expect("create the temp dir");
         let db = Database::open(dir.0.join("t.db")).expect("open");
         db.initialize().expect("initialize");

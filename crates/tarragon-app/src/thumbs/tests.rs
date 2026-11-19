@@ -19,7 +19,10 @@ impl Drop for TempDir {
 
 #[test]
 fn a_folder_with_a_real_pipeline_settles_all_tiles() {
-    let dir = TempDir(std::env::temp_dir().join(format!("tarragon-thumbs-{}", std::process::id())));
+    let dir = TempDir(std::env::temp_dir().join(format!(
+        "tarragon-thumbs-{}",
+        tarragon_core::testing::run_tag()
+    )));
     let folder = dir.0.join("pics");
     std::fs::create_dir_all(&folder).expect("make the folder");
     for name in ["a.png", "b.png", "c.png"] {
@@ -66,7 +69,10 @@ fn a_folder_with_a_real_pipeline_settles_all_tiles() {
 
 #[test]
 fn the_grid_is_shown_once_before_any_tile_settles() {
-    let dir = TempDir(std::env::temp_dir().join(format!("tarragon-shown-{}", std::process::id())));
+    let dir = TempDir(std::env::temp_dir().join(format!(
+        "tarragon-shown-{}",
+        tarragon_core::testing::run_tag()
+    )));
     let folder = dir.0.join("pics");
     std::fs::create_dir_all(&folder).expect("make the folder");
     RgbaImage::new(8, 8)
@@ -140,7 +146,10 @@ impl Rig {
         render: crate::pipeline::RenderFn,
     ) -> Self {
         let base = dunce::canonicalize(std::env::temp_dir()).expect("resolve the temp dir");
-        let dir = TempDir(base.join(format!("tarragon-thumbs-{name}-{}", std::process::id())));
+        let dir = TempDir(base.join(format!(
+            "tarragon-thumbs-{name}-{}",
+            tarragon_core::testing::run_tag()
+        )));
         std::fs::create_dir_all(&dir.0).expect("make the temp dir");
         let db = Arc::new(Database::open(dir.0.join("t.db")).expect("open the db"));
         db.initialize().expect("initialize the db");

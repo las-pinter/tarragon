@@ -28,9 +28,11 @@ impl TempDb {
     pub(super) fn new() -> Self {
         static NEXT: AtomicU64 = AtomicU64::new(0);
         let id = NEXT.fetch_add(1, Ordering::Relaxed);
-        let dir =
-            std::env::temp_dir().join(format!("tarragon-db-test-{}-{id}", std::process::id()));
-        // An earlier test process with the same pid may have left this folder.
+        let dir = std::env::temp_dir().join(format!(
+            "tarragon-db-test-{}-{id}",
+            tarragon_core::testing::run_tag()
+        ));
+        // Remove a leftover folder of the same name, should one exist.
         // A folder that cannot go would hand this test old rows, so fail.
         match std::fs::remove_dir_all(&dir) {
             Err(error) if error.kind() != std::io::ErrorKind::NotFound => {

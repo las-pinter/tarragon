@@ -19,7 +19,10 @@ struct TempDir(PathBuf);
 
 impl TempDir {
     fn new(name: &str) -> Self {
-        let path = std::env::temp_dir().join(format!("tarragon-{name}-{}", std::process::id()));
+        let path = std::env::temp_dir().join(format!(
+            "tarragon-{name}-{}",
+            tarragon_core::testing::run_tag()
+        ));
         let _ = std::fs::remove_dir_all(&path);
         std::fs::create_dir_all(&path).expect("make the temp folder");
         Self(path)

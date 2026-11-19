@@ -91,7 +91,10 @@ mod tests {
 
     /// Make a unique empty cache root.
     fn root(tag: &str) -> std::path::PathBuf {
-        let path = std::env::temp_dir().join(format!("tarragon-temp-{tag}-{}", std::process::id()));
+        let path = std::env::temp_dir().join(format!(
+            "tarragon-temp-{tag}-{}",
+            tarragon_core::testing::run_tag()
+        ));
         let _ = std::fs::remove_dir_all(&path);
         std::fs::create_dir_all(&path).expect("make the root");
         path

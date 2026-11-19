@@ -327,7 +327,13 @@ mod tests {
 
     #[test]
     fn only_regular_text_files_count() {
-        let dir = std::env::temp_dir().join(format!("xtask-filter-{}", std::process::id()));
+        // The process id alone can repeat between test processes, so the name
+        // adds the time.
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |elapsed| elapsed.as_nanos());
+        let dir =
+            std::env::temp_dir().join(format!("xtask-filter-{}-{nanos:x}", std::process::id()));
         fs::create_dir_all(dir.join("sub")).unwrap();
         fs::write(dir.join("text.txt"), "hello\n").unwrap();
         fs::write(dir.join("bin.dat"), [1, 0, 2]).unwrap();

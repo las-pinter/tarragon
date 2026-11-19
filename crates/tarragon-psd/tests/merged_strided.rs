@@ -152,7 +152,10 @@ fn a_bad_merged_section_fails_the_strict_open_but_not_the_lenient_one() {
     push_u16(&mut zip, 2);
     zip.extend_from_slice(&[0; 16]);
     let truncated = vec![0u8, 0, 1, 2];
-    let dir = std::env::temp_dir().join(format!("tarragon-psd-lenient-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!(
+        "tarragon-psd-lenient-{}",
+        tarragon_core::testing::run_tag()
+    ));
     std::fs::create_dir_all(&dir).expect("temp folder");
     for (name, section) in [("zip", zip), ("short", truncated)] {
         let path = dir.join(format!("{name}.psd"));
@@ -175,7 +178,10 @@ fn a_bad_merged_section_fails_the_strict_open_but_not_the_lenient_one() {
 #[test]
 fn a_good_file_opens_the_same_way_in_both_modes() {
     let bytes = build_psd(&DocumentSpec::new(4, 4, 8, 3));
-    let dir = std::env::temp_dir().join(format!("tarragon-psd-same-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!(
+        "tarragon-psd-same-{}",
+        tarragon_core::testing::run_tag()
+    ));
     std::fs::create_dir_all(&dir).expect("temp folder");
     let path = dir.join("good.psd");
     std::fs::write(&path, bytes).expect("write");

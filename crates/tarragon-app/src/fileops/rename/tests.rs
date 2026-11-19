@@ -11,8 +11,10 @@ impl TempDir {
     fn new() -> Self {
         static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let id = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let dir =
-            std::env::temp_dir().join(format!("tarragon-app-rename-{}-{id}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!(
+            "tarragon-app-rename-{}-{id}",
+            tarragon_core::testing::run_tag()
+        ));
         fs::create_dir_all(&dir).expect("create the temp dir");
         Self(dir)
     }

@@ -99,8 +99,10 @@ mod tests {
 
     #[test]
     fn the_render_gate_accepts_a_supported_fixture() {
-        let folder =
-            std::env::temp_dir().join(format!("tarragon-render-gate-{}", std::process::id()));
+        let folder = std::env::temp_dir().join(format!(
+            "tarragon-render-gate-{}",
+            tarragon_core::testing::run_tag()
+        ));
         std::fs::create_dir_all(&folder).expect("create the temp folder");
         let path = folder.join("photo.png");
         DynamicImage::new_rgba8(4, 3)

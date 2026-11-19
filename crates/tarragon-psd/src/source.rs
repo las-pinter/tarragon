@@ -236,7 +236,10 @@ mod tests {
     #[test]
     fn memory_and_file_agree_on_ranges_and_truncation() {
         let data: Vec<u8> = (0..=255u8).collect();
-        let dir = std::env::temp_dir().join(format!("tarragon-source-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!(
+            "tarragon-source-{}",
+            tarragon_core::testing::run_tag()
+        ));
         std::fs::create_dir_all(&dir).expect("temp dir");
         let path = dir.join("bytes.bin");
         std::fs::write(&path, &data).expect("write");

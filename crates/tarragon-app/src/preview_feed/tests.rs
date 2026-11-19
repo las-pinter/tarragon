@@ -80,7 +80,10 @@ fn two_new_items_make_one_request_at_their_planned_sizes() {
     let (loader, signals) = start();
     // Two pictures share 80_000 bytes, so the longest side is at most 100.
     let mut feed = PreviewFeed::<Tex>::with_capacity(80_000);
-    let dir = std::env::temp_dir().join(format!("tarragon-preview-feed-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!(
+        "tarragon-preview-feed-{}",
+        tarragon_core::testing::run_tag()
+    ));
     std::fs::create_dir_all(&dir).expect("create the temp dir");
     let mut items = Vec::new();
     for (name, size) in [("a", (400, 200)), ("b", (50, 60))] {

@@ -56,7 +56,7 @@ fn header_only_png(width: u32, height: u32) -> Vec<u8> {
 fn reason_for(tag: &str, width: u32, height: u32) -> String {
     let path = std::env::temp_dir().join(format!(
         "tarragon-render-limits-{tag}-{}.png",
-        std::process::id()
+        tarragon_core::testing::run_tag()
     ));
     std::fs::write(&path, header_only_png(width, height)).expect("write the crafted file");
     let result = render_plain_image(&path);

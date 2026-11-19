@@ -30,7 +30,7 @@ impl TempDir {
         let id = NEXT.fetch_add(1, Ordering::Relaxed);
         let path = std::env::temp_dir().join(format!(
             "tarragon-pipeline-test-{}-{id}",
-            std::process::id()
+            tarragon_core::testing::run_tag()
         ));
         std::fs::create_dir_all(&path).expect("make the temp folder");
         Self(path)

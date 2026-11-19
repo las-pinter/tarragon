@@ -27,7 +27,7 @@ impl TempDb {
         let id = NEXT.fetch_add(1, Ordering::Relaxed);
         let dir = std::env::temp_dir().join(format!(
             "tarragon-ui-window-state-{}-{id}",
-            std::process::id()
+            tarragon_core::testing::run_tag()
         ));
         std::fs::create_dir_all(&dir).expect("create the temp dir");
         let db = Database::open(dir.join("tarragon.db")).expect("open the temp database");

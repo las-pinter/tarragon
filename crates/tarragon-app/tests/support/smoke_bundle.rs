@@ -35,7 +35,7 @@ impl Bundle {
     pub fn new(name: &str, bench: &str) -> Self {
         let root = std::env::temp_dir().join(format!(
             "tarragon-smoke-script-{}-{name}",
-            std::process::id()
+            tarragon_core::testing::run_tag()
         ));
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(root.join("bin")).expect("make bin");

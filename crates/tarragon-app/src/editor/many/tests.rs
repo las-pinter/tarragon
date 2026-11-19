@@ -34,8 +34,10 @@ impl Fixture {
     fn new(timeout: Duration) -> Self {
         static NEXT: AtomicU64 = AtomicU64::new(0);
         let id = NEXT.fetch_add(1, Ordering::Relaxed);
-        let dir =
-            std::env::temp_dir().join(format!("tarragon-app-many-{}-{id}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!(
+            "tarragon-app-many-{}-{id}",
+            tarragon_core::testing::run_tag()
+        ));
         std::fs::create_dir_all(dir.join("bin")).expect("create bin");
         std::fs::create_dir_all(dir.join("share/applications")).expect("create share");
         let dir = TempDir(dir);

@@ -16,8 +16,10 @@ impl Drop for TempDir {
 fn temp_dir() -> TempDir {
     static NEXT: AtomicU64 = AtomicU64::new(0);
     let id = NEXT.fetch_add(1, Ordering::Relaxed);
-    let dir =
-        std::env::temp_dir().join(format!("tarragon-app-desktop-{}-{id}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!(
+        "tarragon-app-desktop-{}-{id}",
+        tarragon_core::testing::run_tag()
+    ));
     std::fs::create_dir_all(&dir).expect("create the temp dir");
     TempDir(dir)
 }

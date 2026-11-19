@@ -178,8 +178,10 @@ impl TempDir {
     pub fn new(tag: &str) -> Self {
         static NEXT: AtomicU64 = AtomicU64::new(0);
         let id = NEXT.fetch_add(1, Ordering::Relaxed);
-        let path =
-            std::env::temp_dir().join(format!("tarragon-clip-{tag}-{}-{id}", std::process::id()));
+        let path = std::env::temp_dir().join(format!(
+            "tarragon-clip-{tag}-{}-{id}",
+            tarragon_core::testing::run_tag()
+        ));
         std::fs::create_dir_all(&path).expect("the temp folder is created");
         Self { path }
     }

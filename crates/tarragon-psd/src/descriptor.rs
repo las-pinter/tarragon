@@ -10,6 +10,10 @@
 
 /// The deepest nested descriptor this reader accepts.
 const MAX_DEPTH: usize = 32;
+/// The most values one descriptor may hold. A value takes eight input bytes
+/// at least but about ten times that in memory, so a large extra block could
+/// otherwise grow far past its size. Real descriptors hold a few thousand.
+const MAX_VALUES: usize = 1 << 18;
 
 /// One parsed descriptor: a class id and its key/value items.
 #[derive(Debug, Clone, PartialEq)]
@@ -150,12 +154,18 @@ struct Reader<'a> {
     data: &'a [u8],
     /// The read position.
     pos: usize,
+    /// The values still allowed, see [`MAX_VALUES`].
+    budget: usize,
 }
 
 impl<'a> Reader<'a> {
     /// Wrap a slice.
     const fn new(data: &'a [u8]) -> Self {
-        Self { data, pos: 0 }
+        Self {
+            data,
+            pos: 0,
+            budget: MAX_VALUES,
+        }
     }
 
     /// The bytes left.
@@ -271,6 +281,7 @@ fn read_value(reader: &mut Reader<'_>, depth: usize) -> Option<Value> {
     if depth > MAX_DEPTH {
         return None;
     }
+    reader.budget = reader.budget.checked_sub(1)?;
     let kind = reader.code()?;
     Some(match &kind {
         b"obj " => {
@@ -368,7 +379,7 @@ fn read_reference_item(reader: &mut Reader<'_>) -> Option<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Value, parse_versioned};
+    use super::{MAX_VALUES, Value, parse_versioned};
 
     /// Push a four-byte code or a length-prefixed id.
     fn push_id(data: &mut Vec<u8>, id: &[u8]) {
@@ -411,6 +422,29 @@ mod tests {
         assert_eq!(descriptor.class_id, b"null");
         assert_eq!(descriptor.number(b"Opct"), Some(75.5));
         assert!(descriptor.get(b"nope").is_none());
+    }
+
+    /// A versioned descriptor with one list of `count` booleans.
+    fn list_of_booleans(count: usize) -> Vec<u8> {
+        let mut data = 16u32.to_be_bytes().to_vec();
+        push_unicode(&mut data, "");
+        push_id(&mut data, b"null");
+        data.extend_from_slice(&1u32.to_be_bytes());
+        push_id(&mut data, b"List");
+        data.extend_from_slice(b"VlLs");
+        data.extend_from_slice(&u32::try_from(count).expect("count").to_be_bytes());
+        for _ in 0..count {
+            data.extend_from_slice(b"bool");
+            data.push(1);
+        }
+        data
+    }
+
+    #[test]
+    fn a_descriptor_over_the_value_budget_is_rejected() {
+        // The list itself is one value, so its items may use the rest.
+        assert!(parse_versioned(&list_of_booleans(MAX_VALUES - 1)).is_some());
+        assert!(parse_versioned(&list_of_booleans(MAX_VALUES)).is_none());
     }
 
     #[test]

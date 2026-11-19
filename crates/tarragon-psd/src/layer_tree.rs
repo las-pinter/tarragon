@@ -85,8 +85,9 @@ impl LayerNode {
 /// Build the layer tree from the flat record list (bottom to top).
 ///
 /// A bounding divider opens a group, an open or closed folder closes it, and
-/// the close record carries the group settings. Consecutive clipping layers
-/// attach to the base below them.
+/// the close record carries the group settings. A close record with no open
+/// group is skipped, so the layers above it still load. Consecutive clipping
+/// layers attach to the base below them.
 ///
 /// # Errors
 ///
@@ -127,6 +128,10 @@ fn parse_level(
             }
             Some(section) if section.closes_group() => {
                 *cursor += 1;
+                if depth == 0 {
+                    // No group is open, so this close belongs to nothing.
+                    continue;
+                }
                 return Ok((nodes, Some(index)));
             }
             _ => {}
@@ -286,6 +291,19 @@ mod tests {
         assert!(tree[1].is_group);
         assert_eq!(tree[1].children.len(), 1);
         assert_eq!(tree[1].blend, BlendMode::Normal);
+    }
+
+    #[test]
+    fn a_close_record_with_no_open_group_keeps_the_layers_above() {
+        let layers = vec![
+            record(None, Clipping::Base),
+            record(Some(LayerSection::OpenFolder), Clipping::Base),
+            record(None, Clipping::Base),
+            record(None, Clipping::Base),
+        ];
+        let tree = build_tree(&layers).expect("the tree builds");
+        let indexes: Vec<_> = tree.iter().map(|node| node.index).collect();
+        assert_eq!(indexes, [Some(0), Some(2), Some(3)]);
     }
 
     #[test]

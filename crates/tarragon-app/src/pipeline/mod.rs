@@ -309,7 +309,7 @@ impl Pipeline {
         let files = build_pool()
             .map_err(|error| PipelineError::ScanPool(error.to_string()))?
             .install(|| scan_folder(folder))?;
-        let folder_text = folder.to_string_lossy().replace('\\', "/");
+        let folder_text = tarragon_core::path_key::path_key(folder);
         self.db.write_scan_group(&files)?;
         let uuid = self
             .db
@@ -369,7 +369,7 @@ impl Pipeline {
                     mtime: file.mtime,
                     size: file.size,
                 };
-                let key = file.path.to_string_lossy().replace('\\', "/");
+                let key = tarragon_core::path_key::path_key(&file.path);
                 let stored = rows
                     .get(&key)
                     .filter(|row| row.thumbnail_cache_path.is_some())

@@ -15,6 +15,7 @@ pub mod file_name;
 pub mod filter_bar;
 pub mod filter_state;
 pub mod format;
+pub mod path_key;
 pub mod paths;
 pub mod render_scope;
 pub mod sorting;

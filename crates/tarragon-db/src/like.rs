@@ -6,9 +6,10 @@
 //! with an explicit `ESCAPE '\'` clause. Folder matches use [`folder_range`],
 //! which is case-sensitive.
 
-/// Return `path` with backslashes changed to forward slashes.
+/// Return the database key form of `path`: on Windows backslashes become
+/// forward slashes, elsewhere the text stays as it is.
 pub(crate) fn normalize_path(path: &str) -> String {
-    path.replace('\\', "/")
+    tarragon_core::path_key::normalize_key(path)
 }
 
 /// Escape the LIKE wildcards `%`, `_`, and `\` so they match literally.

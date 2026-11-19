@@ -36,7 +36,7 @@ pub(super) fn prune_missing(
     }
     let present: HashSet<String> = files
         .iter()
-        .map(|file| file.path.to_string_lossy().replace('\\', "/"))
+        .map(|file| tarragon_core::path_key::path_key(&file.path))
         .collect();
     let stale: Vec<(&String, &Thumbnail)> = rows
         .iter()

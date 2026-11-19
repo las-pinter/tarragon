@@ -179,7 +179,7 @@ fn process(shared: &Shared, job: &Job) -> Result<RgbaImage, ThumbError> {
         })?;
     if let Some(image) = from_cache(shared, job, name) {
         // Eviction orders by this time, so a hit counts as an access.
-        let path = job.path.to_string_lossy().replace('\\', "/");
+        let path = tarragon_core::path_key::path_key(&job.path);
         let _ = shared.rows.send(Message::Touch(path));
         let image = DynamicImage::ImageRgba8(image);
         if job.needs_colors {
@@ -228,7 +228,7 @@ fn send_colors(shared: &Shared, job: &Job, thumb: &DynamicImage) {
         tracing::warn!("colour extraction panicked for {}", job.path.display());
         return;
     };
-    let path = job.path.to_string_lossy().replace('\\', "/");
+    let path = tarragon_core::path_key::path_key(&job.path);
     let names = colortags::tag_names(&tags);
     let _ = shared.rows.send(Message::Colors { path, names });
 }
@@ -261,9 +261,9 @@ fn from_cache(shared: &Shared, job: &Job, name: &str) -> Option<RgbaImage> {
 /// the source changed during the render, the next open sees a new stamp and
 /// renders again.
 fn row_for(job: &Job, image: &DynamicImage, entry: &CacheEntry) -> ThumbnailWrite {
-    let text = |path: &std::path::Path| Some(path.to_string_lossy().replace('\\', "/"));
+    let text = |path: &std::path::Path| Some(tarragon_core::path_key::path_key(path));
     ThumbnailWrite {
-        path: job.path.to_string_lossy().replace('\\', "/"),
+        path: tarragon_core::path_key::path_key(&job.path),
         mtime: job.stamp.mtime,
         size: i64::try_from(job.stamp.size).unwrap_or(i64::MAX),
         width: image.width(),

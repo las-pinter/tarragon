@@ -112,6 +112,7 @@ fn update_favorite_sort_order_changes_list_order() {
     assert_eq!(missing, 0, "a missing path changes no row");
 }
 
+#[cfg(windows)]
 #[test]
 fn favorite_paths_match_across_backslash_and_slash_spellings() {
     let temp = TempDb::new();

@@ -31,7 +31,13 @@ fn folder_range_trims_slashes_and_normalizes_separators() {
     let expected = ("/a/Pics/".to_owned(), "/a/Pics0".to_owned());
     assert_eq!(folder_range("/a/Pics"), expected);
     assert_eq!(folder_range("/a/Pics/"), expected);
-    assert_eq!(folder_range("\\a\\Pics\\"), expected);
+    if cfg!(windows) {
+        assert_eq!(folder_range("\\a\\Pics\\"), expected);
+    } else {
+        // Outside Windows a backslash belongs to the name.
+        let kept = ("\\a\\Pics\\/".to_owned(), "\\a\\Pics\\0".to_owned());
+        assert_eq!(folder_range("\\a\\Pics\\"), kept);
+    }
 }
 
 #[test]
@@ -83,8 +89,14 @@ fn filter_folder_with_special_characters_matches_itself_only() {
         .expect("write the rows");
     assert_eq!(paths(&temp, &folders(&["/a/10%"])), ["/a/10%/p.png"]);
     assert_eq!(paths(&temp, &folders(&["/a/m_n"])), ["/a/m_n/u.png"]);
-    // A backslash is a separator in both the stored path and the folder.
-    assert_eq!(paths(&temp, &folders(&["/a/b\\c"])), ["/a/b/c/s.png"]);
+    // On Windows a backslash is a separator in both the stored path and the
+    // folder; elsewhere it is part of the folder name.
+    let expected = if cfg!(windows) {
+        "/a/b/c/s.png"
+    } else {
+        "/a/b\\c/s.png"
+    };
+    assert_eq!(paths(&temp, &folders(&["/a/b\\c"])), [expected]);
 }
 
 #[test]

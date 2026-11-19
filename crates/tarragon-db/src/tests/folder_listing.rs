@@ -68,8 +68,10 @@ fn listing_ignores_a_trailing_slash_and_a_backslash_separator() {
         .expect("write the row");
     let expected = ["/a/Pics/x.png"];
     assert_eq!(listed(&temp, "/a/Pics/"), expected);
-    assert_eq!(listed(&temp, "\\a\\Pics"), expected);
-    assert_eq!(listed(&temp, "\\a\\Pics\\"), expected);
+    if cfg!(windows) {
+        assert_eq!(listed(&temp, "\\a\\Pics"), expected);
+        assert_eq!(listed(&temp, "\\a\\Pics\\"), expected);
+    }
 }
 
 #[test]

@@ -64,6 +64,7 @@ fn removing_a_missing_root_returns_zero() {
     assert_eq!(temp.db.list_library_roots().expect("list").len(), 1);
 }
 
+#[cfg(windows)]
 #[test]
 fn backslashes_are_stored_as_slashes_and_case_is_kept() {
     let temp = TempDb::new();
@@ -93,6 +94,7 @@ fn removing_with_a_trailing_slash_removes_the_root() {
     assert_eq!(temp.db.list_library_roots().expect("list").len(), 0);
 }
 
+#[cfg(windows)]
 #[test]
 fn a_filesystem_root_and_a_bare_drive_keep_their_slash() {
     let temp = TempDb::new();

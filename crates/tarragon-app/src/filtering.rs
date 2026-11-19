@@ -92,9 +92,8 @@ pub fn colors_enabled(db: &Database) -> bool {
 /// database stores `/` separators, so on Linux a stored path equals the item
 /// path only when the scan root was stored in the same form as the gallery item
 /// paths. The scanner joins file names to the root as the caller gave it, and
-/// the root can be relative, end in a slash, or be a symlink. A file
-/// name that contains a backslash cannot match: the database stored it as `/`
-/// and this helper cannot tell it from a separator.
+/// the root can be relative, end in a slash, or be a symlink. On Windows the
+/// database stores `\` as `/`, which Windows also reads as a separator.
 fn item_path(stored: &str) -> PathBuf {
     PathBuf::from(stored)
 }

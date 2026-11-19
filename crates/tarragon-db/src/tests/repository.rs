@@ -331,6 +331,7 @@ fn scan_group_rolls_back_as_one_transaction() {
     );
 }
 
+#[cfg(windows)]
 #[test]
 fn scan_group_paths_use_forward_slashes() {
     let temp = TempDb::new();

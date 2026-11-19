@@ -489,6 +489,7 @@ fn filter_engine_folder_escapes_a_percent() {
     );
 }
 
+#[cfg(windows)]
 #[test]
 fn filter_engine_folder_normalizes_backslash_separators() {
     let temp = TempDb::new();

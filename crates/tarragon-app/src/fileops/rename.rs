@@ -108,7 +108,7 @@ fn rename_with(
 
 /// The path text the database stores: forward slashes.
 fn db_text(path: &Path) -> String {
-    path.to_string_lossy().replace('\\', "/")
+    tarragon_core::path_key::path_key(path)
 }
 
 /// The cache tier files of each named file in `folder`. A folder with no cache

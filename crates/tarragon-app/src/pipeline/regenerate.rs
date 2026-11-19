@@ -46,7 +46,7 @@ impl Pipeline {
             if let Some(job) = self.jobs.get(key) {
                 remove_tier_files(&store, &job.folder, &job.uuid, key);
             }
-            paths.push(key.to_string_lossy().replace('\\', "/"));
+            paths.push(tarragon_core::path_key::path_key(key));
         }
         if let Err(error) = self.db.clear_cache_links_for(&paths) {
             tracing::warn!("cannot reset the cache links: {error}");

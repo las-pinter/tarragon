@@ -24,6 +24,7 @@ not a web app. The project is being rewritten in Rust.
 - Build: `cargo build`
 - Format check: `cargo fmt --check`
 - Lint: `cargo clippy --all-targets -- -D warnings`
+- Docs: `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps`
 - Test: `cargo nextest run` (use `cargo test` when `nextest` is absent)
 
 ## Attribution

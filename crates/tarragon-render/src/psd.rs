@@ -17,7 +17,7 @@
 //! The reader skips the rows it does not keep, so memory stays near the output
 //! size. The cache store scales the result to its tiers afterwards.
 //!
-//! The compositor path tiles the canvas, see [`crate::psd_tiles`]. A canvas
+//! The compositor path tiles the canvas, see `psd_tiles`. A canvas
 //! over the full-tier edge with no usable merged image returns
 //! [`RenderError::TooLarge`]: a stepped composite would blur the effects and
 //! the masks, so the renderer refuses instead of showing a wrong picture.

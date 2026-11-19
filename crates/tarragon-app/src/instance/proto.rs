@@ -1,5 +1,5 @@
 //! The one-line wire protocol and the port file format. All of it is pure
-//! except [`new_token`] and [`read_line`].
+//! except `new_token` (not built on unix) and [`read_line`].
 
 use std::io::{self, BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};

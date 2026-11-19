@@ -91,11 +91,12 @@ for each file, so a .ttc file costs its size once. On Arch, a user can install
 ```sh
 cargo fmt --check
 cargo clippy --all-targets -- -D warnings
+RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
 cargo nextest run
 cargo deny check
 ```
 
-All four gates pass on this branch.
+CI runs all five. The pre-commit hooks run all but the doc build.
 
 ## Link mode
 

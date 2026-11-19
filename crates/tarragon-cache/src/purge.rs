@@ -9,7 +9,7 @@
 //! The shutdown rule clears only the `full` tier when the setting is true. The
 //! `320` and `1024` tiers always stay. A false setting deletes nothing.
 //!
-//! Every delete reuses the [`is_within_root`] guard, so a path that resolves
+//! Every delete reuses the `is_within_root` guard, so a path that resolves
 //! outside the cache root is never removed. The walk never follows a symlink.
 //! A symlink inside the tree is unlinked in place, and a symlinked tier
 //! directory is refused.

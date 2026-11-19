@@ -94,7 +94,7 @@ impl Database {
 
     /// Read the tags of many paths. Every requested path gets an entry.
     ///
-    /// The path list is split into chunks of [`PATH_CHUNK`], so a large
+    /// The path list is split into chunks of `PATH_CHUNK`, so a large
     /// library cannot exceed the SQLite variable limit. The chunk results
     /// merge into one map.
     ///
@@ -185,7 +185,7 @@ impl Database {
 
     /// Remove one tag from many paths in one transaction.
     ///
-    /// The path list is split into chunks of [`PATH_CHUNK`], so a large
+    /// The path list is split into chunks of `PATH_CHUNK`, so a large
     /// library cannot exceed the SQLite variable limit. The method returns
     /// the total number of deleted rows.
     ///

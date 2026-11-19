@@ -17,7 +17,7 @@
 //! with the raster mask. Adjustment and fill descriptors parse and apply.
 //!
 //! This file holds the compositor state machine. The layer and group paint,
-//! including the effects path, lives in [`crate::composite_paint`]. The fills,
+//! including the effects path, lives in `composite_paint`. The fills,
 //! the adjustments, and the merged-preview fallback live in
 //! `composite_fill`.
 

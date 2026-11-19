@@ -2,6 +2,7 @@
 //!
 //! Each path writes into the shared compositor state of [`crate::composite`].
 
+use crate::adjustment_table::Prepared;
 use crate::adjustments::Adjustment;
 use crate::composite::Compositor;
 use crate::composite_region::CompositeRegion;
@@ -13,6 +14,9 @@ use crate::layer_source::{channel_samples, cmyk_color, gray_color, read_layer, r
 use crate::layer_tree::LayerNode;
 use crate::limits::ParseOptions;
 use crate::model::ColorMode;
+
+/// The pixels an adjustment pass covers between two deadline checks.
+const CHECK_EVERY: usize = 4096;
 
 impl PsdDocument {
     /// Composite the merged preview when the file has no layer records.
@@ -135,7 +139,11 @@ impl Compositor {
             .mask
             .unwrap_or_else(|| vec![1.0f32; self.count]);
         let coverage = node.opacity * node.fill_opacity;
+        let prepared = Prepared::new(adjustment);
         for (index, &mask_value) in mask.iter().enumerate() {
+            if index % CHECK_EVERY == 0 {
+                options.check()?;
+            }
             let k = coverage * mask_value;
             if k <= 0.0 {
                 continue;
@@ -146,7 +154,7 @@ impl Compositor {
                 self.color[index * 3 + 2],
             ];
             let mut adjusted = backdrop;
-            adjustment.apply(&mut adjusted);
+            prepared.apply(&mut adjusted);
             let blended = crate::blend::blend_rgb(node.blend, backdrop, adjusted);
             for channel in 0..3 {
                 self.color[index * 3 + channel] =

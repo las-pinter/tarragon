@@ -133,12 +133,12 @@ impl PrevKeys {
 
 /// Take the Ctrl+V that pastes.
 ///
-/// This leans on egui-winit 0.36: it turns the Ctrl+V press
-/// into a paste event, so only the V release comes as a key event. That release
-/// has no V press before it, here or in an earlier frame. Ctrl was held
-/// shortly before it, in this frame or an earlier one, and never with Shift or
-/// Alt. The user may let go of Ctrl before V, so the release can carry no
-/// modifiers, but it must not carry Shift or Alt.
+/// This leans on egui-winit 0.36: it turns the Ctrl+V press into a paste
+/// event, so only the V release comes as a key event. That release has no V
+/// press before it, here or in an earlier frame. Ctrl was held shortly before
+/// it, in this frame or an earlier one, and never with Shift or Alt. The user
+/// may let go of Ctrl before V, so the release can carry no modifiers, but it
+/// must not carry Shift or Alt.
 ///
 /// A platform that delivers the press as a key event pastes on the press: a
 /// first V press with exactly Ctrl held. Its release is then not taken, as V
@@ -192,10 +192,10 @@ fn take_swallowed_paste(ctx: &Context, prev: PrevKeys) -> bool {
 
 /// Take the Ctrl+C that copies.
 ///
-/// This leans on egui-winit 0.36: it turns Ctrl+C, and also
-/// Ctrl+Shift+C and Ctrl+Alt+C, into a copy event with no modifiers. So the
-/// modifiers stand where the event stands: exactly Command at the start of the
-/// frame, or after the last event before it. Ctrl may go up later in the same
+/// This leans on egui-winit 0.36: it turns Ctrl+C, and also Ctrl+Shift+C and
+/// Ctrl+Alt+C, into a copy event with no modifiers. So the modifiers stand
+/// where the event stands: exactly Command at the start of the frame, or after
+/// the last event before it. Ctrl may go up later in the same
 /// frame. The end of the frame says nothing. There is no memory of older
 /// frames, so a lone copy event after Ctrl went up does nothing.
 fn take_swallowed_copy(ctx: &Context, prev: PrevKeys) -> bool {

@@ -270,14 +270,17 @@ impl Thumbs {
         self.feed.failure(path).cloned()
     }
 
-    /// Render the failed files again. It waits for an idle pipeline: while an
-    /// open or work runs the pipeline is in another thread, so the call does
-    /// nothing and the user clicks again.
+    /// Render the failed files again. The retry reads the files, which can
+    /// stall on a dead mount, so it runs on the work thread. It needs an idle
+    /// pipeline and no waiting work: otherwise the call does nothing and the
+    /// user clicks again.
     pub fn retry(&mut self, paths: &HashSet<PathBuf>) {
-        let Slot::Idle(pipeline) = &mut self.slot else {
+        if !matches!(self.slot, Slot::Idle(_)) || self.queued.is_some() {
             return;
-        };
-        pipeline.retry(paths);
+        }
+        self.queued = Some(work::Queued::Retry {
+            keys: paths.clone(),
+        });
         (self.repaint)();
     }
 

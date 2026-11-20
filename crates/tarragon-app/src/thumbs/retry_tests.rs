@@ -70,3 +70,23 @@ fn a_retry_while_the_open_runs_queues_nothing() {
     rig.thumbs.before_draw(&rig.ctx, &mut rig.gallery);
     assert_eq!(calls.load(Ordering::SeqCst), 1);
 }
+
+#[test]
+fn a_retry_runs_on_the_work_thread_not_in_the_click() {
+    let (render, _calls) = failing_once();
+    let mut rig = Rig::with_render("retry-work", None, render);
+    let folder = rig.folder("one", &["a.png"]);
+    let file = folder.join("a.png");
+    rig.thumbs.navigate(folder);
+    assert!(rig.settle().starts_with("1 tiles settled, 1 failed"));
+
+    rig.thumbs.retry(&HashSet::from([file]));
+    // The click only queues the retry; the next frame starts the work.
+    assert!(rig.thumbs.has_queued_work());
+    rig.thumbs.before_draw(&rig.ctx, &mut rig.gallery);
+    assert!(matches!(
+        rig.thumbs.is_working(),
+        Some(super::work::Work::Retry) | None
+    ));
+    assert!(!rig.thumbs.has_queued_work());
+}

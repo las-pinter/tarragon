@@ -1,5 +1,5 @@
-//! Cache upkeep that runs on a work thread: a purge, an eviction, or a render
-//! again of chosen files.
+//! Cache upkeep that runs on a work thread: a purge, an eviction, a render
+//! again of chosen files, or a retry of failed files.
 //!
 //! A purge and a render again wait for the renders in flight and an eviction
 //! walks the cache, so none may run on the UI thread. The pipeline moves into
@@ -26,6 +26,9 @@ pub enum Work {
     Evict,
     /// Delete the cache files of chosen sources and render them again.
     Regenerate,
+    /// Render failed files again. It reads their size and time first, which
+    /// can stall on a dead mount.
+    Retry,
 }
 
 /// What a finished piece of work did.
@@ -37,6 +40,8 @@ pub enum WorkOutcome {
     Evicted(Evicted),
     /// How many files were queued to render again.
     Regenerated(usize),
+    /// How many failed files were queued to render again.
+    Retried(usize),
 }
 
 /// A request that waits for an idle pipeline.
@@ -47,6 +52,8 @@ pub(super) enum Queued {
     Evict { cap_gb: i64 },
     /// Render these files again.
     Regenerate { keys: HashSet<PathBuf> },
+    /// Render these failed files again.
+    Retry { keys: HashSet<PathBuf> },
 }
 
 impl Queued {
@@ -56,6 +63,7 @@ impl Queued {
             Self::Purge { .. } => Work::Purge,
             Self::Evict { .. } => Work::Evict,
             Self::Regenerate { .. } => Work::Regenerate,
+            Self::Retry { .. } => Work::Retry,
         }
     }
 
@@ -83,6 +91,7 @@ impl Queued {
                     .map_err(|error| error.to_string())
             }
             Self::Regenerate { keys } => Ok(WorkOutcome::Regenerated(pipeline.regenerate(keys))),
+            Self::Retry { keys } => Ok(WorkOutcome::Retried(pipeline.retry(keys))),
         }
     }
 }

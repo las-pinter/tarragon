@@ -27,10 +27,7 @@ pub fn list_subdirs(path: &Path) -> Vec<PathBuf> {
             is_dir.then(|| (name, entry.path()))
         })
         .collect();
-    named.sort_by(|(left, _), (right, _)| {
-        left.to_lowercase()
-            .cmp(&right.to_lowercase())
-            .then_with(|| left.cmp(right))
-    });
+    // The lower-case name is made once per entry, not once per compare.
+    named.sort_by_cached_key(|(name, _)| (name.to_lowercase(), name.clone()));
     named.into_iter().map(|(_, path)| path).collect()
 }

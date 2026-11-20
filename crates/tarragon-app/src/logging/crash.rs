@@ -116,8 +116,21 @@ const fn writes_crash_file(inside_render_guard: bool) -> bool {
     !inside_render_guard
 }
 
+/// The backtrace text for a crash file, or nothing when no file is written.
+///
+/// A forced capture resolves every frame, which is slow. A caught render panic
+/// writes no file, so it skips the capture.
+fn backtrace_for(writes_file: bool) -> String {
+    if writes_file {
+        std::backtrace::Backtrace::force_capture().to_string()
+    } else {
+        String::new()
+    }
+}
+
 /// Log one panic and write its crash file, unless the render guard catches it.
 fn report(dir: &Path, info: &PanicHookInfo<'_>) {
+    let writes_file = writes_crash_file(inside_render_guard());
     let thread = std::thread::current();
     let crash = CrashInfo {
         time: OffsetDateTime::now_utc(),
@@ -131,12 +144,10 @@ fn report(dir: &Path, info: &PanicHookInfo<'_>) {
             .location()
             .map_or_else(|| "<unknown>".to_owned(), ToString::to_string),
         thread: thread.name().unwrap_or("<unnamed>").to_owned(),
-        backtrace: std::backtrace::Backtrace::force_capture().to_string(),
+        backtrace: backtrace_for(writes_file),
     };
     // The file comes first: the log call is the part most likely to fail.
-    if writes_crash_file(inside_render_guard())
-        && let Ok(path) = write_crash_report(dir, &crash)
-    {
+    if writes_file && let Ok(path) = write_crash_report(dir, &crash) {
         // `eprintln!` would panic on a closed stderr.
         let _ = writeln!(io::stderr(), "tarragon: crash report: {}", path.display());
     }
@@ -349,6 +360,12 @@ mod tests {
     fn a_panic_inside_the_render_guard_writes_no_crash_file() {
         assert!(!super::writes_crash_file(true));
         assert!(super::writes_crash_file(false));
+    }
+
+    #[test]
+    fn only_a_crash_file_gets_a_backtrace() {
+        assert_eq!(super::backtrace_for(false), "");
+        assert_ne!(super::backtrace_for(true), "");
     }
 
     #[test]

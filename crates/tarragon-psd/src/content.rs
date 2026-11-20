@@ -9,6 +9,7 @@
 
 use crate::adjustments::Adjustment;
 use crate::descriptor::{Descriptor, Value, parse_versioned};
+use crate::limits::MAX_GRADIENT_STOPS;
 use crate::pattern_fill::PatternFill;
 
 /// The gradient style of a `GdFl` fill layer.
@@ -292,7 +293,7 @@ fn parse_gradient_stops(gradient: &Descriptor) -> GradientStops {
     let mut stops: Vec<(f32, [f32; 4])> = Vec::new();
     let mut midpoints: Vec<f32> = Vec::new();
     if let Some(items) = gradient.list(b"Clrs") {
-        for item in items {
+        for item in items.iter().take(MAX_GRADIENT_STOPS) {
             let Value::Descriptor(stop) = item else {
                 continue;
             };
@@ -312,7 +313,7 @@ fn parse_gradient_stops(gradient: &Descriptor) -> GradientStops {
     let (sorted, mids) = sort_stops(&stops, &midpoints);
     let mut opacity: Vec<(f32, f32)> = Vec::new();
     if let Some(items) = gradient.list(b"Trns") {
-        for item in items {
+        for item in items.iter().take(MAX_GRADIENT_STOPS) {
             let Value::Descriptor(stop) = item else {
                 continue;
             };
@@ -376,6 +377,7 @@ mod tests {
         GradientFill, GradientStyle, color_from_descriptor, parse_gradient_stops, sample_stops,
     };
     use crate::descriptor::{Descriptor, Value};
+    use crate::limits::MAX_GRADIENT_STOPS;
 
     fn color_descriptor(r: f64, g: f64, b: f64) -> Descriptor {
         Descriptor {
@@ -480,6 +482,34 @@ mod tests {
         assert!((midpoints[0] - 0.25).abs() < 1e-6, "{midpoints:?}");
         // The half-way colour lands at t = 0.25, not at t = 0.5.
         assert!((sample_stops(&stops, &midpoints, 0.25)[0] - 0.5).abs() < 1e-6);
+    }
+
+    #[test]
+    fn a_huge_stop_list_is_cut_to_the_cap() {
+        let stops: Vec<Value> = (0..1000).map(|i| gradient_stop(i, 50, 0.0)).collect();
+        let opacity: Vec<Value> = (0..1000)
+            .map(|i| {
+                Value::Descriptor(Descriptor {
+                    class_id: b"TrnS".to_vec(),
+                    items: vec![
+                        (b"Lctn".to_vec(), Value::Integer(i)),
+                        (b"Opct".to_vec(), Value::Double(100.0)),
+                    ],
+                })
+            })
+            .collect();
+        let gradient = Descriptor {
+            class_id: b"Grdn".to_vec(),
+            items: vec![
+                (b"Clrs".to_vec(), Value::List(stops)),
+                (b"Trns".to_vec(), Value::List(opacity)),
+            ],
+        };
+        let (stops, midpoints, opacity) = parse_gradient_stops(&gradient);
+        assert_eq!(stops.len(), MAX_GRADIENT_STOPS);
+        // One midpoint per segment between stops.
+        assert_eq!(midpoints.len(), MAX_GRADIENT_STOPS - 1);
+        assert_eq!(opacity.len(), MAX_GRADIENT_STOPS);
     }
 
     #[test]

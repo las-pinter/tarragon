@@ -21,6 +21,7 @@ use crate::effects::{
     Bevel, BevelStyle, Contour, Effect, EffectCommon, Effects, Glow, GlowPaint, GlowSource,
     GradientOverlay, MAX_EFFECT_SIZE, Overlay, Satin, Shadow, Stroke, StrokePaint, StrokePosition,
 };
+use crate::limits::{MAX_CONTOUR_POINTS, MAX_EFFECT_INSTANCES};
 
 /// The single-instance key and the multi-instance list key of each effect.
 const KINDS: [(&[u8], &[u8]); 10] = [
@@ -42,6 +43,12 @@ pub(crate) fn parse_object_effects(data: &[u8]) -> Option<Effects> {
     // The outer version field is not the descriptor version.
     let rest = data.get(4..)?;
     let (descriptor, _) = parse_versioned(rest)?;
+    Some(effects_from_descriptor(&descriptor))
+}
+
+/// Read the effects of a parsed effects descriptor, at most
+/// [`MAX_EFFECT_INSTANCES`] of each kind.
+fn effects_from_descriptor(descriptor: &Descriptor) -> Effects {
     let master = !matches!(
         descriptor.get(b"masterFXSwitch"),
         Some(Value::Boolean(false))
@@ -52,7 +59,7 @@ pub(crate) fn parse_object_effects(data: &[u8]) -> Option<Effects> {
         if !multi.is_empty()
             && let Some(Value::List(list)) = descriptor.get(multi)
         {
-            for value in list {
+            for value in list.iter().take(MAX_EFFECT_INSTANCES) {
                 if let Value::Descriptor(item) = value
                     && let Some(effect) = parse_one(single, item)
                 {
@@ -68,7 +75,7 @@ pub(crate) fn parse_object_effects(data: &[u8]) -> Option<Effects> {
             items.push(effect);
         }
     }
-    Some(Effects { master, items })
+    Effects { master, items }
 }
 
 /// Parse one effect descriptor. A false `present` field drops the effect.
@@ -180,6 +187,7 @@ fn contour(item: &Descriptor, key: &[u8]) -> Contour {
     };
     let mut parsed: Vec<(f32, f32)> = points
         .iter()
+        .take(MAX_CONTOUR_POINTS)
         .filter_map(|point| {
             let Value::Descriptor(point) = point else {
                 return None;
@@ -302,4 +310,53 @@ fn parse_bevel(item: &Descriptor) -> Bevel {
 /// Replace a NaN with zero so a bad value cannot poison a buffer.
 fn finite(value: f32) -> f32 {
     if value.is_finite() { value } else { 0.0 }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::effects_from_descriptor;
+    use crate::descriptor::{Descriptor, Value};
+    use crate::limits::{MAX_CONTOUR_POINTS, MAX_EFFECT_INSTANCES};
+
+    fn empty(class: &[u8]) -> Descriptor {
+        Descriptor {
+            class_id: class.to_vec(),
+            items: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn a_huge_list_of_one_effect_kind_is_cut_to_the_cap() {
+        let shadows = vec![Value::Descriptor(empty(b"DrSh")); MAX_EFFECT_INSTANCES + 10];
+        let descriptor = Descriptor {
+            class_id: b"null".to_vec(),
+            items: vec![(b"dropShadowMulti".to_vec(), Value::List(shadows))],
+        };
+        let effects = effects_from_descriptor(&descriptor);
+        assert_eq!(effects.items.len(), MAX_EFFECT_INSTANCES);
+    }
+
+    #[test]
+    fn a_huge_contour_is_cut_to_the_cap() {
+        let point = |x: i32| {
+            Value::Descriptor(Descriptor {
+                class_id: b"CrPt".to_vec(),
+                items: vec![
+                    (b"Hrzn".to_vec(), Value::Integer(x % 256)),
+                    (b"Vrtc".to_vec(), Value::Integer(x % 256)),
+                ],
+            })
+        };
+        let points: Vec<Value> = (0..1000).map(point).collect();
+        let curve = Descriptor {
+            class_id: b"ShpC".to_vec(),
+            items: vec![(b"Crv ".to_vec(), Value::List(points))],
+        };
+        let item = Descriptor {
+            class_id: b"DrSh".to_vec(),
+            items: vec![(b"TrnS".to_vec(), Value::Descriptor(curve))],
+        };
+        let contour = super::contour(&item, b"TrnS");
+        assert_eq!(contour.points.len(), MAX_CONTOUR_POINTS);
+    }
 }

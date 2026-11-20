@@ -71,6 +71,22 @@ pub const MAX_LAYER_CHANNELS: usize = 64;
 /// The most channels the format allows in the file header.
 pub const MAX_HEADER_CHANNELS: usize = 56;
 
+/// The most color stops, and the most opacity stops, read from a gradient.
+///
+/// A gradient is sampled once per pixel by a walk over its stops, so a file
+/// with a huge stop list must not make every pixel slow. Later stops are
+/// dropped.
+pub const MAX_GRADIENT_STOPS: usize = 256;
+
+/// The most points read from an effect contour. A contour is sampled per
+/// pixel, like a gradient; later points are dropped.
+pub const MAX_CONTOUR_POINTS: usize = 256;
+
+/// The most instances of one effect kind read from a layer, such as the drop
+/// shadows of one layer. Every instance paints the whole layer; later ones are
+/// dropped.
+pub const MAX_EFFECT_INSTANCES: usize = 32;
+
 /// A cooperative parse deadline.
 ///
 /// The reader checks the deadline per row, per channel, and per effect pass. A

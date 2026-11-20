@@ -239,10 +239,17 @@ fn send_colors(shared: &Shared, job: &Job, thumb: &DynamicImage) {
 /// partial file that is not empty.
 fn from_cache(shared: &Shared, job: &Job, name: &str) -> Option<RgbaImage> {
     let stored = job.stored?;
-    let entry = shared
-        .cache
-        .find_entry(&job.folder, &job.uuid, name)
-        .ok()??;
+    let entry = match shared.cache.find_entry(&job.folder, &job.uuid, name) {
+        Ok(entry) => entry?,
+        Err(error) => {
+            // A failed lookup counts as a miss.
+            tracing::warn!(
+                "cannot look up the cache of {}: {error}",
+                job.path.display()
+            );
+            return None;
+        }
+    };
     if !entry.is_fresh(stored, job.stamp) {
         return None;
     }

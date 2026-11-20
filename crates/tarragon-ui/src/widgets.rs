@@ -1,4 +1,4 @@
-//! Reusable egui widgets: grid, sidebar, chips, pills, and dialogs.
+//! Shared button widgets.
 
 use egui::{Button, RichText};
 use egui::{CornerRadius, CursorIcon, FontId, Response, Sense, Stroke, StrokeKind, Ui, Vec2, vec2};

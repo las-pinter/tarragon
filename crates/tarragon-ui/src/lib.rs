@@ -1,6 +1,6 @@
 //! egui widgets and theme tokens for the tarragon interface.
 //!
-//! The crate depends on egui only. It never depends on eframe. The app crate
+//! The crate draws with egui and never depends on eframe. The app crate
 //! owns the eframe window and the repaint loop.
 
 mod backdrop;

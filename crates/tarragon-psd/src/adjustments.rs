@@ -100,12 +100,15 @@ pub struct CurvePoint {
 }
 
 /// A tone curve: control points and a sampled lookup table.
+///
+/// The fields are private so the table always has `LUT_SIZE` entries, which
+/// [`Curve::get`] indexes without a check. Build one with [`Curve::new`].
 #[derive(Debug, Clone, PartialEq)]
 pub struct Curve {
     /// The control points, sorted by input.
-    pub points: Vec<CurvePoint>,
+    points: Vec<CurvePoint>,
     /// The sampled lookup table, `LUT_SIZE` entries.
-    pub lut: Vec<f32>,
+    lut: Vec<f32>,
 }
 
 impl Curve {
@@ -125,6 +128,12 @@ impl Curve {
     #[must_use]
     pub fn identity() -> Self {
         Self::new(Vec::new())
+    }
+
+    /// The control points, sorted by input, without near duplicates.
+    #[must_use]
+    pub fn points(&self) -> &[CurvePoint] {
+        &self.points
     }
 
     /// The curve output at `value`, with linear interpolation between samples.

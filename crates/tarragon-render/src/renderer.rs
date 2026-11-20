@@ -4,8 +4,6 @@
 //! render crate does not depend on egui. The UI calls `to_rgba8()` at texture
 //! upload.
 
-#![allow(clippy::module_name_repetitions)]
-
 use std::path::Path;
 
 use image::DynamicImage;

@@ -23,7 +23,7 @@ pub struct PatternFill {
 /// Parse a `PtFl` block: a version and a descriptor.
 ///
 /// Returns `None` when the descriptor holds neither a pattern id nor a name.
-#[allow(
+#[expect(
     clippy::cast_possible_truncation,
     reason = "the descriptor holds small percent, angle and pixel values"
 )]

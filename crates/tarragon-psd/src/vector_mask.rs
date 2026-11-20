@@ -88,8 +88,10 @@ pub struct Subpath {
 }
 
 /// The parsed vector mask of a layer.
-// The four flags mirror the format: three flag bits and the initial fill.
-#[allow(clippy::struct_excessive_bools)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "the four flags mirror the format: three flag bits and the initial fill"
+)]
 #[derive(Debug, Clone, PartialEq)]
 pub struct VectorMask {
     /// The subpaths in file order.
@@ -211,7 +213,10 @@ fn fixed_at(data: &[u8], at: usize) -> Option<f64> {
 }
 
 #[cfg(test)]
-#[allow(clippy::cast_possible_truncation)]
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "the tests encode small fixed-point values"
+)]
 mod tests {
     use super::*;
 

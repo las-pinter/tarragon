@@ -5,8 +5,6 @@
 //! pixels the cache store and the UI consume. The registry uses this renderer
 //! as the default fallback.
 
-#![allow(clippy::module_name_repetitions)]
-
 use std::io::BufReader;
 use std::path::Path;
 

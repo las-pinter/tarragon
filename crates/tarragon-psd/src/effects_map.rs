@@ -48,7 +48,7 @@ impl Coverage {
     }
 
     /// A copy shifted by whole pixels. `outside` fills the vacated edge.
-    #[allow(
+    #[expect(
         clippy::cast_possible_wrap,
         reason = "plane coordinates are far below the i64 range"
     )]
@@ -99,7 +99,7 @@ pub(crate) fn offset(angle: f32, distance: f32) -> (i32, i32) {
 }
 
 /// Convert a finite `f32` to `i32`, saturating.
-#[allow(
+#[expect(
     clippy::cast_possible_truncation,
     reason = "the value is clamped to a small pixel offset first"
 )]

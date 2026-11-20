@@ -136,14 +136,22 @@ impl CompositeRegion {
 }
 
 /// Round a normalized value to the nearest `u8` level.
-#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "the value is clamped to 0..=1 and rounded first"
+)]
 #[must_use]
 fn to_u8(value: f32) -> u8 {
     (value.clamp(0.0, 1.0) * 255.0 + 0.5) as u8
 }
 
 /// Round a normalized value to the nearest `u16` level.
-#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "the value is clamped to 0..=1 and rounded first"
+)]
 #[must_use]
 fn to_u16(value: f32) -> u16 {
     (value.clamp(0.0, 1.0) * 65535.0 + 0.5) as u16

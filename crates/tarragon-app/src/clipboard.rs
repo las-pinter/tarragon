@@ -313,7 +313,7 @@ fn read_with(tool: &ToolCommand, timeout: Duration) -> Result<Vec<PathBuf>, Clip
 }
 
 /// Start a reader thread for the output pipe and one for the error pipe.
-#[allow(clippy::type_complexity, reason = "a pair of reader channels")]
+#[expect(clippy::type_complexity, reason = "a pair of reader channels")]
 fn start_readers(
     child: &mut Child,
 ) -> io::Result<(Receiver<io::Result<Vec<u8>>>, Receiver<io::Result<Vec<u8>>>)> {

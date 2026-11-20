@@ -147,7 +147,7 @@ fn parse_selective_color(data: &[u8]) -> Option<Adjustment> {
 /// description. Another description reads them as CIE Lab times 100. No
 /// Photoshop-made version 3 file in this repository settles the question. To
 /// switch, change this function only.
-#[allow(
+#[expect(
     clippy::cast_precision_loss,
     reason = "a 32-bit sample fits a float closely enough for a color"
 )]
@@ -175,7 +175,7 @@ fn photo_filter_v2_xyz(space: u16, words: [u16; 4]) -> Option<[f32; 3]> {
             Some(srgb_to_xyz(rgb))
         }
         7 => {
-            #[allow(
+            #[expect(
                 clippy::cast_possible_wrap,
                 reason = "the two's-complement bit pattern is the signed value"
             )]
@@ -214,7 +214,7 @@ fn parse_photo_filter(data: &[u8]) -> Option<Adjustment> {
         }
         _ => return None,
     };
-    #[allow(clippy::cast_precision_loss, reason = "a percent is a small integer")]
+    #[expect(clippy::cast_precision_loss, reason = "a percent is a small integer")]
     let density = (be32(data, at)? as f32 / 100.0).clamp(0.0, 1.0);
     Some(Adjustment::PhotoFilter {
         filter_xyz,

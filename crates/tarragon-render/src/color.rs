@@ -10,7 +10,10 @@
 //! This module always computes. It does not read the settings and it does not
 //! check `color_tag_enabled`. The caller owns that gate.
 
-#![allow(clippy::module_name_repetitions)]
+#![expect(
+    clippy::module_name_repetitions,
+    reason = "the color types repeat the module name on purpose"
+)]
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -306,11 +309,10 @@ fn median_cut(histogram: &[ColorCount], palette_size: usize) -> Vec<PaletteBox> 
 
 #[cfg(test)]
 mod tests {
-    // Casts here build test images; the library code avoids them.
-    #![allow(
+    #![expect(
         clippy::cast_possible_truncation,
         clippy::cast_sign_loss,
-        clippy::cast_precision_loss
+        reason = "the casts build test images; the library code avoids them"
     )]
 
     use std::collections::BTreeSet;

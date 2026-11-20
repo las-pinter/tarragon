@@ -110,20 +110,20 @@ impl Lut3d {
     #[must_use]
     pub fn sample(&self, rgb: [f32; 3]) -> [f32; 3] {
         let n = self.size;
-        #[allow(clippy::cast_precision_loss, reason = "the edge is at most 65")]
+        #[expect(clippy::cast_precision_loss, reason = "the edge is at most 65")]
         let top = (n - 1) as f32;
         let position: [f32; 3] = std::array::from_fn(|k| {
             let unit = (rgb[k] - self.domain_min[k]) / (self.domain_max[k] - self.domain_min[k]);
             let unit = if unit.is_finite() { unit } else { 0.0 };
             unit.clamp(0.0, 1.0) * top
         });
-        #[allow(
+        #[expect(
             clippy::cast_possible_truncation,
             clippy::cast_sign_loss,
             reason = "the position is in 0.0..=64.0"
         )]
         let low: [usize; 3] = position.map(|p| (p.floor() as usize).min(n - 2));
-        #[allow(clippy::cast_precision_loss, reason = "the index is at most 64")]
+        #[expect(clippy::cast_precision_loss, reason = "the index is at most 64")]
         let fraction: [f32; 3] = std::array::from_fn(|k| position[k] - low[k] as f32);
         let at = |dr: usize, dg: usize, db: usize| -> [f32; 3] {
             let index = ((low[2] + db) * n + low[1] + dg) * n + low[0] + dr;

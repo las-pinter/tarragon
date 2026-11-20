@@ -7,10 +7,11 @@
 //!
 //! The run is headless: egui lays out and tessellates, and no window opens.
 
-#![allow(
+#![expect(
     clippy::cast_precision_loss,
     clippy::cast_possible_wrap,
-    clippy::print_stdout
+    clippy::print_stdout,
+    reason = "a measurement test: small counts and printed timings"
 )]
 
 use std::path::PathBuf;

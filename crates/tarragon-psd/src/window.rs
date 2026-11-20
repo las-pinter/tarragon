@@ -140,9 +140,10 @@ impl<'a> Window<'a> {
     }
 
     /// Read a big-endian `u16`.
-    // A method path cannot stand in for the closure: the reader lifetime must
-    // stay generic.
-    #[allow(clippy::redundant_closure_for_method_calls)]
+    #[expect(
+        clippy::redundant_closure_for_method_calls,
+        reason = "a method path cannot stand in: the reader lifetime must stay generic"
+    )]
     pub(crate) fn read_u16(&mut self) -> Result<u16, PsdError> {
         // No read-ahead: the caller reads one field, then skips far ahead.
         self.with_reader(2, false, |reader| reader.read_u16())
@@ -150,13 +151,19 @@ impl<'a> Window<'a> {
 
     /// Read a big-endian `i16`. It reads ahead, because the layer records
     /// follow the count at once.
-    #[allow(clippy::redundant_closure_for_method_calls)]
+    #[expect(
+        clippy::redundant_closure_for_method_calls,
+        reason = "a method path cannot stand in: the reader lifetime must stay generic"
+    )]
     pub(crate) fn read_i16(&mut self) -> Result<i16, PsdError> {
         self.with_reader(2, true, |reader| reader.read_i16())
     }
 
     /// Read a big-endian `u32`.
-    #[allow(clippy::redundant_closure_for_method_calls)]
+    #[expect(
+        clippy::redundant_closure_for_method_calls,
+        reason = "a method path cannot stand in: the reader lifetime must stay generic"
+    )]
     pub(crate) fn read_u32(&mut self) -> Result<u32, PsdError> {
         self.with_reader(4, false, |reader| reader.read_u32())
     }

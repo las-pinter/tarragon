@@ -59,7 +59,11 @@ fn color(value: &str) -> Color32 {
     let parts: Vec<&str> = inner.split(',').map(str::trim).collect();
     let channel = |at: usize| parts[at].parse::<u8>().expect("a channel");
     let alpha: f32 = parts[3].parse().expect("an alpha");
-    #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "the alpha is a fraction in 0..=1 from the token text"
+    )]
     let alpha = (alpha * 255.0).round() as u8;
     Color32::from_rgba_unmultiplied(channel(0), channel(1), channel(2), alpha)
 }

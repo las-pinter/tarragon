@@ -86,10 +86,11 @@ fn window_was_hidden(reason: &str) -> bool {
 }
 
 /// Return the value at a percentile, by nearest rank, from sorted values.
-#[allow(
+#[expect(
     clippy::cast_precision_loss,
     clippy::cast_possible_truncation,
-    clippy::cast_sign_loss
+    clippy::cast_sign_loss,
+    reason = "a percentile rank of a frame list fits every cast"
 )]
 fn percentile(sorted: &[f64], p: f64) -> f64 {
     let rank = (p / 100.0 * sorted.len() as f64).ceil() as usize;
@@ -101,7 +102,10 @@ fn percentile(sorted: &[f64], p: f64) -> f64 {
 ///
 /// The log is written for a valid run and for a run that is not valid. A run
 /// that is not valid keeps the frames that were collected.
-#[allow(clippy::cast_precision_loss)]
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "frame counts are far below the f64 mantissa"
+)]
 pub fn report(settings: &Settings, run: &Run) -> u8 {
     let span = run.frames.iter().sum::<f64>().max(0.0) / 1000.0;
     let mut sorted = run.frames.clone();

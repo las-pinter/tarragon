@@ -13,12 +13,11 @@
 //! their path operations. Pixel `(x, y)` covers the square from `(x, y)` to
 //! `(x + 1, y + 1)` in viewport space.
 
-// The grid sizes and step counts are small, and the coverage is stored as `f32`.
-// Every cast below is range-checked by its inputs or rounds on purpose.
-#![allow(
+#![expect(
     clippy::cast_possible_truncation,
     clippy::cast_precision_loss,
-    clippy::cast_sign_loss
+    clippy::cast_sign_loss,
+    reason = "grid sizes and step counts are small, coverage is stored as f32, and each cast is range-checked or rounds on purpose"
 )]
 
 use crate::decode::Viewport;
@@ -129,7 +128,7 @@ fn build_edges(components: &[Component]) -> Vec<Edge> {
         for index in 0..count {
             let (xa, ya) = shape.points[index];
             let (xb, yb) = shape.points[(index + 1) % count];
-            #[allow(clippy::float_cmp)] // Exact: only a truly flat edge is skipped.
+            #[expect(clippy::float_cmp, reason = "exact: only a truly flat edge is skipped")]
             if ya == yb {
                 continue;
             }

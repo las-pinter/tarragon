@@ -36,7 +36,7 @@ pub(crate) fn parse_tone_adjustment(key: [u8; 4], data: &[u8]) -> Option<Adjustm
 
 /// `vibA`: a versioned descriptor with `vibrance` and `Strt` (saturation).
 /// A missing key means 0.
-#[allow(
+#[expect(
     clippy::cast_possible_truncation,
     reason = "the sliders are small integers"
 )]
@@ -57,7 +57,7 @@ fn parse_vibrance(data: &[u8]) -> Option<Adjustment> {
 
 /// `blwh`: a versioned descriptor with six weights in percent, `useTint` and
 /// a `tintColor` color descriptor.
-#[allow(
+#[expect(
     clippy::cast_possible_truncation,
     reason = "the weights are small percentages"
 )]
@@ -127,7 +127,7 @@ fn parse_gradient_map(data: &[u8]) -> Option<Adjustment> {
         if be16(data, at + 8)? != 0 {
             return None;
         }
-        #[allow(
+        #[expect(
             clippy::cast_precision_loss,
             reason = "the location and midpoint are small integers"
         )]

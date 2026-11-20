@@ -6,7 +6,11 @@ use eframe::egui::ColorImage;
 const SIDE: usize = 256;
 
 /// Build one procedural texture. Each has its own hue and a stripe pattern.
-#[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
+#[expect(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    reason = "texture sizes and indexes are small"
+)]
 pub fn make_image(index: usize) -> ColorImage {
     let hue = (index as f32 * 0.618_034).fract();
     let (r, g, b) = palette(hue);
@@ -28,7 +32,11 @@ pub fn make_image(index: usize) -> ColorImage {
 }
 
 /// Map a hue in 0..1 to a bright 8-bit red, green, and blue triple.
-#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "each channel is clamped to 0..=255 before the cast"
+)]
 fn palette(hue: f32) -> (u8, u8, u8) {
     let channel = |shift: f32| {
         let wave = (std::f32::consts::TAU * (hue + shift)).cos();

@@ -6,7 +6,7 @@
 // The script needs Linux tools such as `free`, `lscpu` and `taskset`.
 #![cfg(target_os = "linux")]
 
-#[allow(
+#[expect(
     dead_code,
     reason = "shared with the app-row tests; each file uses part of it"
 )]

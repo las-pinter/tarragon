@@ -168,7 +168,7 @@ impl Compositor {
     ///
     /// The frame is the whole canvas, so tiles agree on the ramp. The returned
     /// color is straight RGB and the shape is the fill alpha.
-    #[allow(
+    #[expect(
         clippy::cast_precision_loss,
         reason = "canvas and viewport coordinates are small enough for f32"
     )]

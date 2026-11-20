@@ -201,7 +201,7 @@ fn black_to_white_gradient_item() -> Vec<u8> {
 }
 
 /// Build a drop shadow or inner shadow effect.
-#[allow(
+#[expect(
     clippy::too_many_arguments,
     reason = "the fixture names each shadow field explicitly"
 )]
@@ -376,7 +376,7 @@ pub fn satin_effect(
 }
 
 /// Push a 16.16 fixed-point value.
-#[allow(
+#[expect(
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
     reason = "the value is clamped to the u32 range first"

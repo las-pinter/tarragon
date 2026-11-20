@@ -187,8 +187,11 @@ mod tests {
             let stripe = ((x / 32) + (y / 32)) % 2 == 0;
             let channel = |value: f64| -> u8 {
                 let value = if stripe { value } else { 255.0 - value };
-                // The values are inside 0..=255 by construction.
-                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                #[expect(
+                    clippy::cast_possible_truncation,
+                    clippy::cast_sign_loss,
+                    reason = "the values are inside 0..=255 by construction"
+                )]
                 let byte = value as u8;
                 byte
             };

@@ -7,7 +7,10 @@
 //! Every fixture is a small image generated in a temporary folder. The tests
 //! never touch the real user data directory.
 
-#![allow(clippy::cast_possible_truncation)]
+#![expect(
+    clippy::cast_possible_truncation,
+    reason = "the fixture sizes are small"
+)]
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};

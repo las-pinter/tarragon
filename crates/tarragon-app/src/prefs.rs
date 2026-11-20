@@ -136,8 +136,10 @@ fn uint(value: &SettingValue) -> Option<u32> {
     }
 }
 
-// The registry bounds keep every float far inside the `f32` range.
-#[allow(clippy::cast_possible_truncation)]
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "the registry bounds keep every float far inside the f32 range"
+)]
 fn float(value: &SettingValue) -> Option<f32> {
     match value {
         SettingValue::Float(number) => Some(*number as f32),

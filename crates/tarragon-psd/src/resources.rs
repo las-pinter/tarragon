@@ -108,7 +108,7 @@ fn read_block_head(reader: &mut Reader<'_>) -> Result<u32, PsdError> {
 }
 
 /// Read four big-endian bytes as a whole-degree value.
-#[allow(
+#[expect(
     clippy::cast_precision_loss,
     reason = "an angle in whole degrees is far below the f32 exact range"
 )]

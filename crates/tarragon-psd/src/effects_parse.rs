@@ -9,7 +9,7 @@
 //! takes its Photoshop default, and a color the parser cannot read leaves the
 //! effect with black paint instead of a panic.
 
-#![allow(
+#![expect(
     clippy::cast_possible_truncation,
     reason = "descriptor numbers are f64 but effect fields are small f32 values"
 )]

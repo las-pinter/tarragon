@@ -32,7 +32,10 @@
 //!
 //! The numeric casts are for a measurement harness, not for the library.
 
-#![allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
+#![expect(
+    clippy::cast_precision_loss,
+    reason = "the casts are for a measurement harness, not for the library"
+)]
 
 use std::path::PathBuf;
 use std::time::{Duration, Instant};

@@ -5,7 +5,7 @@
 //! descriptor and adjustment blocks that those files carry.
 //!
 //! Each test binary uses only part of this module.
-#![allow(dead_code)]
+#![expect(dead_code, reason = "each test binary uses only part of this module")]
 
 mod adjust_blocks;
 mod builder;
@@ -19,16 +19,25 @@ mod zipped;
 
 // Each test binary uses only part of this module, so the re-exports can look
 // unused to one binary even when another uses them.
-#[allow(unused_imports)]
+#[allow(
+    unused_imports,
+    reason = "each test binary uses a different part of the helpers"
+)]
 pub use adjust_blocks::{
     DEFAULT_WEIGHTS, NO_EDITS, adjustment_cell, black_to_white, blwh, cube, grdm, items, viba,
 };
-#[allow(unused_imports)]
+#[allow(
+    unused_imports,
+    reason = "each test binary uses a different part of the helpers"
+)]
 pub use builder::{
     DocumentSpec, LayerSpec, MaskSpec, build_psd, layer_extra, layer_record, push_i32, push_length,
     push_samples, push_u16, push_u32, sample_bytes,
 };
-#[allow(unused_imports)]
+#[allow(
+    unused_imports,
+    reason = "each test binary uses a different part of the helpers"
+)]
 pub use effects::{
     bevel_effect, bool_item, color_item, common, glow_effect, gradient_overlay_effect,
     gradient_stroke_effect, legacy_lrfx, legacy_shadow_body, legacy_shadow_body_with_light, lfx2,
@@ -36,7 +45,10 @@ pub use effects::{
     solid_overlay_effect, square_document_with_fill_opacity, square_document_with_opacity,
     stroke_effect,
 };
-#[allow(unused_imports)]
+#[allow(
+    unused_imports,
+    reason = "each test binary uses a different part of the helpers"
+)]
 pub use encoders::{
     blnc_block, brit_block, clrl_block, curves_block, descriptor_body, descriptor_item, expa_block,
     gdfl_black_to_white, gdfl_black_to_white_midpoint, hue2_block, identity_levels, levels_block,
@@ -44,19 +56,34 @@ pub use encoders::{
     value_boolean, value_descriptor, value_double, value_enum, value_integer, value_list,
     value_raw, value_unit_float, versioned,
 };
-#[allow(unused_imports)]
+#[allow(
+    unused_imports,
+    reason = "each test binary uses a different part of the helpers"
+)]
 pub use patterns::{
     PatternSpec, PtflSpec, packbits_row, packbits_rows, pattern_body, pattern_record, ptfl_block,
     tagged_block, tile4,
 };
-#[allow(unused_imports)]
+#[allow(
+    unused_imports,
+    reason = "each test binary uses a different part of the helpers"
+)]
 pub use raw_bytes::{layered_psd, raw_psd, read_fixture, rle_merged_section, section_offset};
-#[allow(unused_imports)]
+#[allow(
+    unused_imports,
+    reason = "each test binary uses a different part of the helpers"
+)]
 pub use tiles::{assert_suggested_edge_fits, crop_rgba8, peak_resident_bytes, stitched_rgba8};
-#[allow(unused_imports)]
+#[allow(
+    unused_imports,
+    reason = "each test binary uses a different part of the helpers"
+)]
 pub use zipped::{channel_bytes, deflate, padded_stream};
 
-#[allow(unused_imports)]
+#[allow(
+    unused_imports,
+    reason = "each test binary uses a different part of the helpers"
+)]
 pub use vector::{
     VMSK_DISABLED, VMSK_INVERT, ellipse_path, fixed, initial_fill_record, knot_record,
     length_record, rect_path, vmsk_block,

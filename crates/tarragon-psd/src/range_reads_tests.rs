@@ -4,10 +4,10 @@
 //! because the counters exist only for unit tests.
 
 #[path = "../tests/common/builder.rs"]
-#[allow(dead_code, missing_docs)]
+#[expect(dead_code, reason = "these tests use only part of the shared builder")]
 mod builder;
 #[path = "../tests/common/zipped.rs"]
-#[allow(dead_code, missing_docs)]
+#[expect(dead_code, reason = "these tests use only part of the shared builder")]
 mod zipped;
 
 use std::path::PathBuf;

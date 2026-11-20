@@ -60,7 +60,7 @@ pub(crate) struct PaintContext {
 
 impl PaintContext {
     /// The frame of a gradient fill, from its align flag.
-    #[allow(
+    #[expect(
         clippy::cast_precision_loss,
         reason = "canvas dimensions are far below the f32 exact range"
     )]
@@ -309,7 +309,7 @@ fn solid_color_plane(color: [f32; 3], pixels: usize) -> Vec<f32> {
 }
 
 /// A gradient color plane over a padded coverage.
-#[allow(
+#[expect(
     clippy::cast_precision_loss,
     reason = "plane coordinates are far below the f32 exact range"
 )]

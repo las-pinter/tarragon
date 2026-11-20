@@ -18,7 +18,7 @@ pub(crate) fn be16(data: &[u8], at: usize) -> Option<u16> {
 }
 
 /// Read a big-endian `i16`.
-#[allow(
+#[expect(
     clippy::cast_possible_wrap,
     reason = "the two's-complement bit pattern is the signed value"
 )]
@@ -35,7 +35,7 @@ pub(crate) fn be32(data: &[u8], at: usize) -> Option<u32> {
 }
 
 /// Read a big-endian `i32`.
-#[allow(
+#[expect(
     clippy::cast_possible_wrap,
     reason = "the two's-complement bit pattern is the signed value"
 )]
@@ -77,7 +77,7 @@ pub fn parse_adjustment(key: &[u8; 4], data: &[u8], lut_size: u32) -> Option<Adj
 }
 
 /// Parse a `brit` block (and its optional `CgEd` modern parameters).
-#[allow(
+#[expect(
     clippy::cast_possible_truncation,
     reason = "the descriptor holds small integer percentages"
 )]

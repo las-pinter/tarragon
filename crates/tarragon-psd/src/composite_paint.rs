@@ -129,7 +129,7 @@ impl Compositor {
     /// The exterior effects and the layer content compose in a copy of the
     /// running state. The copy then blends back at the layer opacity, so the
     /// opacity applies to the whole stack once.
-    #[allow(
+    #[expect(
         clippy::too_many_arguments,
         reason = "the painted layer needs its stack, its frames, and the node"
     )]
@@ -454,7 +454,7 @@ fn union_into(plane: &mut [f32], source: &[f32]) {
 }
 
 /// A canvas-space frame for a layer rectangle.
-#[allow(
+#[expect(
     clippy::cast_precision_loss,
     reason = "layer coordinates are far below the f32 exact range"
 )]
@@ -473,7 +473,7 @@ fn layer_frame(bounds: LayerBounds) -> Frame {
 /// on the other axis. A tile larger than the cap minus twice the margin keeps
 /// less than the full margin, and the no-seam guarantee then stops at that
 /// boundary.
-#[allow(
+#[expect(
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
     reason = "the margin is finite and bounded by the effect size cap"

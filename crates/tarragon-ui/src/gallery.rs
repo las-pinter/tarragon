@@ -56,7 +56,7 @@ pub const SEARCH_DEBOUNCE: Duration = Duration::from_millis(300);
 pub const WAKE_SLACK: Duration = Duration::from_millis(16);
 
 /// The gallery panel: the top strip and the virtual grid.
-#[allow(
+#[expect(
     clippy::struct_excessive_bools,
     reason = "each flag is an independent one-shot or switch; none combine into a state"
 )]

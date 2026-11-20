@@ -17,8 +17,10 @@ pub fn run_tag() -> &'static str {
         let nanos = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_or(0, |elapsed| elapsed.as_nanos());
-        // Keep the low bits on purpose: they change fastest.
-        #[allow(clippy::cast_possible_truncation)]
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "the low bits are kept on purpose: they change fastest"
+        )]
         let low = nanos as u32;
         format!("{}-{low:08x}", std::process::id())
     })

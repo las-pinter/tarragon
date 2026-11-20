@@ -6,7 +6,10 @@
 //! `filter_state::FilterState`, `tier::Tier`, and `color::ColorBucket` repeat
 //! their module names on purpose. Turn off the repetition lint for the whole
 //! crate.
-#![allow(clippy::module_name_repetitions)]
+#![expect(
+    clippy::module_name_repetitions,
+    reason = "the type names repeat their module names on purpose"
+)]
 
 pub mod color;
 pub mod entity;

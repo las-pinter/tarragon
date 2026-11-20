@@ -127,7 +127,7 @@ fn compare(got: &[u8], want: &[u8]) -> (u8, f64, f64) {
             count += 1;
         }
     }
-    #[allow(clippy::cast_precision_loss, reason = "a report, not a result")]
+    #[expect(clippy::cast_precision_loss, reason = "a report, not a result")]
     let (mean, share) = (sum as f64 / count as f64, close as f64 / count as f64);
     (max, mean, share)
 }

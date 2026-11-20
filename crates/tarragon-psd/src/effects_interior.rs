@@ -62,14 +62,14 @@ fn relative(map: &Coverage, shape: &Coverage) -> Coverage {
 /// `shape` is the padded geometric shape and `color` the padded layer color.
 /// The shape applies once, at the layer composite. The first listed instance
 /// of an effect kind is on top, so the paint order is reversed.
-#[allow(
-    clippy::too_many_lines,
-    reason = "one pass per effect kind keeps the paint order explicit"
-)]
 ///
 /// # Errors
 ///
 /// Returns a typed error when the deadline passed or the work was cancelled.
+#[expect(
+    clippy::too_many_lines,
+    reason = "one pass per effect kind keeps the paint order explicit"
+)]
 pub(crate) fn paint_interior(
     color: &mut [f32],
     strength: &mut [f32],
@@ -267,7 +267,7 @@ fn paint_solid(
 }
 
 /// Paint a gradient through a coverage map.
-#[allow(
+#[expect(
     clippy::too_many_arguments,
     clippy::cast_precision_loss,
     reason = "the paint kernel needs the plane, the map, the sample frame, and the options"

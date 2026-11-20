@@ -28,7 +28,7 @@ pub(crate) fn blur(plane: &mut Coverage, width: f32) {
 
 /// Run one box pass. The horizontal pass walks rows; the vertical pass walks
 /// columns.
-#[allow(
+#[expect(
     clippy::cast_precision_loss,
     clippy::cast_possible_truncation,
     reason = "the box sum is bounded by the plane area, far below the f32 exact range"
@@ -84,7 +84,7 @@ fn box_pass(
 }
 
 /// Linear interpolation into a prefix sum table.
-#[allow(
+#[expect(
     clippy::cast_precision_loss,
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,

@@ -36,10 +36,11 @@
 //!
 //! The numeric casts are for a measurement harness, not for the library.
 
-#![allow(
+#![expect(
     clippy::cast_precision_loss,
     clippy::cast_possible_truncation,
-    clippy::cast_sign_loss
+    clippy::cast_sign_loss,
+    reason = "the casts are for a measurement harness, not for the library"
 )]
 
 mod report;

@@ -8,7 +8,7 @@ use crate::effects_map::{Coverage, apply_contour, distance_inside, distance_outs
 ///
 /// The `light` is the document global light. A bevel that follows it uses the
 /// document angle and altitude instead of its own values.
-#[allow(
+#[expect(
     clippy::cast_possible_wrap,
     reason = "plane coordinates are far below the i64 range"
 )]

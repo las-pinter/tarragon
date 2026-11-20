@@ -8,7 +8,10 @@
 //! The committed fixture in `tests/fixtures/clip/` is this builder's output. A
 //! check test keeps the two in step.
 
-#![allow(clippy::cast_possible_truncation)]
+#![expect(
+    clippy::cast_possible_truncation,
+    reason = "the fixture lengths are small"
+)]
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};

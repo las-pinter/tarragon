@@ -3,11 +3,11 @@
 //! Each cubic Bezier becomes line segments. The work is done in document
 //! pixels, so the step counts never depend on the tile that is rendered.
 
-// The step count is small and clamped. The casts round on purpose.
-#![allow(
+#![expect(
     clippy::cast_possible_truncation,
     clippy::cast_precision_loss,
-    clippy::cast_sign_loss
+    clippy::cast_sign_loss,
+    reason = "the step count is small and clamped, and the casts round on purpose"
 )]
 
 use crate::vector_mask::{Knot, Subpath};

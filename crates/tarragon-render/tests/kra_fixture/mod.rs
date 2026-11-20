@@ -13,7 +13,10 @@
 //! run writes byte-identical bytes. The host system field is pinned to Unix,
 //! because the zip crate otherwise writes DOS on Windows.
 
-#![allow(clippy::cast_possible_truncation)]
+#![expect(
+    clippy::cast_possible_truncation,
+    reason = "the fixture lengths are small"
+)]
 
 use std::io::{Cursor, Write};
 use std::path::{Path, PathBuf};

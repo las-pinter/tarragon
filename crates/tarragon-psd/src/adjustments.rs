@@ -125,7 +125,7 @@ impl Curve {
     }
 
     /// The curve output at `value`, with linear interpolation between samples.
-    #[allow(
+    #[expect(
         clippy::cast_precision_loss,
         clippy::cast_possible_truncation,
         clippy::cast_sign_loss,
@@ -379,7 +379,7 @@ pub fn grey(rgb: [f32; 3]) -> f32 {
 }
 
 /// Photoshop posterize: a floor over `levels` bins, sampled at the document depth.
-#[allow(
+#[expect(
     clippy::cast_precision_loss,
     reason = "the sample count is a small integer"
 )]
@@ -451,10 +451,9 @@ fn modern_contrast(value: f32, contrast: f32) -> f32 {
 }
 
 /// Sample a natural cubic spline through `points` into a lookup table.
-#[allow(
+#[expect(
     clippy::cast_precision_loss,
     clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
     clippy::many_single_char_names,
     reason = "the spline solve uses the standard single-letter names"
 )]

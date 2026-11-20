@@ -160,7 +160,7 @@ pub(crate) fn sort_stops(
 }
 
 /// Sample color stops with their segment midpoints.
-#[allow(
+#[expect(
     clippy::many_single_char_names,
     reason = "t is the standard gradient parameter"
 )]
@@ -234,10 +234,6 @@ pub fn parse_solid_color(data: &[u8]) -> Option<[f32; 4]> {
 }
 
 /// Parse a gradient `GdFl` block.
-#[allow(
-    clippy::cast_possible_truncation,
-    reason = "the descriptor holds small percentage values"
-)]
 #[must_use]
 pub fn parse_gradient_fill(data: &[u8]) -> Option<GradientFill> {
     let (descriptor, _) = parse_versioned(data)?;
@@ -248,7 +244,7 @@ pub fn parse_gradient_fill(data: &[u8]) -> Option<GradientFill> {
 ///
 /// The same descriptor shape appears in a `GdFl` fill layer, a gradient
 /// overlay, and a gradient paint.
-#[allow(
+#[expect(
     clippy::cast_possible_truncation,
     reason = "the descriptor holds small percentage values"
 )]
@@ -288,7 +284,7 @@ pub(crate) fn gradient_from_descriptor(descriptor: &Descriptor) -> GradientFill 
 }
 
 /// Parse the `Clrs`, midpoints and `Trns` of a `Grad` descriptor.
-#[allow(
+#[expect(
     clippy::cast_possible_truncation,
     reason = "the descriptor holds small percentage and location values"
 )]
@@ -333,7 +329,7 @@ fn parse_gradient_stops(gradient: &Descriptor) -> GradientStops {
 ///
 /// `RGBC`, `CMYC` and `Grsc` classes are supported. The Lab class is out of
 /// scope and returns `None`, so the fill is marked unsupported.
-#[allow(
+#[expect(
     clippy::cast_possible_truncation,
     reason = "the descriptor holds 0..=255 and 0..=100 channel values"
 )]

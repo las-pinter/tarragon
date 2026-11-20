@@ -75,7 +75,7 @@ pub(crate) fn parse_legacy_effects(data: &[u8]) -> Option<Effects> {
 }
 
 /// Read a 16.16 fixed-point value as pixels.
-#[allow(
+#[expect(
     clippy::cast_possible_truncation,
     reason = "16.16 pixels fit the f32 range comfortably"
 )]
@@ -126,7 +126,7 @@ fn legacy_color(data: &[u8]) -> Option<[f32; 3]> {
 
 /// Convert HSB to straight RGB. Hue is degrees, saturation and brightness are
 /// `0.0..=1.0`.
-#[allow(
+#[expect(
     clippy::cast_possible_truncation,
     reason = "the hue sector is a small whole number"
 )]

@@ -10,8 +10,6 @@
 //! shows the error card. Streamed reads keep memory bounded for multi-gigabyte
 //! documents.
 
-#![allow(clippy::module_name_repetitions)]
-
 #[cfg(test)]
 mod loop_tests;
 mod record;

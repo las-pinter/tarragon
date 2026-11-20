@@ -129,7 +129,7 @@ pub struct HueRange {
 impl HueRange {
     /// The neutral range `index` (0 reds, 1 yellows, and so on) with the
     /// default extent: 30 degrees fully on, fading over 30 degrees each side.
-    #[allow(clippy::cast_precision_loss, reason = "the index is at most five")]
+    #[expect(clippy::cast_precision_loss, reason = "the index is at most five")]
     #[must_use]
     pub fn neutral(index: usize) -> Self {
         let centre = 60.0 * index as f32;

@@ -15,7 +15,10 @@ pub const VMSK_DISABLED: u32 = 0x4;
 /// A signed 8.24 fixed-point number.
 #[must_use]
 pub fn fixed(value: f64) -> [u8; 4] {
-    #[allow(clippy::cast_possible_truncation)]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "the test values fit the 8.24 fixed-point range"
+    )]
     let raw = (value * 16_777_216.0).round() as i32;
     raw.to_be_bytes()
 }

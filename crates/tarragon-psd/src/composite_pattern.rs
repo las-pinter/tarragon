@@ -83,7 +83,7 @@ impl PatternTile {
     /// Sample at tile coordinates `(u, v)`, where pixel centers are at `i + 0.5`.
     ///
     /// The result is bilinear with wrap-around. It is premultiplied RGBA.
-    #[allow(
+    #[expect(
         clippy::cast_possible_truncation,
         reason = "tile coordinates are far below the i64 range"
     )]
@@ -118,7 +118,7 @@ impl Compositor {
     /// `layer` is the layer record index. A linked fill starts at the top-left
     /// of the layer bounds. The returned color is straight RGB and the shape is
     /// the fill alpha. A missing pattern gives an empty fill.
-    #[allow(
+    #[expect(
         clippy::cast_precision_loss,
         reason = "canvas and viewport coordinates are small enough for f64"
     )]

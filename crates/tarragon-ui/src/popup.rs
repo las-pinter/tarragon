@@ -34,7 +34,7 @@ pub(crate) fn menu_frame() -> Frame {
 }
 
 /// Allocate one menu row `width` wide and paint its hover fill. Give the row
-/// rect, its response, and the text colour for its state.
+/// rect, its response, and the text color for its state.
 pub(crate) fn row_frame(ui: &mut Ui, width: f32) -> (Rect, Response, Color32) {
     let (rect, response) =
         ui.allocate_exact_size(vec2(width, tokens::MENU_ROW_HEIGHT), Sense::click());

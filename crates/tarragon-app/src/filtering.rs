@@ -11,7 +11,7 @@ use tarragon_ui::gallery::Gallery;
 mod lists;
 pub use lists::{init, refresh_lists, update};
 
-/// Return the paths that match the tag, colour, and folder filters.
+/// Return the paths that match the tag, color, and folder filters.
 ///
 /// Returns `None` when none of these filters is active in `scope`, which means
 /// no database filter. The text filter is never sent to the database. The
@@ -72,7 +72,7 @@ fn apply_with(
     true
 }
 
-/// Whether the colour row shows, from the `color_tag_enabled` setting.
+/// Whether the color row shows, from the `color_tag_enabled` setting.
 ///
 /// A setting that cannot be read counts as on, and is logged.
 pub fn colors_enabled(db: &Database) -> bool {
@@ -80,7 +80,7 @@ pub fn colors_enabled(db: &Database) -> bool {
         Ok(SettingValue::Bool(value)) => value,
         Ok(_) => true,
         Err(error) => {
-            tracing::warn!("cannot read the colour tag setting: {error}");
+            tracing::warn!("cannot read the color tag setting: {error}");
             true
         }
     }

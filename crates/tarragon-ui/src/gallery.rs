@@ -76,13 +76,13 @@ pub struct Gallery {
     search: String,
     /// The paths that the database filter keeps, or none for no filter.
     filter_result: Option<HashSet<PathBuf>>,
-    /// The colour, tag, and folder filters.
+    /// The color, tag, and folder filters.
     bar: FilterBar,
     /// The tag names that the tag menu lists.
     tags: Vec<String>,
     /// The folder paths that the folder menu lists.
     folders: Vec<String>,
-    /// Whether the colour row shows.
+    /// Whether the color row shows.
     colors_enabled: bool,
     /// What the filter bar reported since the last take.
     filter_events: Shown,
@@ -314,7 +314,7 @@ impl Gallery {
         std::mem::take(&mut self.filter_events.opened)
     }
 
-    /// Show or hide the colour row. Hiding clears the colour filters.
+    /// Show or hide the color row. Hiding clears the color filters.
     pub fn set_colors_enabled(&mut self, enabled: bool) {
         self.colors_enabled = enabled;
         if enabled {
@@ -325,7 +325,7 @@ impl Gallery {
         self.filter_events.changed |= before != (0, false);
     }
 
-    /// Whether the colour row shows.
+    /// Whether the color row shows.
     #[must_use]
     pub fn colors_enabled(&self) -> bool {
         self.colors_enabled

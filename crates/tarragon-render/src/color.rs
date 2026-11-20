@@ -80,7 +80,7 @@ pub fn extract_dominant_colors(image: &DynamicImage, config: ColorTagConfig) -> 
     }
 
     // The resize does not premultiply, so do it first or clear pixels bleed
-    // colour. Opaque images keep the plain resize to stay bit-for-bit equal.
+    // color. Opaque images keep the plain resize to stay bit-for-bit equal.
     let small = if image.color().has_alpha() {
         let mut rgba = image.to_rgba8();
         for pixel in rgba.pixels_mut() {

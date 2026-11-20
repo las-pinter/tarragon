@@ -15,7 +15,7 @@ pub struct WriteBatch {
     pub touched: Vec<String>,
     /// The `last_accessed` value for every touched path, in epoch seconds.
     pub touched_at: i64,
-    /// Paths with the colour tag names that replace their `auto_color` tags.
+    /// Paths with the color tag names that replace their `auto_color` tags.
     pub colors: Vec<(String, Vec<String>)>,
 }
 
@@ -39,7 +39,7 @@ pub struct WriteReport {
 impl Database {
     /// Store a whole batch in one transaction.
     ///
-    /// The method runs the rows, then the touches, then the colours, and
+    /// The method runs the rows, then the touches, then the colors, and
     /// commits once. An empty batch opens no transaction. Each item runs in
     /// its own savepoint, so a failed item rolls back alone, is counted in
     /// [`WriteReport::failed`], and does not stop the others.

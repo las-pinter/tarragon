@@ -268,7 +268,7 @@ fn sort_pill(ui: &mut Ui, mode: SortMode, active: bool) -> Response {
     )
 }
 
-/// Paint a caption pill from its fill, text colour, border, and padding.
+/// Paint a caption pill from its fill, text color, border, and padding.
 /// Returns its rect.
 fn pill_frame(
     ui: &mut Ui,

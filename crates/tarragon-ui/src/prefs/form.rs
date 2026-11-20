@@ -114,7 +114,7 @@ pub(super) fn contents(ui: &mut Ui, draft: &mut Draft, view: &View<'_>) -> Optio
                 check_row(ui, "Enable Debug Logging", &mut draft.rest.debug);
             });
         });
-    let note = "Colour tagging changes apply at the next folder open. \
+    let note = "Color tagging changes apply at the next folder open. \
                 The cache size cap and the cache folder apply at the next \
                 start. Max PSD Workers, Large Canvas Threshold, Tile Grid \
                 Size, and Cache Format are saved, but nothing reads them yet.";

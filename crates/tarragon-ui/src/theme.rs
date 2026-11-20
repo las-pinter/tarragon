@@ -105,7 +105,7 @@ pub(crate) fn dock_title_style(style: &mut egui_dock::Style, text_height: f32) {
     tab.tab_body.stroke = Stroke::NONE;
 }
 
-/// The frame for one panel: a fill colour and a small inset.
+/// The frame for one panel: a fill color and a small inset.
 pub(crate) fn panel_frame(fill: Color32, margin: Margin) -> Frame {
     Frame::new().fill(fill).inner_margin(margin)
 }

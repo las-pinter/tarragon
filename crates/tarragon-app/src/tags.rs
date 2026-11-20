@@ -89,9 +89,9 @@ fn pills(by_file: &HashMap<String, Vec<Tag>>, total: usize) -> Vec<TagPill> {
         .collect()
 }
 
-/// How many selected files carry each colour, in `Swatch::ALL` order.
+/// How many selected files carry each color, in `Swatch::ALL` order.
 ///
-/// Only `AutoColor` rows count, so a user tag with a colour name changes
+/// Only `AutoColor` rows count, so a user tag with a color name changes
 /// nothing. `total` is how many files were asked for.
 fn color_states(by_file: &HashMap<String, Vec<Tag>>, total: usize) -> ColorStates {
     let mut states = ColorStates::default();
@@ -115,7 +115,7 @@ fn color_states(by_file: &HashMap<String, Vec<Tag>>, total: usize) -> ColorState
     states
 }
 
-/// The names of the user tags, in name order. Colour tags are not offered.
+/// The names of the user tags, in name order. Color tags are not offered.
 fn known_tags(all: Vec<TagUsage>) -> Vec<String> {
     all.into_iter()
         .filter(|usage| usage.tag.source == TagSource::User)

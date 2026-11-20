@@ -30,8 +30,8 @@ fn draw(ui: &mut Ui, label: &str, tooltip: &str) -> (Response, Rect) {
     let layout =
         |ui: &Ui, s: &str, font, color| ui.painter().layout_no_wrap(s.to_owned(), font, color);
     let name = layout(ui, label, font, tokens::AMBER_ACCENT);
-    // The x colour depends on hover, which is known after the allocation, so
-    // the galley takes the placeholder colour and the paint call sets it.
+    // The x color depends on hover, which is known after the allocation, so
+    // the galley takes the placeholder color and the paint call sets it.
     let cross = layout(ui, "x", bold, Color32::PLACEHOLDER);
     let width = PAD_X * 2.0 + name.size().x + tokens::SPACING_XS + cross.size().x;
     let (rect, response) =

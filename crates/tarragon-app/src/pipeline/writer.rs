@@ -81,7 +81,7 @@ fn run_with(
                 Ok(report) => report.stored,
                 Err(error) => {
                     tracing::warn!(
-                        "cannot store the writer batch of {} rows, {} touches and {} colours: {error}",
+                        "cannot store the writer batch of {} rows, {} touches and {} colors: {error}",
                         batch.rows.len(),
                         batch.touched.len(),
                         batch.colors.len(),

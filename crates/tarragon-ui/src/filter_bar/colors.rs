@@ -1,4 +1,4 @@
-//! The colour swatch row of the filter bar.
+//! The color swatch row of the filter bar.
 
 use egui::Ui;
 use tarragon_core::filter_bar::{ColorChoice, FilterBar};

@@ -47,8 +47,8 @@ impl TabViewer for Panes<'_> {
     }
 
     // The tab bar is the panel title strip, so the text matches the mockup title.
-    // The colour is set here because the theme's override text colour beats the
-    // tab style colour, so the style alone would paint the titles near white.
+    // The color is set here because the theme's override text color beats the
+    // tab style color, so the style alone would paint the titles near white.
     fn title(&mut self, tab: &mut Pane) -> WidgetText {
         RichText::new(name(*tab))
             .size(tokens::SIZE_BODY)

@@ -12,7 +12,7 @@ use crate::filtering;
 const RENAME_FAILED: &str = "Cannot rename: database error";
 /// The delete counterpart of [`RENAME_FAILED`].
 const DELETE_FAILED: &str = "Cannot delete: database error";
-/// A colour tag cannot be renamed or deleted.
+/// A color tag cannot be renamed or deleted.
 const PROTECTED: &str = "Built-in tags cannot be changed";
 
 /// The database calls the manager events need, so a test can make one fail.

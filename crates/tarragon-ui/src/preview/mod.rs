@@ -33,7 +33,7 @@ pub const EMPTY_HINT: &str = "Select an image to preview it";
 /// What the panel asks the app to do.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PreviewEvent {
-    /// The user clicked this colour square.
+    /// The user clicked this color square.
     ColorClicked(Swatch),
     /// The user clicked the x on this tag: remove it from every selected image.
     TagRemoved(String),
@@ -60,15 +60,15 @@ pub struct Preview {
     mosaic_total: usize,
     /// How many mosaic pictures show at most.
     mosaic_cap: usize,
-    /// How many selected images carry each colour.
+    /// How many selected images carry each color.
     colors: ColorStates,
     /// The user tags of the selected images, in display order.
     tags: Vec<TagPill>,
-    /// Every known user tag name, for the "+ add" menu. Colour tags are left out.
+    /// Every known user tag name, for the "+ add" menu. Color tags are left out.
     known_tags: Vec<String>,
     /// Which part of the "+ add" control is open.
     add: add::AddState,
-    /// Whether the colour squares show; settings can turn colour tags off.
+    /// Whether the color squares show; settings can turn color tags off.
     colors_enabled: bool,
     /// Events not yet taken by the app.
     events: Vec<PreviewEvent>,
@@ -134,7 +134,7 @@ impl Preview {
         self.mosaic_cap = cap.max(1);
     }
 
-    /// Set how many selected images carry each colour, in `Swatch::ALL` order.
+    /// Set how many selected images carry each color, in `Swatch::ALL` order.
     pub fn set_colors(&mut self, colors: ColorStates) {
         self.colors = colors;
     }
@@ -150,12 +150,12 @@ impl Preview {
         self.known_tags = names;
     }
 
-    /// Show or hide the colour squares, to follow the colour tags setting.
+    /// Show or hide the color squares, to follow the color tags setting.
     pub fn set_colors_enabled(&mut self, enabled: bool) {
         self.colors_enabled = enabled;
     }
 
-    /// Whether the colour squares show.
+    /// Whether the color squares show.
     #[must_use]
     pub fn colors_enabled(&self) -> bool {
         self.colors_enabled

@@ -7,7 +7,7 @@ use tarragon_ui::gallery::{Gallery, TagRow};
 
 use super::{apply_change, colors_enabled};
 
-/// Set up the filter bar at startup: the colour row and the menu lists.
+/// Set up the filter bar at startup: the color row and the menu lists.
 pub fn init(gallery: &mut Gallery, db: &Database) {
     gallery.set_colors_enabled(colors_enabled(db));
     refresh_lists(gallery, db);

@@ -18,7 +18,7 @@ pub struct TagPill {
     pub state: ColorState,
 }
 
-/// The heading stays when the colour squares are hidden, because the pills
+/// The heading stays when the color squares are hidden, because the pills
 /// share it.
 pub fn show_heading(ui: &mut Ui) {
     ui.add_space(tokens::SPACING_S);

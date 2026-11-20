@@ -1,4 +1,4 @@
-//! A colour square: a bucket colour, or a checkerboard for transparency.
+//! A color square: a bucket color, or a checkerboard for transparency.
 //!
 //! The painter knows nothing about panels, so the Preview and Filter panels
 //! share it.
@@ -17,10 +17,10 @@ pub const FILTER_SIZE: f32 = 36.0;
 /// The side of one checkerboard cell, in points. A 24 pt square gets 4 by 4.
 pub const CHECKER_CELL: f32 = 6.0;
 
-/// Which colour a square shows.
+/// Which color a square shows.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Swatch {
-    /// One dominant-colour bucket.
+    /// One dominant-color bucket.
     Bucket(ColorBucket),
     /// Images with transparent pixels; drawn as a checkerboard.
     Transparent,
@@ -44,7 +44,7 @@ impl Swatch {
     ];
 }
 
-/// The theme colour of a bucket.
+/// The theme color of a bucket.
 #[must_use]
 pub const fn bucket_color(bucket: ColorBucket) -> Color32 {
     match bucket {

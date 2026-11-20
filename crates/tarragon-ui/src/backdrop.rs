@@ -13,7 +13,7 @@ const BACKDROP_ORDER: Order = Order::Middle;
 pub(crate) fn show(ctx: &Context, id: &'static str) {
     let area = Area::new(Id::new(id))
         .order(BACKDROP_ORDER)
-        // The dim layer holds its full colour from the first frame.
+        // The dim layer holds its full color from the first frame.
         .fade_in(false)
         .interactable(true)
         .sense(Sense::click_and_drag());

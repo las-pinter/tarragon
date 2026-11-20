@@ -21,7 +21,7 @@ const LUT_SIZE: usize = 256;
 /// The Rec. 601 grey weights, used by Threshold.
 const GREY_WEIGHTS: [f32; 3] = [0.299, 0.587, 0.114];
 
-/// The PDF luminance weights, used by the non-separable blend modes.
+/// The luminance weights of the non-separable blend modes.
 const LUMINANCE_WEIGHTS: [f32; 3] = [0.3, 0.59, 0.11];
 
 /// The pivot of the legacy Brightness/Contrast formula.
@@ -378,7 +378,7 @@ impl Adjustment {
     }
 }
 
-/// The PDF luminance weight of an RGB pixel.
+/// The luminance of an RGB pixel, as the non-separable blend modes weigh it.
 #[must_use]
 pub fn luminance(rgb: [f32; 3]) -> f32 {
     LUMINANCE_WEIGHTS[0] * rgb[0] + LUMINANCE_WEIGHTS[1] * rgb[1] + LUMINANCE_WEIGHTS[2] * rgb[2]

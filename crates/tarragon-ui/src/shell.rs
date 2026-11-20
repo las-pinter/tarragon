@@ -141,7 +141,7 @@ impl Shell {
         self.sidebar.take_events()
     }
 
-    /// The Preview panel, for the app to set the picture, colours, and tags.
+    /// The Preview panel, for the app to set the picture, colors, and tags.
     pub fn preview_mut(&mut self) -> &mut Preview {
         &mut self.preview
     }

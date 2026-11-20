@@ -256,7 +256,7 @@ fn paint_badge(
     );
 }
 
-/// The badge fill and text colours for a file extension.
+/// The badge fill and text colors for a file extension.
 ///
 /// The pairs follow `design/mockups/busy-states.html` lines 55-62: JPG sage,
 /// PNG navy, PSD vinous, WEBP teal, GIF plum, TIFF umber, BMP olive, KRA plum.

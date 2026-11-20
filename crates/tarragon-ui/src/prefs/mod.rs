@@ -28,13 +28,13 @@ pub struct PrefsValues {
     pub large_canvas_mp: f32,
     /// The tile grid size, such as `3x3`.
     pub tile_grid: String,
-    /// Whether the dominant colours of an image are computed.
+    /// Whether the dominant colors of an image are computed.
     pub color_tag_enabled: bool,
-    /// How many colours are kept for an image.
+    /// How many colors are kept for an image.
     pub palette_size: u32,
-    /// The smallest share of an image that a colour must cover.
+    /// The smallest share of an image that a color must cover.
     pub min_share: f32,
-    /// The saturation below which a colour counts as neutral.
+    /// The saturation below which a color counts as neutral.
     pub neutral_s: f32,
     /// The cache folder, or `None` for the default one.
     pub cache_dir: Option<String>,

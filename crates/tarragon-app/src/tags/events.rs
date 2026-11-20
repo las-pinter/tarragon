@@ -22,9 +22,9 @@ trait Store {
     fn user_tag_id(&self, name: &str) -> Result<Option<i64>, DbError>;
     /// Take the tag off every path.
     fn detach(&self, paths: &[String], tag_id: i64) -> Result<usize, DbError>;
-    /// The colour tag of this name, made when absent.
+    /// The color tag of this name, made when absent.
     fn ensure_auto(&self, name: &str) -> Result<Tag, DbError>;
-    /// The id of the colour tag of this name, when there is one.
+    /// The id of the color tag of this name, when there is one.
     fn auto_tag_id(&self, name: &str) -> Result<Option<i64>, DbError>;
     /// The tags of each path, keyed by the normalised path.
     fn file_tags(&self, paths: &[String]) -> Result<HashMap<String, Vec<Tag>>, DbError>;
@@ -159,10 +159,10 @@ fn remove_tag(store: &impl Store, name: &str, stored: &[String]) -> Result<bool,
     Ok(true)
 }
 
-/// Toggle the colour tag `name` on the selected files.
+/// Toggle the color tag `name` on the selected files.
 ///
-/// When every file holds the colour from the `AutoColor` source, it is taken
-/// off all of them. Otherwise it is put on all of them. Colour names are
+/// When every file holds the color from the `AutoColor` source, it is taken
+/// off all of them. Otherwise it is put on all of them. Color names are
 /// reserved, so the tag of this name is always the `AutoColor` tag.
 fn toggle_color(store: &impl Store, name: &str, stored: &[String]) -> Result<bool, String> {
     let by_file = store.file_tags(stored).map_err(|error| error.to_string())?;

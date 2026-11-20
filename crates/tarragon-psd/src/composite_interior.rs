@@ -11,9 +11,9 @@ use crate::composite::Compositor;
 /// The planes of one layer after its interior effects painted, over one
 /// viewport.
 pub(crate) struct LayerStage {
-    /// The layer colour with the interior effects painted in.
+    /// The layer color with the interior effects painted in.
     pub(crate) color: Vec<f32>,
-    /// The layer colour before the effects, when fill opacity is below one.
+    /// The layer color before the effects, when fill opacity is below one.
     pub(crate) own: Option<Vec<f32>>,
     /// The layer alpha after fill opacity.
     pub(crate) layer_alpha: Vec<f32>,
@@ -31,11 +31,11 @@ impl Compositor {
     /// Composite the layer and its interior effects, and return the alpha of
     /// the stack they add.
     ///
-    /// At full fill the painted colour goes through the layer blend as one
+    /// At full fill the painted color goes through the layer blend as one
     /// source. Below full fill, the layer pixels and the effects separate:
     ///
     /// - In a mode of the special eight, the layer pixels go through the fill
-    ///   blend, then the effect colour goes through the plain blend with the
+    ///   blend, then the effect color goes through the plain blend with the
     ///   effect alpha, so the effects keep full strength.
     /// - In any other mode, [`fold_interior`] joins them into one source.
     pub(crate) fn apply_layer_stage(&mut self, stage: LayerStage) -> Vec<f32> {
@@ -69,10 +69,10 @@ impl Compositor {
     }
 }
 
-/// The colour of the effects alone.
+/// The color of the effects alone.
 ///
-/// The painted colour is the layer colour mixed toward the effect colour by the
-/// effect alpha, so the effect colour is what remains. A pixel without an
+/// The painted color is the layer color mixed toward the effect color by the
+/// effect alpha, so the effect color is what remains. A pixel without an
 /// effect gets zero.
 fn effect_color(painted: &[f32], own: &[f32], effect_alpha: &[f32]) -> Vec<f32> {
     let mut effect = vec![0.0f32; painted.len()];
@@ -90,13 +90,13 @@ fn effect_color(painted: &[f32], own: &[f32], effect_alpha: &[f32]) -> Vec<f32> 
 
 /// Fold the interior effect alpha into the fill-scaled layer.
 ///
-/// The layer pixels have alpha `layer_alpha` (shape times fill) and colour
+/// The layer pixels have alpha `layer_alpha` (shape times fill) and color
 /// `own`. The effects, with alpha `effect_alpha`, sit over them. `color` holds
-/// the painted colour, which is `own` mixed toward the effect colour by the
-/// effect alpha. The result is the colour and alpha of the stacked layer. The
+/// the painted color, which is `own` mixed toward the effect color by the
+/// effect alpha. The result is the color and alpha of the stacked layer. The
 /// `over` plane becomes the alpha of that stack at full fill. With several
 /// effects or a non-normal effect blend mode, the effect blends over the layer
-/// colour, not over the real backdrop.
+/// color, not over the real backdrop.
 fn fold_interior(
     color: &mut [f32],
     own: &[f32],
@@ -168,7 +168,7 @@ mod tests {
     #[test]
     fn a_special_layer_at_fill_zero_still_blends_its_effect() {
         // Opaque backdrop, linear dodge, fill zero: the layer pixels add
-        // nothing and a full-strength effect adds its colour.
+        // nothing and a full-strength effect adds its color.
         let mut compositor = Compositor::new(
             1,
             1,

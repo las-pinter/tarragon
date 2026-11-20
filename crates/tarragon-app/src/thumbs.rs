@@ -284,7 +284,7 @@ impl Thumbs {
         (self.repaint)();
     }
 
-    /// The writer's store epoch. A change means new rows or colour tags are
+    /// The writer's store epoch. A change means new rows or color tags are
     /// committed.
     #[must_use]
     pub fn store_epoch(&self) -> u64 {

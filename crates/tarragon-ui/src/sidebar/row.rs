@@ -84,7 +84,7 @@ pub fn show_tree_row(ui: &mut Ui, row: &TreeRow, selected: bool, salt: usize) ->
     }
 }
 
-/// The fill, text, and icon colours of a folder row, from the mockup's selected and hover rules.
+/// The fill, text, and icon colors of a folder row, from the mockup's selected and hover rules.
 pub(super) fn row_colors(selected: bool, hovered: bool) -> (Color32, Color32, Color32) {
     if selected {
         (

@@ -136,7 +136,7 @@ pub struct Results {
 
 impl Results {
     /// A count that goes up after each writer pass that stored data. A change
-    /// means new rows or colour tags are committed.
+    /// means new rows or color tags are committed.
     #[must_use]
     pub fn store_epoch(&self) -> u64 {
         self.store_epoch.load(Ordering::Acquire)
@@ -212,7 +212,7 @@ impl Pipeline {
         Self::with_extract(config, db, repaint, extract_dominant_colors)
     }
 
-    /// Start the threads with a given colour extraction function.
+    /// Start the threads with a given color extraction function.
     fn with_extract(
         config: Config,
         db: Arc<Database>,

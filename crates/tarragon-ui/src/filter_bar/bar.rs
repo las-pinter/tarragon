@@ -1,4 +1,4 @@
-//! The filter bar: colour swatches, tags, and folders stacked in rows.
+//! The filter bar: color swatches, tags, and folders stacked in rows.
 
 use egui::{Frame, Margin, Ui};
 use tarragon_core::filter_bar::FilterBar;
@@ -16,11 +16,11 @@ const BAR_PAD: i8 = 4;
 /// 4 px.
 const INFO_PAD: f32 = 4.0;
 
-/// Draw the colour, tag, and folder rows and report what happened.
+/// Draw the color, tag, and folder rows and report what happened.
 ///
 /// `changed` is true when a filter changed. `opened` is true when a menu opened.
 ///
-/// `tags` and `folders` fill the menus. The colour row is empty when
+/// `tags` and `folders` fill the menus. The color row is empty when
 /// `colors_enabled` is false. The folder row is empty when it has no button and
 /// no chips. An empty row takes no height.
 pub fn show(

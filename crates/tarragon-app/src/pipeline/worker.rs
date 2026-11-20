@@ -36,7 +36,7 @@ pub(super) struct Shared {
     pub(super) extract: ColorFn,
 }
 
-/// The colour extraction function. Tests swap it to force a panic.
+/// The color extraction function. Tests swap it to force a panic.
 pub(super) type ColorFn = fn(&DynamicImage, ColorTagConfig) -> ColorTags;
 
 /// Releases the queue slot of a taken job when it drops, so every exit from
@@ -219,13 +219,13 @@ fn log_failure(path: &Path, error: &ThumbError) {
     }
 }
 
-/// Extract the colour tags of the 320 tier image and queue them for the
-/// writer. It sends nothing when colour tagging is off or the extraction
+/// Extract the color tags of the 320 tier image and queue them for the
+/// writer. It sends nothing when color tagging is off or the extraction
 /// panics; the thumbnail is not affected either way.
 fn send_colors(shared: &Shared, job: &Job, thumb: &DynamicImage) {
     let Some(config) = job.colors else { return };
     let Ok(tags) = catch_unwind(AssertUnwindSafe(|| (shared.extract)(thumb, config))) else {
-        tracing::warn!("colour extraction panicked for {}", job.path.display());
+        tracing::warn!("color extraction panicked for {}", job.path.display());
         return;
     };
     let path = tarragon_core::path_key::path_key(&job.path);

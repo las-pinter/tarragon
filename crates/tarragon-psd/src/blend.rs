@@ -1,8 +1,7 @@
 //! Photoshop blend modes for the layer compositor.
 //!
-//! The formulas follow Adobe's PDF blend-mode specification. Separable modes
-//! run per color channel. Non-separable modes convert to a luminance and
-//! saturation form. Dissolve is not a blend function; it falls back to normal.
+//! Separable modes run per color channel. Non-separable modes convert to a
+//! luminance and saturation form. Dissolve is not a blend function; it falls back to normal.
 //!
 //! All values are normalized `f32` in `0.0..=1.0`.
 //!
@@ -265,8 +264,9 @@ fn hard_light(cb: f32, cs: f32) -> f32 {
 
 /// Soft light on one channel.
 ///
-/// The `cs > 0.5` branch uses `sqrt(cb)` for every backdrop. The PDF/W3C form
-/// switches to a polynomial `D(cb)` when `cb <= 0.25`; this one does not.
+/// The `cs > 0.5` branch uses `sqrt(cb)` for every backdrop. The common
+/// formula switches to a polynomial `D(cb)` when `cb <= 0.25`; this one does
+/// not.
 #[must_use]
 fn soft_light(cb: f32, cs: f32) -> f32 {
     let d = cb.sqrt();
@@ -277,7 +277,7 @@ fn soft_light(cb: f32, cs: f32) -> f32 {
     }
 }
 
-/// The luminance weight of the PDF blend specification.
+/// The luminance of a color for the non-separable blend modes.
 #[must_use]
 fn luminance(c: [f32; 3]) -> f32 {
     0.3 * c[0] + 0.59 * c[1] + 0.11 * c[2]
@@ -339,7 +339,8 @@ fn set_luminance(c: [f32; 3], l: f32) -> [f32; 3] {
     clip_color([c[0] + d, c[1] + d, c[2] + d])
 }
 
-/// Set the saturation of `c` to `s`, following the PDF `SetSat` operator.
+/// Set the saturation of `c` to `s`: the channels keep their order and the
+/// spread between the largest and the smallest becomes `s`.
 #[must_use]
 fn set_saturation(c: [f32; 3], s: f32) -> [f32; 3] {
     let high = c[0].max(c[1]).max(c[2]);
@@ -401,7 +402,7 @@ pub fn blend_rgb(mode: BlendMode, backdrop: [f32; 3], source: [f32; 3]) -> [f32;
 /// Whether a layer fill below one changes the blend itself, not only the coverage.
 ///
 /// For these eight modes, Photoshop blends at full strength a source pulled
-/// toward the mode's neutral colour, and opacity then mixes the result in. Every
+/// toward the mode's neutral color, and opacity then mixes the result in. Every
 /// other mode takes fill as plain coverage.
 pub(crate) fn fill_is_special(mode: BlendMode) -> bool {
     matches!(
@@ -417,10 +418,10 @@ pub(crate) fn fill_is_special(mode: BlendMode) -> bool {
     )
 }
 
-/// The blend colour of a layer at fill `fill` (zero to one).
+/// The blend color of a layer at fill `fill` (zero to one).
 ///
 /// A mode outside the special eight, or a fill of one, gives [`blend_rgb`].
-/// Otherwise the source moves toward the neutral colour of the mode by the
+/// Otherwise the source moves toward the neutral color of the mode by the
 /// fill. Hard Mix has its own formula, which is the plain mode at fill one and
 /// the backdrop at fill zero.
 pub(crate) fn blend_rgb_fill(
@@ -603,7 +604,7 @@ mod tests {
         c.map(|v| f32::from(v) / 255.0)
     }
 
-    /// The blend colour of a source at the given fill over an opaque backdrop.
+    /// The blend color of a source at the given fill over an opaque backdrop.
     fn fill_result(mode: BlendMode, cb: [u8; 3], cs: [u8; 3], fill: f32) -> [f32; 3] {
         blend_rgb_fill(mode, unit(cb), unit(cs), fill)
     }
@@ -637,9 +638,9 @@ mod tests {
 
     #[test]
     fn fill_blend_matches_measured_values_at_half_fill() {
-        // The blend colour at fill 128/255 on backdrop (200,150,100), source (100,180,220).
-        // With the source weight at the fill, the final colour is the mix of the
-        // backdrop and the blend colour at opacity one, so the blend colour is the result.
+        // The blend color at fill 128/255 on backdrop (200,150,100), source (100,180,220).
+        // With the source weight at the fill, the final color is the mix of the
+        // backdrop and the blend color at opacity one, so the blend color is the result.
         let measured: [(BlendMode, [u8; 3]); 8] = [
             (BlendMode::ColorBurn, [176, 132, 88]),
             (BlendMode::LinearBurn, [122, 112, 82]),
@@ -675,7 +676,7 @@ mod tests {
             let none = blend_rgb_fill(mode, cb, cs, 0.0);
             assert!((0..3).all(|i| (none[i] - cb[i]).abs() < 1e-5), "{mode:?}");
         }
-        // A normal-coverage mode ignores the fill in the blend colour.
+        // A normal-coverage mode ignores the fill in the blend color.
         assert_eq!(
             blend_rgb_fill(BlendMode::Multiply, cb, cs, 0.3),
             blend_rgb(BlendMode::Multiply, cb, cs)

@@ -2,7 +2,7 @@
 //!
 //! When a saved value takes effect:
 //! - `debug`, `max_multi_preview`, and `color_tag_enabled` apply at once.
-//! - The other three colour settings apply at the next folder open.
+//! - The other three color settings apply at the next folder open.
 //! - `clear_full_res` is read at exit.
 //! - `cache_cap_gb` and `cache_dir` apply at the next start.
 //! - `cache_format`, `tile_grid`, `max_psd_workers`, and `large_canvas_mp` are

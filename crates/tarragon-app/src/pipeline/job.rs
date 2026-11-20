@@ -93,14 +93,14 @@ pub(super) struct Job {
     pub(super) uuid: String,
     /// A failure seen earlier for this exact stamp. It is not rendered again.
     pub(super) known_failure: Option<ThumbError>,
-    /// The colour tag config, or `None` when colour tagging is off.
+    /// The color tag config, or `None` when color tagging is off.
     pub(super) colors: Option<ColorTagConfig>,
-    /// True when a cache hit must still extract colours, because the path has
+    /// True when a cache hit must still extract colors, because the path has
     /// no `auto_color` tag yet. A render always extracts.
     pub(super) needs_colors: bool,
 }
 
-/// The colour tag state read once per open.
+/// The color tag state read once per open.
 #[derive(Debug, Default)]
 pub(super) struct ColorState {
     config: Option<ColorTagConfig>,
@@ -113,7 +113,7 @@ impl ColorState {
         let config = colortags::read_config(db);
         let colored = if config.is_some() {
             db.auto_colored_paths().unwrap_or_else(|error| {
-                tracing::warn!("cannot list the coloured paths: {error}");
+                tracing::warn!("cannot list the colored paths: {error}");
                 HashSet::new()
             })
         } else {

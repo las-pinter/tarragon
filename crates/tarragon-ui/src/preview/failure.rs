@@ -63,7 +63,7 @@ pub(super) fn show_card(ui: &mut Ui, failure: &PreviewFailure, events: &mut Vec<
         });
 }
 
-/// Caption-size text in the colour of the Metadata values.
+/// Caption-size text in the color of the Metadata values.
 fn detail(text: &str) -> RichText {
     RichText::new(text)
         .size(tokens::SIZE_CAPTION)

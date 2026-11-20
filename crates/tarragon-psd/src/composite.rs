@@ -444,7 +444,7 @@ impl Compositor {
     ///
     /// `over` is the source alpha before fill, and `alpha` is that alpha times
     /// the fill. `shape` is the coverage for the group planes. For the special
-    /// eight modes below full fill, the backdrop sees `over` as its weight and a source pulled toward the neutral colour; the
+    /// eight modes below full fill, the backdrop sees `over` as its weight and a source pulled toward the neutral color; the
     /// `alpha` plane only grows the result alpha. Any other mode takes the
     /// plain coverage path.
     pub(crate) fn apply_source_fill(

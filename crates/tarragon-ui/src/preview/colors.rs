@@ -1,4 +1,4 @@
-//! The row of colour squares: which colours the selected images carry.
+//! The row of color squares: which colors the selected images carry.
 
 use egui::Ui;
 
@@ -6,10 +6,10 @@ use super::PreviewEvent;
 use crate::swatch::{self, Swatch};
 use crate::tokens;
 
-/// How many of the selected images carry one colour.
+/// How many of the selected images carry one color.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum ColorState {
-    /// No selected image has the colour.
+    /// No selected image has the color.
     #[default]
     None,
     /// Some of them have it.

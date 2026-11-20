@@ -390,7 +390,7 @@ mod tests {
         }
     }
 
-    /// A `Clrt` stop with a location, midpoint and grey colour.
+    /// A `Clrt` stop with a location, midpoint and grey color.
     fn gradient_stop(location: i32, midpoint: i32, grey: f64) -> Value {
         Value::Descriptor(Descriptor {
             class_id: b"Clrt".to_vec(),
@@ -480,7 +480,7 @@ mod tests {
         };
         let (stops, midpoints, _) = parse_gradient_stops(&gradient);
         assert!((midpoints[0] - 0.25).abs() < 1e-6, "{midpoints:?}");
-        // The half-way colour lands at t = 0.25, not at t = 0.5.
+        // The half-way color lands at t = 0.25, not at t = 0.5.
         assert!((sample_stops(&stops, &midpoints, 0.25)[0] - 0.5).abs() < 1e-6);
     }
 

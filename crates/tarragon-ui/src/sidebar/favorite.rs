@@ -125,7 +125,7 @@ pub fn paint_lifted_row(ui: &Ui, label: &str, selected: bool, missing: bool, rec
     );
 }
 
-/// The text and icon colours: muted for a missing folder.
+/// The text and icon colors: muted for a missing folder.
 ///
 /// Muted text is the dimmest readable token, so a missing folder reads as gone.
 fn colors(missing: bool, text: Color32, icon: Color32) -> (Color32, Color32) {

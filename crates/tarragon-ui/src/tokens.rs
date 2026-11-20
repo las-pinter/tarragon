@@ -4,7 +4,7 @@
 //! doc comment names its stylesheet token, so the two stay traceable. The
 //! exceptions are `BUCKET_PINK`, `CHECKER_LIGHT`, `CHECKER_DARK`,
 //! `WINDOW_SIZE`, and `GALLERY_MIN_WIDTH`, which have no stylesheet row.
-//! Colours convert to `egui::Color32` at compile time.
+//! Colors convert to `egui::Color32` at compile time.
 
 use egui::Color32;
 
@@ -104,27 +104,27 @@ pub const BADGE_BG_NEUTRAL: Color32 = Color32::from_rgb(0x2a, 0x2a, 0x2a);
 /// `--badge-fg-neutral`: neutral badge text.
 pub const BADGE_FG_NEUTRAL: Color32 = Color32::from_rgb(0xa8, 0xa5, 0xb0);
 
-/// `--bucket-red`: red colour bucket.
+/// `--bucket-red`: red color bucket.
 pub const BUCKET_RED: Color32 = Color32::from_rgb(0xe7, 0x4c, 0x3c);
-/// `--bucket-orange`: orange colour bucket.
+/// `--bucket-orange`: orange color bucket.
 pub const BUCKET_ORANGE: Color32 = Color32::from_rgb(0xf3, 0x9c, 0x12);
-/// `--bucket-yellow`: yellow colour bucket.
+/// `--bucket-yellow`: yellow color bucket.
 pub const BUCKET_YELLOW: Color32 = Color32::from_rgb(0xf1, 0xc4, 0x0f);
-/// `--bucket-green`: green colour bucket.
+/// `--bucket-green`: green color bucket.
 pub const BUCKET_GREEN: Color32 = Color32::from_rgb(0x27, 0xae, 0x60);
-/// `--bucket-teal`: teal colour bucket.
+/// `--bucket-teal`: teal color bucket.
 pub const BUCKET_TEAL: Color32 = Color32::from_rgb(0x1a, 0xbc, 0x9c);
-/// `--bucket-cyan`: cyan colour bucket.
+/// `--bucket-cyan`: cyan color bucket.
 pub const BUCKET_CYAN: Color32 = Color32::from_rgb(0x00, 0xbc, 0xd4);
-/// `--bucket-blue`: blue colour bucket.
+/// `--bucket-blue`: blue color bucket.
 pub const BUCKET_BLUE: Color32 = Color32::from_rgb(0x34, 0x98, 0xdb);
-/// `--bucket-purple`: purple colour bucket.
+/// `--bucket-purple`: purple color bucket.
 pub const BUCKET_PURPLE: Color32 = Color32::from_rgb(0x9b, 0x59, 0xb6);
-/// `--bucket-magenta`: magenta colour bucket.
+/// `--bucket-magenta`: magenta color bucket.
 pub const BUCKET_MAGENTA: Color32 = Color32::from_rgb(0xe9, 0x1e, 0x63);
-/// `--bucket-pink`: pink colour bucket. The stylesheet has no pink row.
+/// `--bucket-pink`: pink color bucket. The stylesheet has no pink row.
 pub const BUCKET_PINK: Color32 = Color32::from_rgb(0xff, 0x80, 0xab);
-/// `--bucket-neutral`: neutral colour bucket.
+/// `--bucket-neutral`: neutral color bucket.
 pub const BUCKET_NEUTRAL: Color32 = Color32::from_rgb(0x7f, 0x8c, 0x8d);
 
 /// Error text under a tag name field. No stylesheet row.

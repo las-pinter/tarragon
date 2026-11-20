@@ -30,7 +30,7 @@ pub enum LogLevel {
 }
 
 impl LogLevel {
-    /// The text colour for this level.
+    /// The text color for this level.
     #[must_use]
     pub fn color(self) -> Color32 {
         match self {
@@ -45,7 +45,7 @@ impl LogLevel {
 /// One preformatted log line.
 #[derive(Clone, Copy, Debug)]
 pub struct LogLine<'a> {
-    /// The severity, which picks the colour.
+    /// The severity, which picks the color.
     pub level: LogLevel,
     /// The full line text, for example `[21:04:02] INFO     scan: done`.
     pub text: &'a str,

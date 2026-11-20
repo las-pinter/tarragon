@@ -1,4 +1,4 @@
-//! Colour tag settings and names for the colour tagging step.
+//! Color tag settings and names for the color tagging step.
 
 use tarragon_core::color::TRANSPARENT_TAG;
 use tarragon_db::Database;
@@ -8,9 +8,9 @@ use tarragon_ui::swatch::Swatch;
 
 use crate::filtering::colors_enabled;
 
-/// Read the colour tag config from the settings.
+/// Read the color tag config from the settings.
 ///
-/// Returns `None` when colour tagging is off. A setting that cannot be read
+/// Returns `None` when color tagging is off. A setting that cannot be read
 /// gives the default for that field and is logged.
 pub fn read_config(db: &Database) -> Option<ColorTagConfig> {
     if !colors_enabled(db) {
@@ -47,7 +47,7 @@ pub fn tag_names(tags: &ColorTags) -> Vec<String> {
     names
 }
 
-/// Return the tag name of one colour square.
+/// Return the tag name of one color square.
 pub fn swatch_name(swatch: Swatch) -> &'static str {
     match swatch {
         Swatch::Bucket(bucket) => bucket.as_str(),

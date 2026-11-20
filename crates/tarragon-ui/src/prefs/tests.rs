@@ -266,7 +266,7 @@ fn the_footnote_names_when_changes_apply_and_the_unread_settings() {
     let texts = frame(&ctx, &mut prefs, vec![]);
     let note = texts
         .iter()
-        .find(|(t, _, _)| t.starts_with("Colour tagging changes"))
+        .find(|(t, _, _)| t.starts_with("Color tagging changes"))
         .expect("the footnote");
     assert!(note.0.contains("next folder open"), "{}", note.0);
     assert!(

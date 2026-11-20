@@ -311,7 +311,7 @@ fn decode_utf16be(data: &[u8]) -> Option<String> {
     let count = u32::from_be_bytes(data.get(..4)?.try_into().ok()?);
     let count = usize::try_from(count).ok()?;
     let byte_count = count.checked_mul(2)?;
-    let units = data.get(4..4 + byte_count)?;
+    let units = data.get(4..byte_count.checked_add(4)?)?;
     let units: Vec<u16> = units
         .as_chunks::<2>()
         .0

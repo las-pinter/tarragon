@@ -133,7 +133,7 @@ impl PrevKeys {
 
 /// Take the Ctrl+V that pastes.
 ///
-/// This leans on egui-winit 0.36 (lib.rs:1020-1043): it turns the Ctrl+V press
+/// This leans on egui-winit 0.36: it turns the Ctrl+V press
 /// into a paste event, so only the V release comes as a key event. That release
 /// has no V press before it, here or in an earlier frame. Ctrl was held
 /// shortly before it, in this frame or an earlier one, and never with Shift or
@@ -192,7 +192,7 @@ fn take_swallowed_paste(ctx: &Context, prev: PrevKeys) -> bool {
 
 /// Take the Ctrl+C that copies.
 ///
-/// This leans on egui-winit 0.36 (lib.rs:1024-1026): it turns Ctrl+C, and also
+/// This leans on egui-winit 0.36: it turns Ctrl+C, and also
 /// Ctrl+Shift+C and Ctrl+Alt+C, into a copy event with no modifiers. So the
 /// modifiers stand where the event stands: exactly Command at the start of the
 /// frame, or after the last event before it. Ctrl may go up later in the same

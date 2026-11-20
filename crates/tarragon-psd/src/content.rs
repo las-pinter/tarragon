@@ -96,8 +96,8 @@ impl GradientFill {
         let center_x = x0 + width / 2.0 + self.offset.0 * width;
         let center_y = y0 + height / 2.0 + self.offset.1 * height;
         // The first and last pixel centers sit on the ends of the frame, so the
-        // end pixels hold the end stop colors. This is the psd-tools mapping:
-        // a frame `n` pixels wide spans `n - 1` steps between pixel centers.
+        // end pixels hold the end stop colors: a frame `n` pixels wide spans
+        // `n - 1` steps between pixel centers.
         // The guard keeps a one pixel frame at a factor of one. It assumes
         // integer frame sizes.
         let (dx, dy) = (

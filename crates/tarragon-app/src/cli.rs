@@ -82,7 +82,7 @@ pub fn help_text() -> String {
          FOLDER      open this folder and show its thumbnails\n\n\
          options:\n  \
          -h, --help  show this help message and exit\n  \
-         --version   Show the version and exit.\n"
+         --version   show the version and exit\n"
     )
 }
 

@@ -48,7 +48,7 @@ impl Pipeline {
         let jobs = library_jobs(
             &rows,
             generation,
-            |parent| ids.get(parent).cloned().unwrap_or_default(),
+            |parent| ids.get(parent).cloned(),
             &self.failures,
             &ColorState::read(&self.db),
         );
@@ -88,15 +88,16 @@ impl Pipeline {
 ///
 /// The stamp comes from the row: a `stat` for every file would stall a large
 /// library. `uuid_of` gets the text of a parent folder, once per folder. It
-/// runs with no lock held.
+/// runs with no lock held. A file whose folder has no cache id gets no job,
+/// so no cache file lands in a folder with an empty name.
 pub(super) fn library_jobs(
     files: &[LibraryFile],
     generation: u64,
-    mut uuid_of: impl FnMut(&str) -> String,
+    mut uuid_of: impl FnMut(&str) -> Option<String>,
     failures: &Failures,
     color_state: &ColorState,
 ) -> Vec<Job> {
-    let mut uuids: HashMap<&str, String> = HashMap::new();
+    let mut uuids: HashMap<&str, Option<String>> = HashMap::new();
     for file in files {
         let parent = parent_of(&file.path);
         uuids.entry(parent).or_insert_with(|| uuid_of(parent));
@@ -106,14 +107,17 @@ pub(super) fn library_jobs(
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     files
         .iter()
-        .map(|file| {
+        .filter_map(|file| {
+            let parent = parent_of(&file.path);
+            let Some(uuid) = uuids[parent].clone() else {
+                tracing::warn!("no cache folder id for {parent}; its files get no thumbnails");
+                return None;
+            };
             let stamp = SourceStamp {
                 mtime: file.mtime,
                 size: u64::try_from(file.size).unwrap_or(0),
             };
             let path = PathBuf::from(&file.path);
-            let parent = parent_of(&file.path);
-            let uuid = uuids[parent].clone();
             let folder = Path::new(parent).file_name().map_or_else(
                 || "root".to_owned(),
                 |name| name.to_string_lossy().into_owned(),
@@ -123,7 +127,7 @@ pub(super) fn library_jobs(
                 .filter(|(failed, _)| *failed == stamp)
                 .map(|(_, error)| error.clone());
             let (colors, needs_colors) = color_state.for_path(&file.path);
-            Job {
+            Some(Job {
                 generation,
                 path,
                 stamp,
@@ -133,7 +137,7 @@ pub(super) fn library_jobs(
                 known_failure,
                 colors,
                 needs_colors,
-            }
+            })
         })
         .collect()
 }

@@ -29,7 +29,7 @@ fn one_job_per_row_in_order_with_the_generation() {
     let jobs = library_jobs(
         &files,
         9,
-        |_| "u".to_owned(),
+        |_| Some("u".to_owned()),
         &no_failures(),
         &ColorState::default(),
     );
@@ -58,7 +58,7 @@ fn uuid_of_runs_once_per_parent_folder() {
         1,
         |parent| {
             calls.push(parent.to_owned());
-            format!("id-{parent}")
+            Some(format!("id-{parent}"))
         },
         &no_failures(),
         &ColorState::default(),
@@ -74,7 +74,7 @@ fn only_a_cached_row_has_a_stored_stamp() {
     let jobs = library_jobs(
         &files,
         1,
-        |_| String::new(),
+        |_| Some(String::new()),
         &no_failures(),
         &ColorState::default(),
     );
@@ -94,7 +94,7 @@ fn folder_is_the_parent_name_or_root() {
     let jobs = library_jobs(
         &files,
         1,
-        |_| String::new(),
+        |_| Some(String::new()),
         &no_failures(),
         &ColorState::default(),
     );
@@ -123,7 +123,7 @@ fn a_known_failure_needs_a_matching_stamp() {
     let jobs = library_jobs(
         &files,
         1,
-        |_| String::new(),
+        |_| Some(String::new()),
         &failures,
         &ColorState::default(),
     );
@@ -142,7 +142,7 @@ fn edge_rows_get_a_zero_size_and_the_root_folder() {
         1,
         |parent| {
             calls.push(parent.to_owned());
-            String::new()
+            Some(String::new())
         },
         &no_failures(),
         &ColorState::default(),
@@ -151,4 +151,18 @@ fn edge_rows_get_a_zero_size_and_the_root_folder() {
     assert_eq!(calls, ["/a", "/", ""]);
     assert_eq!(jobs[1].folder, "root");
     assert_eq!(jobs[2].folder, "root");
+}
+
+#[test]
+fn a_file_whose_folder_has_no_id_gets_no_job() {
+    let files = [file("/a/1.png", true), file("/b/2.png", true)];
+    let jobs = library_jobs(
+        &files,
+        1,
+        |parent| (parent == "/a").then(|| "id-a".to_owned()),
+        &no_failures(),
+        &ColorState::default(),
+    );
+    assert_eq!(jobs.len(), 1);
+    assert_eq!(jobs[0].uuid, "id-a");
 }

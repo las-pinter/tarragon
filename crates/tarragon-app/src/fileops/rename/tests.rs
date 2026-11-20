@@ -279,6 +279,22 @@ fn a_new_name_over_the_limit_by_a_trailing_dot_is_refused() {
     assert_eq!(fits.file_name().expect("name").len(), 255);
 }
 
+#[cfg(unix)]
+#[test]
+fn a_name_that_is_not_text_is_refused_and_says_why() {
+    use std::os::unix::ffi::OsStrExt;
+
+    let fx = Fixture::new();
+    let old = fx.folder.join(std::ffi::OsStr::from_bytes(b"a\xff.png"));
+    fs::write(&old, b"x").expect("write the file");
+
+    let error = rename(&fx.db, &fx.cache, &old, "b").expect_err("bad name");
+
+    assert!(matches!(error, FileOpError::InvalidName(_)), "{error}");
+    assert!(error.to_string().contains("not valid text"), "{error}");
+    assert!(old.exists());
+}
+
 #[test]
 fn old_tier_files_and_stale_row_tier_files_are_deleted_after_success() {
     let fx = Fixture::new();

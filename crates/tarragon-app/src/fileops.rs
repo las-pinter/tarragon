@@ -20,8 +20,12 @@ pub enum FileOpError {
     /// The source is not a regular file.
     #[error("{} is not a regular file", .0.display())]
     NotAFile(PathBuf),
-    /// The source has no name, or its name is not valid UTF-8.
-    #[error("{} has no usable file name", .0.display())]
+    /// The source has no name, or its name is not valid UTF-8. Such a file
+    /// still shows in the gallery; only the file operations refuse it.
+    #[error(
+        "the name of {} is not valid text, so it can be shown but not copied or renamed",
+        .0.display()
+    )]
     InvalidName(PathBuf),
     /// The copy name has more bytes than a file name may have.
     #[error("the copy name is {len} bytes, more than the {max} allowed")]

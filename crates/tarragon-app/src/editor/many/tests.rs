@@ -207,6 +207,27 @@ fn a_timed_out_query_ends_all_lookups_and_keeps_one_start_per_file() {
 }
 
 #[test]
+fn a_hanging_query_is_asked_once_and_the_rest_skip_the_lookup() {
+    // A deadline long enough for the script to log its call on a loaded
+    // machine, so exactly one query must show.
+    let fixture = Fixture::new(Duration::from_millis(1500));
+    fixture.program(
+        "xdg-mime",
+        &format!(
+            "echo call >> {}\nexec sleep 10",
+            fixture.dir.0.join("mime.log").display()
+        ),
+    );
+    fixture.opener();
+    let start = Instant::now();
+    let report = fixture.open(&["/a/1.png", "/a/2.jpg", "/a/3.psd"]);
+    assert!(start.elapsed() < Duration::from_secs(5));
+    assert_eq!(report.failed, 0);
+    assert_eq!(fixture.lines("open.log", 3), ["1", "1", "1"]);
+    assert_eq!(fixture.lines("mime.log", 1), ["call"]);
+}
+
+#[test]
 fn a_files_row_starts_once_with_all_paths() {
     let fixture = Fixture::new(LONG);
     fixture.app("gimp");

@@ -234,3 +234,32 @@ fn a_file_deleted_during_its_render_keeps_no_row() {
     assert!(rows.iter().all(|row| !row.path.ends_with("b.png")));
     assert_eq!(rows.len(), 1);
 }
+
+#[test]
+fn a_failed_row_delete_keeps_the_rows_and_the_cache_files() {
+    let calls = Arc::default();
+    let mut setup = start(TempDir::new(), 2, counting_render(&calls));
+    let folder = setup.dir.sub("pics");
+    open_files(&mut setup, &folder, &["a.png", "b.png"]);
+    let before = stored(&setup.db, &folder);
+    let gone = &before[0];
+    let gone_files = cache_files(gone);
+    // A second connection makes every row delete fail.
+    let other = rusqlite::Connection::open(setup.dir.0.join("test.db")).expect("open");
+    other
+        .execute_batch(
+            "CREATE TRIGGER keep BEFORE DELETE ON thumbnails \
+             BEGIN SELECT RAISE(ABORT, 'kept'); END;",
+        )
+        .expect("add the trigger");
+
+    std::fs::remove_file(&gone.path).expect("delete the source");
+    open_again(&mut setup, &folder, 1);
+
+    let after = stored(&setup.db, &folder);
+    assert_eq!(after.len(), 2, "the failed delete keeps every row");
+    assert!(
+        gone_files.iter().all(|file| file.exists()),
+        "the rows still point at the cache files, so they stay"
+    );
+}

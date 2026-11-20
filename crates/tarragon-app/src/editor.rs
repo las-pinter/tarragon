@@ -179,22 +179,14 @@ fn open_system_with_path(target: &Path, path: Option<&OsStr>) -> Result<(), Open
     })
 }
 
-/// Start the program of `launch` and return at once.
+/// Start the program of `launch` and return at once, with an optional `PATH`
+/// for the child.
 ///
 /// A small thread waits for the child, so it does not stay a zombie.
 ///
 /// # Errors
 ///
 /// Returns the error of the failed process start.
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "`open` starts the child through the path form")
-)]
-pub fn spawn(launch: &Launch) -> io::Result<()> {
-    spawn_with_path(launch, None)
-}
-
-/// [`spawn`] with an optional `PATH` for the child.
 fn spawn_with_path(launch: &Launch, path: Option<&OsStr>) -> io::Result<()> {
     let mut command = Command::new(&launch.program);
     add_args(&mut command, launch);

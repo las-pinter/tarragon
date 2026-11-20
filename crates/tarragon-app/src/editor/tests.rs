@@ -147,7 +147,7 @@ fn spawn_of_a_missing_program_is_not_found() {
         program: "tarragon-no-such-editor".into(),
         args: vec![],
     };
-    let error = spawn(&launch).expect_err("must fail");
+    let error = spawn_with_path(&launch, None).expect_err("must fail");
     assert_eq!(error.kind(), io::ErrorKind::NotFound);
 }
 
@@ -181,13 +181,13 @@ fn spawn_returns_before_the_child_ends() {
         args: os(&["-c", "sleep 1"]),
     };
     let start = std::time::Instant::now();
-    spawn(&launch).expect("spawn");
+    spawn_with_path(&launch, None).expect("spawn");
     assert!(start.elapsed() < std::time::Duration::from_millis(500));
     let launch = Launch {
         program: "true".into(),
         args: vec![],
     };
-    spawn(&launch).expect("spawn true");
+    spawn_with_path(&launch, None).expect("spawn true");
 }
 
 #[cfg(unix)]

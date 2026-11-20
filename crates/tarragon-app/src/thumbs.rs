@@ -198,10 +198,13 @@ impl Thumbs {
     /// running open is over, then opens. A request for the folder that is
     /// opening, or for the shown folder while nothing opens, cancels any
     /// waiting request and does nothing else. A request equal to the waiting
-    /// one does nothing. The caller passes a normalized path.
+    /// one does nothing. The caller passes a normalized path. Without a
+    /// pipeline nothing could take the request, so it is dropped; a kept
+    /// request would hold the busy strip on for good.
     pub fn navigate(&mut self, folder: PathBuf) {
         if matches!(self.slot, Slot::Gone) {
             tracing::warn!("the pipeline is gone; {} cannot open", folder.display());
+            return;
         }
         let settled = match &self.slot {
             Slot::Opening { target, .. } => {
@@ -300,8 +303,12 @@ impl Thumbs {
     /// Ask for the whole library in the gallery. It does nothing while the
     /// library is loaded, asked for, or loading, or when the last open failed.
     /// A folder request goes first, and a later folder open drops the library
-    /// again.
+    /// again. Without a pipeline it does nothing, as [`Thumbs::navigate`].
     pub fn show_library(&mut self) {
+        if matches!(self.slot, Slot::Gone) {
+            tracing::warn!("the pipeline is gone; the library cannot open");
+            return;
+        }
         let loading = matches!(
             &self.slot,
             Slot::Opening {

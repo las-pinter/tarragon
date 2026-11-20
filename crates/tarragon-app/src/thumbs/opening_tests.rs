@@ -59,3 +59,16 @@ fn a_purge_is_not_an_open() {
     assert!(!rig.thumbs.is_opening());
     assert_eq!(rig.gallery.empty_kind(), Some(EmptyKind::NoFolder));
 }
+
+#[test]
+fn requests_without_a_pipeline_leave_no_busy_strip() {
+    let mut rig = Rig::new("opening-gone", None);
+    let folder = rig.folder("one", &["a.png"]);
+    rig.thumbs.slot = Slot::Gone;
+    rig.thumbs.navigate(folder.clone());
+    rig.thumbs.reload_folder(folder);
+    rig.thumbs.show_library();
+    assert!(!rig.thumbs.is_busy());
+    rig.thumbs.before_draw(&rig.ctx, &mut rig.gallery);
+    assert!(!rig.thumbs.is_busy());
+}

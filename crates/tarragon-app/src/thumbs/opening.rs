@@ -32,6 +32,10 @@ impl Thumbs {
     /// Open `folder` again, also when it is the shown folder, so the tiles
     /// follow a change on disk. A newer request replaces it.
     pub(crate) fn reload_folder(&mut self, folder: PathBuf) {
+        if matches!(self.slot, Slot::Gone) {
+            tracing::warn!("the pipeline is gone; {} cannot reload", folder.display());
+            return;
+        }
         self.pending = Some(folder);
         if self.library == Library::Failed {
             self.library = Library::Absent;

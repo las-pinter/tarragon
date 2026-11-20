@@ -117,7 +117,7 @@ pub(crate) fn parse_with(
     // resources. The walk skips every other block by seeking, so a large block
     // is never read.
     let mut resources = Window::new(source, window.pos(), window.pos() + resources_length);
-    let image_resources = read_resources(&mut resources)?;
+    let image_resources = read_resources(&mut resources, options)?;
     window.skip(resources_length)?;
 
     // Layer and mask information. The section length bounds every layer read.

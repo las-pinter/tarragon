@@ -11,6 +11,7 @@
 
 use crate::effects::GlobalLight;
 use crate::error::PsdError;
+use crate::limits::ParseOptions;
 use crate::reader::{Reader, to_usize};
 use crate::window::Window;
 
@@ -37,6 +38,10 @@ pub(crate) struct ImageResources {
 /// length byte and pad, and the data length.
 const MAX_HEAD: usize = 4 + 2 + 1 + 255 + 1 + 4;
 
+/// How many blocks are walked between two cancel and deadline checks. A
+/// block takes at least 12 bytes, so a large section holds millions.
+const CHECK_EVERY: usize = 256;
+
 /// Read the global light and the merged data flag from the image resources.
 ///
 /// The window covers the section. Each block is walked by its head and its
@@ -47,12 +52,21 @@ const MAX_HEAD: usize = 4 + 2 + 1 + 255 + 1 + 4;
 ///
 /// # Errors
 ///
-/// Only a failed read of the source is an error. A malformed block ends the
-/// walk and keeps the values read so far.
-pub(crate) fn read_resources(window: &mut Window) -> Result<ImageResources, PsdError> {
+/// A failed read of the source is an error, and so are a cancel and an
+/// expired deadline, checked every [`CHECK_EVERY`] blocks. A malformed block
+/// ends the walk and keeps the values read so far.
+pub(crate) fn read_resources(
+    window: &mut Window,
+    options: &ParseOptions,
+) -> Result<ImageResources, PsdError> {
     let mut light = GlobalLight::default();
     let mut has_real_merged_data = None;
+    let mut blocks = 0usize;
     while window.remaining() >= 12 {
+        if blocks.is_multiple_of(CHECK_EVERY) {
+            options.check()?;
+        }
+        blocks += 1;
         let count = to_usize(window.remaining().min(MAX_HEAD as u64))?;
         let start = window.pos();
         let slice = window.peek(count, true)?;
@@ -114,4 +128,49 @@ fn read_block_head(reader: &mut Reader<'_>) -> Result<u32, PsdError> {
 )]
 fn degrees_of(raw: &[u8]) -> f32 {
     i32::from_be_bytes([raw[0], raw[1], raw[2], raw[3]]) as f32
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+    use std::sync::atomic::AtomicBool;
+
+    use super::{CHECK_EVERY, read_resources};
+    use crate::error::PsdError;
+    use crate::limits::ParseOptions;
+    use crate::source::Source;
+    use crate::window::Window;
+
+    /// `count` empty `8BIM` blocks with an unknown id and an empty name.
+    fn blocks(count: usize) -> Vec<u8> {
+        let mut data = Vec::new();
+        for _ in 0..count {
+            data.extend_from_slice(b"8BIM");
+            data.extend_from_slice(&1u16.to_be_bytes());
+            data.extend_from_slice(&[0, 0]);
+            data.extend_from_slice(&0u32.to_be_bytes());
+        }
+        data
+    }
+
+    fn walk(data: Vec<u8>, options: &ParseOptions) -> Result<(), PsdError> {
+        let source = Source::memory(data);
+        let mut window = Window::new(&source, 0, source.len());
+        read_resources(&mut window, options).map(|_| ())
+    }
+
+    #[test]
+    fn a_cancel_stops_the_walk_over_many_blocks() {
+        let flag = Arc::new(AtomicBool::new(true));
+        let options = ParseOptions::default().with_cancel(flag);
+        let result = walk(blocks(CHECK_EVERY * 3), &options);
+        assert!(matches!(result, Err(PsdError::Cancelled)), "{result:?}");
+    }
+
+    #[test]
+    fn a_walk_without_a_cancel_reads_every_block() {
+        let flag = Arc::new(AtomicBool::new(false));
+        let options = ParseOptions::default().with_cancel(flag);
+        assert!(walk(blocks(CHECK_EVERY * 3), &options).is_ok());
+    }
 }

@@ -190,3 +190,15 @@ fn the_refresh_is_due_once_per_selection_change() {
     assert!(selection_changed(&mut seen, 2));
     assert_eq!(seen, 2);
 }
+
+#[cfg(windows)]
+#[test]
+fn a_refresh_reads_the_rows_by_their_forward_slash_key() {
+    let mut preview = preview();
+    let mut asked = Vec::new();
+    refresh_with(&mut preview, &[PathBuf::from(r"C:\pics\a.png")], |keys| {
+        asked = keys.to_vec();
+        Ok((std::collections::HashMap::new(), Vec::new()))
+    });
+    assert_eq!(asked, ["C:/pics/a.png"]);
+}

@@ -47,7 +47,7 @@ fn refresh_with(
 ) {
     let stored: Vec<String> = paths
         .iter()
-        .map(|path| path.to_string_lossy().into_owned())
+        .map(|path| tarragon_core::path_key::path_key(path))
         .collect();
     match read(&stored) {
         Ok((by_file, all)) => {

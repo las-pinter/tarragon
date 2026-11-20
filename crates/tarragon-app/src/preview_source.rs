@@ -59,7 +59,7 @@ pub(crate) fn read(db: &Database, selected: &[PathBuf], cap: usize) -> Source {
 
 /// The row of `path`. A failed read is logged and gives `None`.
 fn lookup(db: &Database, path: &Path) -> Option<Thumbnail> {
-    match db.thumbnail(&path.to_string_lossy()) {
+    match db.thumbnail(&tarragon_core::path_key::path_key(path)) {
         Ok(row) => row,
         Err(error) => {
             tracing::warn!("cannot read the row of {}: {error}", path.display());

@@ -109,7 +109,7 @@ fn refresh_after_write(shell: &mut Shell, db: &Database) {
 fn write_events(store: &impl Store, paths: &[PathBuf], events: Vec<PreviewEvent>) -> bool {
     let stored: Vec<String> = paths
         .iter()
-        .map(|path| path.to_string_lossy().into_owned())
+        .map(|path| tarragon_core::path_key::path_key(path))
         .collect();
     // No file, no write: a tag made for nothing would only clutter the lists.
     if stored.is_empty() {

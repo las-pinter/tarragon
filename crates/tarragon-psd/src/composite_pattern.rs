@@ -70,13 +70,24 @@ impl Placement {
 
 impl PatternTile {
     /// The premultiplied pixel at a wrapped integer position.
+    ///
+    /// The pattern parser rejects an empty pattern, but a tile with no pixels
+    /// or too few for its size still reads as transparent instead of failing.
     fn wrapped(&self, x: i64, y: i64) -> [f32; 4] {
         let width = i64::from(self.width);
         let height = i64::from(self.height);
+        if width == 0 || height == 0 {
+            return [0.0; 4];
+        }
         // The wrapped values are below the tile edges, so they fit a usize.
         let column = usize::try_from(x.rem_euclid(width)).unwrap_or(0);
         let row = usize::try_from(y.rem_euclid(height)).unwrap_or(0);
-        let pixel = self.pixels[row * self.width as usize + column];
+        let index = usize::try_from(self.width)
+            .ok()
+            .and_then(|width| row.checked_mul(width)?.checked_add(column));
+        let Some(pixel) = index.and_then(|index| self.pixels.get(index)) else {
+            return [0.0; 4];
+        };
         pixel.map(|value| f32::from(value) / 65_535.0)
     }
 
@@ -164,5 +175,30 @@ impl Compositor {
             }
         }
         Ok((color, shape))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::patterns::PatternTile;
+
+    #[test]
+    fn an_empty_tile_samples_as_transparent() {
+        let tile = PatternTile {
+            width: 0,
+            height: 0,
+            pixels: Vec::new(),
+        };
+        assert_eq!(tile.sample(3.25, -7.5), [0.0; 4]);
+    }
+
+    #[test]
+    fn a_tile_short_of_pixels_samples_as_transparent() {
+        let tile = PatternTile {
+            width: 4,
+            height: 4,
+            pixels: vec![[65_535; 4]; 2],
+        };
+        assert_eq!(tile.sample(3.5, 3.5), [0.0; 4]);
     }
 }

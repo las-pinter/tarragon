@@ -1,7 +1,8 @@
 //! Cache purge and the `clear_full_res_on_exit` rule.
 //!
 //! The manual purge deletes the three tier folders under the cache root and
-//! nothing else. The caller
+//! nothing else. A tier folder counts only when it holds the format marker
+//! that the store writes, so a user folder named like a tier stays. The caller
 //! cancels the pending renders and drains the worker pool first, so no render
 //! writes while the purge deletes. The cache links of the rows are reset in a
 //! separate call, because the cache crate cannot reach the database.
@@ -164,6 +165,11 @@ impl CacheStore {
                     source,
                 });
             }
+        }
+        // A folder that only shares a tier name, with no format marker, was not
+        // made by the store and may hold user files, so it stays.
+        if !self.marker_path(tier).is_file() {
+            return Ok(PurgeOutcome::default());
         }
         let (files_removed, bytes_removed) = remove_tree_contents(&tier_dir)?;
         Ok(PurgeOutcome {

@@ -29,6 +29,13 @@ fn write_tiers(root: &Path, name: &str, len: u64) -> [PathBuf; 3] {
         let file = std::fs::File::create(path).expect("create a tier file");
         file.set_len(len).expect("size a tier file");
     }
+    // A store write leaves the format marker in each tier folder.
+    for tier in tarragon_core::tier::Tier::ALL {
+        let marker = root
+            .join(tier.as_str())
+            .join(tarragon_cache::store::FORMAT_MARKER);
+        std::fs::write(marker, b"1").expect("mark a tier folder");
+    }
     paths
 }
 

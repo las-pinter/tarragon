@@ -148,6 +148,7 @@ fn purge_unlinks_a_broken_symlink() {
     let store = CacheStore::new(temp.path());
     let tier = temp.path().join("320");
     std::fs::create_dir_all(&tier).expect("make the tier folder");
+    std::fs::write(tier.join(crate::store::FORMAT_MARKER), b"1").expect("mark the tier");
     let link = tier.join("broken.jpg");
     symlink(temp.path().join("does-not-exist.jpg"), &link).expect("make the broken link");
 
@@ -173,14 +174,15 @@ fn purge_unlinks_a_directory_symlink_to_an_outside_directory() {
     std::fs::write(&victim_file, b"keep me").expect("write the outside file");
     let tier = temp.path().join("320");
     std::fs::create_dir_all(&tier).expect("make the tier folder");
+    std::fs::write(tier.join(crate::store::FORMAT_MARKER), b"1").expect("mark the tier");
     let link = tier.join("dir-link");
     symlink(&victim_dir, &link).expect("make the directory link");
 
     let outcome = store.purge(None).expect("purge");
 
     assert_eq!(
-        outcome.files_removed, 1,
-        "the directory link must count once"
+        outcome.files_removed, 2,
+        "the directory link counts once, next to the marker"
     );
     assert!(
         victim_file.is_file(),
@@ -483,4 +485,25 @@ fn clear_full_leaves_foreign_entries_in_the_root() {
     assert!(nested.is_file(), "a foreign folder must survive the clear");
     assert!(!entry.full.exists());
     assert!(entry.thumb320.is_file(), "the other tiers stay");
+}
+
+#[test]
+fn a_folder_named_like_a_tier_without_the_marker_is_kept() {
+    let temp = TempDir::new("unmarked");
+    let store = CacheStore::new(temp.path());
+    let user = temp.path().join("1024");
+    std::fs::create_dir_all(&user).expect("make the user folder");
+    let file = user.join("sketch.png");
+    std::fs::write(&file, b"keep me").expect("write the user file");
+    let full = temp.path().join("full");
+    std::fs::create_dir_all(&full).expect("make the second user folder");
+    std::fs::write(full.join("a.txt"), b"keep").expect("write");
+
+    let outcome = store.purge(None).expect("purge");
+    store
+        .clear_full_res_on_exit(true, None)
+        .expect("clear on exit");
+
+    assert_eq!(outcome, PurgeOutcome::default());
+    assert!(file.is_file() && full.join("a.txt").is_file());
 }

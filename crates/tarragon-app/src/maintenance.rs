@@ -99,16 +99,21 @@ fn evict_bytes(
     if let Some(error) = &outcome.error {
         tracing::warn!("cannot remove every evicted cache file: {error}");
     }
-    let mut deleted = 0;
-    for entry in &outcome.evicted {
-        let Some(path) = row_of.get(entry.thumb320.as_path()) else {
-            continue;
-        };
-        match db.delete_thumbnail(path) {
-            Ok(count) => deleted += count,
-            Err(error) => tracing::warn!("cannot delete the row for {path}: {error}"),
-        }
-    }
+    // One transaction for all rows: a large eviction would otherwise wait for
+    // one commit per source before the first folder opens.
+    let paths: Vec<&str> = outcome
+        .evicted
+        .iter()
+        .filter_map(|entry| row_of.get(entry.thumb320.as_path()).copied())
+        .collect();
+    let deleted = if paths.is_empty() {
+        0
+    } else {
+        db.delete_thumbnails(&paths).unwrap_or_else(|error| {
+            tracing::warn!("cannot delete the rows of evicted sources: {error}");
+            0
+        })
+    };
     if !outcome.evicted.is_empty() {
         tracing::info!(
             "evicted {} cached sources, {deleted} rows, {} bytes remain",

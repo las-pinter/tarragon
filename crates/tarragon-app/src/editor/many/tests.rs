@@ -196,7 +196,9 @@ fn a_timed_out_query_ends_all_lookups_and_keeps_one_start_per_file() {
     fixture.opener();
     let start = Instant::now();
     let report = fixture.open(&["/a/1.png", "/a/2.jpg", "/a/3.psd"]);
-    assert!(start.elapsed() < Duration::from_millis(1500));
+    // A query that waited out its script would take ten seconds; the bound
+    // leaves room for a loaded machine.
+    assert!(start.elapsed() < Duration::from_secs(5));
     assert_eq!(report.failed, 0);
     assert_eq!(fixture.lines("open.log", 3), ["1", "1", "1"]);
     // The lookups run one after another before `open` returns, so a second

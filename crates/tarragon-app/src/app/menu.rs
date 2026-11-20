@@ -7,6 +7,7 @@
 //! and the one-step undo in `undo`.
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use crossbeam_channel::{Receiver, TryRecvError};
 use eframe::egui::Context;
@@ -21,11 +22,16 @@ use writes::{Deferred, Outcome, PendingSelect};
 /// What a clipboard copy on its thread answers.
 type CopyResult = Result<(), ClipboardError>;
 
+/// What an open on its thread answers: the report and the file count.
+type OpenAnswer = (editor::OpenReport, usize);
+
 /// What the menu handlers keep between frames.
 #[derive(Default)]
 pub(super) struct MenuState {
     /// The answer of the running clipboard copy, until it arrives.
     copying: Option<Receiver<CopyResult>>,
+    /// The answers of the opens that still run, one per open.
+    opening: Vec<Receiver<OpenAnswer>>,
     /// The answer of the running duplicate or paste, until it arrives.
     writing: Option<Receiver<Outcome>>,
     /// The files to select once the shown folder has loaded again.
@@ -53,7 +59,7 @@ impl App {
     /// Carry out one menu choice.
     fn apply_menu_event(&mut self, ctx: &Context, event: GridMenuEvent) {
         match event {
-            GridMenuEvent::Open(paths) => self.open_in_editor(ctx, &paths),
+            GridMenuEvent::Open(paths) => self.open_in_editor(ctx, paths),
             GridMenuEvent::ShowInFileManager(path) => self.show_in_file_manager(ctx, &path),
             GridMenuEvent::RegenerateThumbnails(paths) => self.regenerate(ctx, paths),
             GridMenuEvent::AddTag { pos, paths } => {
@@ -84,13 +90,28 @@ impl App {
         ctx.request_repaint();
     }
 
-    /// Open the files in their editors. Files that share an app go into one
-    /// start when the app takes many files. No call waits for an editor. A
-    /// failure shows one notice with the counts.
-    fn open_in_editor(&mut self, ctx: &Context, paths: &[PathBuf]) {
-        let report = editor::open_many(&self.db, paths);
-        if let Some(text) = report.first_error {
-            self.notify(ctx, open_failure_text(&text, report.failed, paths.len()));
+    /// Open the files in their editors from a thread, because the default
+    /// app lookups start helper programs that can take seconds. Files that
+    /// share an app go into one start when the app takes many files. No call
+    /// waits for an editor. A failure shows one notice with the counts.
+    fn open_in_editor(&mut self, ctx: &Context, paths: Vec<PathBuf>) {
+        let (sender, receiver) = crossbeam_channel::bounded(1);
+        let db = Arc::clone(&self.db);
+        let wake = ctx.clone();
+        let spawned = std::thread::Builder::new()
+            .name("tarragon-open".to_owned())
+            .spawn(move || {
+                let report = editor::open_many(&db, &paths);
+                // The app closed and dropped the receiver; nothing to show.
+                let _ = sender.send((report, paths.len()));
+                wake.request_repaint();
+            });
+        match spawned {
+            Ok(_) => self.menu.opening.push(receiver),
+            Err(error) => {
+                tracing::warn!("cannot start the open thread: {error}");
+                self.notify(ctx, format!("Cannot open the files: {error}"));
+            }
         }
     }
 
@@ -155,11 +176,12 @@ impl App {
         }
     }
 
-    /// Show the answers of the copy thread and of the render again.
+    /// Show the answers of the open, copy and render again threads.
     fn poll_menu_work(&mut self, ctx: &Context) {
         if let Some(result) = self.thumbs.take_regenerate_result() {
             self.notify(ctx, regenerate_text(result));
         }
+        self.poll_opens(ctx);
         let Some(receiver) = self.menu.copying.take() else {
             return;
         };
@@ -170,6 +192,32 @@ impl App {
             Err(TryRecvError::Disconnected) => {
                 tracing::warn!("the copy thread ended without an answer");
             }
+        }
+    }
+}
+
+impl App {
+    /// Show a notice for each finished open that failed, and keep the opens
+    /// that still run.
+    fn poll_opens(&mut self, ctx: &Context) {
+        let mut failures = Vec::new();
+        self.menu
+            .opening
+            .retain(|receiver| match receiver.try_recv() {
+                Ok((report, total)) => {
+                    if let Some(text) = report.first_error {
+                        failures.push(open_failure_text(&text, report.failed, total));
+                    }
+                    false
+                }
+                Err(TryRecvError::Empty) => true,
+                Err(TryRecvError::Disconnected) => {
+                    tracing::warn!("the open thread ended without an answer");
+                    false
+                }
+            });
+        for text in failures {
+            self.notify(ctx, text);
         }
     }
 }

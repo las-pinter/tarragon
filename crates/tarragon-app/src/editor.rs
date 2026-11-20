@@ -8,7 +8,7 @@ use std::process::{Command, Stdio};
 use tarragon_db::{Database, DbError};
 
 use self::exec::{ExecLine, ListKind};
-pub use self::many::open_many;
+pub use self::many::{OpenReport, open_many};
 
 /// The key that holds the fallback template for every extension.
 const FALLBACK_KEY: &str = "*";

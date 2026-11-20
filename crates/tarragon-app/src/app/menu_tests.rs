@@ -115,6 +115,22 @@ fn a_failing_editor_shows_the_error_notice() {
     wait_for_text(&mut rig, "tarragon-no-such-editor-program");
 }
 
+#[cfg(unix)]
+#[test]
+fn an_open_of_many_files_runs_on_its_own_thread_and_shows_the_counts() {
+    let mut rig = Rig::new(&[], &[], 9);
+    rig.app
+        .db
+        .upsert_editor_association("*", "tarragon-no-such-editor-program {file}")
+        .expect("store the template");
+    let event = GridMenuEvent::Open(vec![path_of(&rig, "a.png"), path_of(&rig, "b.png")]);
+    rig.app.apply_menu_event(&rig.ctx, event);
+    // The answer is taken on a later frame, so the click only queued it.
+    assert_eq!(rig.app.menu.opening.len(), 1);
+    wait_for_text(&mut rig, "(2 of 2 files failed)");
+    assert!(rig.app.menu.opening.is_empty());
+}
+
 #[test]
 fn a_missing_clipboard_tool_shows_the_install_notice() {
     let mut rig = Rig::new(&[], &[], 9);

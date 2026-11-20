@@ -248,12 +248,19 @@ fn list_line(template: &str) -> Option<ExecLine> {
     })
 }
 
-/// Replace each placeholder in `part` with the path, keeping a bare path exact.
+/// Replace each placeholder in `part` with the path. The path goes in as an
+/// `OsStr`, so a name that is not valid text reaches the program unchanged.
 fn substitute(part: &str, file: &Path) -> OsString {
-    if part == PLACEHOLDER {
-        return file.as_os_str().to_owned();
+    let mut out = OsString::with_capacity(part.len() + file.as_os_str().len());
+    let mut pieces = part.split(PLACEHOLDER);
+    if let Some(first) = pieces.next() {
+        out.push(first);
     }
-    OsString::from(part.replace(PLACEHOLDER, &file.to_string_lossy()))
+    for piece in pieces {
+        out.push(file.as_os_str());
+        out.push(piece);
+    }
+    out
 }
 
 /// Split a template on white space. A double-quoted part is one argument with

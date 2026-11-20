@@ -72,6 +72,18 @@ fn placeholder_inside_an_argument_is_replaced() {
     assert_eq!(launch.args, os(&["--open=/a/x.png", "-v"]));
 }
 
+#[cfg(unix)]
+#[test]
+fn a_name_that_is_not_text_reaches_an_argument_unchanged() {
+    use std::ffi::OsStr;
+    use std::os::unix::ffi::{OsStrExt, OsStringExt};
+    let (_dir, db) = db_with(&[("png", "ed --open={file}+{file}")]);
+    let path = Path::new(OsStr::from_bytes(b"/a/x\xff.png"));
+    let launch = resolve(&db, path).expect("resolve");
+    let want = OsString::from_vec(b"--open=/a/x\xff.png+/a/x\xff.png".to_vec());
+    assert_eq!(launch.args, [want]);
+}
+
 #[cfg(target_os = "linux")]
 #[test]
 fn no_template_gives_the_system_opener() {

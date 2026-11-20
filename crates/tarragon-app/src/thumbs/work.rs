@@ -1,8 +1,9 @@
 //! Cache upkeep that runs on a work thread: a purge, an eviction, a render
 //! again of chosen files, or a retry of failed files.
 //!
-//! A purge and a render again wait for the renders in flight and an eviction
-//! walks the cache, so none may run on the UI thread. The pipeline moves into
+//! A purge and a render again wait for the renders in flight, an eviction
+//! walks the cache, and a retry reads files that may sit on a dead mount, so
+//! none may run on the UI thread. The pipeline moves into
 //! the thread the same way it does for an open.
 
 use std::collections::HashSet;
@@ -172,7 +173,7 @@ impl Thumbs {
 }
 
 impl Thumbs {
-    /// True when a purge or an eviction waits for an idle pipeline.
+    /// True when a work request waits for an idle pipeline.
     #[cfg(test)]
     #[must_use]
     pub(crate) fn has_queued_work(&self) -> bool {
@@ -203,7 +204,7 @@ impl Thumbs {
                 if let Some(pipeline) = failed.pipeline {
                     self.slot = Slot::Idle(pipeline);
                 }
-                self.finished = Some((work, Err(error.to_string())));
+                self.keep_result(work, Err(error.to_string()));
             }
         }
     }
@@ -221,7 +222,7 @@ impl Thumbs {
                 tracing::error!("the work thread ended without an answer");
                 self.slot = Slot::Gone;
                 let reason = "the work thread ended without an answer".to_owned();
-                self.finished = Some((work, Err(reason)));
+                self.keep_result(work, Err(reason));
                 return;
             }
         };
@@ -231,6 +232,18 @@ impl Thumbs {
             .unwrap_or_else(|| Err("the work thread panicked".to_owned()));
         if work == Work::Purge {
             self.reopen_after_purge();
+        }
+        self.keep_result(work, result);
+    }
+
+    /// Keep the answer for the caller. Nobody asks for the answer of a retry,
+    /// so it is not kept: its tiles show the outcome, and a failure is logged.
+    fn keep_result(&mut self, work: Work, result: Result<WorkOutcome, String>) {
+        if work == Work::Retry {
+            if let Err(error) = result {
+                tracing::warn!("cannot retry the failed files: {error}");
+            }
+            return;
         }
         self.finished = Some((work, result));
     }

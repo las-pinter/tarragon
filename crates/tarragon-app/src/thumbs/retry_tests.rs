@@ -84,9 +84,8 @@ fn a_retry_runs_on_the_work_thread_not_in_the_click() {
     // The click only queues the retry; the next frame starts the work.
     assert!(rig.thumbs.has_queued_work());
     rig.thumbs.before_draw(&rig.ctx, &mut rig.gallery);
-    assert!(matches!(
-        rig.thumbs.is_working(),
-        Some(super::work::Work::Retry) | None
-    ));
     assert!(!rig.thumbs.has_queued_work());
+    rig.run_until_idle();
+    // Nobody takes the answer of a retry, so none is kept for a later caller.
+    assert!(rig.thumbs.take_work_result().is_none());
 }

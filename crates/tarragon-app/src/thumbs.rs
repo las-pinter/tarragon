@@ -103,7 +103,7 @@ pub struct Thumbs {
     feed: Feed,
     /// The folder to open when the pipeline is idle. A newer request replaces it.
     pending: Option<PathBuf>,
-    /// The purge or eviction to run when the pipeline is idle.
+    /// The work request to run when the pipeline is idle.
     queued: Option<Queued>,
     /// The answer of the last work, until the caller takes it.
     finished: Option<(Work, Result<WorkOutcome, String>)>,

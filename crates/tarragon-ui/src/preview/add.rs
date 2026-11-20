@@ -126,7 +126,8 @@ pub fn show_menu(
         *state = next;
         return;
     }
-    let escape = ui.input(|i| i.key_pressed(Key::Escape));
+    // Consumed, so a dialog or the gallery does not also act on this Escape.
+    let escape = ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, Key::Escape));
     let outside = ui.input(|i| {
         i.pointer.any_pressed()
             && i.pointer

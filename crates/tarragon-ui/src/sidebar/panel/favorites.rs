@@ -25,7 +25,10 @@ impl Sidebar {
             show_empty_favorites(ui);
             return;
         }
-        if ui.input(|input| input.key_pressed(Key::Escape)) {
+        // Consumed only while a drag runs, so it cancels the drag alone.
+        if self.dragging.is_some()
+            && ui.input_mut(|input| input.consume_key(egui::Modifiers::NONE, Key::Escape))
+        {
             self.dragging = None;
         }
         let count = self.state.favorites().len();

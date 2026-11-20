@@ -122,6 +122,28 @@ fn an_outside_click_or_escape_closes() {
 }
 
 #[test]
+fn the_escape_that_closes_the_menu_is_not_seen_again() {
+    let ctx = context();
+    let list = rows(3);
+    run(&ctx, button(50.0), &list, vec![]);
+    let esc = Event::Key {
+        key: egui::Key::Escape,
+        physical_key: None,
+        pressed: true,
+        repeat: false,
+        modifiers: Modifiers::NONE,
+    };
+    let mut seen_after = true;
+    let output = ctx.run_ui(input(400.0, vec![esc]), |ui| {
+        let result = show_check_menu(ui, Id::new("m"), button(50.0), &list, None);
+        assert_eq!(result, MenuResult::Closed);
+        seen_after = ui.input(|i| i.key_pressed(egui::Key::Escape));
+    });
+    output.drop_without_applying_deltas();
+    assert!(!seen_after, "a dialog under the menu must not close too");
+}
+
+#[test]
 fn the_menu_flips_above_at_the_bottom_edge() {
     let ctx = context();
     let list = rows(3);

@@ -100,7 +100,13 @@ pub(super) fn library_jobs(
     let mut uuids: HashMap<&str, Option<String>> = HashMap::new();
     for file in files {
         let parent = parent_of(&file.path);
-        uuids.entry(parent).or_insert_with(|| uuid_of(parent));
+        uuids.entry(parent).or_insert_with(|| {
+            let uuid = uuid_of(parent);
+            if uuid.is_none() {
+                tracing::warn!("no cache folder id for {parent}; its files get no thumbnails");
+            }
+            uuid
+        });
     }
     let failures = failures
         .lock()
@@ -109,10 +115,7 @@ pub(super) fn library_jobs(
         .iter()
         .filter_map(|file| {
             let parent = parent_of(&file.path);
-            let Some(uuid) = uuids[parent].clone() else {
-                tracing::warn!("no cache folder id for {parent}; its files get no thumbnails");
-                return None;
-            };
+            let uuid = uuids[parent].clone()?;
             let stamp = SourceStamp {
                 mtime: file.mtime,
                 size: u64::try_from(file.size).unwrap_or(0),

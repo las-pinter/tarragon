@@ -243,7 +243,7 @@ fn from_cache(shared: &Shared, job: &Job, name: &str) -> Option<RgbaImage> {
         Ok(entry) => entry?,
         Err(error) => {
             // A failed lookup counts as a miss.
-            tracing::warn!(
+            tracing::debug!(
                 "cannot look up the cache of {}: {error}",
                 job.path.display()
             );

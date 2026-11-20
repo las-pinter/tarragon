@@ -111,6 +111,13 @@ trash = { version = "=5.3.0", default-features = false, features = ["freedesktop
 [profile.dev.package."*"]
 opt-level = 2
 
+# Thin LTO gives most of the speed and size of full LTO at a small build
+# cost. Panics keep unwinding: worker threads catch them. The symbols stay,
+# so the backtrace in a crash report names its functions.
+[profile.release]
+lto = "thin"
+codegen-units = 16
+
 [workspace.lints.rust]
 unsafe_code = "forbid"
 missing_docs = "warn"

@@ -83,8 +83,11 @@ fn levels_shape(base: f32, gamma: f32) -> f32 {
     if power <= 1e-6 || line <= 1e-6 {
         return power.min(line);
     }
-    // A p-norm soft-min (p = 10), fitted to whole-level input.
-    (power.powf(-10.0) + line.powf(-10.0)).powf(-0.1)
+    // A p-norm soft-min (p = 10), fitted to whole-level input. It is written
+    // as `low * (1 + (low / high)^10)^-0.1`, the same value as
+    // `(power^-10 + line^-10)^-0.1`, so no power leaves the f32 range.
+    let (low, high) = (power.min(line), power.max(line));
+    low * (1.0 + (low / high).powi(10)).powf(-0.1)
 }
 
 /// One control point of a curve.
@@ -546,6 +549,14 @@ mod tests {
         assert!((curve.apply(1.0) - 1.0).abs() < 1e-6);
         assert!((curve.apply(0.75) - 0.5).abs() < 1e-6);
         assert!((curve.apply(0.2) - 0.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn the_soft_toe_stays_finite_near_black() {
+        // Both curves sit near 1e-4 here, where their -10th powers pass the
+        // f32 range.
+        let shaped = super::levels_shape(5e-5, 1.1);
+        assert!(shaped > 5e-5 && shaped < 2e-4, "{shaped}");
     }
 
     #[test]

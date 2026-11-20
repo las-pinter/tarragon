@@ -163,9 +163,12 @@ fn lines(count: u64) -> String {
     }
 }
 
-/// SVG text must not hold a raw `<` or `>`.
+/// SVG text must not hold a raw `&`, `<` or `>`. The `&` goes first, so the
+/// later escapes are not escaped again.
 fn escape(text: &str) -> String {
-    text.replace('<', "&lt;").replace('>', "&gt;")
+    text.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
 }
 
 /// The SVG has its own background so it reads on light and dark pages.
@@ -247,6 +250,11 @@ mod tests {
         assert!(!is_ai_heading("AI: upper case"));
         assert!(!is_ai_heading("main: fix ai: inside"));
         assert!(!is_ai_heading(""));
+    }
+
+    #[test]
+    fn escape_turns_each_markup_character_into_one_entity() {
+        assert_eq!(escape("a & <b>"), "a &amp; &lt;b&gt;");
     }
 
     #[test]

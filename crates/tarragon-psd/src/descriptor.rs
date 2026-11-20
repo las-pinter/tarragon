@@ -89,11 +89,15 @@ impl Descriptor {
         }
     }
 
-    /// The number at `key`, from a double, an integer or a unit float.
+    /// The number at `key`, from a double, an integer or a unit float. A NaN
+    /// or an infinity gives `None`, as a missing key does, so no caller has to
+    /// check for one.
     #[must_use]
     pub fn number(&self, key: &[u8]) -> Option<f64> {
         match self.get(key)? {
-            Value::Double(value) | Value::UnitFloat { value, .. } => Some(*value),
+            Value::Double(value) | Value::UnitFloat { value, .. } => {
+                value.is_finite().then_some(*value)
+            }
             Value::Integer(value) => Some(f64::from(*value)),
             _ => None,
         }
@@ -380,7 +384,7 @@ fn read_reference_item(reader: &mut Reader<'_>) -> Option<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::{MAX_VALUES, Value, parse_versioned};
+    use super::{Descriptor, MAX_VALUES, Value, parse_versioned};
 
     /// Push a four-byte code or a length-prefixed id.
     fn push_id(data: &mut Vec<u8>, id: &[u8]) {
@@ -544,5 +548,26 @@ mod tests {
             })
         );
         assert_eq!(descriptor.number(b"Hrzn"), Some(-25.0));
+    }
+
+    #[test]
+    fn a_number_that_is_not_finite_reads_as_missing() {
+        for bad in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            let descriptor = Descriptor {
+                class_id: b"null".to_vec(),
+                items: vec![
+                    (b"doub".to_vec(), Value::Double(bad)),
+                    (
+                        b"untf".to_vec(),
+                        Value::UnitFloat {
+                            unit: *b"#Pxl",
+                            value: bad,
+                        },
+                    ),
+                ],
+            };
+            assert_eq!(descriptor.number(b"doub"), None, "{bad}");
+            assert_eq!(descriptor.number(b"untf"), None, "{bad}");
+        }
     }
 }

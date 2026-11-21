@@ -279,7 +279,8 @@ fn a_new_name_over_the_limit_by_a_trailing_dot_is_refused() {
     assert_eq!(fits.file_name().expect("name").len(), 255);
 }
 
-#[cfg(unix)]
+// macOS file systems accept only UTF-8 names, so the setup cannot make this file.
+#[cfg(target_os = "linux")]
 #[test]
 fn a_name_that_is_not_text_is_refused_and_says_why() {
     use std::os::unix::ffi::OsStrExt;

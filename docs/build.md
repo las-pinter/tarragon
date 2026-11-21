@@ -124,7 +124,8 @@ system.
 
 The folder picker talks to the desktop portal at run time. On Linux the files
 that Copy puts on the clipboard are served by Tarragon and go when it closes,
-unless a clipboard manager keeps them. Without a CJK font, CJK file names can show as boxes (see "Vendored font").
+unless a clipboard manager keeps them. Without a CJK font, CJK file names can
+show as boxes (see "Vendored font").
 
 ## Grid thumbnail tier
 

@@ -95,10 +95,7 @@ fn locate(
     resolve_root: impl FnOnce() -> Result<DataPaths, DataDirError>,
 ) -> Result<LogLocation, DataDirError> {
     if let Some(db) = override_db {
-        let dir = match db.parent() {
-            Some(parent) if !parent.as_os_str().is_empty() => parent.to_path_buf(),
-            _ => PathBuf::from("."),
-        };
+        let dir = data_root(&db);
         return Ok(LogLocation {
             log_file: dir.join(LOG_FILENAME),
             crash_dir: dir,

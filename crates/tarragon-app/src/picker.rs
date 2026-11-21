@@ -10,6 +10,8 @@ use std::sync::mpsc::{self, Receiver, TryRecvError};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::thread;
 
+use crate::pipeline::Repaint;
+
 /// The environment variable that replaces the native dialog with a fixed
 /// answer. A native dialog cannot run under a virtual display, so smoke
 /// runs set it to a folder path.
@@ -52,9 +54,6 @@ impl FolderDialog for FixedDialog {
         Some(self.0.clone())
     }
 }
-
-/// The wake-up call that asks the interface to draw a new frame.
-type Repaint = Arc<dyn Fn() + Send + Sync>;
 
 /// Runs one folder dialog at a time off the interface thread.
 ///

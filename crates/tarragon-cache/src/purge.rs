@@ -178,7 +178,9 @@ impl CacheStore {
         // The marker goes last, after every other file is gone. A clear that
         // fails partway keeps it, so the next purge still knows the folder.
         let (mut files_removed, mut bytes_removed) = remove_tree_contents(&tier_dir, &marker)?;
-        let size = std::fs::symlink_metadata(&marker).map_or(0, |meta| meta.len());
+        // A link counts zero bytes, as in the walk.
+        let size = std::fs::symlink_metadata(&marker)
+            .map_or(0, |meta| if meta.is_file() { meta.len() } else { 0 });
         match std::fs::remove_file(&marker) {
             Ok(()) => {
                 files_removed += 1;

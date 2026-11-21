@@ -3,13 +3,15 @@
 //! The clipboard holds one target, `text/uri-list`. A helper program does the
 //! work: `wl-copy` and `wl-paste` under Wayland, `xclip` otherwise.
 
-use std::borrow::Cow;
 use std::ffi::{OsStr, OsString};
-use std::io::{self, Read, Write};
-use std::path::{Path, PathBuf};
+use std::io::{self, Write};
+use std::path::PathBuf;
 use std::process::{Child, Command, ExitStatus, Stdio};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
 use std::time::{Duration, Instant};
+
+use crate::editor::{encode_into, path_bytes};
+use crate::process::{kill_and_reap, read_capped, remaining, wait_until};
 
 /// The clipboard target for a list of files.
 const URI_LIST: &str = "text/uri-list";
@@ -19,8 +21,6 @@ const FILE_SCHEME: &[u8] = b"file:";
 const TOOL_TIMEOUT: Duration = Duration::from_secs(2);
 /// How long to wait for the error text of a helper that has ended.
 const STDERR_WAIT: Duration = Duration::from_millis(100);
-/// How often to check whether a helper has ended.
-const POLL_STEP: Duration = Duration::from_millis(10);
 /// The most bytes of a file list that a paste reads.
 const MAX_LIST_BYTES: usize = 1 << 20;
 /// The most bytes of helper error text that a paste keeps.
@@ -187,30 +187,6 @@ fn recv_error(tool: &ToolCommand, error: RecvTimeoutError) -> ClipboardError {
     }
 }
 
-/// The time left before `deadline`.
-pub(crate) fn remaining(deadline: Instant) -> Duration {
-    deadline.saturating_duration_since(Instant::now())
-}
-
-/// End a child and collect it, so it does not stay a zombie.
-pub(crate) fn kill_and_reap(child: &mut Child) {
-    let _ = child.kill();
-    let _ = child.wait();
-}
-
-/// Wait for `child` to end until `deadline`. `None` means the time ran out.
-pub(crate) fn wait_until(child: &mut Child, deadline: Instant) -> io::Result<Option<ExitStatus>> {
-    loop {
-        if let Some(status) = child.try_wait()? {
-            return Ok(Some(status));
-        }
-        if Instant::now() >= deadline {
-            return Ok(None);
-        }
-        std::thread::sleep(POLL_STEP);
-    }
-}
-
 /// Give `paths` to `tool` on its standard input, within `timeout`.
 ///
 /// The helper forks a child that keeps the clipboard. Its output goes nowhere,
@@ -331,29 +307,6 @@ fn start_readers(
     ))
 }
 
-/// Read up to `cap` bytes of `reader` on a thread. The rest is read and thrown
-/// away, so the helper does not stop on a full pipe.
-pub(crate) fn read_capped<R: Read + Send + 'static>(
-    name: &str,
-    mut reader: R,
-    cap: usize,
-) -> io::Result<Receiver<io::Result<Vec<u8>>>> {
-    let (sender, receiver) = mpsc::channel();
-    let limit = u64::try_from(cap).unwrap_or(u64::MAX);
-    std::thread::Builder::new()
-        .name(name.into())
-        .spawn(move || {
-            let mut bytes = Vec::new();
-            let result = (&mut reader)
-                .take(limit)
-                .read_to_end(&mut bytes)
-                .and_then(|_| io::copy(&mut reader, &mut io::sink()))
-                .map(|_| bytes);
-            let _ = sender.send(result);
-        })?;
-    Ok(receiver)
-}
-
 /// Wait for the output and for the end of the helper, both within `deadline`,
 /// then parse the output.
 fn finish_read(
@@ -406,19 +359,6 @@ fn uri_list(paths: &[PathBuf]) -> String {
     text
 }
 
-/// The bytes of a path. On Unix they are the exact bytes of the name.
-#[cfg(unix)]
-pub(crate) fn path_bytes(path: &Path) -> Cow<'_, [u8]> {
-    use std::os::unix::ffi::OsStrExt;
-    Cow::Borrowed(path.as_os_str().as_bytes())
-}
-
-/// The bytes of a path. A name that is not valid text loses its bad parts.
-#[cfg(not(unix))]
-pub(crate) fn path_bytes(path: &Path) -> Cow<'_, [u8]> {
-    Cow::Owned(path.to_string_lossy().into_owned().into_bytes())
-}
-
 /// A path from decoded bytes.
 #[cfg(unix)]
 fn bytes_to_path(bytes: Vec<u8>) -> PathBuf {
@@ -430,21 +370,6 @@ fn bytes_to_path(bytes: Vec<u8>) -> PathBuf {
 #[cfg(not(unix))]
 fn bytes_to_path(bytes: Vec<u8>) -> PathBuf {
     PathBuf::from(String::from_utf8_lossy(&bytes).into_owned())
-}
-
-/// Add `bytes` to `out`, percent-encoded. Letters, digits, `-`, `.`, `_`, `~`,
-/// and `/` stay as they are.
-pub(crate) fn encode_into(out: &mut String, bytes: &[u8]) {
-    const HEX: &[u8; 16] = b"0123456789ABCDEF";
-    for &byte in bytes {
-        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~' | b'/') {
-            out.push(char::from(byte));
-        } else {
-            out.push('%');
-            out.push(char::from(HEX[usize::from(byte >> 4)]));
-            out.push(char::from(HEX[usize::from(byte & 0x0F)]));
-        }
-    }
 }
 
 /// Undo percent-encoding. A `%` without two hex digits gives `None`.

@@ -25,6 +25,7 @@ mod prefs;
 mod preview_feed;
 mod preview_loader;
 mod preview_source;
+mod process;
 mod run;
 mod sidebar;
 mod storewatch;

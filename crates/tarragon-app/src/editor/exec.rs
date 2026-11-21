@@ -2,11 +2,11 @@
 //!
 //! The code is pure: it reads no file and starts no process.
 
+use std::borrow::Cow;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
 use super::Launch;
-use crate::clipboard::{encode_into, path_bytes};
 
 /// How many files one start of the app takes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -199,6 +199,34 @@ fn expand_token(
         return Some(Expanded::Args(Vec::new()));
     }
     Some(Expanded::Args(vec![out]))
+}
+
+/// The bytes of a path. On Unix they are the exact bytes of the name.
+#[cfg(unix)]
+pub(crate) fn path_bytes(path: &Path) -> Cow<'_, [u8]> {
+    use std::os::unix::ffi::OsStrExt;
+    Cow::Borrowed(path.as_os_str().as_bytes())
+}
+
+/// The bytes of a path. A name that is not valid text loses its bad parts.
+#[cfg(not(unix))]
+pub(crate) fn path_bytes(path: &Path) -> Cow<'_, [u8]> {
+    Cow::Owned(path.to_string_lossy().into_owned().into_bytes())
+}
+
+/// Add `bytes` to `out`, percent-encoded. Letters, digits, `-`, `.`, `_`, `~`,
+/// and `/` stay as they are.
+pub(crate) fn encode_into(out: &mut String, bytes: &[u8]) {
+    const HEX: &[u8; 16] = b"0123456789ABCDEF";
+    for &byte in bytes {
+        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~' | b'/') {
+            out.push(char::from(byte));
+        } else {
+            out.push('%');
+            out.push(char::from(HEX[usize::from(byte >> 4)]));
+            out.push(char::from(HEX[usize::from(byte & 0x0F)]));
+        }
+    }
 }
 
 #[cfg(test)]

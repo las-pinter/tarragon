@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
-use crate::clipboard::{kill_and_reap, read_capped, remaining, wait_until};
+use crate::process::{kill_and_reap, read_capped, remaining, wait_until};
 
 /// How long one query may take. The tool ends in about 70 ms; the deadline
 /// only guards a hang.

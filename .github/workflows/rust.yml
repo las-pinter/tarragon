@@ -42,6 +42,12 @@ jobs:
           RUSTDOCFLAGS: -D warnings
       - name: Test
         run: cargo nextest run
+      # The system clipboard test is ignored by default on Linux, because a
+      # shell display may be a user's screen. Here it runs alone on Xvfb.
+      - name: Install Xvfb
+        run: sudo apt-get update && sudo apt-get install -y xvfb
+      - name: Test the system clipboard on Xvfb
+        run: xvfb-run -a cargo nextest run --run-ignored only -E 'test(the_system_clipboard_round_trips_a_file_list)'
       - name: Check dependencies
         run: cargo deny check
       # The default fonts crate carries licenses that are off the allowlist.

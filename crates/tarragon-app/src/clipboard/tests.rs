@@ -169,6 +169,23 @@ fn stop_drops_the_backend_and_ends_the_thread() {
     assert_eq!(drops.load(Ordering::SeqCst), 1);
 }
 
+#[cfg(unix)]
+#[test]
+fn pasted_entries_keep_absolute_and_localhost_paths_only() {
+    let listed = [
+        "/a.png",
+        "localhost/pics/b.png",
+        "otherhost/c.png",
+        "rel.png",
+    ]
+    .map(PathBuf::from)
+    .to_vec();
+    assert_eq!(
+        local_paths(listed),
+        [PathBuf::from("/a.png"), PathBuf::from("/pics/b.png")]
+    );
+}
+
 #[test]
 fn arboard_errors_map_to_the_app_errors() {
     assert_eq!(
@@ -188,10 +205,10 @@ fn arboard_errors_map_to_the_app_errors() {
 }
 
 /// A temp folder that removes itself on drop.
-#[cfg(any(windows, target_os = "macos"))]
+#[cfg(any(windows, target_os = "macos", target_os = "linux"))]
 struct TempDir(PathBuf);
 
-#[cfg(any(windows, target_os = "macos"))]
+#[cfg(any(windows, target_os = "macos", target_os = "linux"))]
 impl Drop for TempDir {
     fn drop(&mut self) {
         let _ = std::fs::remove_dir_all(&self.0);
@@ -199,8 +216,14 @@ impl Drop for TempDir {
 }
 
 /// Copy two real files to the system clipboard and read them back. It runs
-/// on the Windows and macOS test jobs; Linux CI has no display.
-#[cfg(any(windows, target_os = "macos"))]
+/// on the Windows and macOS test jobs. On Linux it would use the display of
+/// the shell, which may be the user's screen, so it is ignored there and the
+/// Linux CI job runs it alone under `xvfb-run`.
+#[cfg(any(windows, target_os = "macos", target_os = "linux"))]
+#[cfg_attr(
+    target_os = "linux",
+    ignore = "needs a display; CI runs it under xvfb-run"
+)]
 #[test]
 fn the_system_clipboard_round_trips_a_file_list() {
     let dir = TempDir(std::env::temp_dir().join(format!(
@@ -208,7 +231,7 @@ fn the_system_clipboard_round_trips_a_file_list() {
         tarragon_core::testing::run_tag()
     )));
     std::fs::create_dir_all(&dir.0).expect("make the folder");
-    let paths = vec![dir.0.join("a.png"), dir.0.join("b c.psd")];
+    let paths = vec![dir.0.join("a.png"), dir.0.join("b c#1.psd")];
     for path in &paths {
         std::fs::write(path, b"x").expect("write a file");
     }

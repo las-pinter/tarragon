@@ -7,10 +7,11 @@
 //! time. A caller waits at most [`ANSWER_TIMEOUT`] for the answer, so a stuck
 //! clipboard cannot hold a copy or a paste for long.
 //!
-//! [`shutdown`] drops the handle at exit. On X11 the drop offers the list to a
-//! running clipboard manager, which may keep it after Tarragon closes.
+//! [`shutdown`] drops the handle at exit. On X11 the drop of the last handle
+//! in the process offers the list to a running clipboard manager, which may
+//! keep it after Tarragon closes.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Mutex, PoisonError};
 use std::time::Duration;
 
@@ -247,7 +248,7 @@ impl Backend for Arboard {
 
     fn files(&mut self) -> Result<Vec<PathBuf>, ClipboardError> {
         match self.0.get().file_list() {
-            Ok(files) => Ok(files),
+            Ok(files) => Ok(local_paths(files)),
             // No file list on the clipboard is not an error for a paste.
             Err(arboard::Error::ContentNotAvailable | arboard::Error::ConversionFailure) => {
                 Ok(Vec::new())
@@ -255,6 +256,26 @@ impl Backend for Arboard {
             Err(other) => Err(map_error(other)),
         }
     }
+}
+
+/// The pasted entries as absolute paths.
+///
+/// On Linux arboard keeps the host of a `file://localhost/` address as the
+/// first part of a relative path. That host is this machine, so the part goes.
+/// Any other relative entry, such as one from a remote host, is left out: a
+/// relative path would be looked up in the working folder.
+fn local_paths(files: Vec<PathBuf>) -> Vec<PathBuf> {
+    files
+        .into_iter()
+        .filter_map(|path| {
+            if path.is_absolute() {
+                return Some(path);
+            }
+            let rest = path.strip_prefix("localhost").ok()?;
+            Some(Path::new("/").join(rest))
+        })
+        .filter(|path| path.is_absolute())
+        .collect()
 }
 
 /// The app error for an `arboard` error.

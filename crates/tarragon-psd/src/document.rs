@@ -16,9 +16,10 @@ use crate::source::Source;
 /// A parsed PSD or PSB file that keeps its source open.
 ///
 /// A file on disk is read by range and never whole, so memory stays bounded
-/// for a large PSB. A document built from memory keeps its bytes. The source is shared through [`Arc`], so a clone is cheap (one
-/// `Arc` bump); the parsed layer tree is copied. Reads are positional, so many
-/// threads can read one document at once.
+/// for a large PSB. A document built from memory keeps its bytes. The source
+/// is shared through [`Arc`], so a clone is cheap (one `Arc` bump); the parsed
+/// layer tree is copied. Reads are positional, so many threads can read one
+/// document at once.
 #[derive(Debug, Clone)]
 pub struct PsdDocument {
     /// The parsed structure.

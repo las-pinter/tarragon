@@ -240,13 +240,13 @@ impl PsdFile {
     /// viewport is `0..width`, `0..height` of that size. The 8192 px cap
     /// applies to the output, not to the source, so a canvas wider than the cap
     /// reads through a step. The decoder keeps the output plus one source row
-    /// and never decodes a skipped row.
+    /// and never decodes a skipped row. A step of zero is treated as one.
     ///
     /// # Errors
     ///
-    /// A step of zero is treated as one. Returns a typed error when the
-    /// viewport is invalid, the output exceeds the cap, the color mode is unsupported, the deadline
-    /// passed, or the bytes are truncated.
+    /// Returns a typed error when the viewport is invalid, the output exceeds
+    /// the cap, the color mode is unsupported, the deadline passed, or the
+    /// bytes are truncated.
     pub(crate) fn read_merged_strided_from(
         &self,
         source: &Source,

@@ -231,7 +231,8 @@ fn read_header(reader: &mut Reader) -> Result<PsdHeader, PsdError> {
     })
 }
 
-/// The uncapped and capped sizes of a file, for the full tier.
+/// The full-tier size of a file: its size with the long edge capped at
+/// [`crate::limits::FULL_TIER_MAX_EDGE`], keeping the aspect.
 #[must_use]
 pub fn capped_dimensions(header: &PsdHeader) -> (u32, u32) {
     full_tier_size(header.width, header.height)

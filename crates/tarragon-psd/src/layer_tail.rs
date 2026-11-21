@@ -50,7 +50,8 @@ pub(crate) fn drop_unmatched_pattern_fills(layers: &mut [LayerRecord], patterns:
 ///
 /// A layer info block is parsed as records with its channel data left in the
 /// file. A pattern table is read whole when it is no larger than
-/// `pattern_limit` (production passes [`MAX_PATTERN_BLOCK`]). Every other block is skipped unread.
+/// `pattern_limit`; the parse passes [`MAX_PATTERN_BLOCK`], and tests pass a
+/// smaller one. Every other block is skipped unread.
 pub(crate) fn read_tagged_tail(
     section: &mut Window,
     header: &PsdHeader,

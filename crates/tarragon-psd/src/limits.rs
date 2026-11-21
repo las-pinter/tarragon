@@ -31,8 +31,9 @@ pub const MAX_GROUP_DEPTH: usize = 32;
 /// The estimate is [`COMPOSITE_BASE_BYTES_PER_PIXEL`] plus
 /// [`GROUP_BYTES_PER_PIXEL_LEVEL`] for each group level, plus the effects
 /// terms when any layer or group has effects, times the working pixels. Nested
-/// nodes with effects pad the working size again. A call above the budget returns [`PsdError::OverBudget`] before it
-/// allocates. The budget keeps one render from exhausting the machine.
+/// nodes with effects pad the working size again. A call above the budget
+/// returns [`PsdError::OverBudget`] before it allocates. The budget keeps one
+/// render from exhausting the machine.
 pub const MAX_COMPOSITE_BYTES: u64 = 1 << 30;
 
 /// The bytes per pixel that one group nesting level holds.

@@ -46,8 +46,8 @@ pub enum PsdError {
         /// The four signature bytes.
         found: [u8; 4],
     },
-    /// A section length does not fit the address space.
-    #[error("section length {length} is too large")]
+    /// A section length or a buffer size does not fit the address space.
+    #[error("length {length} is too large")]
     LengthTooLarge {
         /// The declared length in bytes.
         length: u64,

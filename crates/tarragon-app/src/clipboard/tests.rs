@@ -186,3 +186,43 @@ fn arboard_errors_map_to_the_app_errors() {
         ClipboardError::Failed(_)
     ));
 }
+
+/// A temp folder that removes itself on drop.
+#[cfg(any(windows, target_os = "macos"))]
+struct TempDir(PathBuf);
+
+#[cfg(any(windows, target_os = "macos"))]
+impl Drop for TempDir {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+/// Copy two real files to the system clipboard and read them back. It runs
+/// on the Windows and macOS test jobs; Linux CI has no display.
+#[cfg(any(windows, target_os = "macos"))]
+#[test]
+fn the_system_clipboard_round_trips_a_file_list() {
+    let dir = TempDir(std::env::temp_dir().join(format!(
+        "tarragon-clipboard-{}",
+        tarragon_core::testing::run_tag()
+    )));
+    std::fs::create_dir_all(&dir.0).expect("make the folder");
+    let paths = vec![dir.0.join("a.png"), dir.0.join("b c.psd")];
+    for path in &paths {
+        std::fs::write(path, b"x").expect("write a file");
+    }
+
+    copy_files(&paths).expect("copy to the system clipboard");
+    let read = read_files().expect("read the system clipboard");
+
+    let canonical = |list: &[PathBuf]| {
+        let mut out: Vec<PathBuf> = list
+            .iter()
+            .map(|path| dunce::canonicalize(path).expect("canonicalize"))
+            .collect();
+        out.sort();
+        out
+    };
+    assert_eq!(canonical(&read), canonical(&paths));
+}

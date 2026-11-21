@@ -8,7 +8,9 @@
 //! The binary layout is the documented Adobe `ActionDescriptor` format. This is
 //! our own reader.
 
-/// The deepest nested descriptor this reader accepts.
+/// The deepest nesting this reader accepts. Each descriptor and each value
+/// counts one level, so a descriptor inside a descriptor takes two and about
+/// 16 descriptors can nest.
 const MAX_DEPTH: usize = 32;
 /// The most values one descriptor may hold. A value takes eight input bytes
 /// at least but about ten times that in memory, so a large extra block could

@@ -108,8 +108,8 @@ glibc 2.31. The pins and the build command are in "Release build".
 These are run-time packages for any install of the app. They are not build
 packages. The binary loads the window and graphics libraries at run time, so
 the `ldd` check in "Release build" does not list them. Windows and macOS need
-no extra package. Copy and Paste in the grid use the Linux helper tools below.
-They are not supported yet on Windows and macOS.
+no extra package. Copy and Paste in the grid need no extra package on any
+system.
 
 | Need | Ubuntu package | Arch package | Required |
 |------|----------------|--------------|----------|
@@ -120,12 +120,11 @@ They are not supported yet on Windows and macOS.
 | Vulkan loader and one driver | `libvulkan1`, `mesa-vulkan-drivers` | `vulkan-icd-loader`, and one Vulkan driver for the GPU | One of this row or the EGL row: the default renderer |
 | Folder picker: portal and one backend | `xdg-desktop-portal`, `xdg-desktop-portal-gtk` | `xdg-desktop-portal`, `xdg-desktop-portal-gtk` | Yes, for the folder picker |
 | Open in editor and Show in file manager (`xdg-open`, `xdg-mime`) | `xdg-utils` | `xdg-utils` | Yes, for those items |
-| Copy and Paste in the grid menu | `xclip` (X11) or `wl-clipboard` (Wayland) | `xclip` (X11) or `wl-clipboard` (Wayland) | Optional |
 | CJK font | `fonts-noto-cjk` | `noto-fonts-cjk` | Optional |
 
-The folder picker talks to the desktop portal at run time. Without `xclip` or
-`wl-clipboard`, the app runs and shows a notice that names the missing package.
-Without a CJK font, CJK file names can show as boxes (see "Vendored font").
+The folder picker talks to the desktop portal at run time. On Linux the files
+that Copy puts on the clipboard are served by Tarragon and go when it closes,
+unless a clipboard manager keeps them. Without a CJK font, CJK file names can show as boxes (see "Vendored font").
 
 ## Grid thumbnail tier
 

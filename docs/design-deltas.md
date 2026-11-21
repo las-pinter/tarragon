@@ -800,9 +800,8 @@ drawn dim at the right.
 - Copy puts the files on the clipboard as a `text/uri-list`. Paste reads that list and
   copies each regular file of a supported type into the open folder, under a free
   name. It skips other entries and counts them in the notice. Paste does nothing in
-  the All scope. The clipboard needs `wl-copy` and `wl-paste` under Wayland, or
-  `xclip` under X11. A missing program shows a notice that names the package. File
-  Copy and Paste are not supported on Windows.
+  the All scope. Copy and Paste work on Linux, Windows, and macOS. On Linux the
+  copied list lasts while Tarragon runs, unless a clipboard manager keeps it.
 - Delete and Delete permanently... always ask first. Delete asks to move the files to
   the Trash, and its default button, Move to Trash, confirms. Delete permanently...
   asks for confirmation and warns that it cannot be undone. Its default button is

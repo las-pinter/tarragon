@@ -26,7 +26,8 @@ importing. No copying. Your files stay where they are on your disk.
 - **Search and sort.** Search by file name. Sort by name or by date.
 - **Dark theme.** Easy on the eyes for long sessions.
 
-Copy and Paste in the grid work on Linux only for now.
+Copy and Paste in the grid work with the file manager on Linux, Windows, and
+macOS. On Linux the copied files stay on the clipboard while Tarragon runs.
 
 ## Screenshots
 

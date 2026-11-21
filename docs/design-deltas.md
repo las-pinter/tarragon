@@ -802,8 +802,8 @@ drawn dim at the right.
   name. It skips other entries and counts them in the notice. Paste does nothing in
   the All scope. Copy and Paste work on Linux, Windows, and macOS. On Linux the
   copied list lasts while Tarragon runs, unless a clipboard manager keeps it.
-  A pasted entry whose name is not valid text, or one from another host, is left
-  out of the list.
+  On Linux a pasted entry whose name is not valid text, or one from another
+  host, is left out of the list.
 - Delete and Delete permanently... always ask first. Delete asks to move the files to
   the Trash, and its default button, Move to Trash, confirms. Delete permanently...
   asks for confirmation and warns that it cannot be undone. Its default button is

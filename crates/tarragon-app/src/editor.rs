@@ -8,7 +8,6 @@ use std::process::{Command, Stdio};
 use tarragon_db::{Database, DbError};
 
 use self::exec::{ExecLine, ListKind};
-pub(crate) use self::exec::{encode_into, path_bytes};
 pub use self::many::{OpenReport, open_many};
 
 /// The key that holds the fallback template for every extension.

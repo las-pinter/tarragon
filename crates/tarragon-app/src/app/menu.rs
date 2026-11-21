@@ -141,7 +141,7 @@ impl App {
         self.start_copy(ctx, paths, clipboard::copy_files);
     }
 
-    /// Put the files on the clipboard from a thread, so a stuck helper program
+    /// Put the files on the clipboard from a thread, so a stuck clipboard
     /// cannot freeze the window.
     fn start_copy(
         &mut self,
@@ -233,10 +233,7 @@ fn open_failure_text(first: &str, failed: usize, total: usize) -> String {
 
 /// The notice for a failed clipboard copy.
 fn copy_failure_text(error: &ClipboardError) -> String {
-    match error {
-        ClipboardError::ToolMissing(package) => format!("Install {package} to copy files"),
-        other => format!("Cannot copy files: {other}"),
-    }
+    format!("Cannot copy files: {error}")
 }
 
 /// The notice for the end of a render again.

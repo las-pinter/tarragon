@@ -1,254 +1,188 @@
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
+
 use super::*;
 
-/// A tool that does not exist, so no real program runs.
-const MISSING: ToolCommand = ToolCommand {
-    program: "tarragon-no-such-tool",
-    args: &[],
-    package: "some-package",
-};
-
-/// A list long enough to fill a pipe, so a write to a stalled tool blocks.
-fn long_list() -> Vec<PathBuf> {
-    (0..5000)
-        .map(|n| PathBuf::from(format!("/home/a/a-long-file-name-{n}.png")))
-        .collect()
+/// A clipboard in memory. A copy of no files fails like the system one.
+#[derive(Default)]
+struct Memory {
+    files: Arc<Mutex<Vec<PathBuf>>>,
 }
 
-// A POSIX path is not absolute on Windows, so the filter drops it.
-#[cfg(unix)]
+impl Backend for Memory {
+    fn set_files(&mut self, paths: &[PathBuf]) -> Result<(), ClipboardError> {
+        if paths.is_empty() {
+            return Err(ClipboardError::NothingToCopy);
+        }
+        *self.files.lock().expect("lock") = paths.to_vec();
+        Ok(())
+    }
+
+    fn files(&mut self) -> Result<Vec<PathBuf>, ClipboardError> {
+        Ok(self.files.lock().expect("lock").clone())
+    }
+}
+
+/// A clipboard that always gives `error`, after `delay`.
+struct Failing {
+    error: ClipboardError,
+    delay: Duration,
+}
+
+impl Backend for Failing {
+    fn set_files(&mut self, _paths: &[PathBuf]) -> Result<(), ClipboardError> {
+        std::thread::sleep(self.delay);
+        Err(self.error.clone())
+    }
+
+    fn files(&mut self) -> Result<Vec<PathBuf>, ClipboardError> {
+        std::thread::sleep(self.delay);
+        Err(self.error.clone())
+    }
+}
+
+fn copy(service: &Service, paths: &[PathBuf], timeout: Duration) -> Result<(), ClipboardError> {
+    let paths = paths.to_vec();
+    send_and_wait(
+        &service.requests(),
+        |answer| Request::Copy(paths, answer),
+        timeout,
+    )
+}
+
+fn read(service: &Service, timeout: Duration) -> Result<Vec<PathBuf>, ClipboardError> {
+    send_and_wait(&service.requests(), Request::Read, timeout)
+}
+
+const WAIT: Duration = Duration::from_secs(5);
+
 #[test]
-fn uri_list_encodes_paths_and_ends_lines_with_crlf() {
-    let paths = [
-        PathBuf::from("/home/a/my file.png"),
-        PathBuf::from("/home/a/café.png"),
-    ];
+fn a_copied_list_reads_back_through_the_thread() {
+    let service = Service::start(Box::new(|| {
+        Ok(Box::new(Memory::default()) as Box<dyn Backend>)
+    }))
+    .expect("start");
+    let paths = vec![PathBuf::from("/pics/a.png"), PathBuf::from("/pics/b c.psd")];
+    copy(&service, &paths, WAIT).expect("copy");
+    assert_eq!(read(&service, WAIT).expect("read"), paths);
+    service.stop(WAIT);
+}
 
-    let text = uri_list(&paths);
+#[test]
+fn the_thread_keeps_one_backend_for_every_request() {
+    let made = Arc::new(AtomicUsize::new(0));
+    let counter = Arc::clone(&made);
+    let service = Service::start(Box::new(move || {
+        counter.fetch_add(1, Ordering::SeqCst);
+        Ok(Box::new(Memory::default()) as Box<dyn Backend>)
+    }))
+    .expect("start");
+    copy(&service, &[PathBuf::from("/a.png")], WAIT).expect("copy");
+    read(&service, WAIT).expect("read");
+    read(&service, WAIT).expect("read");
+    assert_eq!(made.load(Ordering::SeqCst), 1);
+    service.stop(WAIT);
+}
 
+#[test]
+fn a_clipboard_that_cannot_open_is_unavailable_and_tried_again_later() {
+    let tries = Arc::new(AtomicUsize::new(0));
+    let counter = Arc::clone(&tries);
+    let service = Service::start(Box::new(move || {
+        if counter.fetch_add(1, Ordering::SeqCst) == 0 {
+            return Err(ClipboardError::Unavailable("no display".into()));
+        }
+        Ok(Box::new(Memory::default()) as Box<dyn Backend>)
+    }))
+    .expect("start");
     assert_eq!(
-        text,
-        "file:///home/a/my%20file.png\r\nfile:///home/a/caf%C3%A9.png\r\n"
+        read(&service, WAIT),
+        Err(ClipboardError::Unavailable("no display".into()))
     );
-}
-
-// A POSIX path is not absolute on Windows, so the filter drops it.
-#[cfg(unix)]
-#[test]
-fn uri_list_skips_a_path_that_is_not_absolute() {
-    let paths = [PathBuf::from("a/b.png"), PathBuf::from("/ok.png")];
-
-    let text = uri_list(&paths);
-
-    assert_eq!(text, "file:///ok.png\r\n");
-}
-
-// A POSIX path is not absolute on Windows, so the filter drops it.
-#[cfg(unix)]
-#[test]
-fn uri_list_keeps_a_newline_in_a_path_inside_one_line() {
-    let path = PathBuf::from("/a/b\nc.png");
-
-    let text = uri_list(std::slice::from_ref(&path));
-
-    assert_eq!(text, "file:///a/b%0Ac.png\r\n");
-    assert_eq!(parse_uri_list(text.as_bytes()), [path]);
+    assert_eq!(read(&service, WAIT), Ok(Vec::new()));
+    assert_eq!(tries.load(Ordering::SeqCst), 2);
+    service.stop(WAIT);
 }
 
 #[test]
-fn parse_uri_list_keeps_only_file_entries() {
-    let text = b"# a comment\r\n\r\nhttp://example.com/a.png\r\n\
-                 file:///home/a/my%20file.png\r\nfile://localhost/home/a/caf%C3%A9.png\r\n";
-
-    let files = parse_uri_list(text);
-
+fn a_backend_error_reaches_the_caller() {
+    let service = Service::start(Box::new(|| {
+        Ok(Box::new(Failing {
+            error: ClipboardError::Busy,
+            delay: Duration::ZERO,
+        }) as Box<dyn Backend>)
+    }))
+    .expect("start");
     assert_eq!(
-        files,
-        [
-            PathBuf::from("/home/a/my file.png"),
-            PathBuf::from("/home/a/café.png"),
-        ]
+        copy(&service, &[PathBuf::from("/a.png")], WAIT),
+        Err(ClipboardError::Busy)
     );
+    assert_eq!(read(&service, WAIT), Err(ClipboardError::Busy));
+    service.stop(WAIT);
 }
 
 #[test]
-fn parse_uri_list_reads_the_one_slash_form() {
-    let files = parse_uri_list(b"file:/home/a/b%20c.png\nfile:relative.png\n");
-
-    assert_eq!(files, [PathBuf::from("/home/a/b c.png")]);
-}
-
-#[test]
-fn parse_uri_list_skips_remote_host_and_bad_escapes() {
-    let text = b"file://server/share/a.png\nfile:///a/%zz.png\nfile:///a/%4\nfile:///a/%00.png\n\
-                 file:///ok.png\n";
-
-    let files = parse_uri_list(text);
-
-    assert_eq!(files, [PathBuf::from("/ok.png")]);
-}
-
-#[cfg(unix)]
-#[test]
-fn uri_list_round_trips_a_path_that_is_not_utf8() {
-    use std::os::unix::ffi::OsStringExt;
-    let path = PathBuf::from(OsString::from_vec(b"/t/\xFF\xFEx y.png".to_vec()));
-
-    let text = uri_list(std::slice::from_ref(&path));
-
-    assert_eq!(text, "file:///t/%FF%FEx%20y.png\r\n");
-    assert_eq!(parse_uri_list(text.as_bytes()), [path]);
-}
-
-#[test]
-fn commands_use_the_wayland_tools_when_the_display_is_set() {
-    let wayland = OsStr::new("wayland-0");
-    let x11 = OsStr::new(":0");
-
-    let copy = copy_command(Some(wayland), Some(x11)).expect("a command");
-    let paste = paste_command(Some(wayland), None).expect("a command");
-
-    assert_eq!(copy.program, "wl-copy");
-    assert_eq!(copy.args, ["--type", "text/uri-list"]);
-    assert_eq!(copy.package, "wl-clipboard");
-    assert_eq!(paste.program, "wl-paste");
-    assert_eq!(paste.args, ["--type", "text/uri-list"]);
-    assert_eq!(paste.package, "wl-clipboard");
-}
-
-#[test]
-fn commands_use_xclip_when_only_the_x11_display_is_set() {
-    let x11 = OsStr::new(":0");
-
-    let copy = copy_command(None, Some(x11)).expect("a command");
-    let paste = paste_command(None, Some(x11)).expect("a command");
-
-    assert_eq!(copy.program, "xclip");
+fn a_stalled_clipboard_times_out_without_holding_the_caller() {
+    let service = Service::start(Box::new(|| {
+        Ok(Box::new(Failing {
+            error: ClipboardError::Busy,
+            delay: Duration::from_millis(500),
+        }) as Box<dyn Backend>)
+    }))
+    .expect("start");
+    let start = std::time::Instant::now();
     assert_eq!(
-        copy.args,
-        ["-selection", "clipboard", "-t", "text/uri-list", "-i"]
+        read(&service, Duration::from_millis(50)),
+        Err(ClipboardError::Timeout)
     );
-    assert_eq!(copy.package, "xclip");
-    assert_eq!(paste.program, "xclip");
-    assert_eq!(
-        paste.args,
-        ["-selection", "clipboard", "-o", "-t", "text/uri-list"]
-    );
+    assert!(start.elapsed() < Duration::from_millis(400));
+    service.stop(WAIT);
 }
 
 #[test]
-fn commands_report_no_display_when_neither_display_is_set() {
+fn stop_drops_the_backend_and_ends_the_thread() {
+    struct Dropped(Arc<AtomicUsize>);
+    impl Backend for Dropped {
+        fn set_files(&mut self, _paths: &[PathBuf]) -> Result<(), ClipboardError> {
+            Ok(())
+        }
+        fn files(&mut self) -> Result<Vec<PathBuf>, ClipboardError> {
+            Ok(Vec::new())
+        }
+    }
+    impl Drop for Dropped {
+        fn drop(&mut self) {
+            self.0.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+    let drops = Arc::new(AtomicUsize::new(0));
+    let counter = Arc::clone(&drops);
+    let service = Service::start(Box::new(move || {
+        Ok(Box::new(Dropped(Arc::clone(&counter))) as Box<dyn Backend>)
+    }))
+    .expect("start");
+    read(&service, WAIT).expect("read");
+    assert_eq!(drops.load(Ordering::SeqCst), 0);
+    service.stop(WAIT);
+    assert_eq!(drops.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn arboard_errors_map_to_the_app_errors() {
+    assert_eq!(
+        map_error(arboard::Error::ClipboardOccupied),
+        ClipboardError::Busy
+    );
     assert!(matches!(
-        copy_command(None, None),
-        Err(ClipboardError::NoDisplay)
+        map_error(arboard::Error::ClipboardNotSupported),
+        ClipboardError::Unavailable(_)
     ));
     assert!(matches!(
-        paste_command(None, None),
-        Err(ClipboardError::NoDisplay)
+        map_error(arboard::Error::Unknown {
+            description: "x".into()
+        }),
+        ClipboardError::Failed(_)
     ));
-}
-
-// A POSIX path is not absolute on Windows, so the filter drops it.
-#[cfg(unix)]
-#[test]
-fn copy_with_a_missing_tool_names_the_package() {
-    let result = copy_with(&MISSING, &[PathBuf::from("/a.png")], Duration::from_secs(1));
-
-    assert!(matches!(
-        result,
-        Err(ClipboardError::ToolMissing("some-package"))
-    ));
-}
-
-#[test]
-fn read_with_a_missing_tool_names_the_package() {
-    let result = read_with(&MISSING, Duration::from_secs(1));
-
-    assert!(matches!(
-        result,
-        Err(ClipboardError::ToolMissing("some-package"))
-    ));
-}
-
-#[cfg(unix)]
-#[test]
-fn copy_with_a_stalled_tool_times_out() {
-    let stalled = ToolCommand {
-        program: "sleep",
-        args: &["5"],
-        package: "coreutils",
-    };
-
-    let result = copy_with(&stalled, &long_list(), Duration::from_millis(100));
-
-    assert!(matches!(result, Err(ClipboardError::Timeout)));
-}
-
-#[cfg(unix)]
-#[test]
-fn copy_with_a_failing_tool_reports_the_exit_status_not_the_write_error() {
-    let failing = ToolCommand {
-        program: "false",
-        args: &[],
-        package: "coreutils",
-    };
-
-    let result = copy_with(&failing, &long_list(), Duration::from_secs(2));
-
-    assert!(matches!(result, Err(ClipboardError::Failed { .. })));
-}
-
-#[cfg(unix)]
-#[test]
-fn read_with_a_silent_tool_times_out() {
-    let silent = ToolCommand {
-        program: "sleep",
-        args: &["5"],
-        package: "coreutils",
-    };
-
-    let result = read_with(&silent, Duration::from_millis(100));
-
-    assert!(matches!(result, Err(ClipboardError::Timeout)));
-}
-
-#[cfg(unix)]
-#[test]
-fn read_with_a_tool_that_closes_its_output_and_keeps_running_times_out() {
-    let lingering = ToolCommand {
-        program: "/bin/sh",
-        args: &["-c", "exec >&-; exec sleep 5"],
-        package: "coreutils",
-    };
-
-    let result = read_with(&lingering, Duration::from_millis(200));
-
-    assert!(matches!(result, Err(ClipboardError::Timeout)));
-}
-
-#[cfg(unix)]
-#[test]
-fn read_with_a_failing_tool_gives_an_empty_list() {
-    let failing = ToolCommand {
-        program: "false",
-        args: &[],
-        package: "coreutils",
-    };
-
-    let result = read_with(&failing, Duration::from_secs(2));
-
-    assert!(matches!(result, Ok(files) if files.is_empty()));
-}
-
-#[cfg(unix)]
-#[test]
-fn read_with_a_tool_that_prints_a_list_returns_the_files() {
-    let printing = ToolCommand {
-        program: "printf",
-        args: &["file:///a/b%%20c.png\\r\\n"],
-        package: "coreutils",
-    };
-
-    let result = read_with(&printing, Duration::from_secs(2));
-
-    assert!(matches!(result, Ok(files) if files == [PathBuf::from("/a/b c.png")]));
 }

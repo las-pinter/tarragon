@@ -52,6 +52,11 @@ fontdb = { version = "=0.24.0", default-features = false, features = ["std", "fs
 # The app matches the winit errors that eframe returns. This is the version
 # eframe already uses; no features are added.
 winit = { version = "=0.30.13", default-features = false }
+# Copy and Paste of files in the grid use the system clipboard through arboard
+# on Linux, Windows, and macOS. eframe already pulls the same version. The
+# Wayland feature talks to compositors with the data-control protocol and
+# falls back to X11 elsewhere.
+arboard = { version = "=3.7.0", default-features = false, features = ["wayland-data-control"] }
 # rayon handles CPU-bound work. The grid example caps its pool at four threads.
 rayon = "1.11"
 # The render pipeline sends results from worker threads to the UI over a

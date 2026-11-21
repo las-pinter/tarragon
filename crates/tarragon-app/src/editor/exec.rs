@@ -203,20 +203,20 @@ fn expand_token(
 
 /// The bytes of a path. On Unix they are the exact bytes of the name.
 #[cfg(unix)]
-pub(crate) fn path_bytes(path: &Path) -> Cow<'_, [u8]> {
+fn path_bytes(path: &Path) -> Cow<'_, [u8]> {
     use std::os::unix::ffi::OsStrExt;
     Cow::Borrowed(path.as_os_str().as_bytes())
 }
 
 /// The bytes of a path. A name that is not valid text loses its bad parts.
 #[cfg(not(unix))]
-pub(crate) fn path_bytes(path: &Path) -> Cow<'_, [u8]> {
+fn path_bytes(path: &Path) -> Cow<'_, [u8]> {
     Cow::Owned(path.to_string_lossy().into_owned().into_bytes())
 }
 
 /// Add `bytes` to `out`, percent-encoded. Letters, digits, `-`, `.`, `_`, `~`,
 /// and `/` stay as they are.
-pub(crate) fn encode_into(out: &mut String, bytes: &[u8]) {
+fn encode_into(out: &mut String, bytes: &[u8]) {
     const HEX: &[u8; 16] = b"0123456789ABCDEF";
     for &byte in bytes {
         if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~' | b'/') {

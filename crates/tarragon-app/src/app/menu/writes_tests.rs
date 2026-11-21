@@ -1,5 +1,5 @@
 //! Tests for the menu choices that write files. Every file lives in a temp
-//! folder, and no test runs a real clipboard program.
+//! folder, and no test touches the system clipboard.
 
 use std::time::{Duration, Instant};
 
@@ -175,10 +175,17 @@ fn a_paste_skips_a_folder_and_a_missing_file() {
 #[test]
 fn the_paste_notices_name_the_cause_of_a_failure() {
     let target = new_dir();
-    let missing = paste_outcome(&target.0, || Err(ClipboardError::ToolMissing("xclip")));
+    let missing = paste_outcome(&target.0, || {
+        Err(ClipboardError::Unavailable("no display".to_owned()))
+    });
     assert_eq!(
         missing.notice.as_deref(),
-        Some("Install xclip to paste files")
+        Some("Cannot paste files: the clipboard is not available: no display")
+    );
+    let busy = paste_outcome(&target.0, || Err(ClipboardError::Busy));
+    assert_eq!(
+        busy.notice.as_deref(),
+        Some("Cannot paste files: another program is using the clipboard")
     );
     let empty = paste_outcome(&target.0, || Ok(Vec::new()));
     assert_eq!(
@@ -217,11 +224,10 @@ fn a_paste_only_starts_for_the_shown_folder() {
     assert!(rig.app.menu.writing.is_none());
     // A shown folder: the paste starts.
     rig.app.shell.gallery_mut().set_folder(Some(dir));
-    rig.app.paste_with(&rig.ctx.clone(), || {
-        Err(ClipboardError::ToolMissing("xclip"))
-    });
+    rig.app
+        .paste_with(&rig.ctx.clone(), || Err(ClipboardError::Busy));
     assert!(rig.app.menu.writing.is_some());
-    wait_for_text(&mut rig, "Install xclip to paste files");
+    wait_for_text(&mut rig, "another program is using the clipboard");
     assert!(rig.app.menu.writing.is_none());
 }
 

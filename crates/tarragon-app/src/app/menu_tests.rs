@@ -1,5 +1,5 @@
 //! Tests for the grid menu choices that the app carries out. No test runs a
-//! real editor, file manager, or clipboard tool.
+//! real editor or file manager, and none touches the system clipboard.
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -132,17 +132,20 @@ fn an_open_of_many_files_runs_on_its_own_thread_and_shows_the_counts() {
 }
 
 #[test]
-fn a_missing_clipboard_tool_shows_the_install_notice() {
+fn a_clipboard_that_is_not_available_shows_the_reason() {
     let mut rig = Rig::new(&[], &[], 9);
     let paths = vec![path_of(&rig, "a.png")];
     rig.app.start_copy(&rig.ctx, paths, |_| {
-        Err(ClipboardError::ToolMissing("xclip"))
+        Err(ClipboardError::Unavailable("no display".to_owned()))
     });
-    wait_for_text(&mut rig, "Install xclip to copy files");
+    wait_for_text(
+        &mut rig,
+        "Cannot copy files: the clipboard is not available: no display",
+    );
 }
 
 #[test]
-fn a_copy_does_not_block_the_caller_while_the_tool_runs() {
+fn a_copy_does_not_block_the_caller_while_the_clipboard_works() {
     let mut rig = Rig::new(&[], &[], 9);
     let (release, wait) = crossbeam_channel::bounded::<()>(1);
     let start = Instant::now();

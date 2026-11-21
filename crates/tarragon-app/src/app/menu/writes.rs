@@ -108,8 +108,8 @@ impl App {
         self.paste_with(ctx, clipboard::read_files);
     }
 
-    /// [`Self::paste`] with the call that reads the clipboard, so a test needs
-    /// no clipboard program.
+    /// [`Self::paste`] with the call that reads the clipboard, so a test need
+    /// not touch the system clipboard.
     pub(super) fn paste_with(
         &mut self,
         ctx: &Context,
@@ -428,10 +428,7 @@ fn paste_text(pasted: usize, skipped: usize, failed: Option<(String, usize)>) ->
 
 /// The notice for a clipboard that could not be read.
 fn paste_failure_text(error: &ClipboardError) -> String {
-    match error {
-        ClipboardError::ToolMissing(package) => format!("Install {package} to paste files"),
-        other => format!("Cannot paste files: {other}"),
-    }
+    format!("Cannot paste files: {error}")
 }
 
 #[cfg(test)]

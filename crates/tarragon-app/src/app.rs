@@ -523,6 +523,8 @@ impl eframe::App for App {
     // The argument exists because the eframe `glow` feature is on.
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
         self.save_window_state();
+        // On X11 the drop offers a copied list to a clipboard manager.
+        crate::clipboard::shutdown();
         let exit = self.exit_clear();
         self.thumbs.shutdown(&self.exit_wait, exit);
     }

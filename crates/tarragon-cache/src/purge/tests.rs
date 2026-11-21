@@ -507,3 +507,40 @@ fn a_folder_named_like_a_tier_without_the_marker_is_kept() {
     assert_eq!(outcome, PurgeOutcome::default());
     assert!(file.is_file() && full.join("a.txt").is_file());
 }
+
+#[cfg(unix)]
+#[test]
+fn a_purge_that_fails_partway_keeps_the_marker_for_the_next_purge() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let temp = TempDir::new("partial");
+    let store = CacheStore::new(temp.path());
+    let entry = store
+        .write_all(&source(40, 30), "gallery", "abcd1234", "art.jpg")
+        .expect("write the tiers");
+    let locked = entry
+        .path(Tier::Thumb320)
+        .parent()
+        .expect("the entry folder")
+        .to_path_buf();
+    std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o555))
+        .expect("lock the folder");
+    // A user who may write anyway (root) cannot see the failure.
+    let probe = locked.join("probe");
+    if std::fs::write(&probe, b"x").is_ok() {
+        let _ = std::fs::remove_file(&probe);
+        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755)).expect("unlock");
+        return;
+    }
+
+    let failed = store.purge(None);
+    std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755))
+        .expect("unlock the folder");
+
+    assert!(matches!(failed, Err(CacheError::Io { .. })), "{failed:?}");
+    assert!(store.marker_path(Tier::Thumb320).is_file());
+    let second = store.purge(None).expect("the second purge");
+    assert!(second.files_removed >= 2, "{second:?}");
+    assert!(!entry.path(Tier::Thumb320).exists());
+    assert!(!store.marker_path(Tier::Thumb320).exists());
+}

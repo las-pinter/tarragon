@@ -39,7 +39,9 @@ pub struct PurgeOutcome {
 
 impl CacheStore {
     /// Delete the cache tiers (`320`, `1024`, `full`) and their markers, and
-    /// prune the empty directories. The cache root itself stays.
+    /// prune the empty directories. The cache root itself stays. A tier folder
+    /// without the `format=1` marker is left alone, and a marker is removed
+    /// only after the rest of its tier, so a failed purge can run again.
     ///
     /// Anything else in the cache root is left untouched. The user can point
     /// the cache at a folder that holds other files, and a purge must never
@@ -79,7 +81,8 @@ impl CacheStore {
     }
 
     /// Delete every file under one tier and prune its empty directories. The
-    /// tier root itself stays.
+    /// tier root itself stays. A tier folder without the `format=1` marker is
+    /// left alone.
     ///
     /// A missing tier gives a zero outcome. A tier directory that resolves
     /// outside the cache root deletes nothing. A tier directory that is a
@@ -168,10 +171,27 @@ impl CacheStore {
         }
         // A folder that only shares a tier name, with no format marker, was not
         // made by the store and may hold user files, so it stays.
-        if !self.marker_path(tier).is_file() {
+        let marker = self.marker_path(tier);
+        if !marker.is_file() {
             return Ok(PurgeOutcome::default());
         }
-        let (files_removed, bytes_removed) = remove_tree_contents(&tier_dir)?;
+        // The marker goes last, after every other file is gone. A clear that
+        // fails partway keeps it, so the next purge still knows the folder.
+        let (mut files_removed, mut bytes_removed) = remove_tree_contents(&tier_dir, &marker)?;
+        let size = std::fs::symlink_metadata(&marker).map_or(0, |meta| meta.len());
+        match std::fs::remove_file(&marker) {
+            Ok(()) => {
+                files_removed += 1;
+                bytes_removed = bytes_removed.saturating_add(size);
+            }
+            Err(source) if source.kind() == std::io::ErrorKind::NotFound => {}
+            Err(source) => {
+                return Err(CacheError::Io {
+                    path: marker,
+                    source,
+                });
+            }
+        }
         Ok(PurgeOutcome {
             files_removed,
             bytes_removed,
@@ -237,8 +257,8 @@ fn home_dir() -> Option<PathBuf> {
         .map(PathBuf::from)
 }
 
-/// Remove every file under `root` and prune the empty subdirectories. The
-/// `root` directory itself stays.
+/// Remove every file under `root` except `keep`, and prune the empty
+/// subdirectories. The `root` directory itself stays.
 ///
 /// The walk never follows a symlink, so a link cannot escape the tree. A
 /// symlink inside the tree is unlinked in place, never followed, so "delete
@@ -253,7 +273,7 @@ fn home_dir() -> Option<PathBuf> {
 /// # Errors
 ///
 /// Returns [`CacheError::Io`] when a directory read or file remove fails.
-fn remove_tree_contents(root: &Path) -> Result<(u64, u64), CacheError> {
+fn remove_tree_contents(root: &Path, keep: &Path) -> Result<(u64, u64), CacheError> {
     let canonical_root = dunce::canonicalize(root).ok();
     let mut files_removed = 0u64;
     let mut bytes_removed = 0u64;
@@ -284,6 +304,9 @@ fn remove_tree_contents(root: &Path) -> Result<(u64, u64), CacheError> {
                 }
             };
             let path = item.path();
+            if path == keep {
+                continue;
+            }
             let file_type = match item.file_type() {
                 Ok(file_type) => file_type,
                 Err(source) => {

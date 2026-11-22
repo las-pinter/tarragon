@@ -19,4 +19,5 @@ mod settings;
 mod settings_repair;
 mod support;
 mod tag_rename;
+mod thumbnail_order;
 mod window_state;

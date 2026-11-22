@@ -6,7 +6,7 @@ use tarragon_core::tier::Tier;
 
 use crate::CacheError;
 
-use super::{CacheStore, FORMAT_MARKER, SourceStamp, TierFormat, is_stale};
+use super::{CacheStore, FORMAT_MARKER, SourceStamp, TEMP_PREFIX, TierFormat, is_stale};
 
 /// A temporary cache root that removes itself on drop.
 struct TempDir {
@@ -260,6 +260,39 @@ fn every_tier_holds_the_format_marker() {
             marker,
             temp.path().join(tier.as_str()).join(FORMAT_MARKER),
             "marker is not in the tier directory"
+        );
+        let content = std::fs::read(&marker).expect("read the marker");
+        assert_eq!(content, b"1", "the marker must hold exactly 1");
+    }
+}
+
+#[test]
+fn a_failed_rename_removes_its_temp_file() {
+    let temp = TempDir::new("renamefail");
+    let store = CacheStore::new(temp.path());
+    let entry = store
+        .entry("gallery", "abcd1234", "art.jpg", TierFormat::Jpeg)
+        .expect("build the paths");
+    // A folder with a file in it where the tier file goes makes the rename
+    // fail on every system.
+    let blocked = entry.path(Tier::Thumb320);
+    std::fs::create_dir_all(blocked).expect("make the blocking folder");
+    std::fs::write(blocked.join("keep"), b"x").expect("fill the blocking folder");
+
+    let result = store.write_all(&source(300, 200), "gallery", "abcd1234", "art.jpg");
+
+    // The error must come from the rename, or the check below proves nothing.
+    assert!(
+        matches!(&result, Err(CacheError::Io { path, .. }) if path == blocked),
+        "the rename must fail: {result:?}"
+    );
+    let dir = blocked.parent().expect("a parent");
+    for item in std::fs::read_dir(dir).expect("read the tier dir") {
+        let name = item.expect("read a dir entry").file_name();
+        let name = name.to_string_lossy();
+        assert!(
+            !name.starts_with(TEMP_PREFIX),
+            "a temp file was left behind: {name}"
         );
     }
 }

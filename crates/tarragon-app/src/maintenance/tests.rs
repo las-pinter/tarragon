@@ -136,6 +136,21 @@ fn the_oldest_source_goes_first_with_its_row() {
 }
 
 #[test]
+fn sources_with_the_same_access_time_go_in_path_order() {
+    let setup = setup();
+    // Written out of path order, so insertion order cannot pass the test.
+    add_source(&setup, "c", 10);
+    add_source(&setup, "a", 10);
+    add_source(&setup, "b", 10);
+    let done = evict_bytes(&setup.db, &setup.cache, 2 * SOURCE_BYTES).expect("evict");
+    assert_eq!(done.rows, 1);
+    assert!(none_exist(&setup, "a"), "the first path must go first");
+    for name in ["b", "c"] {
+        assert!(all_exist(&setup, name), "{name} lost files");
+    }
+}
+
+#[test]
 fn the_cap_converts_from_gib() {
     assert_eq!(cap_to_bytes(20), 20 * (1u64 << 30));
     assert_eq!(cap_to_bytes(20), 21_474_836_480);

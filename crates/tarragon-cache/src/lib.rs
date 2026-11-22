@@ -15,6 +15,8 @@ mod names;
 pub mod purge;
 pub mod store;
 pub mod temp;
+#[cfg(all(test, windows))]
+mod test_links;
 
 pub use codec::thumb_image;
 

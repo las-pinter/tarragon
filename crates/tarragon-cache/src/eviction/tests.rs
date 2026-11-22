@@ -422,3 +422,6 @@ fn a_failed_remove_keeps_the_removed_sources_and_goes_on() {
     assert_eq!(outcome.evicted, vec![old, mid.clone(), new.clone()]);
     assert!(!any_file_exists(&mid) && !any_file_exists(&new));
 }
+
+#[cfg(windows)]
+mod windows;

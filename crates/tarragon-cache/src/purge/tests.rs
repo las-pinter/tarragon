@@ -544,3 +544,6 @@ fn a_purge_that_fails_partway_keeps_the_marker_for_the_next_purge() {
     assert!(!entry.path(Tier::Thumb320).exists());
     assert!(!store.marker_path(Tier::Thumb320).exists());
 }
+
+#[cfg(windows)]
+mod windows;

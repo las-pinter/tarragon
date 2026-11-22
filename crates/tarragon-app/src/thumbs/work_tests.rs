@@ -321,7 +321,7 @@ fn a_regenerate_does_not_replace_a_waiting_purge() {
 fn only_the_result_of_a_regenerate_is_taken_as_one() {
     let mut rig = Rig::new("regentake", Some("one"));
     rig.settle();
-    rig.thumbs.evict(0);
+    rig.thumbs.upkeep_at_start(0);
     let start = Instant::now();
     while rig.thumbs.finished.is_none() {
         rig.thumbs.before_draw(&rig.ctx, &mut rig.gallery);
@@ -331,7 +331,7 @@ fn only_the_result_of_a_regenerate_is_taken_as_one() {
     assert!(rig.thumbs.take_regenerate_result().is_none());
     assert!(matches!(
         rig.thumbs.take_work_result(),
-        Some((Work::Evict, _))
+        Some((Work::Upkeep, _))
     ));
 }
 
@@ -342,14 +342,14 @@ fn an_eviction_with_a_zero_cap_changes_nothing_and_reports() {
     let cache = held.rig.dir.0.join("cache");
     let before = files_under(&cache).len();
 
-    held.rig.thumbs.evict(0);
+    held.rig.thumbs.upkeep_at_start(0);
     let mut result = None;
     held.pump_until(|rig| {
         result = rig.thumbs.take_work_result();
         result.is_some()
     });
 
-    let Some((Work::Evict, Ok(WorkOutcome::Evicted(evicted)))) = result else {
+    let Some((Work::Upkeep, Ok(WorkOutcome::Evicted(evicted)))) = result else {
         panic!("the eviction gave {result:?}");
     };
     assert_eq!(evicted.rows, 0);

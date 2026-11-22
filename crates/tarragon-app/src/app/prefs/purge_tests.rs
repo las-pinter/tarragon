@@ -335,7 +335,7 @@ fn the_window_stays_drawable_and_shows_the_strip_while_the_purge_waits_for_a_ren
 fn an_eviction_result_is_taken_and_leaves_the_purge_state_alone() {
     let mut rig = Rig::new(&[], &[], 9);
     rig.frame(Vec::new());
-    rig.app.thumbs.evict(0);
+    rig.app.thumbs.upkeep_at_start(0);
     let end = Instant::now() + LIMIT;
     while !rig.app.thumbs.is_idle() {
         rig.frame(Vec::new());

@@ -122,7 +122,7 @@ impl App {
             self.shell.prefs_mut().set_cache_size(text);
         }
         // An eviction result is only taken: its failure is already logged.
-        let _ = self.thumbs.take_evict_result();
+        let _ = self.thumbs.take_upkeep_result();
         // Only a purge result is taken otherwise; other work has its own taker.
         if let Some(result) = self.thumbs.take_purge_result() {
             lock(&state).purging = false;

@@ -1,4 +1,4 @@
-//! Tests for the cache eviction caller.
+//! Tests for the cache eviction caller and the upkeep at start.
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -194,4 +194,33 @@ fn a_row_without_cache_paths_is_never_deleted() {
     // The bare row and the newest source stay.
     assert_eq!(setup.db.count_thumbnails().expect("count"), 2);
     assert!(all_exist(&setup, "new"));
+}
+
+#[test]
+fn the_start_upkeep_removes_old_temps_and_keeps_the_ids_of_missing_folders() {
+    let setup = setup();
+    let folder = setup.root.join("320").join("folder_x");
+    std::fs::create_dir_all(&folder).expect("make a tier folder");
+    let orphan = folder.join(".tmp-1-0");
+    std::fs::write(&orphan, b"x").expect("write the temp file");
+    let hour_ago = std::time::SystemTime::now() - std::time::Duration::from_secs(3600);
+    std::fs::File::options()
+        .write(true)
+        .open(&orphan)
+        .and_then(|file| file.set_modified(hour_ago))
+        .expect("age the temp file");
+    // A folder on a drive that is not mounted looks missing; its ID must stay.
+    let missing = setup.root.join("unmounted").to_string_lossy().into_owned();
+    setup
+        .db
+        .upsert_folder_uuid(&missing, "kept")
+        .expect("store an ID");
+
+    upkeep_at_start(&setup.db, &setup.cache, 0).expect("run the upkeep");
+
+    assert!(!orphan.exists());
+    assert_eq!(
+        setup.db.folder_uuid(&missing).expect("read"),
+        Some("kept".to_owned())
+    );
 }

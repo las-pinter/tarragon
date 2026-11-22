@@ -89,7 +89,7 @@ fn evicted_at_start(app: &mut App) -> usize {
     loop {
         app.thumbs.before_draw(&ctx, app.shell.gallery_mut());
         if let Some(result) = app.thumbs.take_work_result() {
-            let (Work::Evict, Ok(WorkOutcome::Evicted(done))) = result else {
+            let (Work::Upkeep, Ok(WorkOutcome::Evicted(done))) = result else {
                 panic!("the start work gave {result:?}");
             };
             return done.rows;

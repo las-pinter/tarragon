@@ -42,6 +42,28 @@ fn cap_to_bytes(cap_gb: i64) -> u64 {
         .saturating_mul(BYTES_PER_GIB)
 }
 
+/// The upkeep at start: delete the temp files that a crashed write left, then
+/// [`evict`].
+///
+/// The temp files go first, because the size total counts them. A failed
+/// sweep is logged and does not stop the eviction.
+///
+/// # Errors
+///
+/// Returns the errors of [`evict`].
+pub fn upkeep_at_start(
+    db: &Database,
+    cache: &CacheStore,
+    cap_gb: i64,
+) -> Result<Evicted, MaintenanceError> {
+    match cache.sweep_orphan_temps() {
+        Ok(0) => {}
+        Ok(removed) => tracing::info!("removed {removed} leftover cache temp files"),
+        Err(error) => tracing::warn!("cannot remove the leftover cache temp files: {error}"),
+    }
+    evict(db, cache, cap_gb)
+}
+
 /// Evict the least recently used sources until the cache fits `cap_gb` GiB.
 ///
 /// A cap of zero or less turns the cap off. The tier files and the

@@ -23,8 +23,9 @@ use crate::pipeline::Pipeline;
 pub enum Work {
     /// Delete every cache file and thumbnail row.
     Purge,
-    /// Evict the least recently used sources down to the size cap.
-    Evict,
+    /// The upkeep at start: remove leftover temp files, then evict the least
+    /// recently used sources down to the size cap.
+    Upkeep,
     /// Delete the cache files of chosen sources and render them again.
     Regenerate,
     /// Render failed files again. It reads their size and time first, which
@@ -49,8 +50,8 @@ pub enum WorkOutcome {
 pub(super) enum Queued {
     /// Purge the cache. `data_root` is the directory the purge must never delete.
     Purge { data_root: PathBuf },
-    /// Evict down to `cap_gb` GiB.
-    Evict { cap_gb: i64 },
+    /// Run the upkeep at start and evict down to `cap_gb` GiB.
+    Upkeep { cap_gb: i64 },
     /// Render these files again.
     Regenerate { keys: HashSet<PathBuf> },
     /// Render these failed files again.
@@ -62,7 +63,7 @@ impl Queued {
     fn work(&self) -> Work {
         match self {
             Self::Purge { .. } => Work::Purge,
-            Self::Evict { .. } => Work::Evict,
+            Self::Upkeep { .. } => Work::Upkeep,
             Self::Regenerate { .. } => Work::Regenerate,
             Self::Retry { .. } => Work::Retry,
         }
@@ -85,9 +86,9 @@ impl Queued {
                 .purge(data_root)
                 .map(WorkOutcome::Purged)
                 .map_err(|error| error.to_string()),
-            Self::Evict { cap_gb } => {
+            Self::Upkeep { cap_gb } => {
                 let cache = CacheStore::new(pipeline.cache_root().to_path_buf());
-                maintenance::evict(pipeline.database(), &cache, *cap_gb)
+                maintenance::upkeep_at_start(pipeline.database(), &cache, *cap_gb)
                     .map(WorkOutcome::Evicted)
                     .map_err(|error| error.to_string())
             }
@@ -106,9 +107,10 @@ impl Thumbs {
         (self.repaint)();
     }
 
-    /// Ask for an eviction down to `cap_gb` GiB. It waits like [`Self::purge`].
-    pub fn evict(&mut self, cap_gb: i64) {
-        self.queued = Some(Queued::Evict { cap_gb });
+    /// Ask for the upkeep at start, which evicts down to `cap_gb` GiB. It
+    /// waits like [`Self::purge`].
+    pub fn upkeep_at_start(&mut self, cap_gb: i64) {
+        self.queued = Some(Queued::Upkeep { cap_gb });
         (self.repaint)();
     }
 
@@ -157,10 +159,10 @@ impl Thumbs {
         self.take_result_of(Work::Purge)
     }
 
-    /// Return the result of a finished eviction, once. Its failure is already
+    /// Return the result of a finished upkeep, once. Its failure is already
     /// logged, so a caller only takes it to clear it.
-    pub fn take_evict_result(&mut self) -> Option<Result<WorkOutcome, String>> {
-        self.take_result_of(Work::Evict)
+    pub fn take_upkeep_result(&mut self) -> Option<Result<WorkOutcome, String>> {
+        self.take_result_of(Work::Upkeep)
     }
 
     /// Take the last result only when it came from `work`.

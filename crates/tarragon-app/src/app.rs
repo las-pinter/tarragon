@@ -165,7 +165,7 @@ impl App {
         let repaint_ctx = Arc::new(OnceLock::new());
         let (mut thumbs, cache_root) = start_thumbs(path, &db, folder, &repaint_ctx)?;
         // Queued before any folder open, so the open sees the evicted cache.
-        thumbs.evict(cache_cap_gb(&db));
+        thumbs.upkeep_at_start(cache_cap_gb(&db));
         let preview_loader = PreviewLoader::new(repaint_of(&repaint_ctx))?;
         let max_multi_preview = max_multi_preview(&db);
         shell.preview_mut().set_max_multi_preview(max_multi_preview);

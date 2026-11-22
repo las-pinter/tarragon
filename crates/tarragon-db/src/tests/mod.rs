@@ -16,6 +16,7 @@ mod rename;
 mod repository;
 mod roots;
 mod settings;
+mod settings_repair;
 mod support;
 mod tag_rename;
 mod window_state;

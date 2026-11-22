@@ -8,7 +8,11 @@ use serde_json::Value;
 
 use crate::{Database, DbError};
 
+mod repair;
 mod window_state;
+
+use repair::repair;
+pub(crate) use repair::was_repaired;
 
 pub use window_state::{WINDOW_STATE_KEY, WindowState};
 
@@ -300,7 +304,9 @@ impl<'a> Settings<'a> {
     /// Read one typed setting.
     ///
     /// A stored value whose exact JSON type differs from the declared type,
-    /// or whose text is malformed, is repaired to the default.
+    /// or whose text is malformed, reads as the default, and a number out of
+    /// bounds is clamped. Either repair logs a warning and is stored, so the
+    /// next read finds the repaired value.
     ///
     /// # Errors
     ///
@@ -308,7 +314,28 @@ impl<'a> Settings<'a> {
     pub fn get(&self, key: SettingKey) -> Result<SettingValue, DbError> {
         let kind = key.kind();
         match self.db.setting(key.as_str())? {
-            Some(text) => Ok(repair(kind, &text)),
+            Some(text) => {
+                let value = repair(kind, &text);
+                if was_repaired(&text, &value) {
+                    tracing::warn!(
+                        "the stored setting {} was invalid and was repaired",
+                        key.as_str()
+                    );
+                    // Store the repair, so the next read finds a good value
+                    // and does not warn again.
+                    let stored = encode(key, value.clone())
+                        .map_err(|error| error.to_string())
+                        .and_then(|fixed| {
+                            self.db
+                                .set_setting(key.as_str(), &fixed)
+                                .map_err(|error| error.to_string())
+                        });
+                    if let Err(error) = stored {
+                        tracing::debug!("cannot store the repaired {}: {error}", key.as_str());
+                    }
+                }
+                Ok(value)
+            }
             None => Ok(kind.default_value()),
         }
     }
@@ -438,42 +465,5 @@ fn encode(key: SettingKey, value: SettingValue) -> Result<String, SettingsError>
             Ok(encoded.to_string())
         }
         SettingValue::Text(text) => Ok(Value::String(text).to_string()),
-    }
-}
-
-/// Parse a stored value and apply the read-repair, clamp, and choice rules.
-///
-/// The exact-type rule uses the JSON type, not a coercion. So a stored `true`
-/// or `3.5` is wrong for an int key, and a stored `5` is wrong for a float key.
-fn repair(kind: SettingKind, text: &str) -> SettingValue {
-    let Ok(value) = serde_json::from_str::<Value>(text) else {
-        return kind.default_value();
-    };
-    match kind {
-        SettingKind::OptionalText => match value {
-            Value::String(text) => SettingValue::Text(text),
-            Value::Null => SettingValue::None,
-            _ => kind.default_value(),
-        },
-        SettingKind::Choice { choices, .. } => match value {
-            Value::String(text) if choices.contains(&text.as_str()) => SettingValue::Text(text),
-            _ => kind.default_value(),
-        },
-        SettingKind::Bool { .. } => match value {
-            Value::Bool(flag) => SettingValue::Bool(flag),
-            _ => kind.default_value(),
-        },
-        SettingKind::Int { min, max, .. } => match value.as_i64() {
-            // `as_i64` is `None` for a JSON real, so an int key rejects a float.
-            Some(number) => SettingValue::Int(number.clamp(min, max)),
-            None => kind.default_value(),
-        },
-        SettingKind::Float { min, max, .. } => match value.as_f64() {
-            // `is_f64` is false for a JSON int, so a float key rejects an int.
-            Some(number) if value.is_f64() && number.is_finite() => {
-                SettingValue::Float(number.clamp(min, max))
-            }
-            _ => kind.default_value(),
-        },
     }
 }

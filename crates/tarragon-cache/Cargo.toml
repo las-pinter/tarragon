@@ -17,7 +17,7 @@ thiserror.workspace = true
 [dev-dependencies]
 # The fixture test renders real files. The render crate does not depend on
 # this crate, so no runtime edge and no cycle.
-tarragon-render = { path = "../tarragon-render", version = "0.2.0" }
+tarragon-render = { path = "../tarragon-render", version = "0.3.0" }
 
 [lints]
 workspace = true

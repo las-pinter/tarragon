@@ -21,8 +21,8 @@ zip.workspace = true
 rayon.workspace = true
 # The render tests include the PSD test builder, which writes zlib channels.
 flate2.workspace = true
-tarragon-cache = { path = "../tarragon-cache", version = "0.2.0" }
-tarragon-scan = { path = "../tarragon-scan", version = "0.2.0" }
+tarragon-cache = { path = "../tarragon-cache", version = "0.3.0" }
+tarragon-scan = { path = "../tarragon-scan", version = "0.3.0" }
 
 [lints]
 workspace = true

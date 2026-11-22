@@ -41,14 +41,14 @@ macOS. On Linux the copied files stay on the clipboard while Tarragon runs.
 
 ## Install (Linux)
 
-Download `tarragon-0.2.0-linux-x86_64-portable.zip` and its `.sha256` file
+Download `tarragon-0.3.0-linux-x86_64-portable.zip` and its `.sha256` file
 from the [GitHub Releases](https://github.com/las-pinter/tarragon/releases)
 page. Then run:
 
 ```sh
-sha256sum -c tarragon-0.2.0-linux-x86_64-portable.zip.sha256
-unzip tarragon-0.2.0-linux-x86_64-portable.zip
-cd tarragon-0.2.0-linux-x86_64-portable
+sha256sum -c tarragon-0.3.0-linux-x86_64-portable.zip.sha256
+unzip tarragon-0.3.0-linux-x86_64-portable.zip
+cd tarragon-0.3.0-linux-x86_64-portable
 ./tarragon
 ```
 

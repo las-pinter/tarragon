@@ -237,7 +237,8 @@ fn masked(body: Vec<u8>) -> PsdDocument {
 }
 
 #[test]
-fn mask_parameters_are_skipped_before_the_real_rectangle() {
+fn parameters_before_the_real_mask_are_read() {
+    // The order of the format specification.
     let mut body = Vec::new();
     push_rect(&mut body, [0, 0, 2, 2]);
     // The default color, then the flags with the parameters bit.
@@ -250,15 +251,153 @@ fn mask_parameters_are_skipped_before_the_real_rectangle() {
     push_rect(&mut body, [0, 0, 2, 2]);
     let document = masked(body);
     let mask = document.file().layers[0].mask.expect("a mask");
+    assert_eq!(mask.user_density, Some(128));
+    assert_eq!(mask.vector_density, None);
+    let real = mask.real.expect("a real mask");
     assert_eq!(
-        mask.real_bounds,
-        Some(LayerBounds {
+        real.bounds,
+        LayerBounds {
             top: 0,
             left: 0,
             bottom: 2,
             right: 2
-        })
+        }
     );
+    assert_eq!((real.flags, real.default_color), (0, 255));
+}
+
+#[test]
+fn a_short_parameter_block_before_the_real_mask_is_read() {
+    // The order of the format specification with only a user density. Read
+    // in Photoshop's order, the bytes also end the body (the presence byte
+    // would be the high byte of the real right edge), but the real
+    // background would be the density 128, so that order is rejected.
+    let mut body = Vec::new();
+    push_rect(&mut body, [0, 0, 2, 2]);
+    body.extend_from_slice(&[255, 0x10, 0x01, 128, 0, 255]);
+    push_rect(&mut body, [0, 0, 2, 2]);
+    let document = masked(body);
+    let mask = document.file().layers[0].mask.expect("a mask");
+    assert_eq!(mask.user_density, Some(128));
+    let real = mask.real.expect("a real mask");
+    assert_eq!(
+        real.bounds,
+        LayerBounds {
+            top: 0,
+            left: 0,
+            bottom: 2,
+            right: 2
+        }
+    );
+    assert_eq!((real.flags, real.default_color), (0, 255));
+}
+
+#[test]
+fn when_both_orders_fit_the_one_with_less_padding_wins() {
+    // A full user density, then a real mask with background 0. Read in
+    // Photoshop's order, the bytes give a plausible real mask too, but leave
+    // one byte of padding; the specification order leaves none.
+    let mut body = Vec::new();
+    push_rect(&mut body, [0, 0, 2, 2]);
+    body.extend_from_slice(&[255, 0x10, 0x01, 255, 0, 0]);
+    push_rect(&mut body, [0, 0, 2, 2]);
+    let document = masked(body);
+    let mask = document.file().layers[0].mask.expect("a mask");
+    assert_eq!(mask.user_density, Some(255));
+    let real = mask.real.expect("a real mask");
+    assert_eq!(
+        real.bounds,
+        LayerBounds {
+            top: 0,
+            left: 0,
+            bottom: 2,
+            right: 2
+        }
+    );
+    assert_eq!((real.flags, real.default_color), (0, 0));
+}
+
+/// A mask body in Photoshop's order with a user density of 200 and `padding`
+/// zero bytes at the end.
+fn padded_body(padding: usize) -> Vec<u8> {
+    let mut body = Vec::new();
+    push_rect(&mut body, [0, 0, 2, 2]);
+    body.extend_from_slice(&[0, 0x18, 0, 255]);
+    push_rect(&mut body, [0, 0, 2, 2]);
+    body.extend_from_slice(&[0x01, 200]);
+    body.resize(body.len() + padding, 0);
+    body
+}
+
+#[test]
+fn padding_after_the_parameters_is_read_past() {
+    let document = masked(padded_body(6));
+    let mask = document.file().layers[0].mask.expect("a mask");
+    assert_eq!(mask.user_density, Some(200));
+    let real = mask.real.expect("a real mask");
+    assert_eq!(
+        real.bounds,
+        LayerBounds {
+            top: 0,
+            left: 0,
+            bottom: 2,
+            right: 2
+        }
+    );
+    assert_eq!((real.flags, real.default_color), (0, 255));
+}
+
+#[test]
+fn without_a_plausible_real_mask_the_parameters_come_first() {
+    // A user density, then real fields with a background of 7, which no
+    // writer uses: neither order gives a plausible real mask.
+    let mut body = Vec::new();
+    push_rect(&mut body, [0, 0, 2, 2]);
+    body.extend_from_slice(&[255, 0x10, 0x01, 128, 0, 7]);
+    push_rect(&mut body, [0, 0, 2, 2]);
+    let document = masked(body);
+    let mask = document.file().layers[0].mask.expect("a mask");
+    assert_eq!(mask.user_density, Some(128));
+    assert_eq!(mask.real, None);
+}
+
+#[test]
+fn parameters_after_the_real_mask_are_read() {
+    // The order Photoshop writes when a real mask is present: the real flags,
+    // background and rectangle, then all four parameters, then one pad byte.
+    let mut body = Vec::new();
+    push_rect(&mut body, [0, 0, 2, 2]);
+    body.extend_from_slice(&[0, 0x18, 0, 255]);
+    push_rect(&mut body, [0, 0, 1, 1]);
+    body.extend_from_slice(&[0x0F, 204]);
+    body.extend_from_slice(&2.6f64.to_be_bytes());
+    body.push(250);
+    body.extend_from_slice(&0.3f64.to_be_bytes());
+    body.push(0);
+    let document = masked(body);
+    let mask = document.file().layers[0].mask.expect("a mask");
+    assert_eq!(
+        (mask.user_density, mask.vector_density),
+        (Some(204), Some(250))
+    );
+    let real = mask.real.expect("a real mask");
+    assert_eq!((real.bounds.bottom, real.bounds.right), (1, 1));
+    assert_eq!((real.flags, real.default_color), (0, 255));
+}
+
+#[test]
+fn parameters_without_a_real_mask_are_read() {
+    // A user feather, a vector density and a vector feather, no real mask.
+    let mut body = Vec::new();
+    push_rect(&mut body, [0, 0, 2, 2]);
+    body.extend_from_slice(&[255, 0x10, 0x0E]);
+    body.extend_from_slice(&3.0f64.to_be_bytes());
+    body.push(191);
+    body.extend_from_slice(&6.0f64.to_be_bytes());
+    let document = masked(body);
+    let mask = document.file().layers[0].mask.expect("a mask");
+    assert_eq!((mask.user_density, mask.vector_density), (None, Some(191)));
+    assert_eq!(mask.real, None);
 }
 
 #[test]
@@ -269,7 +408,7 @@ fn a_bad_real_rectangle_does_not_fail_the_file() {
     push_rect(&mut body, [0, 0, 2, i32::MAX]);
     let document = masked(body);
     let mask = document.file().layers[0].mask.expect("a mask");
-    assert_eq!(mask.real_bounds, None);
+    assert_eq!(mask.real, None);
     assert_eq!(mask.default_color, 255);
 }
 

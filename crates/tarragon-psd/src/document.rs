@@ -155,6 +155,11 @@ impl PsdDocument {
 
     /// Decode one layer's channels over a viewport.
     ///
+    /// The region holds the color channels, the transparency channel, and the
+    /// mask channels the compositor reads: the user mask channel when
+    /// `LayerRecord::mask_channels` names one, and channel -2 when it stands
+    /// in for the vector mask.
+    ///
     /// # Errors
     ///
     /// Returns a typed error when the layer index is out of range, the

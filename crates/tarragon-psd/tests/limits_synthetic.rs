@@ -187,7 +187,8 @@ fn empty_rle_section(channels: usize, rows: usize) -> Vec<u8> {
 
 #[test]
 fn empty_layer_channels_over_a_large_canvas_decode_to_nothing() {
-    let mut layer = LayerSpec::content((0, 0, 0, 0));
+    // The mask record makes the compositor read channel -2.
+    let mut layer = LayerSpec::content((0, 0, 0, 0)).with_mask((0, 0, 0, 0), 255);
     // The channels the compositor reads, a repeat of one of them, and many
     // channels it never reads. All of them are empty.
     let ids: Vec<i16> = [0, 1, 2, -1, -2, 0]

@@ -117,7 +117,9 @@ pub(crate) fn validate_layer_bounds(bounds: LayerBounds) -> Result<(), PsdError>
 /// One channel of a layer record or of the merged image.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ChannelInfo {
-    /// The channel ID. 0 to 3 are color, -1 is alpha, -2 is a user mask.
+    /// The channel ID. 0 to 3 are color, -1 is alpha, -2 is the user mask or,
+    /// when mask flag bit 3 is set, the rendered vector mask, and -3 is then
+    /// the user mask.
     pub id: i16,
     /// The declared channel block length in bytes.
     pub length: u64,
@@ -157,8 +159,24 @@ pub struct LayerMask {
     pub default_color: u8,
     /// The mask flag bits.
     pub flags: u8,
-    /// The real user mask rectangle, when present.
-    pub real_bounds: Option<LayerBounds>,
+    /// The user mask density, 0 to 255, when the file sets one.
+    pub user_density: Option<u8>,
+    /// The vector mask density, 0 to 255, when the file sets one.
+    pub vector_density: Option<u8>,
+    /// The real user mask, when present: channel -3.
+    pub real: Option<RealMask>,
+}
+
+/// The real user mask fields: where channel -3 sits when channel -2 holds
+/// the rendered vector mask.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RealMask {
+    /// The real mask rectangle.
+    pub bounds: LayerBounds,
+    /// The real mask flag bits.
+    pub flags: u8,
+    /// The default color outside the rectangle, 0 or 255.
+    pub default_color: u8,
 }
 
 /// The global layer mask info section.
@@ -392,9 +410,9 @@ pub(crate) fn read_layer_record(
         {
             channel.bounds = mask.bounds;
         } else if channel.id == -3
-            && let Some(real) = parsed.mask.and_then(|mask| mask.real_bounds)
+            && let Some(real) = parsed.mask.and_then(|mask| mask.real)
         {
-            channel.bounds = real;
+            channel.bounds = real.bounds;
         }
     }
 

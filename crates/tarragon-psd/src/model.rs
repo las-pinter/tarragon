@@ -298,14 +298,14 @@ impl PsdFile {
         self.check_region(viewport)?;
         let bytes_per_sample = sample_bytes(self.header.color_mode, self.header.depth)?;
         options.check()?;
-        self.decode_channels(
-            source,
-            &layer.channels,
-            viewport,
-            1,
-            bytes_per_sample,
-            options,
-        )
+        let masks = layer.mask_channels();
+        let channels: Vec<ChannelInfo> = layer
+            .channels
+            .iter()
+            .filter(|channel| masks.reads(channel.id))
+            .copied()
+            .collect();
+        self.decode_channels(source, &channels, viewport, 1, bytes_per_sample, options)
     }
 
     /// Decode the merged image over `viewport` from bytes in memory.
@@ -346,7 +346,8 @@ impl PsdFile {
     }
 
     /// Decode one layer's channels over `viewport` from bytes in memory. See
-    /// [`PsdFile::read_merged_region`] for the copy.
+    /// [`PsdFile::read_merged_region`] for the copy. The mask channels are the
+    /// ones the compositor reads, as for `PsdDocument::read_layer_region`.
     ///
     /// # Errors
     ///
@@ -404,9 +405,10 @@ impl PsdFile {
 
     /// Decode the channels the compositor reads over the viewport.
     ///
-    /// A channel the compositor never reads (spot, extra alpha, the real mask)
-    /// is skipped, and so is a repeated channel ID, because each decode costs a
-    /// full viewport of samples.
+    /// A channel the compositor never reads (spot, extra alpha) is skipped, and
+    /// so is a repeated channel ID, because each decode costs a full viewport
+    /// of samples. The caller leaves out a mask channel (-2 or -3) that the
+    /// compositor does not read.
     fn decode_channels(
         &self,
         source: &Source,
@@ -421,6 +423,7 @@ impl PsdFile {
         for channel in channels {
             let wanted = channel.id == -1
                 || channel.id == -2
+                || channel.id == -3
                 || usize::try_from(channel.id).is_ok_and(|id| id < color_channels);
             if !wanted || decoded.iter().any(|done| done.id == channel.id) {
                 continue;

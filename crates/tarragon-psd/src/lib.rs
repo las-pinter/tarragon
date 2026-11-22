@@ -52,6 +52,7 @@ mod layer_tail;
 mod layer_tree;
 pub mod limits;
 pub mod lut3d;
+mod mask_channels;
 pub mod merged;
 mod model;
 pub mod parse;
@@ -81,7 +82,7 @@ pub use effects::{
 pub use error::PsdError;
 pub use layer::{
     BlendingRanges, ChannelInfo, Clipping, GlobalMask, LayerBounds, LayerMask, LayerRecord,
-    LayerSection,
+    LayerSection, RealMask,
 };
 pub use limits::{Deadline, FULL_TIER_MAX_EDGE, ParseOptions, full_tier_size};
 pub use merged::MergedImage;

@@ -92,6 +92,22 @@ differences below are recorded deltas, not failures.
 | `layer_mask` | At the first differing coordinate the composite is `[255,255,255,0]` and the golden is `[255,255,255,255]`. The pixel-mask alpha cut is covered by the rule test `the_layer_mask_fixture_cuts_the_layer_alpha` in `crates/tarragon-psd/tests/composite_fixtures.rs`. This row proves only that the composite RGB agrees. |
 | `layered_blend_modes` | The fixture holds five layers whose channel alpha is 160 with layer opacity 200. The straight-alpha stack gives `255 * (1 - (1 - (160/255) * (200/255))^5)`, which is about 246.4, so 246 is correct for a document with no merged background. The oracle's 255 is the delta. |
 
+Mask density and the user mask differ from the oracle on purpose and have no
+golden fixture; they follow files saved by Photoshop, checked against the
+merged image Photoshop stored in them. A density below full lets the hidden
+part show, `1 - density * (1 - mask)`, for the user mask and the vector mask
+each. When mask flag bit 3 is set, channel -2 holds the vector mask as the
+writer rendered it, so the user mask is channel -3 (placed by the real
+rectangle and background). With the real fields, the vector path is rendered
+from its block; without them, or with no readable path, channel -2 is the
+vector mask, with the vector density (Krita writes bit 3 with a raster mask
+in -2 and no real fields). Both field orders are read: the real fields
+before the mask parameters, as Photoshop writes them, and after them, as the
+specification says; when both fit, the one with less padding wins, then
+Photoshop's. The oracle multiplies the layer opacity by the density instead.
+Feather is not drawn. The rule tests are in
+`crates/tarragon-psd/tests/composite_mask_density.rs`.
+
 ## Tolerance
 
 The tests use a provisional per-channel tolerance of 2 on 8-bit values. A small

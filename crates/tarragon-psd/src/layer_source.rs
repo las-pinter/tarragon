@@ -9,6 +9,7 @@ use crate::document::PsdDocument;
 use crate::error::PsdError;
 use crate::layer::{LayerBounds, LayerRecord};
 use crate::limits::ParseOptions;
+use crate::mask_channels::VectorSource;
 use crate::model::ColorMode;
 use crate::vector_raster::rasterize;
 
@@ -57,8 +58,7 @@ pub(crate) fn read_layer(
         }
     };
     let shape = shape_from(&region, layer.bounds, viewport, count, scale);
-    let mask = mask_from(&region, layer, viewport, count, scale);
-    let mask = with_vector_mask(mask, layer, document, viewport, options)?;
+    let mask = layer_mask(&region, layer, document, viewport, (count, scale), options)?;
     Ok(LayerRead { color, shape, mask })
 }
 
@@ -156,67 +156,109 @@ fn shape_from(
     shape
 }
 
-/// Build the layer mask. Outside the mask rectangle the default color fills.
-fn mask_from(
-    region: &ImageRegion,
-    layer: &LayerRecord,
+/// The mask over the viewport: `samples` inside `bounds`, the default color
+/// outside.
+fn fill_mask(
+    samples: &[u16],
+    bounds: LayerBounds,
+    default_color: u8,
     viewport: Viewport,
     count: usize,
     scale: f32,
-) -> Option<Vec<f32>> {
-    let mask = layer.mask?;
-    // Bit 1 of the mask flags disables the mask.
-    if mask.flags & 0x02 != 0 {
-        return None;
-    }
-    let background = f32::from(mask.default_color) / 255.0;
-    let mut shape = vec![background; count];
-    let Some(samples) = channel_samples(region, -2) else {
-        return Some(shape);
-    };
+) -> Vec<f32> {
+    let mut shape = vec![f32::from(default_color) / 255.0; count];
     let width = usize::try_from(viewport.width()).unwrap_or(0);
     for y in 0..usize::try_from(viewport.height()).unwrap_or(0) {
         for x in 0..width {
             let canvas_x = viewport.left + u32::try_from(x).unwrap_or(0);
             let canvas_y = viewport.top + u32::try_from(y).unwrap_or(0);
-            if inside(mask.bounds, canvas_x, canvas_y) {
+            if inside(bounds, canvas_x, canvas_y) {
                 let index = y * width + x;
                 shape[index] = f32::from(sample_at(samples, index)) / scale;
             }
         }
     }
-    Some(shape)
+    shape
 }
 
-/// Fold the vector mask coverage into the raster mask.
+/// Apply a mask density: a density below full lets the hidden part show,
+/// `1 - density * (1 - mask)`, as Photoshop does.
+fn apply_density(values: &mut [f32], density: Option<u8>) {
+    let Some(density) = density.filter(|density| *density < 255) else {
+        return;
+    };
+    let density = f32::from(density) / 255.0;
+    for value in values {
+        *value = 1.0 - density * (1.0 - *value);
+    }
+}
+
+/// Build the mask of a layer: the user mask times the vector mask, each with
+/// its density, or `None` when the layer has neither.
 ///
-/// The two multiply. A disabled or missing vector mask leaves the mask as is.
+/// [`LayerRecord::mask_channels`] picks the channels. Channel -3 is placed by
+/// the real rectangle and background, channel -2 by the mask rectangle and
+/// default color. The vector mask is the rendered path or the channel -2
+/// stand-in, with the vector density either way. `count` is the viewport
+/// pixel count and `scale` the sample scale.
 ///
 /// # Errors
 ///
 /// Returns the error of `options` when the rasterizer passes the deadline or
 /// is cancelled.
-fn with_vector_mask(
-    mask: Option<Vec<f32>>,
+fn layer_mask(
+    region: &ImageRegion,
     layer: &LayerRecord,
     document: &PsdDocument,
     viewport: Viewport,
+    (count, scale): (usize, f32),
     options: &ParseOptions,
 ) -> Result<Option<Vec<f32>>, PsdError> {
-    let Some(vector) = layer.vector_mask.as_ref().filter(|v| !v.disabled) else {
-        return Ok(mask);
+    let channel =
+        |id: i16, bounds: LayerBounds, default_color: u8| match channel_samples(region, id) {
+            Some(samples) => fill_mask(samples, bounds, default_color, viewport, count, scale),
+            None => vec![f32::from(default_color) / 255.0; count],
+        };
+    let masks = layer.mask_channels();
+    let user = layer.mask.zip(masks.user).map(|(mask, id)| {
+        let (bounds, default_color) = match mask.real {
+            Some(real) if id == -3 => (real.bounds, real.default_color),
+            _ => (mask.bounds, mask.default_color),
+        };
+        let mut user = channel(id, bounds, default_color);
+        apply_density(&mut user, mask.user_density);
+        user
+    });
+    let vector_density = layer.mask.and_then(|mask| mask.vector_density);
+    let vector = match (masks.vector, layer.mask, layer.vector_mask.as_ref()) {
+        (VectorSource::Channel, Some(mask), _) => {
+            Some(channel(-2, mask.bounds, mask.default_color))
+        }
+        (VectorSource::Path, _, Some(path)) => {
+            let header = &document.file().header;
+            Some(rasterize(
+                path,
+                header.width,
+                header.height,
+                viewport,
+                options,
+            )?)
+        }
+        _ => None,
     };
-    let header = &document.file().header;
-    let coverage = rasterize(vector, header.width, header.height, viewport, options)?;
-    Ok(Some(match mask {
-        Some(mut raster) => {
-            for (value, factor) in raster.iter_mut().zip(&coverage) {
+    let vector = vector.map(|mut vector| {
+        apply_density(&mut vector, vector_density);
+        vector
+    });
+    Ok(match (user, vector) {
+        (Some(mut user), Some(vector)) => {
+            for (value, factor) in user.iter_mut().zip(&vector) {
                 *value *= *factor;
             }
-            raster
+            Some(user)
         }
-        None => coverage,
-    }))
+        (user, vector) => user.or(vector),
+    })
 }
 
 /// Build a constant RGB plane from a straight RGBA color.

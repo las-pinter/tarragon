@@ -6,7 +6,9 @@ use crate::effects::Effects;
 use crate::effects_legacy::parse_legacy_effects;
 use crate::effects_parse::parse_object_effects;
 use crate::error::PsdError;
-use crate::layer::{BlendingRanges, LayerBounds, LayerMask, LayerSection, validate_layer_bounds};
+use crate::layer::{
+    BlendingRanges, LayerBounds, LayerMask, LayerSection, RealMask, validate_layer_bounds,
+};
 use crate::layer_blocks::read_tagged_block;
 use crate::model::PsdVersion;
 use crate::pattern_fill::parse_pattern_fill;
@@ -122,37 +124,130 @@ fn read_mask(reader: &mut Reader) -> Result<Option<LayerMask>, PsdError> {
     let default_color = data[16];
     let flags = data[17];
     validate_layer_bounds(bounds)?;
+    let (parameters, real) = read_mask_tail(data, flags);
     Ok(Some(LayerMask {
         bounds,
         default_color,
         flags,
-        real_bounds: read_real_bounds(data, flags),
+        user_density: parameters.user_density,
+        vector_density: parameters.vector_density,
+        real,
     }))
 }
 
-/// Read the real user mask rectangle, or `None` when it is absent or unusable.
+/// The size of the real user mask fields: flags, background, rectangle.
+const REAL_MASK_BYTES: usize = 18;
+/// The real mask flag bits the format defines (bits 0 to 4).
+const REAL_FLAG_BITS: u8 = 0x1F;
+
+/// The mask densities read from the parameters.
+#[derive(Default)]
+struct MaskParameters {
+    user_density: Option<u8>,
+    vector_density: Option<u8>,
+}
+
+/// Read the parameters and the real user mask after the flags byte.
 ///
-/// The compositor does not use the real mask yet, so a bad rectangle must not
-/// fail the file.
-fn read_real_bounds(data: &[u8], flags: u8) -> Option<LayerBounds> {
-    // Flag bit 4 puts the mask parameters after the flags byte: one byte of
-    // presence bits, then a density byte or an eight-byte feather per bit.
-    let mut at = 18;
-    if flags & MASK_HAS_PARAMETERS != 0 {
-        let present = *data.get(at)?;
-        at += 1;
-        for (bit, size) in [(0x01, 1), (0x02, 8), (0x04, 1), (0x08, 8)] {
-            if present & bit != 0 {
-                at += size;
+/// The two orders are both in use. With a real mask, Photoshop writes the
+/// real fields at byte 18 and the parameters after them; the format
+/// specification puts the parameters first and the real fields after them.
+/// An order fits when its fields lie inside the body and its real mask is
+/// plausible (see [`plausible_real`]). When both fit, the one that leaves
+/// less padding at the end wins, then Photoshop's. When neither fits, the
+/// parameters are read at byte 18 and there is no real mask.
+fn read_mask_tail(data: &[u8], flags: u8) -> (MaskParameters, Option<RealMask>) {
+    if flags & MASK_HAS_PARAMETERS == 0 {
+        return (MaskParameters::default(), plausible_real(data, 18));
+    }
+    let real_first = read_parameters(data, 18 + REAL_MASK_BYTES)
+        .and_then(|(parameters, end)| fitted(data, end, parameters, 18));
+    let parameters_first = read_parameters(data, 18).and_then(|(parameters, real_at)| {
+        fitted(data, real_at + REAL_MASK_BYTES, parameters, real_at)
+    });
+    match (real_first, parameters_first) {
+        (Some((padding, a)), Some((other, b))) => {
+            if other < padding {
+                b
+            } else {
+                a
             }
         }
+        (Some((_, a)), None) | (None, Some((_, a))) => a,
+        (None, None) => (
+            read_parameters(data, 18).map_or_else(MaskParameters::default, |(p, _)| p),
+            None,
+        ),
     }
-    // The real flags and the real background byte come before the rectangle.
-    let start = at.checked_add(2)?;
+}
+
+/// The padding and the reading of one field order, when it fits: the fields
+/// end at or before the end of the body, and the real mask at `real_at` is
+/// plausible.
+fn fitted(
+    data: &[u8],
+    end: usize,
+    parameters: MaskParameters,
+    real_at: usize,
+) -> Option<(usize, (MaskParameters, Option<RealMask>))> {
+    let padding = data.len().checked_sub(end)?;
+    let real = plausible_real(data, real_at)?;
+    Some((padding, (parameters, Some(real))))
+}
+
+/// Read the real user mask at `at` when it is plausible: only defined flag
+/// bits, a background of 0 or 255, and a rectangle of non-negative size
+/// within the format limit. Anything else reads as no real mask.
+fn plausible_real(data: &[u8], at: usize) -> Option<RealMask> {
+    let real = read_real(data, at)?;
+    let plausible = real.flags & !REAL_FLAG_BITS == 0
+        && matches!(real.default_color, 0 | 255)
+        && real.bounds.width() >= 0
+        && real.bounds.height() >= 0;
+    plausible.then_some(real)
+}
+
+/// Read the mask parameters at `at`: one byte of presence bits, then per set
+/// bit the user density (one byte), the user feather (an eight-byte double),
+/// the vector density (one byte), and the vector feather (a double).
+///
+/// Returns the densities and the end of the parameters, or `None` when the
+/// presence byte is missing or the values run past the body. The feathers
+/// are read past: a writer that applies them stores a real mask.
+fn read_parameters(data: &[u8], at: usize) -> Option<(MaskParameters, usize)> {
+    let present = *data.get(at)?;
+    let mut parameters = MaskParameters::default();
+    let mut at = at + 1;
+    for (bit, size) in [(0x01, 1), (0x02, 8), (0x04, 1), (0x08, 8)] {
+        if present & bit == 0 {
+            continue;
+        }
+        let value = *data.get(at + size - 1)?;
+        if bit == 0x01 {
+            parameters.user_density = Some(value);
+        } else if bit == 0x04 {
+            parameters.vector_density = Some(value);
+        }
+        at += size;
+    }
+    Some((parameters, at))
+}
+
+/// Read the real user mask at `at`, or `None` when it is absent or unusable.
+///
+/// The real flags and the real background byte come before the rectangle. A
+/// bad rectangle must not fail the file, so it reads as no real mask.
+fn read_real(data: &[u8], at: usize) -> Option<RealMask> {
+    let head = data.get(at..at.checked_add(2)?)?;
+    let start = at + 2;
     let bytes = data.get(start..start.checked_add(16)?)?;
     let bounds = rect_at(bytes, 0);
     validate_layer_bounds(bounds).ok()?;
-    Some(bounds)
+    Some(RealMask {
+        bounds,
+        flags: head[0],
+        default_color: head[1],
+    })
 }
 
 /// Read four big-endian `i32` edges (top, left, bottom, right) at `at`.

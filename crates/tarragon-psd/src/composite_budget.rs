@@ -3,13 +3,12 @@
 //! A render holds [`COMPOSITE_BASE_BYTES_PER_PIXEL`] bytes per working pixel,
 //! plus [`GROUP_BYTES_PER_PIXEL_LEVEL`] for each group nesting level. A layer,
 //! clip layer or group with active effects is built over a viewport padded by
-//! up to [`crate::effects::MAX_EFFECT_SIZE`] on each side, and holds
-//! [`EFFECTS_BYTES_PER_PIXEL`] plus [`EFFECT_PAINT_BYTES_PER_PIXEL`] for each
-//! paint it holds on top. A node inside a padded node pads again, so the
-//! padding grows with the deepest chain of nodes that have effects. The
-//! estimate counts all of that over the padded size, so it is an upper bound
-//! for every paint path.
-
+//! its effect margin on each side (at most [`crate::effects::MAX_EFFECT_SIZE`]),
+//! and holds [`EFFECTS_BYTES_PER_PIXEL`] plus [`EFFECT_PAINT_BYTES_PER_PIXEL`]
+//! for each paint it holds on top. A node inside a padded node pads again, so
+//! the padding is the largest sum of margins on one chain of nodes that have
+//! effects. The estimate counts all of that over the padded size, so it is an
+//! upper bound for every paint path.
 use crate::decode::Viewport;
 use crate::document::PsdDocument;
 use crate::error::PsdError;
@@ -19,18 +18,17 @@ use crate::limits::{
     FULL_TIER_MAX_EDGE, GROUP_BYTES_PER_PIXEL_LEVEL, MAX_COMPOSITE_BYTES,
 };
 
-/// The padding on each side of a tile, in pixels, for each level of nested
-/// effects. It equals [`crate::effects::MAX_EFFECT_SIZE`]; a unit test checks that.
-const MAX_PADDING: u64 = 512;
-
 /// The memory model of one document.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct TileBudget {
     /// The deepest group nesting.
     depth: usize,
-    /// The most nodes with active effects on one root-to-leaf path. Each one
-    /// pads the viewport again, so the padding is this many times the cap.
+    /// The most nodes with active effects on one root-to-leaf path. Zero
+    /// means no node has effects and the effects terms do not apply.
     levels: usize,
+    /// The padding on each side of a tile, in pixels: the largest sum of
+    /// effect margins on one root-to-leaf path.
+    padding: u64,
     /// The most paints one node holds at once.
     paints: usize,
     /// The canvas size, which bounds the padding.
@@ -44,6 +42,7 @@ impl TileBudget {
         Self {
             depth: group_depth(tree),
             levels: load.padded_levels,
+            padding: load.padding,
             paints: load.paints,
             canvas,
         }
@@ -69,18 +68,13 @@ impl TileBudget {
             .saturating_add(effects)
     }
 
-    /// The padding on each side of a tile, in pixels.
-    fn padding(&self) -> u64 {
-        MAX_PADDING.saturating_mul(self.levels as u64)
-    }
-
     /// The working size of a tile: the tile plus its padding, bounded by the
     /// canvas.
     fn working_size(&self, width: u32, height: u32) -> (u64, u64) {
         let grow = |edge: u32, canvas: u32| {
             let edge = u64::from(edge);
             if self.padded() {
-                edge.saturating_add(2 * self.padding())
+                edge.saturating_add(2 * self.padding)
                     .min(u64::from(canvas).max(edge))
             } else {
                 edge
@@ -118,7 +112,7 @@ impl TileBudget {
     ///
     /// The edge keeps room for the padding inside [`FULL_TIER_MAX_EDGE`].
     pub(crate) fn suggested_edge(&self) -> u32 {
-        let padding = 2 * self.padding();
+        let padding = 2 * self.padding;
         let cap = u64::from(FULL_TIER_MAX_EDGE).saturating_sub(padding).max(1);
         let canvas = u64::from(self.canvas.0.max(self.canvas.1)).max(1);
         let (mut low, mut high) = (1u64, cap.min(canvas));
@@ -157,7 +151,8 @@ impl PsdDocument {
     /// The most working pixels one `composite_region` call may hold.
     ///
     /// The count is the viewport plus its padding. A document with a layer,
-    /// clip layer or group that has effects pads each side of the viewport by up to
+    /// clip layer or group that has effects pads each side of the viewport by
+    /// the sum of the effect margins on its deepest chain, each at most
     /// `MAX_EFFECT_SIZE`, so the viewport itself must be smaller. Use
     /// [`PsdDocument::suggested_tile_edge`] for a ready tile size.
     ///
@@ -194,19 +189,10 @@ mod tests {
         TileBudget {
             depth,
             levels: 0,
+            padding: 0,
             paints: 0,
             canvas,
         }
-    }
-
-    #[test]
-    fn the_padding_matches_the_effect_size_cap() {
-        assert!(
-            (crate::effects::MAX_EFFECT_SIZE
-                - f32::from(u16::try_from(super::MAX_PADDING).expect("fits")))
-            .abs()
-                < f32::EPSILON
-        );
     }
 
     #[test]
@@ -232,6 +218,7 @@ mod tests {
         let padded = TileBudget {
             depth: 3,
             levels: 1,
+            padding: 512,
             paints: 1,
             canvas: (8192, 8192),
         };
@@ -247,6 +234,7 @@ mod tests {
         let one = TileBudget {
             depth: 0,
             levels: 1,
+            padding: 512,
             paints: 1,
             canvas: (8192, 8192),
         };
@@ -260,6 +248,7 @@ mod tests {
         let nested = |canvas| TileBudget {
             depth: 1,
             levels: 2,
+            padding: 1024,
             paints: 1,
             canvas: (canvas, canvas),
         };
@@ -277,9 +266,10 @@ mod tests {
 
     #[test]
     fn one_more_level_of_padding_shrinks_the_suggested_edge() {
-        let at = |levels| TileBudget {
+        let at = |levels: usize| TileBudget {
             depth: 1,
             levels,
+            padding: 512 * levels as u64,
             paints: 1,
             canvas: (8192, 8192),
         };
@@ -296,6 +286,7 @@ mod tests {
             let budget = TileBudget {
                 depth: levels,
                 levels,
+                padding: 512 * levels as u64,
                 paints: 6,
                 canvas: (1000, 1000),
             };
@@ -309,6 +300,7 @@ mod tests {
         let padded = TileBudget {
             depth: 0,
             levels: 1,
+            padding: 512,
             paints: 1,
             canvas: (200, 200),
         };
@@ -316,10 +308,34 @@ mod tests {
     }
 
     #[test]
+    fn a_small_effect_reach_keeps_a_larger_tile_than_the_cap() {
+        let with = |padding| TileBudget {
+            depth: 1,
+            levels: 2,
+            padding,
+            paints: 1,
+            canvas: (8192, 8192),
+        };
+        // Two nested 17 px margins instead of two 512 px caps.
+        let small = with(34);
+        let capped = with(1024);
+        assert_eq!(capped.suggested_edge(), 1);
+        let edge = small.suggested_edge();
+        assert!(
+            edge > 1000,
+            "a small reach must allow a usable tile: {edge}"
+        );
+        assert!(small.estimate(edge, edge) <= MAX_COMPOSITE_BYTES);
+        assert!(small.estimate(edge + 1, edge + 1) > MAX_COMPOSITE_BYTES);
+        assert_eq!(small.estimate(100, 100), 168 * 168 * (80 + 56 + 160 + 16));
+    }
+
+    #[test]
     fn a_hopeless_budget_suggests_one_pixel() {
         let deep = TileBudget {
             depth: 32,
             levels: 1,
+            padding: 512,
             paints: 1,
             canvas: (8192, 8192),
         };

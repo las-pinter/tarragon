@@ -56,6 +56,19 @@ pub const COMPOSITE_BASE_BYTES_PER_PIXEL: u64 = 56;
 /// layer paint (24), the effect shape (4), up to sixteen transient `f32`
 /// planes while one effect map is built (64), and a copy of the running state
 /// with the stack planes (48). That is 152 bytes, rounded up to 160.
+///
+/// To check this term and [`EFFECT_PAINT_BYTES_PER_PIXEL`] against a measured
+/// peak, run one `composite_region` call per fresh process under
+/// `cargo nextest run --release` and read `VmHWM` from `/proc/self/status`
+/// before and after (the `peak_resident_bytes` test helper does this). Use a
+/// 3000 px canvas, one opaque layer covering it, and a 1500 px viewport, in
+/// two documents: a group around the layer, and the same group and layer
+/// each with a drop shadow. The effects bytes per pixel are at most the
+/// effects run's peak over its padded pixels, minus the plain run's increase
+/// over its pixels. That value covers this term and one paint together, so
+/// the two are checked as one sum: lower them only when the value plus 25
+/// percent, rounded up to a multiple of 8, is below that sum. The
+/// `psd_rss_bench` example measures a whole scan and cannot give this value.
 pub const EFFECTS_BYTES_PER_PIXEL: u64 = 160;
 
 /// The bytes per padded pixel that each held paint takes.

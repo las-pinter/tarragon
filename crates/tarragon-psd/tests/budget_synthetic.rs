@@ -44,14 +44,15 @@ fn a_layer_with_effects_and_no_group_is_padded() {
 fn a_shadow_layer_composites_in_suggested_tiles_within_the_budget() {
     let shadowed = one_layer(2100, true);
     let edge = shadowed.suggested_tile_edge().unwrap();
-    assert!(edge + 2 * 512 <= FULL_TIER_MAX_EDGE);
+    // The 16 px shadow margin pads each side of the tile.
+    assert!(edge + 2 * 16 <= FULL_TIER_MAX_EDGE);
     assert!(edge < 2100);
     let pixels = stitched_rgba8(&shadowed, 2100, 2100, edge);
     let at = |x: usize, y: usize| pixels[(y * 2100 + x) * 4];
     // The shadow lands down and right of the layer, over the white backdrop.
     assert_eq!(at(10, 10), 255);
     assert!(at(2100 - 100 + 4, 1200) < 255, "the shadow is drawn");
-    assert_suggested_edge_fits(&shadowed, 2100, 512);
+    assert_suggested_edge_fits(&shadowed, 2100, 16);
     // A smoke check: the peak is process-wide, so it is read only in a fresh
     // process and does not prove the estimate for this tile.
     if let Some(peak) = peak_resident_bytes() {
@@ -83,10 +84,11 @@ fn a_flattened_document_is_checked_before_the_merged_read() {
     );
 }
 
-/// A canvas with one shadowed layer, wrapped in a shadowed group when asked.
-fn shadow_document(canvas: u32, group_effect: bool) -> PsdDocument {
+/// A document with one shadowed layer, optionally inside a shadowed group.
+/// A shadow of `size` with distance 8 reaches `size + 10` px, at most 512.
+fn shadow_document(canvas: u32, group_effect: bool, size: f64) -> PsdDocument {
     let mut spec = DocumentSpec::new(canvas, canvas, 8, 3);
-    let shadow = || shadow_effect(false, [0.0; 3], 120.0, 8.0, 6.0, 0.0, 100.0, true);
+    let shadow = || shadow_effect(false, [0.0; 3], 120.0, 8.0, size, 0.0, 100.0, true);
     if group_effect {
         spec.layers.push(LayerSpec::group_marker(3, *b"pass"));
     }
@@ -108,29 +110,49 @@ fn shadow_document(canvas: u32, group_effect: bool) -> PsdDocument {
 #[test]
 fn a_group_effect_around_a_layer_effect_pads_twice() {
     let canvas = 1800u32;
-    let document = shadow_document(canvas, true);
+    let document = shadow_document(canvas, true, 600.0);
     let edge = document.suggested_tile_edge().unwrap();
-    // Two levels of padding bound the working size by the canvas here.
+    // Two margins at the 512 px cap bound the working size by the canvas.
     assert_eq!(edge, canvas);
     assert_suggested_edge_fits(&document, canvas, 1024);
     let pixels = stitched_rgba8(&document, canvas, canvas, edge);
-    assert_eq!(pixels[(10 * canvas as usize + 10) * 4], 255);
+    // The far corner is past the reach of the large shadow.
+    let corner = (canvas as usize - 10) * (canvas as usize + 1);
+    assert_eq!(pixels[corner * 4], 255);
 }
 
 #[test]
-fn two_padding_levels_are_refused_where_one_level_fits() {
-    // At 1900 px both levels pad past the canvas, so the working size is the
-    // whole canvas. Two levels cost 312 bytes per pixel and are over the
-    // budget; one level costs 272 and fits.
+fn two_large_padding_levels_are_refused_where_one_level_fits() {
+    // At 1900 px two margins at the 512 px cap pad past the canvas, so the
+    // working size is the whole canvas. Two levels cost 312 bytes per pixel and are over
+    // the budget; one level costs 272 and fits.
     let canvas = 1900u32;
-    let nested = shadow_document(canvas, true);
+    let nested = shadow_document(canvas, true, 600.0);
     assert_eq!(nested.suggested_tile_edge().unwrap(), 1);
     let refused = nested.composite_region(Viewport::new(0, 0, 64, 64), &ParseOptions::none());
     assert!(matches!(refused, Err(PsdError::OverBudget { .. })));
 
-    let single = shadow_document(canvas, false);
+    let single = shadow_document(canvas, false, 600.0);
     assert_eq!(single.suggested_tile_edge().unwrap(), canvas);
     assert_suggested_edge_fits(&single, canvas, 512);
     let pixels = stitched_rgba8(&single, canvas, canvas, canvas);
+    // The far corner is past the reach of the large shadow.
+    let corner = (canvas as usize - 10) * (canvas as usize + 1);
+    assert_eq!(pixels[corner * 4], 255);
+}
+
+#[test]
+fn two_small_padding_levels_keep_a_usable_tile() {
+    // Two 16 px margins pad 32 px on each side, not two 512 px caps, so the
+    // nested document that the cap refused now renders in large tiles.
+    let canvas = 1900u32;
+    let nested = shadow_document(canvas, true, 6.0);
+    let edge = nested.suggested_tile_edge().unwrap();
+    assert!(
+        edge > 1000,
+        "a small reach must allow a usable tile: {edge}"
+    );
+    assert_suggested_edge_fits(&nested, canvas, 32);
+    let pixels = stitched_rgba8(&nested, canvas, canvas, edge);
     assert_eq!(pixels[(10 * canvas as usize + 10) * 4], 255);
 }

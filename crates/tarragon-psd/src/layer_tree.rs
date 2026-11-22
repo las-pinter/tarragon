@@ -166,6 +166,10 @@ pub(crate) struct EffectsLoad {
     /// The most nodes with active effects on one root-to-leaf path. Each such
     /// node pads the viewport again inside the padded viewport of its parent.
     pub(crate) padded_levels: usize,
+    /// The largest sum, on one root-to-leaf path, of the padding each node
+    /// with active effects adds on each side, in pixels: its effect margin
+    /// rounded up, as the compositor pads it.
+    pub(crate) padding: u64,
     /// The most paints one node holds at once.
     pub(crate) paints: usize,
 }
@@ -187,10 +191,31 @@ pub(crate) fn effects_load(nodes: &[LayerNode]) -> EffectsLoad {
         let nested = below.padded_levels.max(clipped.padded_levels);
         let own = usize::from(active.is_some());
         load.padded_levels = load.padded_levels.max(own + nested);
+        let own_padding = active.map_or(0, |effects| margin_pixels(effects.margin()));
+        let nested_padding = below.padding.max(clipped.padding);
+        load.padding = load.padding.max(own_padding.saturating_add(nested_padding));
         let held = active.map_or(0, Effects::held_paints);
         load.paints = load.paints.max(held).max(below.paints).max(clipped.paints);
     }
     load
+}
+
+/// The padding in whole pixels for an effect margin, rounded up as the
+/// compositor rounds it. A margin that is not a positive finite number pads
+/// nothing.
+fn margin_pixels(margin: f32) -> u64 {
+    if margin.is_finite() && margin > 0.0 {
+        // The margin is at most `MAX_EFFECT_SIZE`, so the cast keeps it whole.
+        #[expect(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "a positive margin of at most 512 fits a u64"
+        )]
+        let pixels = margin.ceil() as u64;
+        pixels
+    } else {
+        0
+    }
 }
 
 /// Attach consecutive clipping layers to the base below them.
@@ -384,6 +409,8 @@ mod tests {
         let tree = build_tree(&layers).expect("the tree builds");
         assert_eq!(effects_load(&tree).padded_levels, 2);
         assert_eq!(effects_load(&tree).paints, 0);
+        // A color overlay reaches nothing outside the layer.
+        assert_eq!(effects_load(&tree).padding, 0);
         assert_eq!(effects_load(&[]).padded_levels, 0);
     }
 
@@ -464,6 +491,9 @@ mod tests {
         let load = effects_load(&tree);
         assert_eq!(load.paints, 2);
         assert_eq!(load.padded_levels, 2);
+        // The group's drop shadow reaches 5 + 4 + 2 = 11 px and the bevel
+        // inside it 4 + 0 + 2 = 6 px, so the path pads 17 px.
+        assert_eq!(load.padding, 17);
     }
 
     #[test]
@@ -480,5 +510,38 @@ mod tests {
         ];
         let tree = build_tree(&beveled).expect("the tree builds");
         assert_eq!(effects_load(&tree).paints, 2);
+    }
+
+    fn wide_shadow() -> crate::effects::Effect {
+        let crate::effects::Effect::DropShadow(mut shadow) = drop_shadow() else {
+            unreachable!("drop_shadow builds a drop shadow");
+        };
+        shadow.size = 600.0;
+        crate::effects::Effect::DropShadow(shadow)
+    }
+
+    #[test]
+    fn each_margin_counts_at_most_the_cap() {
+        let layers = vec![
+            record(Some(LayerSection::BoundingSectionDivider), Clipping::Base),
+            with_items(record(None, Clipping::Base), vec![wide_shadow()]),
+            with_items(
+                record(Some(LayerSection::OpenFolder), Clipping::Base),
+                vec![wide_shadow()],
+            ),
+        ];
+        let tree = build_tree(&layers).expect("the tree builds");
+        assert_eq!(effects_load(&tree).padding, 1024);
+    }
+
+    #[test]
+    fn a_clip_layer_margin_adds_to_its_base() {
+        let layers = vec![
+            with_items(record(None, Clipping::Base), vec![drop_shadow()]),
+            with_items(record(None, Clipping::NonBase), vec![outer_bevel()]),
+        ];
+        let tree = build_tree(&layers).expect("the tree builds");
+        // The base shadow reaches 11 px and the clipped bevel 6 px.
+        assert_eq!(effects_load(&tree).padding, 17);
     }
 }

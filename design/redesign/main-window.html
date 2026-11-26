@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tarragon main window</title>
+<style>
+body{margin:0;background:#16151a}
+a{color:#f0997b}a:hover{color:#fac775}
+button{font:inherit;cursor:pointer}
+input{font:inherit}
+input::placeholder{color:#8d8a98}
+</style>
+</head>
+<body>
+<div style="min-height: 100vh; display: flex; flex-direction: column; background: #16151a; color: #ece9f2; font-family: Roboto, system-ui, sans-serif; font-size: 13px; line-height: 1.45">
+
+  <header style="display: flex; flex-wrap: wrap; align-items: center; gap: 16px; padding: 10px 16px; background: #1c1b22">
+    <div style="display: flex; align-items: center; gap: 10px">
+      <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><rect width="22" height="22" rx="5" fill="#e06540"></rect><path d="M6 16 C 8 9, 12 6, 16 6 C 16 10, 13 15, 6 16 Z" fill="#16151a"></path></svg>
+      <span style="font-weight: 700; font-size: 15px; letter-spacing: -0.01em">Tarragon</span>
+    </div>
+    <nav aria-label="Menu" style="display: flex; gap: 2px">
+      <button style="background: transparent; border: 0; color: #a8a5b0; padding: 6px 10px; border-radius: 6px">File</button>
+      <button style="background: transparent; border: 0; color: #a8a5b0; padding: 6px 10px; border-radius: 6px">View</button>
+      <button style="background: transparent; border: 0; color: #a8a5b0; padding: 6px 10px; border-radius: 6px">Settings</button>
+    </nav>
+    <label style="flex: 1 1 280px; max-width: 560px; margin: 0 auto; display: flex; align-items: center; gap: 8px; background: #211f29; border-radius: 8px; padding: 0 12px; height: 36px; color: #8d8a98">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5 14 14"></path></svg>
+      <input type="search" aria-label="Search files and tags" placeholder="Search files and tags" style="flex: 1; min-width: 0; background: transparent; border: 0; outline: 0; color: #ece9f2; font-size: 13px">
+      <span style="font-family: 'Roboto Mono', ui-monospace, monospace; font-size: 11px; color: #a8a5b0; background: #2a2836; padding: 2px 6px; border-radius: 4px">Ctrl K</span>
+    </label>
+    <div style="display: flex; gap: 4px">
+      <button aria-label="Show log" style="width: 36px; height: 36px; display: grid; place-items: center; background: transparent; border: 0; color: #a8a5b0; border-radius: 8px"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="2" y="3" width="14" height="12" rx="2"></rect><path d="M5 7l2 2-2 2M9 11h4"></path></svg></button>
+      <button aria-label="Settings" style="width: 36px; height: 36px; display: grid; place-items: center; background: transparent; border: 0; color: #a8a5b0; border-radius: 8px"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="9" cy="9" r="2.5"></circle><path d="M9 1.5v2.5M9 14v2.5M1.5 9H4M14 9h2.5M3.7 3.7l1.8 1.8M12.5 12.5l1.8 1.8M3.7 14.3l1.8-1.8M12.5 5.5l1.8-1.8"></path></svg></button>
+    </div>
+  </header>
+
+  <div style="flex: 1; display: flex; flex-wrap: wrap; align-items: stretch">
+
+    <aside aria-label="Library" style="flex: 1 0 232px; max-width: 100%; background: #1c1b22; padding: 16px 12px; display: flex; flex-direction: column; gap: 4px">
+      <div style="font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #8d8a98; padding: 4px 8px 8px">Folders</div>
+
+        <button style="display: flex; align-items: center; gap: 8px; width: 100%; height: 34px; padding: 0 8px 0 8px; border: 0; border-radius: 6px; font-size: 13px; background: transparent; color: #ece9f2">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" style="flex: none; transform: rotate(90deg); opacity: 1" aria-hidden="true"><path d="M4.5 3 7.5 6 4.5 9"></path></svg>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 4.5A1.5 1.5 0 0 1 3.5 3H6l1.5 1.5h5A1.5 1.5 0 0 1 14 6v5.5a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 11.5z"></path></svg>
+          <span style="flex: 1; text-align: left">references</span>
+          <span style="font-size: 11px; color: #a8a5b0"></span>
+        </button>
+
+        <button style="display: flex; align-items: center; gap: 8px; width: 100%; height: 34px; padding: 0 8px 0 24px; border: 0; border-radius: 6px; font-size: 13px; background: transparent; color: #ece9f2">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" style="flex: none; transform: rotate(90deg); opacity: 1" aria-hidden="true"><path d="M4.5 3 7.5 6 4.5 9"></path></svg>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 4.5A1.5 1.5 0 0 1 3.5 3H6l1.5 1.5h5A1.5 1.5 0 0 1 14 6v5.5a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 11.5z"></path></svg>
+          <span style="flex: 1; text-align: left">sketches</span>
+          <span style="font-size: 11px; color: #a8a5b0"></span>
+        </button>
+
+        <button style="display: flex; align-items: center; gap: 8px; width: 100%; height: 34px; padding: 0 8px 0 40px; border: 0; border-radius: 6px; font-size: 13px; background: transparent; color: #ece9f2">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" style="flex: none; transform: rotate(0deg); opacity: 0" aria-hidden="true"><path d="M4.5 3 7.5 6 4.5 9"></path></svg>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 4.5A1.5 1.5 0 0 1 3.5 3H6l1.5 1.5h5A1.5 1.5 0 0 1 14 6v5.5a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 11.5z"></path></svg>
+          <span style="flex: 1; text-align: left">2026-09</span>
+          <span style="font-size: 11px; color: #a8a5b0">36</span>
+        </button>
+
+        <button style="display: flex; align-items: center; gap: 8px; width: 100%; height: 34px; padding: 0 8px 0 40px; border: 0; border-radius: 6px; font-size: 13px; background: #4a1b0c; color: #f0997b; font-weight: 600">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" style="flex: none; transform: rotate(0deg); opacity: 0" aria-hidden="true"><path d="M4.5 3 7.5 6 4.5 9"></path></svg>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 4.5A1.5 1.5 0 0 1 3.5 3H6l1.5 1.5h5A1.5 1.5 0 0 1 14 6v5.5a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 11.5z"></path></svg>
+          <span style="flex: 1; text-align: left">2026-10</span>
+          <span style="font-size: 11px; color: #a8a5b0">48</span>
+        </button>
+
+        <button style="display: flex; align-items: center; gap: 8px; width: 100%; height: 34px; padding: 0 8px 0 24px; border: 0; border-radius: 6px; font-size: 13px; background: transparent; color: #ece9f2">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" style="flex: none; transform: rotate(0deg); opacity: 1" aria-hidden="true"><path d="M4.5 3 7.5 6 4.5 9"></path></svg>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 4.5A1.5 1.5 0 0 1 3.5 3H6l1.5 1.5h5A1.5 1.5 0 0 1 14 6v5.5a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 11.5z"></path></svg>
+          <span style="flex: 1; text-align: left">studies</span>
+          <span style="font-size: 11px; color: #a8a5b0">112</span>
+        </button>
+
+        <button style="display: flex; align-items: center; gap: 8px; width: 100%; height: 34px; padding: 0 8px 0 24px; border: 0; border-radius: 6px; font-size: 13px; background: transparent; color: #ece9f2">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" style="flex: none; transform: rotate(0deg); opacity: 1" aria-hidden="true"><path d="M4.5 3 7.5 6 4.5 9"></path></svg>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 4.5A1.5 1.5 0 0 1 3.5 3H6l1.5 1.5h5A1.5 1.5 0 0 1 14 6v5.5a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 11.5z"></path></svg>
+          <span style="flex: 1; text-align: left">psd_sources</span>
+          <span style="font-size: 11px; color: #a8a5b0">19</span>
+        </button>
+
+      <div style="font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #8d8a98; padding: 20px 8px 8px">Favorites</div>
+
+        <button style="display: flex; align-items: center; gap: 10px; width: 100%; height: 34px; padding: 0 8px; border: 0; border-radius: 6px; background: transparent; color: #ece9f2; font-size: 13px">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="#fac775" aria-hidden="true"><path d="M8 1.8l1.9 3.9 4.3.6-3.1 3 .7 4.3L8 11.6l-3.8 2 .7-4.3-3.1-3 4.3-.6z"></path></svg>
+          <span style="flex: 1; text-align: left">sketches/2026-10</span>
+        </button>
+
+        <button style="display: flex; align-items: center; gap: 10px; width: 100%; height: 34px; padding: 0 8px; border: 0; border-radius: 6px; background: transparent; color: #ece9f2; font-size: 13px">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="#fac775" aria-hidden="true"><path d="M8 1.8l1.9 3.9 4.3.6-3.1 3 .7 4.3L8 11.6l-3.8 2 .7-4.3-3.1-3 4.3-.6z"></path></svg>
+          <span style="flex: 1; text-align: left">studies/color</span>
+        </button>
+
+        <button style="display: flex; align-items: center; gap: 10px; width: 100%; height: 34px; padding: 0 8px; border: 0; border-radius: 6px; background: transparent; color: #ece9f2; font-size: 13px">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="#fac775" aria-hidden="true"><path d="M8 1.8l1.9 3.9 4.3.6-3.1 3 .7 4.3L8 11.6l-3.8 2 .7-4.3-3.1-3 4.3-.6z"></path></svg>
+          <span style="flex: 1; text-align: left">psd_sources</span>
+        </button>
+
+      <button style="margin-top: 8px; display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 8px; border: 0; border-radius: 6px; background: transparent; color: #f0997b; font-size: 13px; font-weight: 500">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M8 3v10M3 8h10"></path></svg>
+        Add current folder
+      </button>
+    </aside>
+
+    <main style="flex: 999 1 520px; min-width: 0; display: flex; flex-direction: column; gap: 16px; padding: 20px 24px">
+      <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px">
+        <div style="flex: 1 1 240px">
+          <div style="font-size: 12px; color: #8d8a98">references / sketches</div>
+          <h1 style="margin: 2px 0 0; font-size: 22px; font-weight: 700; letter-spacing: -0.02em">2026-10 <span style="font-size: 13px; font-weight: 500; color: #8d8a98; letter-spacing: 0">12 of 48 files</span></h1>
+        </div>
+        <div role="tablist" aria-label="Gallery scope" style="display: flex; background: #211f29; border-radius: 8px; padding: 3px">
+          <button role="tab" aria-selected="true" style="border: 0; border-radius: 6px; padding: 7px 14px; background: #3d3b44; color: #ece9f2; font-weight: 600; font-size: 13px">Folder</button>
+          <button role="tab" aria-selected="false" style="border: 0; border-radius: 6px; padding: 7px 14px; background: transparent; color: #a8a5b0; font-weight: 500; font-size: 13px">All images</button>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 16px; padding: 12px 14px; background: #1c1b22; border-radius: 10px">
+        <div role="group" aria-label="Color filter" style="display: flex; flex-wrap: wrap; gap: 8px">
+
+            <button aria-label="Red" aria-pressed="true" style="width: 24px; height: 24px; border-radius: 12px; border: 0; padding: 0; background: #e74c3c; outline: 2px solid #ece9f2; outline-offset: 2px"></button>
+
+            <button aria-label="Orange" aria-pressed="false" style="width: 24px; height: 24px; border-radius: 12px; border: 0; padding: 0; background: #f39c12; outline: 0"></button>
+
+            <button aria-label="Yellow" aria-pressed="false" style="width: 24px; height: 24px; border-radius: 12px; border: 0; padding: 0; background: #f1c40f; outline: 0"></button>
+
+            <button aria-label="Green" aria-pressed="false" style="width: 24px; height: 24px; border-radius: 12px; border: 0; padding: 0; background: #27ae60; outline: 0"></button>
+
+            <button aria-label="Teal" aria-pressed="false" style="width: 24px; height: 24px; border-radius: 12px; border: 0; padding: 0; background: #1abc9c; outline: 0"></button>
+
+            <button aria-label="Cyan" aria-pressed="false" style="width: 24px; height: 24px; border-radius: 12px; border: 0; padding: 0; background: #00bcd4; outline: 0"></button>
+
+            <button aria-label="Blue" aria-pressed="true" style="width: 24px; height: 24px; border-radius: 12px; border: 0; padding: 0; background: #3498db; outline: 2px solid #ece9f2; outline-offset: 2px"></button>
+
+            <button aria-label="Purple" aria-pressed="false" style="width: 24px; height: 24px; border-radius: 12px; border: 0; padding: 0; background: #9b59b6; outline: 0"></button>
+
+            <button aria-label="Magenta" aria-pressed="false" style="width: 24px; height: 24px; border-radius: 12px; border: 0; padding: 0; background: #e91e63; outline: 0"></button>
+
+            <button aria-label="Pink" aria-pressed="false" style="width: 24px; height: 24px; border-radius: 12px; border: 0; padding: 0; background: #ff80ab; outline: 0"></button>
+
+            <button aria-label="Neutral" aria-pressed="false" style="width: 24px; height: 24px; border-radius: 12px; border: 0; padding: 0; background: #7f8c8d; outline: 0"></button>
+
+            <button aria-label="Transparent" aria-pressed="false" style="width: 24px; height: 24px; border-radius: 12px; border: 0; padding: 0; background: repeating-conic-gradient(#b0b0b0 0% 25%, #707070 0% 50%) 50% / 12px 12px; outline: 0"></button>
+
+        </div>
+        <div style="width: 1px; height: 24px; background: #3d3b44"></div>
+        <div style="display: flex; flex-wrap: wrap; gap: 6px; flex: 1 1 200px">
+
+            <span style="display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 6px 0 10px; border-radius: 14px; background: #2a2836; color: #ece9f2; font-size: 12px; font-weight: 500">
+              <span style="width: 8px; height: 8px; border-radius: 4px; background: #e74c3c"></span>Red
+              <button aria-label="Remove filter" style="width: 20px; height: 20px; display: grid; place-items: center; border: 0; border-radius: 10px; background: transparent; color: #a8a5b0"><svg width="10" height="10" viewBox="0 0 10 10" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M2 2l6 6M8 2 2 8"></path></svg></button>
+            </span>
+
+            <span style="display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 6px 0 10px; border-radius: 14px; background: #2a2836; color: #ece9f2; font-size: 12px; font-weight: 500">
+              <span style="width: 8px; height: 8px; border-radius: 4px; background: #3498db"></span>Blue
+              <button aria-label="Remove filter" style="width: 20px; height: 20px; display: grid; place-items: center; border: 0; border-radius: 10px; background: transparent; color: #a8a5b0"><svg width="10" height="10" viewBox="0 0 10 10" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M2 2l6 6M8 2 2 8"></path></svg></button>
+            </span>
+
+            <span style="display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 6px 0 10px; border-radius: 14px; background: #2a2836; color: #ece9f2; font-size: 12px; font-weight: 500">
+              <span style="width: 8px; height: 8px; border-radius: 4px; background: #f0997b"></span>character
+              <button aria-label="Remove filter" style="width: 20px; height: 20px; display: grid; place-items: center; border: 0; border-radius: 10px; background: transparent; color: #a8a5b0"><svg width="10" height="10" viewBox="0 0 10 10" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M2 2l6 6M8 2 2 8"></path></svg></button>
+            </span>
+
+        </div>
+        <button style="border: 0; background: transparent; color: #f0997b; font-size: 13px; font-weight: 500; padding: 6px 4px">Tags</button>
+        <button style="border: 0; background: transparent; color: #a8a5b0; font-size: 13px; padding: 6px 4px">Clear</button>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 20px 16px">
+
+          <button style="border: 0; padding: 0; background: transparent; color: inherit; text-align: left; display: flex; flex-direction: column; gap: 8px">
+            <div style="position: relative; aspect-ratio: 1; border-radius: 8px; overflow: hidden; background: #1a2a3a; outline: 2px solid #e06540; outline-offset: 3px">
+              <div style="position: absolute; width: 22%; aspect-ratio: 1; border-radius: 50%; top: 16%; right: 18%; background: #7ba8c8"></div>
+              <div style="position: absolute; left: -15%; right: 25%; bottom: 0; height: 40%; border-radius: 50% 50% 0 0; background: #3498db"></div>
+              <div style="position: absolute; left: 35%; right: -15%; bottom: 0; height: 28%; border-radius: 50% 50% 0 0; background: #2e86ab"></div>
+              <span style="position: absolute; top: 8px; left: 8px; font-family: 'Roboto Mono', ui-monospace, monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.04em; padding: 3px 6px; border-radius: 4px; background: #16151a; color: #7ba8c8">PNG</span>
+
+            </div>
+            <span style="font-size: 12px; padding: 0 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #f0997b; font-weight: 600">sketch_014.png</span>
+          </button>
+
+          <button style="border: 0; padding: 0; background: transparent; color: inherit; text-align: left; display: flex; flex-direction: column; gap: 8px">
+            <div style="position: relative; aspect-ratio: 1; border-radius: 8px; overflow: hidden; background: #4a1b0c; outline: 0">
+              <div style="position: absolute; width: 28%; aspect-ratio: 1; border-radius: 50%; top: 20%; left: 18%; background: #fac775"></div>
+              <div style="position: absolute; left: -15%; right: 35%; bottom: 0; height: 46%; border-radius: 50% 50% 0 0; background: #e06540"></div>
+              <div style="position: absolute; left: 45%; right: -15%; bottom: 0; height: 33%; border-radius: 50% 50% 0 0; background: #d85a30"></div>
+              <span style="position: absolute; top: 8px; left: 8px; font-family: 'Roboto Mono', ui-monospace, monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.04em; padding: 3px 6px; border-radius: 4px; background: #16151a; color: #7bc88f">JPG</span>
+
+            </div>
+            <span style="font-size: 12px; padding: 0 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #a8a5b0">ref_042.jpg</span>
+          </button>
+
+          <button style="border: 0; padding: 0; background: transparent; color: inherit; text-align: left; display: flex; flex-direction: column; gap: 8px">
+            <div style="position: relative; aspect-ratio: 1; border-radius: 8px; overflow: hidden; background: #412402; outline: 0">
+              <div style="position: absolute; width: 34%; aspect-ratio: 1; border-radius: 50%; top: 24%; right: 18%; background: #ffd480"></div>
+              <div style="position: absolute; left: -15%; right: 45%; bottom: 0; height: 52%; border-radius: 50% 50% 0 0; background: #d85a30"></div>
+              <div style="position: absolute; left: 35%; right: -15%; bottom: 0; height: 38%; border-radius: 50% 50% 0 0; background: #4a1b0c"></div>
+              <span style="position: absolute; top: 8px; left: 8px; font-family: 'Roboto Mono', ui-monospace, monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.04em; padding: 3px 6px; border-radius: 4px; background: #16151a; color: #f0997b">PSD</span>
+
+            </div>
+            <span style="font-size: 12px; padding: 0 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #a8a5b0">poster_v2.psd</span>
+          </button>
+
+          <button style="border: 0; padding: 0; background: transparent; color: inherit; text-align: left; display: flex; flex-direction: column; gap: 8px">
+            <div style="position: relative; aspect-ratio: 1; border-radius: 8px; overflow: hidden; background: #1a3a3a; outline: 0">
+              <div style="position: absolute; width: 22%; aspect-ratio: 1; border-radius: 50%; top: 28%; left: 18%; background: #7bc8c8"></div>
+              <div style="position: absolute; left: -15%; right: 25%; bottom: 0; height: 58%; border-radius: 50% 50% 0 0; background: #1abc9c"></div>
+              <div style="position: absolute; left: 45%; right: -15%; bottom: 0; height: 28%; border-radius: 50% 50% 0 0; background: #1a3a2a"></div>
+              <span style="position: absolute; top: 8px; left: 8px; font-family: 'Roboto Mono', ui-monospace, monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.04em; padding: 3px 6px; border-radius: 4px; background: #16151a; color: #7bc8c8">WEBP</span>
+
+            </div>
+            <span style="font-size: 12px; padding: 0 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #a8a5b0">palette.webp</span>
+          </button>
+
+          <button style="border: 0; padding: 0; background: transparent; color: inherit; text-align: left; display: flex; flex-direction: column; gap: 8px">
+            <div style="position: relative; aspect-ratio: 1; border-radius: 8px; overflow: hidden; background: #2a1a3a; outline: 0">
+              <div style="position: absolute; width: 28%; aspect-ratio: 1; border-radius: 50%; top: 16%; right: 18%; background: #e91e63"></div>
+              <div style="position: absolute; left: -15%; right: 35%; bottom: 0; height: 40%; border-radius: 50% 50% 0 0; background: #9b59b6"></div>
+              <div style="position: absolute; left: 35%; right: -15%; bottom: 0; height: 33%; border-radius: 50% 50% 0 0; background: #a87bc8"></div>
+              <span style="position: absolute; top: 8px; left: 8px; font-family: 'Roboto Mono', ui-monospace, monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.04em; padding: 3px 6px; border-radius: 4px; background: #16151a; color: #a87bc8">GIF</span>
+
+            </div>
+            <span style="font-size: 12px; padding: 0 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #a8a5b0">doodle.gif</span>
+          </button>
+
+          <button style="border: 0; padding: 0; background: transparent; color: inherit; text-align: left; display: flex; flex-direction: column; gap: 8px">
+            <div style="position: relative; aspect-ratio: 1; border-radius: 8px; overflow: hidden; background: #3a2a1a; outline: 0">
+              <div style="position: absolute; width: 34%; aspect-ratio: 1; border-radius: 50%; top: 20%; left: 18%; background: #f39c12"></div>
+              <div style="position: absolute; left: -15%; right: 45%; bottom: 0; height: 46%; border-radius: 50% 50% 0 0; background: #c8a87b"></div>
+              <div style="position: absolute; left: 45%; right: -15%; bottom: 0; height: 38%; border-radius: 50% 50% 0 0; background: #412402"></div>
+              <span style="position: absolute; top: 8px; left: 8px; font-family: 'Roboto Mono', ui-monospace, monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.04em; padding: 3px 6px; border-radius: 4px; background: #16151a; color: #c8a87b">TIFF</span>
+
+            </div>
+            <span style="font-size: 12px; padding: 0 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #a8a5b0">scan_07.tiff</span>
+          </button>
+
+          <button style="border: 0; padding: 0; background: transparent; color: inherit; text-align: left; display: flex; flex-direction: column; gap: 8px">
+            <div style="position: relative; aspect-ratio: 1; border-radius: 8px; overflow: hidden; background: #3a3a1a; outline: 0">
+              <div style="position: absolute; width: 22%; aspect-ratio: 1; border-radius: 50%; top: 24%; right: 18%; background: #f1c40f"></div>
+              <div style="position: absolute; left: -15%; right: 25%; bottom: 0; height: 52%; border-radius: 50% 50% 0 0; background: #27ae60"></div>
+              <div style="position: absolute; left: 35%; right: -15%; bottom: 0; height: 28%; border-radius: 50% 50% 0 0; background: #c8c87b"></div>
+              <span style="position: absolute; top: 8px; left: 8px; font-family: 'Roboto Mono', ui-monospace, monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.04em; padding: 3px 6px; border-radius: 4px; background: #16151a; color: #c8c87b">BMP</span>
+
+            </div>
+            <span style="font-size: 12px; padding: 0 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #a8a5b0">matte.bmp</span>
+          </button>
+
+          <button style="border: 0; padding: 0; background: transparent; color: inherit; text-align: left; display: flex; flex-direction: column; gap: 8px">
+            <div style="position: relative; aspect-ratio: 1; border-radius: 8px; overflow: hidden; background: #211f29; outline: 0">
+              <div style="position: absolute; width: 28%; aspect-ratio: 1; border-radius: 50%; top: 28%; left: 18%; background: #e91e63"></div>
+              <div style="position: absolute; left: -15%; right: 35%; bottom: 0; height: 58%; border-radius: 50% 50% 0 0; background: #3d3b44"></div>
+              <div style="position: absolute; left: 45%; right: -15%; bottom: 0; height: 33%; border-radius: 50% 50% 0 0; background: #65626f"></div>
+              <span style="position: absolute; top: 8px; left: 8px; font-family: 'Roboto Mono', ui-monospace, monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.04em; padding: 3px 6px; border-radius: 4px; background: #16151a; color: #a87bc8">KRA</span>
+
+            </div>
+            <span style="font-size: 12px; padding: 0 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #a8a5b0">concept.kra</span>
+          </button>
+
+          <button style="border: 0; padding: 0; background: transparent; color: inherit; text-align: left; display: flex; flex-direction: column; gap: 8px">
+            <div style="position: relative; aspect-ratio: 1; border-radius: 8px; overflow: hidden; background: #1a2a3a; outline: 0">
+              <div style="position: absolute; width: 34%; aspect-ratio: 1; border-radius: 50%; top: 16%; right: 18%; background: #d4eef7"></div>
+              <div style="position: absolute; left: -15%; right: 45%; bottom: 0; height: 40%; border-radius: 50% 50% 0 0; background: #00bcd4"></div>
+              <div style="position: absolute; left: 35%; right: -15%; bottom: 0; height: 38%; border-radius: 50% 50% 0 0; background: #2e86ab"></div>
+              <span style="position: absolute; top: 8px; left: 8px; font-family: 'Roboto Mono', ui-monospace, monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.04em; padding: 3px 6px; border-radius: 4px; background: #16151a; color: #d4eef7">CLIP</span>
+
+            </div>
+            <span style="font-size: 12px; padding: 0 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #a8a5b0">mood.clip</span>
+          </button>
+
+          <button style="border: 0; padding: 0; background: transparent; color: inherit; text-align: left; display: flex; flex-direction: column; gap: 8px">
+            <div style="position: relative; aspect-ratio: 1; border-radius: 8px; overflow: hidden; background: #1a3a2a; outline: 0">
+              <div style="position: absolute; width: 22%; aspect-ratio: 1; border-radius: 50%; top: 20%; left: 18%; background: #f1c40f"></div>
+              <div style="position: absolute; left: -15%; right: 25%; bottom: 0; height: 46%; border-radius: 50% 50% 0 0; background: #27ae60"></div>
+              <div style="position: absolute; left: 45%; right: -15%; bottom: 0; height: 28%; border-radius: 50% 50% 0 0; background: #7bc88f"></div>
+              <span style="position: absolute; top: 8px; left: 8px; font-family: 'Roboto Mono', ui-monospace, monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.04em; padding: 3px 6px; border-radius: 4px; background: #16151a; color: #7bc88f">JPG</span>
+
+            </div>
+            <span style="font-size: 12px; padding: 0 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #a8a5b0">ref_118.jpg</span>
+          </button>
+
+          <button style="border: 0; padding: 0; background: transparent; color: inherit; text-align: left; display: flex; flex-direction: column; gap: 8px">
+            <div style="position: relative; aspect-ratio: 1; border-radius: 8px; overflow: hidden; background: #2a2836; outline: 0">
+              <div style="position: absolute; width: 28%; aspect-ratio: 1; border-radius: 50%; top: 24%; right: 18%; background: #ece9f2"></div>
+              <div style="position: absolute; left: -15%; right: 35%; bottom: 0; height: 52%; border-radius: 50% 50% 0 0; background: #8d8a98"></div>
+              <div style="position: absolute; left: 35%; right: -15%; bottom: 0; height: 33%; border-radius: 50% 50% 0 0; background: #3d3b44"></div>
+              <span style="position: absolute; top: 8px; left: 8px; font-family: 'Roboto Mono', ui-monospace, monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.04em; padding: 3px 6px; border-radius: 4px; background: #16151a; color: #7ba8c8">PNG</span>
+
+            </div>
+            <span style="font-size: 12px; padding: 0 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #a8a5b0">sketch_009.png</span>
+          </button>
+
+          <button style="border: 0; padding: 0; background: transparent; color: inherit; text-align: left; display: flex; flex-direction: column; gap: 8px">
+            <div style="position: relative; aspect-ratio: 1; border-radius: 8px; overflow: hidden; background: #4a1b0c; outline: 0">
+              <div style="position: absolute; width: 34%; aspect-ratio: 1; border-radius: 50%; top: 28%; left: 18%; background: #f1c40f"></div>
+              <div style="position: absolute; left: -15%; right: 45%; bottom: 0; height: 58%; border-radius: 50% 50% 0 0; background: #e74c3c"></div>
+              <div style="position: absolute; left: 45%; right: -15%; bottom: 0; height: 38%; border-radius: 50% 50% 0 0; background: #f0997b"></div>
+              <span style="position: absolute; top: 8px; left: 8px; font-family: 'Roboto Mono', ui-monospace, monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.04em; padding: 3px 6px; border-radius: 4px; background: #16151a; color: #7bc88f">JPG</span>
+
+            </div>
+            <span style="font-size: 12px; padding: 0 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #a8a5b0">ref_203.jpg</span>
+          </button>
+
+      </div>
+    </main>
+
+      <aside aria-label="Preview" style="flex: 1 0 500px; max-width: 100%; background: #1c1b22; padding: 16px; display: flex; flex-direction: column; gap: 14px">
+        <div style="flex: 1; min-height: 560px; border-radius: 10px; background: #0d0c10; display: flex; align-items: center; justify-content: center; padding: 12px">
+          <div role="img" aria-label="sketch_014.png" style="position: relative; height: 100%; max-height: 640px; aspect-ratio: 3 / 4; max-width: 100%; overflow: hidden; border-radius: 4px; background: #1a2a3a">
+            <div style="position: absolute; width: 34%; aspect-ratio: 1; border-radius: 50%; background: #7ba8c8; top: 14%; right: 14%"></div>
+            <div style="position: absolute; left: -20%; right: 25%; bottom: 0; height: 48%; background: #3498db; border-radius: 50% 50% 0 0"></div>
+            <div style="position: absolute; left: 35%; right: -20%; bottom: 0; height: 32%; background: #2e86ab; border-radius: 50% 50% 0 0"></div>
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px">
+          <div style="flex: 1; min-width: 0">
+            <h2 style="margin: 0; font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">sketch_014.png</h2>
+            <div style="color: #8d8a98; font-size: 12px">1536 × 2048 · 2.4 MB · PNG · Oct 14, 2026</div>
+          </div>
+          <button style="height: 34px; padding: 0 14px; border: 0; border-radius: 8px; background: #e06540; color: #16151a; font-weight: 600; font-size: 13px">Open in Krita</button>
+          <button aria-label="Open with another app" style="width: 34px; height: 34px; border: 0; border-radius: 8px; background: #2a2836; color: #ece9f2; display: grid; place-items: center"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3.5 5.5 7 9l3.5-3.5"></path></svg></button>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px">
+          <span style="display: flex; gap: 3px; margin-right: 6px" aria-label="Dominant colors">
+            <span style="width: 28px; height: 8px; border-radius: 4px; background: #3498db"></span>
+            <span style="width: 18px; height: 8px; border-radius: 4px; background: #00bcd4"></span>
+            <span style="width: 10px; height: 8px; border-radius: 4px; background: #e74c3c"></span>
+          </span>
+          <span style="padding: 3px 9px; border-radius: 12px; background: #4a1b0c; color: #f0997b; font-size: 12px; font-weight: 500">character</span>
+          <span style="padding: 3px 9px; border-radius: 12px; background: #1a2a3a; color: #7ba8c8; font-size: 12px; font-weight: 500">blue</span>
+          <span style="padding: 3px 9px; border-radius: 12px; background: #3a2a1a; color: #c8a87b; font-size: 12px; font-weight: 500">lighting</span>
+          <span style="padding: 3px 9px; border-radius: 12px; background: #2a1a3a; color: #a87bc8; font-size: 12px; font-weight: 500">todo</span>
+          <button style="padding: 3px 9px; border-radius: 12px; border: 0; background: #2a2836; color: #a8a5b0; font-size: 12px">+ Tag</button>
+        </div>
+      </aside>
+
+  </div>
+
+  <footer style="display: flex; flex-wrap: wrap; align-items: center; gap: 16px; padding: 6px 16px; background: #1c1b22; color: #8d8a98; font-size: 12px">
+    <span style="display: inline-flex; align-items: center; gap: 8px">
+      <span style="width: 120px; height: 4px; border-radius: 2px; background: #2a2836; overflow: hidden; display: inline-block"><span style="display: block; width: 64%; height: 4px; background: #fac775"></span></span>
+      Indexing colors 1,204 / 1,880
+    </span>
+    <span style="margin-left: auto">1 selected</span>
+  </footer>
+</div>
+</body>
+</html>

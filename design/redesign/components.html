@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tarragon components and states</title>
+<style>
+body{margin:0}
+a{color:#f0997b}a:hover{color:#fac775}
+button{font:inherit}
+</style>
+</head>
+<body>
+<div style="width: 1440px; height: 760px; box-sizing: border-box; padding: 48px; background: #16151a; color: #ece9f2; font-family: Roboto, system-ui, sans-serif; font-size: 13px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 40px">
+
+  <section style="display: flex; flex-direction: column; gap: 16px">
+    <h2 style="margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #8d8a98">Buttons</h2>
+    <div style="display: flex; flex-wrap: wrap; gap: 8px">
+      <button style="height: 36px; padding: 0 16px; border: 0; border-radius: 8px; background: #e06540; color: #16151a; font-weight: 600">Open in Krita</button>
+      <button style="height: 36px; padding: 0 16px; border: 0; border-radius: 8px; background: #2a2836; color: #ece9f2; font-weight: 500">Reveal</button>
+    </div>
+    <div style="display: flex; flex-wrap: wrap; gap: 8px">
+      <button style="height: 36px; padding: 0 12px; border: 0; border-radius: 8px; background: transparent; color: #f0997b; font-weight: 500">Text action</button>
+      <button disabled style="height: 36px; padding: 0 16px; border: 0; border-radius: 8px; background: #1a1820; color: #8d8a98; font-weight: 500">Disabled</button>
+    </div>
+    <div style="display: flex; flex-wrap: wrap; gap: 8px">
+      <button style="height: 36px; padding: 0 16px; border: 0; border-radius: 8px; background: #4a1b0c; color: #f0997b; font-weight: 600">Delete 3 files</button>
+    </div>
+
+    <h2 style="margin: 16px 0 0; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #8d8a98">Segmented tabs</h2>
+    <div role="tablist" aria-label="Example tabs" style="display: flex; align-self: flex-start; background: #211f29; border-radius: 8px; padding: 3px">
+      <button role="tab" aria-selected="true" style="border: 0; border-radius: 6px; padding: 7px 14px; background: #3d3b44; color: #ece9f2; font-weight: 600">Folder</button>
+      <button role="tab" aria-selected="false" style="border: 0; border-radius: 6px; padding: 7px 14px; background: transparent; color: #a8a5b0">All images</button>
+    </div>
+
+    <h2 style="margin: 16px 0 0; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #8d8a98">Fields</h2>
+    <label style="display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: #a8a5b0">Cache folder
+      <input value="~/.cache/tarragon" style="height: 36px; padding: 0 12px; border: 0; border-radius: 8px; background: #211f29; color: #ece9f2; font: inherit; font-size: 13px; outline: 2px solid #e06540; outline-offset: 0">
+    </label>
+    <label style="display: flex; align-items: center; gap: 10px; font-size: 13px">
+      <span style="width: 36px; height: 20px; border-radius: 10px; background: #e06540; position: relative; display: inline-block"><span style="position: absolute; top: 2px; left: 18px; width: 16px; height: 16px; border-radius: 8px; background: #16151a"></span></span>
+      Watch folders for changes
+    </label>
+    <label style="display: flex; align-items: center; gap: 10px; font-size: 13px">
+      <span style="width: 36px; height: 20px; border-radius: 10px; background: #3d3b44; position: relative; display: inline-block"><span style="position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 8px; background: #8d8a98"></span></span>
+      Show hidden files
+    </label>
+  </section>
+
+  <section style="display: flex; flex-direction: column; gap: 16px">
+    <h2 style="margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #8d8a98">Thumbnail states</h2>
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 16px">
+
+        <div style="display: flex; flex-direction: column; gap: 8px">
+          <div style="position: relative; aspect-ratio: 1; border-radius: 8px; overflow: hidden; background: #1a2a3a; outline: 0">
+            <div style="position: absolute; width: 30%; aspect-ratio: 1; border-radius: 50%; top: 18%; right: 18%; background: #7ba8c8"></div>
+            <div style="position: absolute; left: -15%; right: 30%; bottom: 0; height: 46%; border-radius: 50% 50% 0 0; background: #3498db"></div>
+            <span style="position: absolute; top: 8px; left: 8px; font-family: 'Roboto Mono', ui-monospace, monospace; font-size: 10px; padding: 3px 6px; border-radius: 4px; background: #16151a; color: #7ba8c8">PNG</span>
+
+          </div>
+          <span style="font-size: 12px; color: #a8a5b0">Default</span>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 8px">
+          <div style="position: relative; aspect-ratio: 1; border-radius: 8px; overflow: hidden; background: #1a2a3a; outline: 2px solid #3d3b44; outline-offset: 3px">
+            <div style="position: absolute; width: 30%; aspect-ratio: 1; border-radius: 50%; top: 18%; right: 18%; background: #7ba8c8"></div>
+            <div style="position: absolute; left: -15%; right: 30%; bottom: 0; height: 46%; border-radius: 50% 50% 0 0; background: #3498db"></div>
+            <span style="position: absolute; top: 8px; left: 8px; font-family: 'Roboto Mono', ui-monospace, monospace; font-size: 10px; padding: 3px 6px; border-radius: 4px; background: #16151a; color: #7ba8c8">PNG</span>
+
+              <span style="position: absolute; left: 0; right: 0; bottom: 0; padding: 6px 8px; background: #16151a; color: #a8a5b0; font-size: 11px">2048 × 1536 · 2.4 MB</span>
+
+          </div>
+          <span style="font-size: 12px; color: #ece9f2">Hover</span>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 8px">
+          <div style="position: relative; aspect-ratio: 1; border-radius: 8px; overflow: hidden; background: #1a2a3a; outline: 2px solid #e06540; outline-offset: 3px">
+            <div style="position: absolute; width: 30%; aspect-ratio: 1; border-radius: 50%; top: 18%; right: 18%; background: #7ba8c8"></div>
+            <div style="position: absolute; left: -15%; right: 30%; bottom: 0; height: 46%; border-radius: 50% 50% 0 0; background: #3498db"></div>
+            <span style="position: absolute; top: 8px; left: 8px; font-family: 'Roboto Mono', ui-monospace, monospace; font-size: 10px; padding: 3px 6px; border-radius: 4px; background: #16151a; color: #7ba8c8">PNG</span>
+
+          </div>
+          <span style="font-size: 12px; color: #f0997b">Selected</span>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 8px">
+          <div style="position: relative; aspect-ratio: 1; border-radius: 8px; overflow: hidden; background: #1a2a3a; outline: 2px solid #e06540; outline-offset: 3px">
+            <div style="position: absolute; width: 30%; aspect-ratio: 1; border-radius: 50%; top: 18%; right: 18%; background: #7ba8c8"></div>
+            <div style="position: absolute; left: -15%; right: 30%; bottom: 0; height: 46%; border-radius: 50% 50% 0 0; background: #3498db"></div>
+            <span style="position: absolute; top: 8px; left: 8px; font-family: 'Roboto Mono', ui-monospace, monospace; font-size: 10px; padding: 3px 6px; border-radius: 4px; background: #16151a; color: #7ba8c8">PNG</span>
+
+              <span style="position: absolute; top: 8px; right: 8px; width: 22px; height: 22px; border-radius: 11px; background: #e06540; display: grid; place-items: center"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="#16151a" stroke-width="2" aria-hidden="true"><path d="M2.5 6.2 5 8.5l4.5-5"></path></svg></span>
+
+          </div>
+          <span style="font-size: 12px; color: #f0997b">Multi-select</span>
+        </div>
+
+    </div>
+  </section>
+
+  <section style="display: flex; flex-direction: column; gap: 16px">
+    <h2 style="margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #8d8a98">Context menu</h2>
+    <div role="menu" aria-label="File actions" style="background: #2a2836; border-radius: 10px; padding: 6px; display: flex; flex-direction: column">
+
+          <button role="menuitem" style="display: flex; align-items: center; gap: 12px; height: 32px; padding: 0 10px; border: 0; border-radius: 6px; font-size: 13px; background: #4a1b0c; color: #f0997b"><span style="flex: 1; text-align: left">Open in Krita</span><span style="font-family: 'Roboto Mono', ui-monospace, monospace; font-size: 11px; color: #a8a5b0">Enter</span></button>
+
+          <button role="menuitem" style="display: flex; align-items: center; gap: 12px; height: 32px; padding: 0 10px; border: 0; border-radius: 6px; font-size: 13px; background: transparent; color: #ece9f2"><span style="flex: 1; text-align: left">Open with…</span><span style="font-family: 'Roboto Mono', ui-monospace, monospace; font-size: 11px; color: #a8a5b0"></span></button>
+
+          <button role="menuitem" style="display: flex; align-items: center; gap: 12px; height: 32px; padding: 0 10px; border: 0; border-radius: 6px; font-size: 13px; background: transparent; color: #ece9f2"><span style="flex: 1; text-align: left">Show in file manager</span><span style="font-family: 'Roboto Mono', ui-monospace, monospace; font-size: 11px; color: #a8a5b0"></span></button>
+
+          <div style="height: 1px; background: #3d3b44; margin: 4px 6px"></div>
+
+          <button role="menuitem" style="display: flex; align-items: center; gap: 12px; height: 32px; padding: 0 10px; border: 0; border-radius: 6px; font-size: 13px; background: transparent; color: #ece9f2"><span style="flex: 1; text-align: left">Rename</span><span style="font-family: 'Roboto Mono', ui-monospace, monospace; font-size: 11px; color: #a8a5b0">F2</span></button>
+
+          <button role="menuitem" style="display: flex; align-items: center; gap: 12px; height: 32px; padding: 0 10px; border: 0; border-radius: 6px; font-size: 13px; background: transparent; color: #ece9f2"><span style="flex: 1; text-align: left">Duplicate</span><span style="font-family: 'Roboto Mono', ui-monospace, monospace; font-size: 11px; color: #a8a5b0">Ctrl D</span></button>
+
+          <button role="menuitem" style="display: flex; align-items: center; gap: 12px; height: 32px; padding: 0 10px; border: 0; border-radius: 6px; font-size: 13px; background: transparent; color: #ece9f2"><span style="flex: 1; text-align: left">Copy</span><span style="font-family: 'Roboto Mono', ui-monospace, monospace; font-size: 11px; color: #a8a5b0">Ctrl C</span></button>
+
+          <button role="menuitem" style="display: flex; align-items: center; gap: 12px; height: 32px; padding: 0 10px; border: 0; border-radius: 6px; font-size: 13px; background: transparent; color: #ece9f2"><span style="flex: 1; text-align: left">Edit tags</span><span style="font-family: 'Roboto Mono', ui-monospace, monospace; font-size: 11px; color: #a8a5b0">T</span></button>
+
+          <div style="height: 1px; background: #3d3b44; margin: 4px 6px"></div>
+
+          <button role="menuitem" style="display: flex; align-items: center; gap: 12px; height: 32px; padding: 0 10px; border: 0; border-radius: 6px; font-size: 13px; background: transparent; color: #ece9f2"><span style="flex: 1; text-align: left">Move to trash</span><span style="font-family: 'Roboto Mono', ui-monospace, monospace; font-size: 11px; color: #a8a5b0">Del</span></button>
+
+    </div>
+  </section>
+
+  <section style="display: flex; flex-direction: column; gap: 16px">
+    <h2 style="margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #8d8a98">Tag editor</h2>
+    <div style="background: #2a2836; border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 12px">
+      <label style="display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 10px; border-radius: 8px; background: #16151a; color: #8d8a98">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5 14 14"></path></svg>
+        <input aria-label="Find or create tag" value="lig" style="flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: #ece9f2; font: inherit">
+      </label>
+      <div style="display: flex; flex-direction: column; gap: 2px">
+        <button style="display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 8px; border: 0; border-radius: 6px; background: #3d3b44; color: #ece9f2"><span style="width: 8px; height: 8px; border-radius: 4px; background: #c8a87b"></span>lighting<span style="margin-left: auto; color: #a8a5b0; font-size: 11px">84</span></button>
+        <button style="display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 8px; border: 0; border-radius: 6px; background: transparent; color: #ece9f2"><span style="width: 8px; height: 8px; border-radius: 4px; background: #7bc8c8"></span>light study<span style="margin-left: auto; color: #a8a5b0; font-size: 11px">12</span></button>
+        <button style="display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 8px; border: 0; border-radius: 6px; background: transparent; color: #f0997b; font-weight: 500">+ Create “lig”</button>
+      </div>
+    </div>
+
+    <h2 style="margin: 16px 0 0; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #8d8a98">Empty folder</h2>
+    <div style="background: #1c1b22; border-radius: 10px; padding: 28px 20px; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center">
+      <svg width="40" height="40" viewBox="0 0 40 40" aria-hidden="true"><rect x="4" y="10" width="32" height="24" rx="4" fill="#2a2836"></rect><circle cx="27" cy="18" r="3.5" fill="#fac775"></circle><path d="M8 30l8-9 6 6 4-4 6 7z" fill="#3d3b44"></path></svg>
+      <div style="font-weight: 600; font-size: 14px">No images here</div>
+      <div style="color: #8d8a98; font-size: 12px">This folder holds no supported files.</div>
+      <button style="margin-top: 4px; height: 32px; padding: 0 14px; border: 0; border-radius: 8px; background: #2a2836; color: #ece9f2">Choose another folder</button>
+    </div>
+  </section>
+</div>
+</body>
+</html>

@@ -10,5 +10,14 @@ These mockups define the intended design. The application code is the runtime
 truth for implemented behavior. When the approved design changes, update the
 mockup or record the divergence.
 
-Treat the set as frozen. Do not restyle or add screens without a new design
-approval.
+Treat `mockups/` as frozen. Do not restyle it or add screens to it.
+
+`redesign/` holds the flat redesign that the owner approved on 2026-11-26:
+six screens and a README with the design rules. It is the one approved
+exception to the freeze, and the target look for a restyle of the app. Where
+a screen in `redesign/` covers the same view as a screen in `mockups/`, the
+redesign wins for look. `mockups/` stays the record for behavior and for the
+states that the redesign does not draw. `docs/design-deltas.md` still applies
+to both sets: a recorded delta wins over either drawing.
+`redesign/canvas.html` is a concept for a planned feature that is not built
+yet.

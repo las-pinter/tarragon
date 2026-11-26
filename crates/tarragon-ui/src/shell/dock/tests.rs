@@ -7,7 +7,9 @@ use crate::shell::tests::{draw, input, leaf_rect, painted_text};
 use crate::shell::{DOCK_GALLERY, DOCK_LIBRARY, DOCK_LOG, DOCK_PREVIEW, Shell};
 use crate::theme::apply_theme;
 use crate::tokens;
-use egui::{Color32, Context, Event, Modifiers, PointerButton, Pos2, RawInput, vec2};
+use egui::{
+    Color32, Context, Event, FontFamily, FontId, Modifiers, PointerButton, Pos2, RawInput, vec2,
+};
 
 #[test]
 fn the_docks_draw_at_the_default_fractions() {
@@ -50,8 +52,9 @@ fn the_default_dock_draws_the_panels_and_the_log_after_a_toggle() {
     };
     painted(&ctx, &mut shell);
     let text = painted(&ctx, &mut shell);
-    for label in [DOCK_LIBRARY, DOCK_PREVIEW, DOCK_GALLERY] {
-        assert!(text.iter().any(|t| t == label), "{label} is not drawn");
+    for pane in [Pane::Library, Pane::Preview, Pane::Gallery] {
+        let label = title(pane);
+        assert!(text.contains(&label), "{label} is not drawn");
     }
     assert!(
         text.iter().any(|t| t == "FAVORITES"),
@@ -252,10 +255,10 @@ fn each_panel_title_is_painted_once() {
         }
         frame_text(&ctx, &mut shell, vec![]);
         let text = frame_text(&ctx, &mut shell, vec![]);
-        let titles = [DOCK_LIBRARY, DOCK_GALLERY, DOCK_PREVIEW, DOCK_LOG];
-        for title in titles {
-            let want = usize::from(title != DOCK_LOG || log_shown);
-            let got = text.iter().filter(|(t, _)| t == title).count();
+        for pane in [Pane::Library, Pane::Gallery, Pane::Preview, Pane::Log] {
+            let title = title(pane);
+            let want = usize::from(pane != Pane::Log || log_shown);
+            let got = text.iter().filter(|(t, _)| *t == title).count();
             assert_eq!(
                 got, want,
                 "{title} is painted {got} times (log: {log_shown})"
@@ -274,18 +277,47 @@ fn the_tab_bar_is_a_title_strip_with_no_buttons() {
 
     // Nothing but the title text and the strip is in the tab bar: a close
     // button, a close-all button, or a collapse arrow would add more shapes.
-    // The bar is one title line plus the padding above and below, so the text
-    // sits one padding below the leaf top.
+    // The bar is the caption line plus one strip padding above and below, and
+    // the title line is centered in it.
     let leaf = leaf_rect(&shell, Pane::Library);
+    let output = ctx.run_ui(input(), |ui| shell.show(ui));
+    let bar = output
+        .shapes
+        .iter()
+        .filter_map(|clipped| match &clipped.shape {
+            egui::epaint::Shape::Rect(rect)
+                if rect.fill == tokens::BG_TERTIARY
+                    && (rect.rect.min.y - leaf.min.y).abs() < 0.5
+                    && rect.rect.width() > leaf.width() - 20.0 =>
+            {
+                Some(rect.rect.height())
+            }
+            _ => None,
+        })
+        .reduce(f32::max);
+    output.drop_without_applying_deltas();
+    let want_bar = tokens::SIZE_CAPTION + 2.0 * tokens::SPACING_XS;
+    let bar = bar.unwrap_or_else(|| panic!("the tab bar is not painted"));
+    assert!(
+        (bar - want_bar).abs() < 0.5,
+        "bar is {bar} tall, want {want_bar}"
+    );
+
     let text = frame_text(&ctx, &mut shell, vec![]);
     let (_, title_pos) = text
         .iter()
-        .find(|(t, _)| t == DOCK_LIBRARY)
+        .find(|(t, _)| *t == title(Pane::Library))
         .expect("the title is painted");
-    let want = leaf.min.y + tokens::SPACING_XS;
+    let line = ctx.fonts_mut(|fonts| {
+        fonts.row_height(&FontId::new(
+            tokens::SIZE_CAPTION,
+            FontFamily::Name(crate::fonts::MEDIUM_FAMILY.into()),
+        ))
+    });
+    let want = leaf.min.y + (bar - line) / 2.0;
     assert!(
         (title_pos.y - want).abs() < 1.0,
-        "title at {}, want {want}",
+        "title at {}, want about {want}",
         title_pos.y
     );
 
@@ -379,17 +411,25 @@ fn dropping_a_dragged_tab_asks_for_a_repaint() {
 }
 
 #[test]
-fn every_panel_title_paints_in_amber() {
-    fn panel_title_colors(ctx: &Context, shell: &mut Shell) -> Vec<(String, Color32)> {
+fn every_panel_title_paints_as_a_gray_section_label() {
+    fn panel_title_formats(ctx: &Context, shell: &mut Shell) -> Vec<(String, f32, Color32, f32)> {
         let output = ctx.run_ui(input(), |ui| shell.show(ui));
         let mut found = Vec::new();
         for clipped in &output.shapes {
             if let egui::epaint::Shape::Text(shape) = &clipped.shape {
                 let text = shape.galley.job.text.clone();
-                if [DOCK_LIBRARY, DOCK_GALLERY, DOCK_PREVIEW, DOCK_LOG].contains(&text.as_str()) {
+                if [DOCK_LIBRARY, DOCK_GALLERY, DOCK_PREVIEW, DOCK_LOG]
+                    .map(str::to_uppercase)
+                    .contains(&text)
+                {
                     // A section colour is the one the glyphs use.
-                    let color = shape.galley.job.sections[0].format.color;
-                    found.push((text, color));
+                    let section = &shape.galley.job.sections[0].format;
+                    found.push((
+                        text,
+                        section.font_id.size,
+                        section.color,
+                        section.extra_letter_spacing,
+                    ));
                 }
             }
         }
@@ -401,10 +441,26 @@ fn every_panel_title_paints_in_amber() {
     apply_theme(&ctx);
     let mut shell = Shell::new();
     shell.toggle_log();
-    panel_title_colors(&ctx, &mut shell);
-    let titles = panel_title_colors(&ctx, &mut shell);
-    assert_eq!(titles.len(), 4, "{titles:?}");
-    for (title, color) in titles {
-        assert_eq!(color, tokens::AMBER_ACCENT, "{title} is not amber");
+    panel_title_formats(&ctx, &mut shell);
+    let formats = panel_title_formats(&ctx, &mut shell);
+    let spacing = tokens::SIZE_CAPTION * TAB_SPACING_EM;
+    for pane in [Pane::Library, Pane::Gallery, Pane::Preview, Pane::Log] {
+        let label = title(pane);
+        assert_eq!(
+            label,
+            name(pane).to_uppercase(),
+            "{pane:?} is not upper case"
+        );
+        let (_, size, color, letter_spacing) = formats
+            .iter()
+            .find(|(text, ..)| *text == label)
+            .unwrap_or_else(|| panic!("{label} is not painted: {formats:?}"));
+        assert_eq!(*size, tokens::SIZE_CAPTION, "{label} is not caption size");
+        assert_eq!(*color, tokens::TEXT_SECONDARY, "{label} is not gray");
+        assert!(
+            (letter_spacing - spacing).abs() < 1e-4,
+            "{label} has {letter_spacing} of letter spacing, want {spacing}"
+        );
     }
+    assert_eq!(formats.len(), 4, "{formats:?}");
 }

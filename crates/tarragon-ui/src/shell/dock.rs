@@ -13,6 +13,10 @@ use crate::sidebar::panel::Sidebar;
 use crate::theme::panel_frame;
 use crate::tokens;
 
+/// The letter spacing of a tab title, in em. The redesign gives a section
+/// label wide spacing.
+const TAB_SPACING_EM: f32 = 0.08;
+
 /// What the four panels need to draw one frame.
 pub(super) struct Panes<'a> {
     /// The Library panel.
@@ -46,14 +50,15 @@ impl TabViewer for Panes<'_> {
         Id::new(name(*tab))
     }
 
-    // The tab bar is the panel title strip, so the text matches the mockup title.
-    // The color is set here because the theme's override text color beats the
-    // tab style color, so the style alone would paint the titles near white.
+    // The tab bar is the panel title strip: a small gray upper-case label. The
+    // color is set here because the theme's override text color beats the tab
+    // style color.
     fn title(&mut self, tab: &mut Pane) -> WidgetText {
-        RichText::new(name(*tab))
-            .size(tokens::SIZE_BODY)
-            .color(tokens::AMBER_ACCENT)
+        RichText::new(title(*tab))
+            .size(tokens::SIZE_CAPTION)
+            .color(tokens::TEXT_SECONDARY)
             .family(FontFamily::Name(fonts::MEDIUM_FAMILY.into()))
+            .extra_letter_spacing(tokens::SIZE_CAPTION * TAB_SPACING_EM)
             .into()
     }
 
@@ -99,7 +104,7 @@ impl TabViewer for Panes<'_> {
     }
 }
 
-/// The panel name: the tab title and the tab id.
+/// The panel name: the tab id and the View menu label.
 pub(super) fn name(pane: Pane) -> &'static str {
     match pane {
         Pane::Library => DOCK_LIBRARY,
@@ -107,6 +112,11 @@ pub(super) fn name(pane: Pane) -> &'static str {
         Pane::Preview => DOCK_PREVIEW,
         Pane::Log => DOCK_LOG,
     }
+}
+
+/// The tab title: the upper-case section label of the redesign.
+pub(super) fn title(pane: Pane) -> String {
+    name(pane).to_uppercase()
 }
 
 #[cfg(test)]

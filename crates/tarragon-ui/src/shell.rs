@@ -2,7 +2,7 @@
 //!
 //! The four panels sit in a dock, so the user can resize and move them.
 
-use egui::{CentralPanel, FontFamily, FontId, Frame, Margin, MenuBar, Panel, RichText, Ui};
+use egui::{CentralPanel, Frame, Margin, MenuBar, Panel, RichText, Ui};
 use egui_dock::{DockArea, DockState, Style};
 use tarragon_core::sorting::SortMode;
 
@@ -282,11 +282,9 @@ impl Shell {
         // The dock fills what the bars leave. It owns the panel sizes and places.
         CentralPanel::default().frame(Frame::NONE).show(ui, |ui| {
             let mut style = Style::from_egui(ui.style());
-            let title_font = FontId::new(
-                tokens::SIZE_BODY,
-                FontFamily::Name(crate::fonts::MEDIUM_FAMILY.into()),
-            );
-            dock_title_style(&mut style, ui.fonts_mut(|f| f.row_height(&title_font)));
+            // The strip height follows the caption token, not the body line
+            // height.
+            dock_title_style(&mut style, tokens::SIZE_CAPTION);
             let separator = style.separator.width;
             let mut panes = dock::Panes {
                 sidebar: &mut self.sidebar,

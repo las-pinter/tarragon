@@ -142,10 +142,12 @@ pub(crate) fn dialog_frame() -> Frame {
 /// padding, and no boxes or lines around the tab.
 ///
 /// This style sets no text color. The theme's `override_text_color` wins over
-/// it, so the amber comes from the title text itself in the dock tab viewer.
+/// it, so the title color comes from the title text itself in the dock tab
+/// viewer.
 ///
-/// `text_height` is the line height of the title font. The 8 px side padding
-/// is fixed inside `egui_dock` and equals `SPACING_S`, so it is not set here.
+/// `text_height` is the title text size; the bar adds the strip padding. The
+/// 8 px side padding is fixed inside `egui_dock` and equals `SPACING_S`, so it
+/// is not set here.
 pub(crate) fn dock_title_style(style: &mut egui_dock::Style, text_height: f32) {
     let bar = &mut style.tab_bar;
     bar.bg_fill = tokens::BG_TERTIARY;

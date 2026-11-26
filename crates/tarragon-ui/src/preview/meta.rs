@@ -73,7 +73,7 @@ pub fn show_grid(ui: &mut Ui, meta: &Meta) {
     ui.label(
         RichText::new("Metadata")
             .size(tokens::SIZE_CAPTION)
-            .color(tokens::TEXT_MUTED),
+            .color(tokens::TEXT_SECONDARY),
     );
     Grid::new("preview-meta")
         // egui rows are at least as tall as a button; the stylesheet's are
@@ -85,7 +85,7 @@ pub fn show_grid(ui: &mut Ui, meta: &Meta) {
                 ui.label(
                     RichText::new(key)
                         .size(tokens::SIZE_CAPTION)
-                        .color(tokens::TEXT_MUTED),
+                        .color(tokens::TEXT_SECONDARY),
                 );
                 ui.label(
                     RichText::new(value)

@@ -44,7 +44,11 @@ pub const TEXT_PRIMARY: Color32 = Color32::from_rgb(0xec, 0xe9, 0xf2);
 pub const TEXT_SECONDARY: Color32 = Color32::from_rgb(0x8d, 0x8a, 0x98);
 /// `--text-tertiary`: tertiary text.
 pub const TEXT_TERTIARY: Color32 = Color32::from_rgb(0xa8, 0xa5, 0xb0);
-/// `--text-muted`: muted text.
+/// `--text-muted`: dim marks, such as the favorites grip.
+///
+/// The redesign forbids this value for text: `#8d8a98` is the lowest text
+/// color that passes the contrast bar. Text uses `TEXT_SECONDARY` or
+/// `TEXT_TERTIARY`.
 pub const TEXT_MUTED: Color32 = Color32::from_rgb(0x65, 0x62, 0x6f);
 
 /// `--border-subtle`: faint 6% white border.
@@ -196,9 +200,12 @@ pub const PREVIEW_TAG_ROW_HEIGHT: f32 = 36.0;
 /// row, in points. With the 2 point `.meta-grid` gap it gives the 18 point row
 /// pitch of the mockup.
 pub const PREVIEW_META_ROW_HEIGHT: f32 = 16.0;
-/// `.menu-row` height: 5 point padding either side of the text line, measured
-/// at 27 points between rows in the mockup.
-pub const MENU_ROW_HEIGHT: f32 = 27.0;
+/// `.menu-row` height: the row of the redesign context menu, in points. The
+/// row padding either side of the text line gives it.
+pub const MENU_ROW_HEIGHT: f32 = 32.0;
+/// The padding inside a menu frame, in points, as the redesign context menu
+/// shows it. It does not sit on the spacing scale.
+pub const MENU_PADDING: f32 = 6.0;
 /// `.menu-row` horizontal padding, in points.
 pub const MENU_ROW_PAD_X: f32 = 10.0;
 /// The room between a popup menu and the window edge, in points. The

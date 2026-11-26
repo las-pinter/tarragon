@@ -237,7 +237,7 @@ fn show_empty(ui: &mut Ui) {
         ui.label(
             RichText::new(EMPTY_HINT)
                 .size(tokens::SIZE_SMALL)
-                .color(tokens::TEXT_MUTED),
+                .color(tokens::TEXT_SECONDARY),
         );
     });
 }

@@ -13,6 +13,7 @@ use tarragon_core::file_name::{
 
 use super::{Gallery, GridMenuEvent};
 use crate::popup::text_width;
+use crate::theme::dialog_frame;
 use crate::{backdrop, tokens};
 
 /// Window width, in points.
@@ -118,6 +119,7 @@ impl RenameDialog {
             .collapsible(false)
             .resizable(false)
             .anchor(Align2::CENTER_CENTER, vec2(0.0, 0.0))
+            .frame(dialog_frame())
             .show(ctx, |ui| {
                 ui.set_width(WIDTH);
                 let id = Id::new(FIELD_ID);
@@ -144,7 +146,7 @@ impl RenameDialog {
                                 .desired_width(room),
                         );
                         if let Some(text) = &suffix {
-                            ui.label(RichText::new(text).color(tokens::TEXT_MUTED));
+                            ui.label(RichText::new(text).color(tokens::TEXT_SECONDARY));
                         }
                         response
                     })

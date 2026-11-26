@@ -27,7 +27,7 @@ fn busy_phase(time: f64) -> f32 {
 pub(crate) fn strip(ui: &mut Ui, label: &str) {
     ui.horizontal(|ui| {
         let label = RichText::new(label).size(tokens::SIZE_CAPTION);
-        ui.label(label.color(tokens::TEXT_MUTED));
+        ui.label(label.color(tokens::TEXT_SECONDARY));
         let size = vec2(ui.available_width(), BUSY_BAR_HEIGHT);
         let (track, _) = ui.allocate_exact_size(size, Sense::hover());
         let painter = ui.painter().with_clip_rect(track);

@@ -90,7 +90,7 @@ pub fn show_favorite_row(
             label,
             rect,
             fill,
-            colors(missing, text, icon),
+            colors(missing, text, icon, fill),
         );
     }
 
@@ -121,19 +121,26 @@ pub fn paint_lifted_row(ui: &Ui, label: &str, selected: bool, missing: bool, rec
         label,
         rect,
         tokens::SURFACE_HIGHLIGHT,
-        colors(missing, text, icon),
+        colors(missing, text, icon, tokens::SURFACE_HIGHLIGHT),
     );
 }
 
 /// The text and icon colors: muted for a missing folder.
 ///
-/// Muted text is the dimmest readable token, so a missing folder reads as gone.
-fn colors(missing: bool, text: Color32, icon: Color32) -> (Color32, Color32) {
-    if missing {
-        (tokens::TEXT_MUTED, tokens::TEXT_MUTED)
-    } else {
-        (text, icon)
+/// A missing folder keeps the lowest readable text for its fill: the floor on
+/// the base, panel, and field steps, and the lighter tertiary text on the
+/// hover and raised steps, where the floor is too dark. Its icon stays dim.
+fn colors(missing: bool, text: Color32, icon: Color32, fill: Color32) -> (Color32, Color32) {
+    if !missing {
+        return (text, icon);
     }
+    let on_low_step = fill == Color32::TRANSPARENT || fill == tokens::BG_TERTIARY;
+    let text = if on_low_step {
+        tokens::TEXT_SECONDARY
+    } else {
+        tokens::TEXT_TERTIARY
+    };
+    (text, tokens::TEXT_MUTED)
 }
 
 /// The laid-out `::` grip.
@@ -200,7 +207,7 @@ pub fn show_empty_favorites(ui: &mut Ui) {
             ui.label(
                 RichText::new("No favorites yet.")
                     .size(tokens::SIZE_SMALL)
-                    .color(tokens::TEXT_MUTED),
+                    .color(tokens::TEXT_SECONDARY),
             );
         });
 }

@@ -373,7 +373,7 @@ fn head(ui: &mut Ui, text: &str, gap: f32) {
                     .size(tokens::SIZE_CAPTION)
                     .family(FontFamily::Name(fonts::MEDIUM_FAMILY.into()))
                     .extra_letter_spacing(tokens::SIZE_CAPTION * HEAD_SPACING_EM)
-                    .color(tokens::TEXT_MUTED),
+                    .color(tokens::TEXT_SECONDARY),
             );
         });
 }

@@ -106,7 +106,7 @@ fn the_refusal_is_painted_in_the_error_colour_and_the_hint_in_the_muted_colour()
     open_input(&ctx, &mut preview);
     assert_eq!(
         colour_of(&ctx, &mut preview, HINT),
-        Some(tokens::TEXT_MUTED)
+        Some(tokens::TEXT_TERTIARY)
     );
     frame(&ctx, &mut preview, vec![Event::Text("red".into())]);
     frame(&ctx, &mut preview, vec![key(Key::Enter)]);

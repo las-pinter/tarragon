@@ -131,6 +131,6 @@ mod paint {
         let value = at(&found, "PNG");
         assert_eq!((value.2, value.3), (tokens::TEXT_TERTIARY, None));
         let key = at(&found, "Format");
-        assert_eq!((key.2, key.3), (tokens::TEXT_MUTED, None));
+        assert_eq!((key.2, key.3), (tokens::TEXT_SECONDARY, None));
     }
 }

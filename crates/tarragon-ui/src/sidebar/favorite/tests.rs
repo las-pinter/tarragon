@@ -115,12 +115,13 @@ fn the_selected_row_paints_the_tertiary_fill_and_coral_icon() {
 }
 
 #[test]
-fn a_missing_row_paints_the_dim_text_colour() {
+fn a_missing_row_keeps_the_text_floor() {
     let ctx = ready(1);
     let found = frame(&ctx, input(Vec::new()), 1, false, false).shapes;
     let gone = frame(&ctx, input(Vec::new()), 1, false, true).shapes;
-    assert!(!has_text_color(&found, tokens::TEXT_MUTED));
-    assert!(has_text_color(&gone, tokens::TEXT_MUTED));
+    assert!(has_text_color(&found, tokens::TEXT_SECONDARY));
+    assert!(has_text_color(&gone, tokens::TEXT_SECONDARY));
+    assert!(!has_text_color(&gone, tokens::TEXT_MUTED));
 }
 
 #[test]
@@ -150,12 +151,45 @@ fn a_hovered_row_paints_the_hover_fill_and_primary_text() {
 }
 
 #[test]
-fn a_selected_missing_row_keeps_the_fill_but_dims_text_and_icon() {
+fn a_selected_missing_row_keeps_the_fill_but_dims_the_icon() {
     let ctx = ready(1);
     let shapes = frame(&ctx, input(Vec::new()), 1, true, true).shapes;
     assert!(has_fill(&shapes, tokens::BG_TERTIARY));
-    assert!(has_text_color(&shapes, tokens::TEXT_MUTED));
+    assert!(has_text_color(&shapes, tokens::TEXT_SECONDARY));
     assert!(!has_fill(&shapes, tokens::CORAL_STRONG));
+}
+
+#[test]
+fn a_hovered_missing_row_uses_the_light_text() {
+    let ctx = ready(1);
+    let pos = frame(&ctx, input(Vec::new()), 1, false, true).rects[0].center();
+    frame(&ctx, input(vec![Event::PointerMoved(pos)]), 1, false, true);
+    let shapes = frame(&ctx, input(Vec::new()), 1, false, true).shapes;
+    assert!(has_text_color(&shapes, tokens::TEXT_TERTIARY));
+    assert!(!has_text_color(&shapes, tokens::TEXT_SECONDARY));
+}
+
+#[test]
+fn a_lifted_missing_row_uses_the_light_text() {
+    let ctx = ready(1);
+    let output = ctx.run_ui(input(Vec::new()), |ui| {
+        paint_lifted_row(
+            ui,
+            "gone",
+            false,
+            true,
+            Rect::from_min_size(Pos2::ZERO, egui::vec2(200.0, FAVORITE_HEIGHT)),
+        );
+    });
+    let shapes: Vec<Shape> = output
+        .shapes
+        .iter()
+        .map(|clipped| clipped.shape.clone())
+        .collect();
+    output.drop_without_applying_deltas();
+    // The 0.75 lift dims the row when it paints; the chosen text color is the
+    // light tertiary one.
+    assert!(has_text_color(&shapes, tokens::TEXT_TERTIARY));
 }
 
 #[test]

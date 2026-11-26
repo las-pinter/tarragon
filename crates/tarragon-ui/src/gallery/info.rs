@@ -68,7 +68,7 @@ fn info_measure(ui: &Ui) -> impl Fn(&str) -> f32 + '_ {
     );
     move |text: &str| {
         ui.painter()
-            .layout_no_wrap(text.to_owned(), font.clone(), tokens::TEXT_MUTED)
+            .layout_no_wrap(text.to_owned(), font.clone(), tokens::TEXT_SECONDARY)
             .size()
             .x
     }

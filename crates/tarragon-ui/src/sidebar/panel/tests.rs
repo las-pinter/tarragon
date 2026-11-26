@@ -265,13 +265,16 @@ fn the_grip_is_painted_with_minus_one_letter_spacing() {
 }
 
 #[test]
-fn a_missing_favorite_paints_dim() {
+fn a_missing_favorite_stays_at_the_text_floor() {
     let mut sidebar = panel();
     let ctx = ready();
     let found = find(&frame(&ctx, &mut sidebar, Vec::new()), "fav").color;
     sidebar.set_favorites(vec![favorite(true)]);
     let gone = find(&frame(&ctx, &mut sidebar, Vec::new()), "fav").color;
-    assert_eq!((found, gone), (tokens::TEXT_SECONDARY, tokens::TEXT_MUTED));
+    assert_eq!(
+        (found, gone),
+        (tokens::TEXT_SECONDARY, tokens::TEXT_SECONDARY)
+    );
 }
 
 #[test]

@@ -122,7 +122,7 @@ pub(super) fn contents(ui: &mut Ui, draft: &mut Draft, view: &View<'_>) -> Optio
         Label::new(
             RichText::new(note)
                 .size(tokens::SIZE_SMALL)
-                .color(tokens::TEXT_MUTED),
+                .color(tokens::TEXT_SECONDARY),
         )
         .wrap(),
     );
@@ -228,7 +228,7 @@ fn choice(ui: &mut Ui, id: &str, current: &mut String, choices: &[&str]) {
 fn cache_dir_field(ui: &mut Ui, dir: Option<&str>) -> bool {
     let (text, color) = match dir {
         Some(dir) => (dir, tokens::TEXT_PRIMARY),
-        None => ("Default cache directory", tokens::TEXT_MUTED),
+        None => ("Default cache directory", tokens::TEXT_SECONDARY),
     };
     Frame::new()
         .fill(tokens::BG_TERTIARY)

@@ -152,7 +152,7 @@ pub fn show(ui: &mut Ui, images: &[PreviewImage], total: usize, cap: usize) {
         ui.label(
             RichText::new(hint)
                 .size(tokens::SIZE_CAPTION)
-                .color(tokens::TEXT_MUTED),
+                .color(tokens::TEXT_SECONDARY),
         );
     }
 }

@@ -92,7 +92,7 @@ impl Gallery {
         let output = TextEdit::singleline(&mut self.search)
             .id(Id::new("tarragon-gallery-search"))
             .hint_text("Search file names")
-            .text_color(tokens::TEXT_MUTED)
+            .text_color(tokens::TEXT_SECONDARY)
             .desired_width(f32::INFINITY)
             .frame(
                 Frame::new()
@@ -157,7 +157,7 @@ impl Gallery {
         let info = self.info_text_fitted(ui, ui.available_width());
         let text = RichText::new(info)
             .size(tokens::SIZE_CAPTION)
-            .color(tokens::TEXT_MUTED);
+            .color(tokens::TEXT_SECONDARY);
         ui.add(Label::new(text).truncate());
     }
 
@@ -186,7 +186,7 @@ impl Gallery {
         ui.label(
             RichText::new("Sort")
                 .size(tokens::SIZE_SMALL)
-                .color(tokens::TEXT_MUTED),
+                .color(tokens::TEXT_SECONDARY),
         );
         picked
     }

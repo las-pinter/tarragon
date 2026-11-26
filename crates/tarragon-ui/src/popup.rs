@@ -24,13 +24,13 @@ pub(crate) fn menu_placement(button: Rect, height: f32, bounds: Rect) -> (Pos2, 
     }
 }
 
-/// The frame of a popup menu: the fill, the border, and the padding.
+/// The frame of a popup menu: the menu fill, a large radius, and no border.
 pub(crate) fn menu_frame() -> Frame {
     Frame::new()
-        .fill(tokens::BG_TERTIARY)
-        .stroke(Stroke::new(tokens::STROKE_WIDTH, tokens::SURFACE_HIGHLIGHT))
-        .corner_radius(CornerRadius::same(tokens::RADIUS_M))
-        .inner_margin(Margin::same(points(tokens::SPACING_XS)))
+        .fill(tokens::SURFACE_HOVER)
+        .stroke(Stroke::NONE)
+        .corner_radius(CornerRadius::same(tokens::RADIUS_XL))
+        .inner_margin(Margin::same(points(tokens::MENU_PADDING)))
 }
 
 /// Allocate one menu row `width` wide and paint its hover fill. Give the row
@@ -42,10 +42,9 @@ pub(crate) fn row_frame(ui: &mut Ui, width: f32) -> (Rect, Response, Color32) {
     if !response.hovered() {
         return (rect, response, tokens::TEXT_PRIMARY);
     }
-    let radius = CornerRadius::same(tokens::RADIUS_S);
-    ui.painter()
-        .rect_filled(rect, radius, tokens::SURFACE_HIGHLIGHT);
-    (rect, response, tokens::AMBER_ACCENT)
+    let radius = CornerRadius::same(tokens::RADIUS_M);
+    ui.painter().rect_filled(rect, radius, tokens::CORAL_DARK);
+    (rect, response, tokens::CORAL_STRONG)
 }
 
 /// The width of `text` in the menu font.

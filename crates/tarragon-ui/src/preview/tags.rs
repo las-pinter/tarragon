@@ -25,7 +25,7 @@ pub fn show_heading(ui: &mut Ui) {
     ui.label(
         RichText::new("Tags")
             .size(tokens::SIZE_CAPTION)
-            .color(tokens::TEXT_MUTED),
+            .color(tokens::TEXT_SECONDARY),
     );
 }
 

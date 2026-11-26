@@ -15,6 +15,7 @@ use std::path::PathBuf;
 use egui::{Align, Align2, Button, Context, Event, Key, Label, Layout, Modifiers, vec2};
 
 use super::{Gallery, GridMenuEvent};
+use crate::theme::dialog_frame;
 use crate::{backdrop, tokens};
 
 /// Window width, in points.
@@ -133,6 +134,7 @@ impl DeleteDialog {
             .collapsible(false)
             .resizable(false)
             .anchor(Align2::CENTER_CENTER, vec2(0.0, 0.0))
+            .frame(dialog_frame())
             .show(ctx, |ui| {
                 ui.set_width(WIDTH);
                 ui.add(Label::new(self.question()).wrap());

@@ -17,8 +17,8 @@ pub(super) const FOOTER_SEPARATOR: f32 = tokens::STROKE_WIDTH + 2.0 * tokens::SP
 /// What the footer adds to the menu height: the rule and one row.
 pub(super) const FOOTER_HEIGHT: f32 = FOOTER_SEPARATOR + tokens::MENU_ROW_HEIGHT;
 
-/// The height of a menu with `rows` rows, borders and padding included. An
-/// empty menu still has its one "No items" row.
+/// The height of a menu with `rows` rows, padding included. An empty menu
+/// still has its one "No items" row.
 #[must_use]
 #[expect(
     clippy::cast_precision_loss,
@@ -26,7 +26,7 @@ pub(super) const FOOTER_HEIGHT: f32 = FOOTER_SEPARATOR + tokens::MENU_ROW_HEIGHT
 )]
 pub(super) fn menu_height(rows: usize) -> f32 {
     let shown = (rows as f32).clamp(1.0, MENU_ROWS);
-    shown * tokens::MENU_ROW_HEIGHT + 2.0 * (tokens::SPACING_XS + tokens::STROKE_WIDTH)
+    shown * tokens::MENU_ROW_HEIGHT + 2.0 * tokens::MENU_PADDING
 }
 
 /// Draw a check mark in the tick box `tick`.

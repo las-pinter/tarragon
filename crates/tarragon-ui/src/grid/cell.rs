@@ -289,7 +289,7 @@ fn paint_name(painter: &Painter, rect: Rect, thumb: Rect, item: &GridItem) {
     let color = if item.error.is_some() && item.texture.is_none() {
         tokens::CORAL_STRONG
     } else {
-        tokens::TEXT_MUTED
+        tokens::TEXT_TERTIARY
     };
     let mut job = LayoutJob::simple_singleline(
         name.to_owned(),

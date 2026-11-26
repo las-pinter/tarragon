@@ -64,7 +64,7 @@ pub fn show_check_menu(
                             if rows.is_empty() {
                                 let size = vec2(width, tokens::MENU_ROW_HEIGHT);
                                 let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
-                                paint_label(ui, rect, "No items", tokens::TEXT_MUTED);
+                                paint_label(ui, rect, "No items", tokens::TEXT_TERTIARY);
                             }
                             rows.iter()
                                 .enumerate()

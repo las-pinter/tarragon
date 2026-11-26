@@ -136,11 +136,18 @@ fn the_menu_opens_below_the_button() {
 
 #[test]
 fn the_menu_height_counts_rows_rule_and_frame() {
-    // One row, and 5 points of padding and border either side.
-    assert_eq!(menu_height(0), 27.0 + 10.0);
-    assert_eq!(menu_height(2), 27.0 * 3.0 + 9.0 + 10.0);
+    // The padding sits inside the frame, six points a side.
+    let pad = 2.0 * tokens::MENU_PADDING;
+    assert_eq!(menu_height(0), tokens::MENU_ROW_HEIGHT + pad);
+    assert_eq!(
+        menu_height(2),
+        tokens::MENU_ROW_HEIGHT * 3.0 + SEPARATOR + pad
+    );
     // The tag rows stop growing at eight and scroll.
-    assert_eq!(menu_height(80), 27.0 * 9.0 + 9.0 + 10.0);
+    assert_eq!(
+        menu_height(80),
+        tokens::MENU_ROW_HEIGHT * 9.0 + SEPARATOR + pad
+    );
 }
 
 #[test]
@@ -157,15 +164,19 @@ fn the_menu_flips_above_the_button_only_when_it_does_not_fit_below() {
     assert_eq!((pos, pivot), (Pos2::new(20.0, 124.0), Align2::LEFT_TOP));
 }
 
-/// The menu frame in a painted frame: the one rect with both a fill and a
-/// border that is not the button's. The area fades in, so the colours are not
-/// matched exactly.
+/// The menu frame in a painted frame: the filled rect taller than a row that
+/// is not the button's. The area fades in, so the colour is not matched.
 fn menu_frame(found: &Shapes) -> Rect {
     let button = rect_with(found, |_, stroke| stroke == tokens::BORDER_INTERACTIVE);
     let frames: Vec<Rect> = found
         .rects
         .iter()
-        .filter(|(r, fill, stroke)| *r != button && fill.a() > 0 && stroke.a() > 0)
+        .filter(|(r, fill, _)| {
+            *r != button
+                && fill.a() > 0
+                && r.height() > tokens::MENU_ROW_HEIGHT
+                && r.width() > tokens::MENU_ROW_HEIGHT
+        })
         .map(|(r, ..)| *r)
         .collect();
     assert_eq!(frames.len(), 1, "{frames:?}");

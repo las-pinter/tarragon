@@ -201,7 +201,7 @@ pub fn show_input(ui: &mut Ui, id: Id, state: &mut AddState, events: &mut Vec<Pr
         Some(error) => (error.to_string(), tokens::TAG_ERROR_TEXT),
         None => (
             "Press Enter to add. Escape or focus loss cancels.".to_owned(),
-            tokens::TEXT_MUTED,
+            tokens::TEXT_TERTIARY,
         ),
     };
     ui.label(

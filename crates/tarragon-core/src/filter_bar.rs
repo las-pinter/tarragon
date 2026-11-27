@@ -136,6 +136,26 @@ impl FilterBar {
         self.state.colors.clear();
         self.state.transparent = false;
     }
+
+    /// Whether the bar holds a color, the transparent flag, a tag, or a
+    /// folder. The search text does not count.
+    #[must_use]
+    pub fn holds_any(&self) -> bool {
+        !self.state.colors.is_empty()
+            || self.state.transparent
+            || !self.tag_order.is_empty()
+            || !self.folder_order.is_empty()
+    }
+
+    /// Drop every color, tag, and folder filter. The search text stays,
+    /// because the search field owns it.
+    pub fn clear(&mut self) {
+        self.clear_colors();
+        self.state.tags.clear();
+        self.tag_order.clear();
+        self.state.folders.clear();
+        self.folder_order.clear();
+    }
 }
 
 #[cfg(test)]
@@ -310,5 +330,38 @@ mod tests {
         assert!(bar.state.colors.is_empty() && !bar.state.transparent);
         assert_eq!(bar.tag_order(), ["a"]);
         assert_eq!(bar.folder_order(), [Path::new("/x")]);
+    }
+
+    #[test]
+    fn clear_drops_every_chip_and_keeps_the_text() {
+        let mut bar = FilterBar::default();
+        bar.state.text = "cat".to_owned();
+        assert!(!bar.holds_any());
+        bar.toggle_color(ColorChoice::Bucket(ColorBucket::Red));
+        bar.toggle_color(ColorChoice::Transparent);
+        bar.toggle_tag("a");
+        bar.toggle_folder(Path::new("/x"));
+        assert!(bar.holds_any());
+        bar.clear();
+        assert!(!bar.holds_any());
+        assert!(bar.tag_order().is_empty() && bar.folder_order().is_empty());
+        assert!(bar.state.tags.is_empty() && bar.state.folders.is_empty());
+        assert_eq!(bar.state.text, "cat");
+        bar.toggle_tag("b");
+        assert_eq!(
+            bar.tag_order(),
+            ["b"],
+            "the order starts again after a clear"
+        );
+    }
+
+    #[test]
+    fn any_single_kind_counts_as_held() {
+        let mut bar = FilterBar::default();
+        bar.toggle_color(ColorChoice::Transparent);
+        assert!(bar.holds_any());
+        let mut bar = FilterBar::default();
+        bar.toggle_folder(Path::new("/x"));
+        assert!(bar.holds_any());
     }
 }

@@ -1,8 +1,8 @@
 //! Tests for the colour square painter.
 
 use super::{
-    CHECKER_CELL, FILTER_SIZE, SIZE, Swatch, bucket_color, checker_cells, outline, show,
-    show_filter,
+    CHECKER_CELL, FILTER_SIZE, RING_GAP, RING_WIDTH, SIZE, Swatch, bucket_color, checker_cells,
+    name, ring, show, show_filter,
 };
 use crate::tokens;
 use egui::{Color32, Context, CornerRadius, Pos2, Rect, vec2};
@@ -210,62 +210,82 @@ fn show_takes_the_given_size_and_senses_clicks() {
     assert!(sense.senses_click());
 }
 
-#[test]
-fn the_outline_has_three_states_and_active_wins() {
-    let rest = outline(false, false);
-    assert_eq!((rest.width, rest.color), (1.0, tokens::BORDER_INACTIVE));
-    let hover = outline(false, true);
-    assert_eq!((hover.width, hover.color), (1.0, tokens::TEXT_PRIMARY));
-    let active = outline(true, false);
-    assert_eq!((active.width, active.color), (2.0, tokens::AMBER_ACCENT));
-    assert_eq!(outline(true, true), active);
-}
-
-fn filter_frame(swatch: Swatch, active: bool) -> (egui::Response, Vec<egui::epaint::ClippedShape>) {
+fn filter_frame(swatch: Swatch, held: bool) -> (egui::Response, Vec<egui::epaint::ClippedShape>) {
     let ctx = Context::default();
     let mut response = None;
     let output = ctx.run_ui(input(), |ui| {
-        response = Some(show_filter(ui, swatch, active));
+        response = Some(show_filter(ui, swatch, held));
     });
     let shapes = output.shapes.clone();
     output.drop_without_applying_deltas();
     (response.expect("the closure ran"), shapes)
 }
 
-#[test]
-fn a_filter_square_is_36_points_and_senses_clicks() {
-    let (response, _) = filter_frame(Swatch::Transparent, true);
-    assert_eq!(response.rect.size(), vec2(FILTER_SIZE, FILTER_SIZE));
-    assert_eq!(FILTER_SIZE, 36.0);
-    assert!(response.sense.senses_click());
-}
-
-#[test]
-fn the_outline_is_rounded_and_inside_and_the_checker_keeps_its_corners() {
+/// The circles in `shapes`: centre, radius, fill, and stroke.
+pub(crate) fn circles(
+    shapes: &[egui::epaint::ClippedShape],
+) -> Vec<(Pos2, f32, Color32, egui::Stroke)> {
     use egui::epaint::Shape;
-    fn collect<'a>(shape: &'a Shape, found: &mut Vec<&'a egui::epaint::RectShape>) {
+    fn collect(shape: &Shape, found: &mut Vec<(Pos2, f32, Color32, egui::Stroke)>) {
         match shape {
             Shape::Vec(shapes) => shapes.iter().for_each(|s| collect(s, found)),
-            Shape::Rect(r) => found.push(r),
+            Shape::Circle(c) => found.push((c.center, c.radius, c.fill, c.stroke)),
             _ => {}
         }
     }
-    let (_, shapes) = filter_frame(Swatch::Transparent, true);
-    let mut rects = Vec::new();
-    for c in &shapes {
-        collect(&c.shape, &mut rects);
+    let mut found = Vec::new();
+    for c in shapes {
+        collect(&c.shape, &mut found);
     }
-    let stroked: Vec<_> = rects.iter().filter(|r| r.stroke.width > 0.0).collect();
-    assert_eq!(stroked.len(), 1);
+    found
+}
+
+#[test]
+fn a_filter_swatch_is_a_24_point_circle_that_senses_clicks() {
+    let (response, shapes) = filter_frame(Swatch::Bucket(ColorBucket::Teal), false);
+    assert_eq!(FILTER_SIZE, 24.0);
+    assert_eq!(response.rect.size(), vec2(FILTER_SIZE, FILTER_SIZE));
+    assert!(response.sense.senses_click());
+    let found = circles(&shapes);
+    assert_eq!(found.len(), 1, "a swatch at rest has no ring: {found:?}");
+    let (center, radius, fill, _) = found[0];
+    assert_eq!((center, radius), (response.rect.center(), 12.0));
+    assert_eq!(fill, bucket_color(ColorBucket::Teal));
+}
+
+#[test]
+fn a_held_swatch_has_the_light_ring_two_points_out() {
+    let (response, shapes) = filter_frame(Swatch::Bucket(ColorBucket::Red), true);
+    let rings: Vec<_> = circles(&shapes)
+        .into_iter()
+        .filter(|c| c.3.width > 0.0)
+        .collect();
+    assert_eq!(rings.len(), 1);
+    let (center, radius, _, stroke) = rings[0];
+    assert_eq!(center, response.rect.center());
+    // The stroke centre sits half its width beyond the 2 pt gap.
+    assert_eq!(radius, 12.0 + RING_GAP + RING_WIDTH / 2.0);
+    assert_eq!(stroke, egui::Stroke::new(2.0, tokens::TEXT_PRIMARY));
+}
+
+#[test]
+fn the_ring_shows_focus_then_held_then_hover() {
+    let ring_color = |held, focused, hovered| ring(held, focused, hovered).map(|s| s.color);
+    assert_eq!(ring_color(false, false, false), None);
     assert_eq!(
-        stroked[0].corner_radius,
-        CornerRadius::same(tokens::RADIUS_S)
+        ring_color(false, false, true),
+        Some(tokens::SURFACE_HIGHLIGHT)
     );
-    assert_eq!(stroked[0].stroke_kind, egui::StrokeKind::Inside);
-    let rounded = rects
-        .iter()
-        .filter(|r| r.stroke.width == 0.0 && r.corner_radius != CornerRadius::ZERO);
-    assert_eq!(rounded.count(), 4);
+    assert_eq!(ring_color(true, false, true), Some(tokens::TEXT_PRIMARY));
+    assert_eq!(ring_color(true, true, true), Some(tokens::CORAL_STRONG));
+    assert_eq!(ring_color(false, true, false), Some(tokens::CORAL_STRONG));
+}
+
+#[test]
+fn swatch_names_take_a_capital() {
+    assert_eq!(name(Swatch::Bucket(ColorBucket::Red)), "Red");
+    assert_eq!(name(Swatch::Bucket(ColorBucket::Neutral)), "Neutral");
+    assert_eq!(name(Swatch::Transparent), "Transparent");
 }
 
 pub(crate) fn stroked_widths(shapes: &[egui::epaint::ClippedShape]) -> Vec<(f32, Color32)> {
@@ -284,14 +304,6 @@ pub(crate) fn stroked_widths(shapes: &[egui::epaint::ClippedShape]) -> Vec<(f32,
         collect(&c.shape, &mut found);
     }
     found
-}
-
-#[test]
-fn show_filter_draws_the_outline_for_its_active_flag() {
-    let (_, shapes) = filter_frame(Swatch::Bucket(ColorBucket::Red), true);
-    assert_eq!(stroked_widths(&shapes), [(2.0, tokens::AMBER_ACCENT)]);
-    let (_, shapes) = filter_frame(Swatch::Bucket(ColorBucket::Red), false);
-    assert_eq!(stroked_widths(&shapes), [(1.0, tokens::BORDER_INACTIVE)]);
 }
 
 #[test]

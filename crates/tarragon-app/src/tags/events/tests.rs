@@ -314,7 +314,7 @@ fn a_write_runs_an_active_tag_filter_again_and_a_refused_one_does_not() {
     shell
         .gallery_mut()
         .set_filter_lists(vec!["night".into()], Vec::new());
-    click_text(&ctx, "Filter Tags", &mut |ui: &mut Ui| {
+    click_text(&ctx, "Tags", &mut |ui: &mut Ui| {
         shell.gallery_mut().show(ui);
     });
     click_text(&ctx, "night", &mut |ui: &mut Ui| {

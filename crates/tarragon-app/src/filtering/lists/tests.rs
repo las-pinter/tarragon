@@ -23,7 +23,7 @@ fn a_failed_read_logs_a_warning_and_keeps_the_lists_and_chips() {
         let texts = frame(&ctx, Vec::new(), &mut |ui: &mut Ui| gallery.show(ui)).texts;
         texts.iter().filter(|t| t.0 == "/r/one").count()
     };
-    click_text(&ctx, "Filter Folders", &mut |ui: &mut Ui| gallery.show(ui));
+    click_text(&ctx, "Folders", &mut |ui: &mut Ui| gallery.show(ui));
     click_text(&ctx, "/r/one", &mut |ui: &mut Ui| gallery.show(ui));
     let state = gallery.take_filter_change().expect("a chip was selected").0;
     assert_eq!(state.folders.len(), 1);

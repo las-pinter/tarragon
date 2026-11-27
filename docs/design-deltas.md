@@ -453,15 +453,19 @@ Reason: "1 filters active" reads as an error.
 ## Filter colour row
 
 Before: `design/mockups/filter-colors.html` shows ten swatches. The row is always
-there.
+there. `design/redesign/main-window.html` draws twelve round 24 px swatches,
+with a 2 px light ring 2 px outside a held swatch, and no hover or focus state.
 
-After: the row has twelve swatches of the same size: the eleven buckets, then the
-checkerboard `transparent` swatch. The outline states match
-`design/mockups/theme.css` lines 616-630. The row is hidden when the
-`color_tag_enabled` setting is off.
+After: the row has the redesign's twelve round swatches: the eleven buckets,
+then the checkerboard `transparent` swatch, cut from 4 by 4 cells with the
+top-left cell dark, as the page's pattern draws it. A held swatch takes the
+light ring. A hovered swatch takes the same ring in the raised surface colour,
+and a swatch with the keyboard focus takes it in coral, which wins over the
+held ring. The row is hidden when the `color_tag_enabled` setting is off.
 
 Reason: the app has eleven buckets and the transparency tag. With colour tags
-off, the row has nothing to filter.
+off, the row has nothing to filter. The page defines no hover or focus state,
+and a swatch can be reached with the keyboard, so it needs both.
 
 ## Folder labels
 
@@ -485,17 +489,35 @@ filter pill and the sort pills keep their size.
 
 Reason: a pill that shrinks or wraps becomes hard to read and hard to click.
 
-## Filter bar rows
+## Filter bar row
 
 Before: `design/mockups/main-window.html` lines 57-71 put the swatches and the
-"Filter Tags" button in one `filterbar` row.
+"Filter Tags" button in one `filterbar` row. `design/redesign/main-window.html`
+draws one wrapping row on the panel fill: the swatches, a divider, a chip for
+each held filter, then the "Tags" and "Clear" text actions. The chip area grows,
+so the actions sit at the right end. "Clear" always shows, and no row reaches
+the folder filter.
 
-After: the bar stacks three rows below the info row with 12 pt gaps: colours,
-then tags, then folders. The tag button and its chips share the tags row. The
-folder button and its chips share the folders row.
+After: the bar is the redesign row, with its padding, gaps, chips, divider, and
+radius. The chips list the held colours in swatch order, then the tags and the
+folders in the order they were added. A colour chip shows the small swatch, a
+tag chip a coral dot, and a folder chip an amber dot. In the All images scope a
+coral "Folders" action sits between "Tags" and "Clear" and opens the folder
+menu. A held folder keeps its chip in the Folder scope. "Clear" shows only while
+the bar holds a filter, and it keeps the search text, which the search field
+owns. The actions sit at the right of the first line when the bar is wide enough
+for them beside a full line of swatches. A narrower bar wraps the swatches and
+chips, and the actions take a line of their own below them, at its right end.
+The divider shows only between swatches and chips. A chip name too wide for one
+line ends in an ellipsis, and its tooltip shows the whole name. The chip x and
+the text actions take the keyboard focus and show the coral focus ring. The
+action and chip text stays at the 12 pt body size where the page gives 13 px
+and 12 px.
 
-Reason: the chips of each kind wrap in their own row. The folder row shows only
-in All images scope, or when it has chips.
+Reason: the folder filter needs a way in, and the page's text action is the
+smallest one that matches it. A "Clear" with nothing to clear does nothing. In a
+narrow gallery, actions kept beside the swatches would squeeze them into many
+short lines.
 
 ## Gallery minimum width
 
@@ -523,7 +545,7 @@ Reason: the rows give the library without a scan of every folder. A scan of
 Before: no mockup shows how to rename or delete a tag.
 `design/mockups/tag-edit.html` shows only "Create new..." and its input.
 
-After: a "Manage tags..." row sits at the bottom of the Filter Tags menu, under
+After: a "Manage tags..." row sits at the bottom of the Tags menu, under
 a separator. A click closes the menu and opens a small window inside the app
 window. The window lists the user tags in name order with their image counts.
 Each row has an inline Rename and Delete. "Create new..." stays in the Preview

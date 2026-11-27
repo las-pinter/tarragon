@@ -134,7 +134,7 @@ fn a_tag_on_a_file_of_another_folder_filters_all_images_to_it() {
     rig.tag(&rig.b.join("b1.png"), "night");
     rig.show_all();
     assert!(!rig.texts().iter().any(|t| t.contains("filter")));
-    click_text(&rig.ctx.clone(), "Filter Tags", &mut |ui| {
+    click_text(&rig.ctx.clone(), "Tags", &mut |ui| {
         rig.app.ui(ui, &mut rig.frame);
     });
     let ctx = rig.ctx.clone();

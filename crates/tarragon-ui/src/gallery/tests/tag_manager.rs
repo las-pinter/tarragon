@@ -64,7 +64,7 @@ fn key(key: egui::Key, modifiers: Modifiers) -> Event {
 #[test]
 fn the_footer_row_opens_the_window_in_the_click_frame() {
     let (ctx, mut gallery) = listed();
-    click_button(&ctx, &mut gallery, "Filter Tags");
+    click_button(&ctx, &mut gallery, "Tags");
     let at = shown(&ctx, &mut gallery, Vec::new())
         .into_iter()
         .find(|t| t.0 == "Manage tags...")
@@ -80,7 +80,7 @@ fn the_footer_row_opens_the_window_in_the_click_frame() {
 #[test]
 fn one_footer_click_opens_once_and_asks_for_the_rows() {
     let (ctx, mut gallery) = listed();
-    click_button(&ctx, &mut gallery, "Filter Tags");
+    click_button(&ctx, &mut gallery, "Tags");
     gallery.take_filter_menu_opened();
     let at = shown(&ctx, &mut gallery, Vec::new())
         .into_iter()
@@ -111,7 +111,7 @@ fn the_filter_menu_stays_shut_under_the_window_and_one_escape_closes_it() {
     gallery.tag_manager.open();
     shown(&ctx, &mut gallery, Vec::new());
     shown(&ctx, &mut gallery, Vec::new());
-    let after_click = click_button(&ctx, &mut gallery, "Filter Tags");
+    let after_click = click_button(&ctx, &mut gallery, "Tags");
     assert!(!has_text(&after_click, "lighting"), "the menu opened");
     assert!(gallery.tag_manager.is_open());
     shown(

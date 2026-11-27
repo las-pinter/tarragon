@@ -3,10 +3,10 @@
 use std::path::Path;
 
 use super::show_folders;
+use crate::filter_bar::FOLDERS_TEXT;
 use crate::test_support::input;
 use egui::{Context, Event, Pos2, epaint::Shape};
 use tarragon_core::filter_bar::FilterBar;
-use tarragon_core::filter_state::FilterScope;
 
 /// A text shape: its string and position.
 type Text = (String, Pos2);
@@ -15,7 +15,6 @@ struct Rig {
     ctx: Context,
     bar: FilterBar,
     folders: Vec<String>,
-    scope: FilterScope,
     ticks: usize,
 }
 
@@ -37,7 +36,6 @@ impl Rig {
             ctx: crate::test_support::context(),
             bar,
             folders: ["/p/one/a", "/q/two/b"].map(String::from).to_vec(),
-            scope: FilterScope::Global,
             ticks: 0,
         }
     }
@@ -48,7 +46,7 @@ impl Rig {
         raw.time = Some(f64::from(u32::try_from(self.ctx.cumulative_pass_nr()).unwrap_or(0)) * 0.5);
         let out = self.ctx.run_ui(raw, |ui| {
             ui.style_mut().interaction.tooltip_delay = 0.0;
-            changed = show_folders(ui, "folders", &mut self.bar, &self.folders, self.scope).changed;
+            changed = show_folders(ui, "folders", &mut self.bar, &self.folders).changed;
         });
         let mut texts = Vec::new();
         for clipped in &out.shapes {
@@ -87,60 +85,21 @@ impl Rig {
 }
 
 #[test]
-fn the_button_shows_in_global_scope_only() {
-    let mut rig = Rig::new(&["/p/one/a"]);
-    assert!(rig.names().contains(&"Filter Folders".into()));
-    rig.scope = FilterScope::Folder;
-    let names = rig.names();
-    assert!(!names.contains(&"Filter Folders".into()));
-    assert!(names.contains(&"one/a".into()));
-}
-
-#[test]
 fn the_folder_menu_has_no_manage_tags_row() {
     let mut rig = Rig::new(&[]);
-    rig.click_text("Filter Folders");
+    rig.click_text(FOLDERS_TEXT);
     let names = rig.names();
     assert!(names.contains(&"one/a".into()));
     assert!(!names.contains(&"Manage tags...".into()));
 }
 
-#[test]
-fn chips_follow_activation_order() {
-    let mut rig = Rig::new(&["/z/last/x", "/a/first/y", "/p/two/a"]);
-    let names = rig.names();
-    let at = |s: &str| names.iter().position(|t| t == s);
-    let (a, b, c) = (at("last/x"), at("first/y"), at("two/a"));
-    assert!(a.is_some() && b.is_some() && c.is_some());
-    assert!(a < b && b < c);
-}
-
-#[test]
-fn equal_short_names_stay_two_chips() {
-    let mut rig = Rig::new(&["/p/one/a", "/q/one/a"]);
-    let count = rig.names().iter().filter(|t| *t == "one/a").count();
-    assert_eq!(count, 2);
-}
-
-#[test]
-fn the_chip_tooltip_holds_the_full_path() {
-    let (first, second) = ("/home/u/photos/vacation", "/home/u/photos/travel");
-    let mut rig = Rig::new(&[first, second]);
-    rig.scope = FilterScope::Folder;
-    let at = rig.pos("photos/travel", 0);
-    rig.frame(vec![Event::PointerMoved(at)]);
-    let held: Vec<_> = (0..4).flat_map(|_| rig.frame(vec![]).1).collect();
-    assert!(held.iter().any(|t| t.0 == second));
-    assert!(!held.iter().any(|t| t.0 == first));
-}
-
 /// The y of the one tick drawn in the open menu, and the y of each row text.
 fn tick_and_rows(rig: &mut Rig) -> (f32, Vec<(String, f32)>) {
-    rig.click_text("Filter Folders");
+    rig.click_text(FOLDERS_TEXT);
     rig.view();
     let mut texts = Vec::new();
     let out = rig.ctx.run_ui(input(600.0, vec![]), |ui| {
-        show_folders(ui, "folders", &mut rig.bar, &rig.folders, rig.scope);
+        show_folders(ui, "folders", &mut rig.bar, &rig.folders);
     });
     let mut ticks = Vec::new();
     for clipped in &out.shapes {
@@ -162,7 +121,6 @@ fn a_ticked_row_matches_the_bar() {
     ] {
         let mut rig = Rig::new(&[active]);
         let (tick, rows) = tick_and_rows(&mut rig);
-        // The menu rows sit below the chip row, so take the lowest match.
         let row = |name: &str| {
             rows.iter()
                 .filter(|r| r.0 == name)
@@ -177,27 +135,8 @@ fn a_ticked_row_matches_the_bar() {
 #[test]
 fn a_row_click_toggles_the_folder() {
     let mut rig = Rig::new(&[]);
-    rig.click_text("Filter Folders");
+    rig.click_text(FOLDERS_TEXT);
     assert!(rig.click_text("one/a"));
     assert!(rig.bar.state.folders.contains(Path::new("/p/one/a")));
     assert!(!rig.frame(vec![]).0);
-}
-
-#[test]
-fn the_chip_x_removes_the_folder() {
-    let mut rig = Rig::new(&["/p/one/a"]);
-    assert!(rig.click_text("x"));
-    assert!(rig.bar.state.folders.is_empty());
-    assert_eq!(rig.bar.folder_order(), [] as [&Path; 0]);
-}
-
-#[test]
-fn the_menu_is_closed_after_a_scope_round_trip() {
-    let mut rig = Rig::new(&[]);
-    rig.click_text("Filter Folders");
-    assert!(rig.names().contains(&"one/a".into()));
-    rig.scope = FilterScope::Folder;
-    rig.view();
-    rig.scope = FilterScope::Global;
-    assert!(!rig.names().contains(&"one/a".into()));
 }

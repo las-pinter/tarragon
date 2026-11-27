@@ -35,7 +35,7 @@ macOS. On Linux the copied files stay on the clipboard while Tarragon runs.
 
 ![One color swatch is selected in the Gallery. The grid shows only the images with that color.](docs/screenshots/color-filter.png)
 
-![The Filter Tags menu lists the tags moodboard and reference, with a Manage tags entry.](docs/screenshots/tags.png)
+![The tag filter menu lists the tags moodboard and reference, with a Manage tags entry.](docs/screenshots/tags.png)
 
 ![A layered PSD file in the Preview panel, with its dimensions, size, and format.](docs/screenshots/psd-preview.png)
 
@@ -68,8 +68,8 @@ Windows and macOS are not released yet.
    editor. Right-click for more actions.
 4. Tag. Right-click an image and choose Add tag..., or use the + add button in
    the Preview panel.
-5. Filter by color. Click a color swatch above the grid. Click it again to
-   clear the filter.
+5. Filter by color. Click a color swatch above the grid. Click it again, or
+   the x on its chip, to drop that filter. Clear drops every filter.
 
 To save a folder, select it and choose Add current folder under Favorites.
 Drag a favorite to reorder the list, or right-click it and choose Remove.

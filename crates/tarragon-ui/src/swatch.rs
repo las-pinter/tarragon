@@ -3,16 +3,20 @@
 //! The painter knows nothing about panels, so the Preview and Filter panels
 //! share it.
 
-use egui::{Color32, CornerRadius, Painter, Rect, Response, Sense, Stroke, StrokeKind, Ui, vec2};
+use egui::{Color32, CornerRadius, Painter, Rect, Response, Sense, Ui, vec2};
 use tarragon_core::color::ColorBucket;
 
 use crate::tokens;
 
+mod round;
+
+pub use round::{RING_GAP, RING_WIDTH, paint_round, ring};
+
 /// The side of a square in the mockup, in points.
 pub const SIZE: f32 = 24.0;
 
-/// The side of a square in the filter bar, in points.
-pub const FILTER_SIZE: f32 = 36.0;
+/// The diameter of a round swatch in the filter bar, in points.
+pub const FILTER_SIZE: f32 = 24.0;
 
 /// The side of one checkerboard cell, in points. A 24 pt square gets 4 by 4.
 pub const CHECKER_CELL: f32 = 6.0;
@@ -162,37 +166,42 @@ pub fn show(ui: &mut Ui, swatch: Swatch, size: f32, opacity: f32) -> Response {
     response
 }
 
-/// The outline of a filter square. An active square wins over a hovered one.
-#[must_use]
-pub const fn outline(active: bool, hovered: bool) -> Stroke {
-    if active {
-        Stroke {
-            width: 2.0,
-            color: tokens::AMBER_ACCENT,
-        }
-    } else if hovered {
-        Stroke {
-            width: 1.0,
-            color: tokens::TEXT_PRIMARY,
-        }
-    } else {
-        Stroke {
-            width: 1.0,
-            color: tokens::BORDER_INACTIVE,
-        }
+/// Lay out and paint one round filter swatch with its ring. The response
+/// senses clicks and reports a toggle with the swatch name, so a screen
+/// reader hears the colour and whether the bar holds it.
+///
+/// The ring sits outside the swatch, so the row gap must leave room for it.
+pub fn show_filter(ui: &mut Ui, swatch: Swatch, held: bool) -> Response {
+    let (rect, response) = ui.allocate_exact_size(vec2(FILTER_SIZE, FILTER_SIZE), Sense::click());
+    let radius = FILTER_SIZE / 2.0;
+    paint_round(ui.painter(), rect.center(), radius, swatch);
+    if let Some(stroke) = ring(held, response.has_focus(), response.hovered()) {
+        let at = radius + RING_GAP + stroke.width / 2.0;
+        ui.painter().circle_stroke(rect.center(), at, stroke);
     }
+    response.widget_info(|| {
+        egui::WidgetInfo::selected(
+            egui::WidgetType::Checkbox,
+            ui.is_enabled(),
+            held,
+            name(swatch),
+        )
+    });
+    response
 }
 
-/// Lay out and paint one 36 pt filter square with its outline. The response
-/// senses clicks.
-pub fn show_filter(ui: &mut Ui, swatch: Swatch, active: bool) -> Response {
-    let (rect, response) = ui.allocate_exact_size(vec2(FILTER_SIZE, FILTER_SIZE), Sense::click());
-    paint(ui.painter(), rect, swatch, 1.0);
-    let stroke = outline(active, response.hovered());
-    let radius = CornerRadius::same(tokens::RADIUS_S);
-    ui.painter()
-        .rect_stroke(rect, radius, stroke, StrokeKind::Inside);
-    response
+/// The display name of a swatch: the bucket name with a capital, or
+/// "Transparent".
+#[must_use]
+pub fn name(swatch: Swatch) -> String {
+    let word = match swatch {
+        Swatch::Bucket(bucket) => bucket.as_str(),
+        Swatch::Transparent => "transparent",
+    };
+    let mut chars = word.chars();
+    chars.next().map_or_else(String::new, |first| {
+        first.to_uppercase().chain(chars).collect()
+    })
 }
 
 #[cfg(test)]

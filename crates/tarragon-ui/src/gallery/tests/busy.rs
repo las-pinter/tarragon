@@ -98,7 +98,7 @@ fn layout(ctx: &egui::Context, gallery: &mut Gallery) -> (Vec<(String, egui::Pos
     let output = frame(ctx, gallery, Vec::new());
     let buttons = super::filter_bar::texts(&output)
         .into_iter()
-        .filter(|t| t.0 == "Filter Tags" || t.0 == "Filter Folders")
+        .filter(|t| t.0 == "Tags" || t.0 == "Folders")
         .collect();
     let grid_top = output
         .shapes

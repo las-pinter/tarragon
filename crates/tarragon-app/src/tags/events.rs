@@ -98,7 +98,7 @@ pub fn apply_tag_paths(shell: &mut Shell, db: &Database, paths: &[PathBuf], tag:
 /// Read the Preview tags again and bring the filter lists up to date.
 fn refresh_after_write(shell: &mut Shell, db: &Database) {
     refresh_preview(shell, db);
-    // A new tag must reach the Filter Tags list, and an active tag filter must run again.
+    // A new tag must reach the Tags menu, and an active tag filter must run again.
     filtering::refresh_lists(shell.gallery_mut(), db);
     shell.gallery_mut().refresh_filter();
 }

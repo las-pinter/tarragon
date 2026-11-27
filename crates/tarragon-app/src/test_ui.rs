@@ -58,7 +58,8 @@ fn tally(shape: &Shape, painted: &mut Painted) {
         Shape::Text(t) => painted.texts.push((t.galley.text().to_owned(), t.pos)),
         Shape::Mesh(m) if m.texture_id != TextureId::default() => painted.pictures += 1,
         Shape::Rect(r) if r.brush.is_some() => painted.pictures += 1,
-        Shape::Rect(r) if r.rect.size() == vec2(FILTER_SIZE, FILTER_SIZE) => {
+        // A filter swatch is a filled circle; its ring has no fill.
+        Shape::Circle(c) if c.radius == FILTER_SIZE / 2.0 && c.fill != Color32::TRANSPARENT => {
             painted.swatches += 1;
         }
         _ => {}
@@ -93,7 +94,7 @@ pub fn square_fills(ctx: &Context, run: &mut impl FnMut(&mut Ui)) -> Vec<Color32
     found
 }
 
-/// Open the Manage tags window from the Filter Tags menu and return the texts
+/// Open the Manage tags window from the Tags menu and return the texts
 /// of the settled frame. The filter lists must hold a tag, or the menu is empty.
 pub fn open_manager(ctx: &Context, run: &mut impl FnMut(&mut Ui)) -> Vec<String> {
     // A menu that is open already must not be toggled shut.
@@ -102,7 +103,7 @@ pub fn open_manager(ctx: &Context, run: &mut impl FnMut(&mut Ui)) -> Vec<String>
         .iter()
         .any(|t| t.0 == "Manage tags...");
     if !menu_open {
-        click_text(ctx, "Filter Tags", run);
+        click_text(ctx, "Tags", run);
     }
     click_text(ctx, "Manage tags...", run);
     frame(ctx, Vec::new(), run);

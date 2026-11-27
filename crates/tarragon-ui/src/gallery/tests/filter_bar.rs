@@ -16,7 +16,7 @@ fn a_colour_click_flags_one_change() {
         .shapes
         .iter()
         .find_map(|c| match &c.shape {
-            Shape::Rect(r) if r.rect.size() == vec2(36.0, 36.0) => Some(r.rect.center()),
+            Shape::Circle(c) if c.radius == crate::swatch::FILTER_SIZE / 2.0 => Some(c.center),
             _ => None,
         })
         .expect("a swatch was painted");
@@ -161,10 +161,7 @@ pub(super) fn listed() -> (egui::Context, Gallery) {
 
 #[test]
 fn the_filter_lists_fill_the_menu_rows() {
-    for (label, row) in [
-        ("Filter Tags", "lighting"),
-        ("Filter Folders", "u/sketches"),
-    ] {
+    for (label, row) in [("Tags", "lighting"), ("Folders", "u/sketches")] {
         let (ctx, mut gallery) = listed();
         assert!(click_button(&ctx, &mut gallery, label).contains(&row.into()));
     }
@@ -172,7 +169,7 @@ fn the_filter_lists_fill_the_menu_rows() {
 
 #[test]
 fn opening_a_menu_reports_once() {
-    for label in ["Filter Tags", "Filter Folders"] {
+    for label in ["Tags", "Folders"] {
         let (ctx, mut gallery) = listed();
         assert!(!gallery.take_filter_menu_opened());
         click_button(&ctx, &mut gallery, label);
@@ -184,11 +181,11 @@ fn opening_a_menu_reports_once() {
 #[test]
 fn an_open_menu_and_a_close_flag_no_change() {
     let (ctx, mut gallery) = listed();
-    let open = click_button(&ctx, &mut gallery, "Filter Tags");
+    let open = click_button(&ctx, &mut gallery, "Tags");
     assert!(open.contains(&"lighting".into()));
     assert_eq!(gallery.take_filter_change(), None);
     gallery.take_filter_menu_opened();
-    let closed = click_button(&ctx, &mut gallery, "Filter Tags");
+    let closed = click_button(&ctx, &mut gallery, "Tags");
     assert!(!closed.contains(&"lighting".into()));
     assert_eq!(gallery.take_filter_change(), None);
     assert!(!gallery.take_filter_menu_opened());
@@ -197,7 +194,7 @@ fn an_open_menu_and_a_close_flag_no_change() {
 #[test]
 fn a_frame_with_an_open_menu_reports_no_new_open() {
     let (ctx, mut gallery) = listed();
-    click_button(&ctx, &mut gallery, "Filter Tags");
+    click_button(&ctx, &mut gallery, "Tags");
     gallery.take_filter_menu_opened();
     frame(&ctx, &mut gallery, Vec::new()).drop_without_applying_deltas();
     assert!(!gallery.take_filter_menu_opened());
@@ -205,10 +202,7 @@ fn a_frame_with_an_open_menu_reports_no_new_open() {
 
 #[test]
 fn escape_closes_an_open_menu() {
-    for (label, row) in [
-        ("Filter Tags", "lighting"),
-        ("Filter Folders", "u/sketches"),
-    ] {
+    for (label, row) in [("Tags", "lighting"), ("Folders", "u/sketches")] {
         let (ctx, mut gallery) = listed();
         let open = click_button(&ctx, &mut gallery, label);
         assert!(open.contains(&row.into()), "{label}");

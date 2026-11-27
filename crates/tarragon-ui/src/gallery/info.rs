@@ -13,8 +13,8 @@ impl Gallery {
         match self.scope {
             Scope::All => Scope::All.label().to_owned(),
             Scope::Folder => self
-                .busy
-                .loading()
+                .opening
+                .folder()
                 .or(self.folder.as_deref())
                 .and_then(Path::file_name)
                 .and_then(|name| name.to_str())
@@ -28,7 +28,7 @@ impl Gallery {
         if self.scope == Scope::All {
             return None;
         }
-        let folder = self.busy.loading().or(self.folder.as_deref())?;
+        let folder = self.opening.folder().or(self.folder.as_deref())?;
         let mut parts: Vec<&str> = folder
             .parent()?
             .components()
@@ -56,11 +56,5 @@ impl Gallery {
         } else {
             format!("{visible} of {scoped} {noun}")
         }
-    }
-
-    /// The selection text of the info row, or none with nothing selected.
-    pub(super) fn selection_text(&self) -> Option<String> {
-        let selected = self.selection.len();
-        (selected > 0).then(|| format!("{selected} selected"))
     }
 }

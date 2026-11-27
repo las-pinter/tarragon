@@ -1,9 +1,9 @@
 //! Gallery strip and virtual grid.
 //!
-//! The strip holds the header, the info row, the filter bar, and the busy
-//! strip; the search field lives in the top bar. The grid paints the visible
-//! items. [`Gallery::set_items`] sorts the items; the scope and name filters
-//! run when a filter input changes.
+//! The strip holds the header, the info row, and the filter bar; the search
+//! field lives in the top bar and the jobs in the status bar. The grid paints
+//! the visible items. [`Gallery::set_items`] sorts the items; the scope and
+//! name filters run when a filter input changes.
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -27,13 +27,13 @@ use keys::Debouncer;
 pub use scroll::scroll_offset;
 pub use view::Scope;
 
-mod busy;
 mod context_menu;
 mod delete_dialog;
 mod empty;
 mod header;
 mod info;
 mod keys;
+mod loading;
 mod manager;
 mod notice;
 mod open;
@@ -132,8 +132,8 @@ pub struct Gallery {
     search_focus_requested: bool,
     /// The image path that waits for the app to open it, or none.
     open_request: Option<PathBuf>,
-    /// Whether the busy strip shows under the filter bar.
-    busy: busy::Busy,
+    /// The folder that opens, which the header names early.
+    opening: loading::Loading,
     /// The notice line at the foot of the gallery.
     notice: notice::Notice,
     /// The tile menu and the choices it made since the last take.
@@ -184,7 +184,7 @@ impl Gallery {
             open_folder_requested: false,
             search_focus_requested: false,
             open_request: None,
-            busy: busy::Busy::default(),
+            opening: loading::Loading::default(),
             notice: notice::Notice::default(),
             tile_menu: context_menu::TileMenu::default(),
             rename: None,

@@ -1,4 +1,5 @@
-//! Tests that the busy flag follows the pipeline into the gallery.
+//! Tests that the open and the purge show in the status bar from the request
+//! to the end.
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -14,9 +15,7 @@ use crate::logging::LogControl;
 use crate::logging::ring::LogRing;
 use crate::sidebar;
 use crate::test_ui::frame;
-
-/// The strip text of the gallery.
-const STRIP: &str = "Working...";
+use tarragon_ui::status::Job;
 
 /// An app with a window context and one folder of two files.
 struct Rig {
@@ -84,9 +83,22 @@ impl Rig {
         self.painted_texts().into_iter().map(|t| t.0).collect()
     }
 
-    /// Whether one more frame shows the strip.
+    /// Whether an open or a purge is among the jobs.
+    fn busy(&self) -> bool {
+        self.app
+            .thumbs
+            .jobs()
+            .iter()
+            .any(|job| matches!(job, Job::Scan { .. } | Job::Library | Job::Purge { .. }))
+    }
+
+    /// Whether one more frame shows an open or a purge in the status bar.
     fn strip(&mut self) -> bool {
-        self.texts().iter().any(|text| text == STRIP)
+        self.texts().iter().any(|text| {
+            text.starts_with("Scanning ")
+                || text.starts_with("Purging cache")
+                || text == "Loading library"
+        })
     }
 
     /// Draw frames until the pipeline is idle. The flag must hold in every
@@ -94,7 +106,7 @@ impl Rig {
     fn settle(&mut self) {
         let start = Instant::now();
         while !self.app.thumbs.is_idle() {
-            assert!(self.app.thumbs.is_busy(), "busy until the pipeline is idle");
+            assert!(self.busy(), "a job shows until the pipeline is idle");
             self.texts();
             assert!(start.elapsed() < Duration::from_secs(30), "the load hangs");
             std::thread::sleep(Duration::from_millis(10));
@@ -105,16 +117,16 @@ impl Rig {
 #[test]
 fn an_open_is_busy_from_the_request_to_the_end() {
     let mut rig = Rig::new();
-    assert!(!rig.app.thumbs.is_busy());
+    assert!(!rig.busy());
     let folder = rig.folder.clone();
     rig.app.navigate(&folder);
-    assert!(rig.app.thumbs.is_busy());
+    assert!(rig.busy());
     assert!(
         rig.strip(),
         "the first frame after the request shows the strip"
     );
     rig.settle();
-    assert!(!rig.app.thumbs.is_busy());
+    assert!(!rig.busy());
     assert!(!rig.strip(), "the strip ends with the open");
 }
 
@@ -126,10 +138,10 @@ fn a_purge_is_busy_from_the_call_to_the_end_of_the_work() {
     rig.settle();
     let root = rig.app.data_root.clone();
     rig.app.thumbs.purge(root);
-    assert!(rig.app.thumbs.is_busy());
+    assert!(rig.busy());
     assert!(rig.strip());
     rig.settle();
-    assert!(!rig.app.thumbs.is_busy());
+    assert!(!rig.busy());
     assert!(!rig.strip());
 }
 
@@ -138,15 +150,15 @@ fn a_purge_asked_during_an_open_keeps_the_flag_until_both_end() {
     let mut rig = Rig::new();
     let folder = rig.folder.clone();
     rig.app.navigate(&folder);
-    assert!(rig.app.thumbs.is_busy());
+    assert!(rig.busy());
     let root = rig.app.data_root.clone();
     rig.app.thumbs.purge(root);
-    assert!(rig.app.thumbs.is_busy());
+    assert!(rig.busy());
     assert!(rig.strip());
     // `settle` asserts the flag in each frame, so the open ending and the
     // purge starting leave no gap.
     rig.settle();
-    assert!(!rig.app.thumbs.is_busy());
+    assert!(!rig.busy());
     assert!(!rig.strip());
 }
 
@@ -155,10 +167,10 @@ fn a_failed_open_ends_with_the_flag_false() {
     let mut rig = Rig::new();
     let missing = sidebar::normalize(&rig.folder.join("gone"));
     rig.app.navigate(&missing);
-    assert!(rig.app.thumbs.is_busy());
+    assert!(rig.busy());
     assert!(rig.strip());
     rig.settle();
-    assert!(!rig.app.thumbs.is_busy());
+    assert!(!rig.busy());
     assert!(!rig.strip());
 }
 
@@ -185,7 +197,7 @@ fn the_first_open_names_the_folder_in_the_header_before_it_ends() {
     let folder = rig.folder.clone();
     rig.app.navigate(&folder);
     let texts = rig.painted_texts();
-    assert!(rig.app.thumbs.is_busy(), "the open still runs");
+    assert!(rig.busy(), "the open still runs");
     assert!(header_names(&texts, "pics"), "{texts:?}");
     assert!(!header_names(&texts, "No folder"));
 }
@@ -209,6 +221,30 @@ fn a_failed_open_leaves_the_header_on_the_old_folder() {
 fn the_startup_eviction_is_not_busy() {
     let mut rig = Rig::open();
     assert!(!rig.app.thumbs.is_idle(), "the eviction waits or runs");
-    assert!(!rig.app.thumbs.is_busy());
+    assert!(!rig.busy());
     assert!(!rig.strip(), "no strip while the eviction runs");
+}
+
+#[test]
+fn the_thumbnail_and_color_jobs_end_when_every_tile_settles() {
+    let mut rig = Rig::new();
+    let folder = rig.folder.clone();
+    rig.app.navigate(&folder);
+    rig.settle();
+    let start = Instant::now();
+    loop {
+        let texts = rig.texts();
+        let counting = texts
+            .iter()
+            .any(|t| t.starts_with("Rendering thumbnails") || t.starts_with("Indexing colors"));
+        if !counting {
+            break;
+        }
+        assert!(
+            start.elapsed() < Duration::from_secs(30),
+            "stuck: {texts:?}"
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    assert_eq!(rig.app.thumbs.jobs(), []);
 }

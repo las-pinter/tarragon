@@ -21,6 +21,7 @@
 //! the data path itself, so the caller supplies it.
 
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use tarragon_core::tier::Tier;
 
@@ -35,6 +36,38 @@ pub struct PurgeOutcome {
     pub files_removed: u64,
     /// The byte size of the removed files. A removed link counts zero bytes.
     pub bytes_removed: u64,
+}
+
+/// How far a purge has come, in bytes, for another thread to show.
+///
+/// The total comes from a walk of the tiers before the first delete, so it
+/// is zero until that walk ends. A file that a render writes after the walk
+/// is still removed, so `done` can pass `total` by a little.
+#[derive(Debug, Default)]
+pub struct PurgeProgress {
+    total: AtomicU64,
+    done: AtomicU64,
+}
+
+impl PurgeProgress {
+    /// The bytes the tiers held when the purge began, or zero before the
+    /// walk ends.
+    #[must_use]
+    pub fn total(&self) -> u64 {
+        self.total.load(Ordering::Relaxed)
+    }
+
+    /// The bytes removed so far.
+    #[must_use]
+    pub fn done(&self) -> u64 {
+        self.done.load(Ordering::Relaxed)
+    }
+
+    /// Set both values back to zero for the next purge.
+    pub fn reset(&self) {
+        self.total.store(0, Ordering::Relaxed);
+        self.done.store(0, Ordering::Relaxed);
+    }
 }
 
 impl CacheStore {
@@ -63,15 +96,40 @@ impl CacheStore {
     /// Returns [`CacheError::UnsafeRoot`] when the root is unsafe to purge.
     /// Returns [`CacheError::Io`] when a directory read or file remove fails.
     pub fn purge(&self, protected: Option<&Path>) -> Result<PurgeOutcome, CacheError> {
+        self.purge_with(protected, &PurgeProgress::default())
+    }
+
+    /// Purge as [`CacheStore::purge`] does, and report the bytes in
+    /// `progress`: the total of the tiers it will clear, then each removed
+    /// file. It does not reset `progress`; the caller does that first.
+    ///
+    /// # Errors
+    ///
+    /// Returns the errors of [`CacheStore::purge`].
+    pub fn purge_with(
+        &self,
+        protected: Option<&Path>,
+        progress: &PurgeProgress,
+    ) -> Result<PurgeOutcome, CacheError> {
         let Some(resolved) = self.resolve_root()? else {
             return Ok(PurgeOutcome::default());
         };
         if !is_safe_purge_root(&resolved, protected) {
             return Err(CacheError::UnsafeRoot(resolved));
         }
+        let mut total = 0u64;
+        for tier in Tier::ALL {
+            // A tier that cannot be checked adds nothing here. The clear below
+            // meets the same error after the tiers before it, as it did
+            // before the total existed.
+            if let Ok(Some((tier_dir, _))) = self.clearable_tier(&resolved, tier) {
+                total = total.saturating_add(tree_bytes(&tier_dir));
+            }
+        }
+        progress.total.store(total, Ordering::Relaxed);
         let mut outcome = PurgeOutcome::default();
         for tier in Tier::ALL {
-            let tier_outcome = self.clear_tier_in(&resolved, tier)?;
+            let tier_outcome = self.clear_tier_in(&resolved, tier, &progress.done)?;
             outcome.files_removed += tier_outcome.files_removed;
             outcome.bytes_removed += tier_outcome.bytes_removed;
             // The tier folder is cache-owned, so drop it once it is empty.
@@ -107,7 +165,7 @@ impl CacheStore {
         if !is_safe_purge_root(&resolved_root, protected) {
             return Err(CacheError::UnsafeRoot(resolved_root));
         }
-        self.clear_tier_in(&resolved_root, tier)
+        self.clear_tier_in(&resolved_root, tier, &AtomicU64::new(0))
     }
 
     /// Clear the `full` tier when `enabled` is true. A false value deletes
@@ -133,51 +191,21 @@ impl CacheStore {
         self.clear_tier(Tier::Full, protected)
     }
 
-    /// Clear one tier folder below the already resolved cache root.
-    fn clear_tier_in(&self, resolved_root: &Path, tier: Tier) -> Result<PurgeOutcome, CacheError> {
-        let tier_dir = self.root().join(tier.as_str());
-        // A symlinked tier directory can point at another tier. Refuse it, so
-        // the clear cannot empty the wrong directory.
-        match std::fs::symlink_metadata(&tier_dir) {
-            Ok(metadata) if metadata.file_type().is_symlink() => {
-                return Ok(PurgeOutcome::default());
-            }
-            Ok(_) => {}
-            Err(source) if source.kind() == std::io::ErrorKind::NotFound => {
-                return Ok(PurgeOutcome::default());
-            }
-            Err(source) => {
-                return Err(CacheError::Io {
-                    path: tier_dir,
-                    source,
-                });
-            }
-        }
-        // The canonical tier directory must be exactly `<root>/<tier>`, so a
-        // link cannot redirect the clear.
-        let expected = resolved_root.join(tier.as_str());
-        match dunce::canonicalize(&tier_dir) {
-            Ok(canonical) if canonical == expected => {}
-            Ok(_) => return Ok(PurgeOutcome::default()),
-            Err(source) if source.kind() == std::io::ErrorKind::NotFound => {
-                return Ok(PurgeOutcome::default());
-            }
-            Err(source) => {
-                return Err(CacheError::Io {
-                    path: tier_dir,
-                    source,
-                });
-            }
-        }
-        // A folder that only shares a tier name, with no format marker, was not
-        // made by the store and may hold user files, so it stays.
-        let marker = self.marker_path(tier);
-        if !marker.is_file() {
+    /// Clear one tier folder below the already resolved cache root, and add
+    /// each removed file's bytes to `done`.
+    fn clear_tier_in(
+        &self,
+        resolved_root: &Path,
+        tier: Tier,
+        done: &AtomicU64,
+    ) -> Result<PurgeOutcome, CacheError> {
+        let Some((tier_dir, marker)) = self.clearable_tier(resolved_root, tier)? else {
             return Ok(PurgeOutcome::default());
-        }
+        };
         // The marker goes last, after every other file is gone. A clear that
         // fails partway keeps it, so the next purge still knows the folder.
-        let (mut files_removed, mut bytes_removed) = remove_tree_contents(&tier_dir, &marker)?;
+        let (mut files_removed, mut bytes_removed) =
+            remove_tree_contents(&tier_dir, &marker, done)?;
         // A link counts zero bytes, as in the walk.
         let size = std::fs::symlink_metadata(&marker)
             .map_or(0, |meta| if meta.is_file() { meta.len() } else { 0 });
@@ -185,6 +213,7 @@ impl CacheStore {
             Ok(()) => {
                 files_removed += 1;
                 bytes_removed = bytes_removed.saturating_add(size);
+                done.fetch_add(size, Ordering::Relaxed);
             }
             Err(source) if source.kind() == std::io::ErrorKind::NotFound => {}
             Err(source) => {
@@ -198,6 +227,57 @@ impl CacheStore {
             files_removed,
             bytes_removed,
         })
+    }
+
+    /// The folder and the marker of `tier` when the purge may clear it: a
+    /// real folder at exactly `<root>/<tier>` that holds the format marker.
+    /// `None` leaves the tier alone.
+    fn clearable_tier(
+        &self,
+        resolved_root: &Path,
+        tier: Tier,
+    ) -> Result<Option<(PathBuf, PathBuf)>, CacheError> {
+        let tier_dir = self.root().join(tier.as_str());
+        // A symlinked tier directory can point at another tier. Refuse it, so
+        // the clear cannot empty the wrong directory.
+        match std::fs::symlink_metadata(&tier_dir) {
+            Ok(metadata) if metadata.file_type().is_symlink() => {
+                return Ok(None);
+            }
+            Ok(_) => {}
+            Err(source) if source.kind() == std::io::ErrorKind::NotFound => {
+                return Ok(None);
+            }
+            Err(source) => {
+                return Err(CacheError::Io {
+                    path: tier_dir,
+                    source,
+                });
+            }
+        }
+        // The canonical tier directory must be exactly `<root>/<tier>`, so a
+        // link cannot redirect the clear.
+        let expected = resolved_root.join(tier.as_str());
+        match dunce::canonicalize(&tier_dir) {
+            Ok(canonical) if canonical == expected => {}
+            Ok(_) => return Ok(None),
+            Err(source) if source.kind() == std::io::ErrorKind::NotFound => {
+                return Ok(None);
+            }
+            Err(source) => {
+                return Err(CacheError::Io {
+                    path: tier_dir,
+                    source,
+                });
+            }
+        }
+        // A folder that only shares a tier name, with no format marker, was not
+        // made by the store and may hold user files, so it stays.
+        let marker = self.marker_path(tier);
+        if !marker.is_file() {
+            return Ok(None);
+        }
+        Ok(Some((tier_dir, marker)))
     }
 
     /// Resolve the cache root to an absolute path. A missing root gives
@@ -275,7 +355,11 @@ fn home_dir() -> Option<PathBuf> {
 /// # Errors
 ///
 /// Returns [`CacheError::Io`] when a directory read or file remove fails.
-fn remove_tree_contents(root: &Path, keep: &Path) -> Result<(u64, u64), CacheError> {
+fn remove_tree_contents(
+    root: &Path,
+    keep: &Path,
+    done: &AtomicU64,
+) -> Result<(u64, u64), CacheError> {
     let canonical_root = dunce::canonicalize(root).ok();
     let mut files_removed = 0u64;
     let mut bytes_removed = 0u64;
@@ -359,6 +443,7 @@ fn remove_tree_contents(root: &Path, keep: &Path) -> Result<(u64, u64), CacheErr
                 Ok(()) => {
                     files_removed += 1;
                     bytes_removed = bytes_removed.saturating_add(size);
+                    done.fetch_add(size, Ordering::Relaxed);
                 }
                 Err(source) if source.kind() == std::io::ErrorKind::NotFound => {}
                 Err(source) => {
@@ -377,6 +462,30 @@ fn remove_tree_contents(root: &Path, keep: &Path) -> Result<(u64, u64), CacheErr
         let _ = std::fs::remove_dir(&dir);
     }
     first_error.map_or(Ok((files_removed, bytes_removed)), Err)
+}
+
+/// The bytes of the regular files under `root`, links not followed and
+/// counted as zero, as the removal counts them. A folder that cannot be read
+/// adds nothing.
+fn tree_bytes(root: &Path) -> u64 {
+    let mut total = 0u64;
+    let mut stack = vec![root.to_path_buf()];
+    while let Some(dir) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+        for item in entries.flatten() {
+            let Ok(file_type) = item.file_type() else {
+                continue;
+            };
+            if file_type.is_dir() {
+                stack.push(item.path());
+            } else if file_type.is_file() {
+                total = total.saturating_add(item.metadata().map_or(0, |meta| meta.len()));
+            }
+        }
+    }
+    total
 }
 
 #[cfg(test)]

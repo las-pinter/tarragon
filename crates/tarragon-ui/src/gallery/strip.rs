@@ -23,7 +23,7 @@ const FILTER_PAD_X: f32 = 8.0;
 const FILTER_PAD_Y: f32 = 2.0;
 
 impl Gallery {
-    /// Draw the header, the info row, the filter bar, and the busy strip.
+    /// Draw the header, the info row, and the filter bar.
     ///
     /// The header draws first and refreshes the cached view. The info row and
     /// the grid then paint one set in one frame.
@@ -53,43 +53,20 @@ impl Gallery {
                     // The app refreshes the rows when a menu opens.
                     self.filter_events.opened = true;
                 }
-                // Last, so the controls above stay still and only the grid moves.
-                self.show_busy(ui);
             });
     }
 
-    /// Draw the selection text, the filter pill, and the sort pills. Returns
-    /// the picked sort mode.
-    ///
-    /// The row always holds one line: the selection text takes the width that
-    /// the controls leave, and the dock keeps the gallery wide enough for the
-    /// controls.
+    /// Draw the filter pill and the sort pills at the right of one line.
+    /// Returns the picked sort mode. The dock keeps the gallery wide enough
+    /// for them.
     fn sort_segment(&self, ui: &mut Ui) -> Option<SortMode> {
         let mut picked = None;
         ui.horizontal(|ui| {
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 picked = self.sort_controls(ui);
-                ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
-                    self.selection_label(ui);
-                });
             });
         });
         picked
-    }
-
-    /// Draw the selection text when anything is selected.
-    fn selection_label(&self, ui: &mut Ui) {
-        let Some(text) = self.selection_text() else {
-            return;
-        };
-        ui.add(
-            egui::Label::new(
-                RichText::new(text)
-                    .size(tokens::SIZE_CAPTION)
-                    .color(tokens::TEXT_SECONDARY),
-            )
-            .truncate(),
-        );
     }
 
     /// The filter pill text, or none when no filter is active.

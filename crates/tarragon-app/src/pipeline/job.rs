@@ -103,6 +103,14 @@ pub(super) struct Job {
     pub(super) needs_colors: bool,
 }
 
+/// The paths whose job extracts colors because the file has none yet.
+pub(super) fn color_keys(jobs: &[Job]) -> HashSet<PathBuf> {
+    jobs.iter()
+        .filter(|job| job.colors.is_some() && job.needs_colors)
+        .map(|job| job.path.clone())
+        .collect()
+}
+
 /// The color tag state read once per open.
 #[derive(Debug, Default)]
 pub(super) struct ColorState {

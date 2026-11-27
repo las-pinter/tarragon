@@ -8,9 +8,9 @@ use std::sync::atomic::Ordering;
 use tarragon_cache::store::SourceStamp;
 use tarragon_core::entity::FileInfo;
 use tarragon_db::repository::Thumbnail;
-use tarragon_scan::scan::{build_pool, scan_folder};
+use tarragon_scan::scan::{build_pool, scan_folder_counted};
 
-use super::job::{ColorState, Job};
+use super::job::{ColorState, Job, color_keys};
 use super::{Opened, Pipeline, PipelineError, new_folder_id, prune};
 
 impl Pipeline {
@@ -31,9 +31,11 @@ impl Pipeline {
     /// Returns an error when the scan or a database call fails. The old
     /// folder stays current in that case.
     pub fn open_folder(&mut self, folder: &Path) -> Result<Opened, PipelineError> {
+        let found = &self.counters.found;
+        found.store(0, Ordering::Relaxed);
         let files = build_pool()
             .map_err(|error| PipelineError::ScanPool(error.to_string()))?
-            .install(|| scan_folder(folder))?;
+            .install(|| scan_folder_counted(folder, found))?;
         let folder_text = tarragon_core::path_key::path_key(folder);
         self.db.write_scan_group(&files)?;
         let uuid = self
@@ -121,6 +123,7 @@ impl Pipeline {
             })
             .collect();
         drop(failures);
+        let color_keys = color_keys(&jobs);
         self.jobs = jobs
             .iter()
             .map(|job| (job.path.clone(), job.clone()))
@@ -128,7 +131,11 @@ impl Pipeline {
         self.queue.replace(jobs);
         let mut files = files;
         copy_stored_sizes(&mut files, &rows);
-        Ok(Opened { generation, files })
+        Ok(Opened {
+            generation,
+            files,
+            color_keys,
+        })
     }
 }
 

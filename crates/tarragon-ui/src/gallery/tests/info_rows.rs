@@ -80,16 +80,20 @@ fn the_header_count_stays_whole_at_the_minimum_width() {
 }
 
 #[test]
-fn the_selection_and_the_controls_share_one_row_at_the_minimum_width() {
-    // At the minimum width the selection text and the controls share the row,
-    // and the selection text gives way first.
-    let painted = draw(260.0, 0);
-    let selected = rect_where(&painted, |t| t == SELECTED);
-    let sort = rect_where(&painted, |t| t == "Sort");
-    let name = rect_where(&painted, |t| t == "Name");
-    assert!(selected.min.y < sort.max.y, "Sort is not beside");
-    assert!(selected.min.y < name.max.y, "Name is not beside");
-    assert!(selected.max.x <= sort.min.x, "the slots overlap");
+fn the_info_row_holds_the_controls_on_one_line_and_leaves_the_selection_out() {
+    // The selection count lives in the status bar.
+    for width in [260.0, 1200.0] {
+        for filters in [0, 2] {
+            let painted = draw(width, filters);
+            assert!(
+                !painted.iter().any(|(t, _)| t == SELECTED),
+                "{width}, {filters}: the row paints the selection"
+            );
+            let sort = rect_where(&painted, |t| t == "Sort");
+            let date = rect_where(&painted, |t| t == "Date");
+            assert!(sort.min.y < date.max.y && date.min.y < sort.max.y);
+        }
+    }
 }
 
 #[test]
@@ -222,17 +226,5 @@ fn the_scope_tabs_stay_inside_the_strip_padding() {
             "{width}: the track ends at {}",
             track.max.x
         );
-    }
-}
-
-#[test]
-fn everything_shares_one_row_at_a_wide_width() {
-    for filters in [0, 2] {
-        let painted = draw(1200.0, filters);
-        let selected = rect_where(&painted, |t| t == SELECTED);
-        let sort = rect_where(&painted, |t| t == "Sort");
-        let name = rect_where(&painted, |t| t == "Name");
-        assert!(selected.min.y < sort.max.y && sort.min.y < selected.max.y);
-        assert!(selected.min.y < name.max.y && name.min.y < selected.max.y);
     }
 }

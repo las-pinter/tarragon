@@ -15,6 +15,7 @@ use crate::layout::{
 use crate::prefs::Prefs;
 use crate::preview::{Preview, PreviewEvent};
 use crate::sidebar::panel::{Sidebar, SidebarEvent};
+use crate::status::{self, Job};
 use crate::theme::{dock_title_style, panel_frame};
 use crate::tokens;
 
@@ -55,6 +56,8 @@ pub struct Shell {
     crash_card: CrashCard,
     /// The Preferences window over the dock.
     prefs: Prefs,
+    /// The jobs the status bar shows, in start order.
+    jobs: Vec<Job>,
     /// The menu choices that the app has not taken yet.
     menu_events: Vec<MenuEvent>,
     /// What earlier frames showed of Ctrl and V. Paste reads a V release that
@@ -75,9 +78,16 @@ impl Shell {
             dock: first_dock(),
             crash_card: CrashCard::default(),
             prefs: Prefs::default(),
+            jobs: Vec::new(),
             menu_events: Vec::new(),
             prev_keys: keys::PrevKeys::default(),
         }
+    }
+
+    /// Set the jobs the status bar shows, in start order. An empty list shows
+    /// none.
+    pub fn set_jobs(&mut self, jobs: Vec<Job>) {
+        self.jobs = jobs;
     }
 
     /// Show the crash card for `report` over the dock from the next frame.
@@ -268,6 +278,18 @@ impl Shell {
                 Margin::symmetric(top_bar::BAR_PAD_X, 0),
             ))
             .show(ui, |ui| self.top_bar(ui, &ctx));
+
+        Panel::bottom("tarragon-status")
+            .exact_size(status::STATUS_HEIGHT)
+            .resizable(false)
+            .show_separator_line(false)
+            .frame(panel_frame(
+                tokens::BG_SECONDARY,
+                Margin::symmetric(status::STATUS_PAD_X, 0),
+            ))
+            .show(ui, |ui| {
+                status::show(ui, &self.jobs, self.gallery.selected_count());
+            });
 
         // The dock fills what the bars leave. It owns the panel sizes and places.
         CentralPanel::default().frame(Frame::NONE).show(ui, |ui| {

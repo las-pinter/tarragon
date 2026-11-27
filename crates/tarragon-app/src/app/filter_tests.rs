@@ -39,8 +39,8 @@ fn context() -> Context {
     ctx
 }
 
-/// Draw frames until the library load is over. The busy strip moves the
-/// layout while it shows, and a click must not land in that shift.
+/// Draw frames until the library load is over. The grid changes while it
+/// runs, and a click must not land in that change.
 fn settle(app: &mut App, ctx: &Context) {
     let mut eframe_frame = Frame::_new_kittest();
     let start = std::time::Instant::now();

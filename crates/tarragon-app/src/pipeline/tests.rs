@@ -913,6 +913,7 @@ fn a_panicking_extraction_still_gives_the_thumbnail() {
     assert!(db.auto_colored_paths().expect("list").is_empty());
 }
 
+mod counters;
 mod drain;
 mod failure_log;
 mod library_open;

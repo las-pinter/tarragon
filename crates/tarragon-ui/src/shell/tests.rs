@@ -15,6 +15,7 @@ mod grid_keys;
 mod keys;
 mod min_width;
 mod preview_wiring;
+mod status_bar;
 mod tag_picker_input;
 mod undo_key;
 

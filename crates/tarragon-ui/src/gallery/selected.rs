@@ -21,6 +21,12 @@ impl Gallery {
             .collect()
     }
 
+    /// How many items are selected.
+    #[must_use]
+    pub fn selected_count(&self) -> usize {
+        self.selection.len()
+    }
+
     /// The size of the selected items together, in bytes, from the sizes the
     /// scan or the stored rows gave.
     #[must_use]

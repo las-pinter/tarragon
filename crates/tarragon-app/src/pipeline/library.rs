@@ -8,7 +8,7 @@ use tarragon_cache::store::SourceStamp;
 use tarragon_core::entity::FileInfo;
 use tarragon_db::repository::LibraryFile;
 
-use super::job::{ColorState, Job};
+use super::job::{ColorState, Job, color_keys};
 use super::{Failures, Opened, Pipeline, PipelineError, new_folder_id};
 
 #[cfg(test)]
@@ -66,6 +66,7 @@ impl Pipeline {
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .clear();
         }
+        let color_keys = color_keys(&jobs);
         self.jobs = jobs
             .iter()
             .map(|job| (job.path.clone(), job.clone()))
@@ -81,7 +82,11 @@ impl Pipeline {
                 height: row.height,
             })
             .collect();
-        Ok(Opened { generation, files })
+        Ok(Opened {
+            generation,
+            files,
+            color_keys,
+        })
     }
 }
 

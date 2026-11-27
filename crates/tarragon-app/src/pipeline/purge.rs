@@ -32,13 +32,15 @@ impl Pipeline {
     /// file cannot be removed; the rows stay then. Returns
     /// [`PipelineError::Db`] when the link reset fails.
     pub fn purge(&mut self, protected: &Path) -> Result<PurgeOutcome, PipelineError> {
+        self.counters.purge.reset();
         self.drain();
         self.flush();
         self.failures
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clear();
-        let outcome = CacheStore::new(self.cache_root.clone()).purge(Some(protected))?;
+        let outcome = CacheStore::new(self.cache_root.clone())
+            .purge_with(Some(protected), &self.counters.purge)?;
         let rows = self.db.clear_cache_links()?;
         tracing::info!(
             "purged the cache: {} files, {} bytes, {rows} rows reset",

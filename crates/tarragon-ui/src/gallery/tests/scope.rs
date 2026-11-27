@@ -101,14 +101,14 @@ fn the_header_uses_the_singular_for_one_file() {
 }
 
 #[test]
-fn the_info_row_shows_the_selection_count_only() {
+fn the_selected_count_follows_the_selection() {
     let mut gallery = Gallery::new(SortMode::Natural);
     gallery.set_items(items());
     gallery.set_folder(Some(PathBuf::from("/images")));
-    assert_eq!(gallery.selection_text(), None);
+    assert_eq!(gallery.selected_count(), 0);
     gallery.selection.select_only(1);
     gallery.selection.toggle(2);
-    assert_eq!(gallery.selection_text().as_deref(), Some("2 selected"));
+    assert_eq!(gallery.selected_count(), 2);
 }
 
 #[test]

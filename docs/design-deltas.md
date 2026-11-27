@@ -567,8 +567,8 @@ Before: the mockups set no minimum width for the Gallery panel.
 After: the Gallery panel is never narrower than 260 pt. The dock keeps this
 width when the user drags a separator.
 
-Reason: below about 224 pt the info row clips on the left. The pills and the
-selection text need the width.
+Reason: below about 224 pt the info row clips on the left. The pills need the
+width.
 
 ## All images scope
 
@@ -719,27 +719,35 @@ program name and the desktop entry are the names it has. A session that
 crosses a change of daylight saving time keeps the start offset, as the log
 times do.
 
-## Busy strip
+## Status bar
 
 Before: the mockups `scanning-busy.html` and `busy-states.html` show a strip with
-`Working...` for a scan, a purge, and a decode. It is hidden when idle. The
-mockup stylesheet lists it between the info bar and the filters.
+`Working...` in the gallery for a scan, a purge, and a decode. The redesign pages
+`main-window.html` and `main-multi-select.html` instead end the window with a status
+bar: one segment for each job (a 120 by 4 px amber bar and a text such as
+`Indexing colors 1,204 / 1,880`) and the selection count at the right.
 
-After: the gallery shows the strip while a folder or the library opens, and while
-a purge waits or runs. It stays until the last one ends. It is the last block of
-the top panel, below the filter bar, so only the grid moves down by the strip
-height while it shows. The filter buttons stay still. The strip takes no space when
-idle. The cache clean-up at start does not show it. The Preferences purge strip
-uses the same painter. No decode strip exists. The strip ends when the file list is
-ready, not when the tiles render. Each tile shows its own loading cell. While a
-folder opens, the gallery header names that folder. The count still belongs to the files
-on screen, so a switch from one folder to another shows the new name with the old
-count, and a first open shows 0. The mockup shows the count of the new folder. The
-All images scope keeps its own name. When an open fails, the header shows the old folder again.
+After: the window ends with the status bar of the redesign pages, on the panel fill,
+28 points tall, always shown. Each running job has a segment, in start order, and a
+segment goes when its job ends. A folder open shows `Scanning N files` with the
+supported files found so far, and a library open shows `Loading library`; neither
+has a total, so a block slides along the bar. When the open ends, `Rendering
+thumbnails done / total` counts the tiles that have a picture or an error, and
+`Indexing colors done / total` counts those of the files that had no colours yet.
+Both wait while an open or other work runs, because their counts belong to the
+files on screen. Only an open starts these counts, so rendering again or retrying
+tiles that already show adds no segment. A purge shows `Purging cache done / total` in bytes, with a sliding
+block until a walk of the cache gives the total. Numbers group thousands with commas.
+The start-up cache clean-up shows nothing. "N selected" sits at the right end and
+leaves the gallery info row. The gallery has no busy strip. While a folder opens, the
+gallery header names that folder. The count still belongs to the files on screen, so
+a switch from one folder to another shows the new name with the old count, and a
+first open shows 0. When an open fails, the header shows the old folder again.
 
-Reason: one state machine runs all the thumbnail work, so one flag is enough. Below
-the filter bar, the strip does not move the controls under the pointer. A decode
-strip would need a count of tile renders, and the tile cells show that already.
+Reason: one bar for every job keeps the gallery still while work runs, and each count
+comes from a number the work already has. The clean-up at start is upkeep nobody
+asked for. A colour count is done when its tile settles, because the worker extracts
+the colours before it sends the tile.
 
 ## Preferences dialog
 
@@ -765,11 +773,11 @@ move it while it has the focus. The other numbers are text fields. The registry 
 on save. While one does not parse, Save stays off, and the field label and the group name in
 the list turn coral, so a fault in a hidden group can be found. The cap row reads
 `Cache size cap (GiB, 0 = off)`, and Cache format offers only `jpeg`. Purge cache acts at
-once and shows a busy strip in the Cache group with the label `Purging cache...`. The gallery
-strip shows too (see "Busy strip"). Save, Cancel, the close button, and Escape wait while it
-runs. A refused purge shows `The cache folder is not safe to purge.` at the left of the
-buttons, and the log has the raw error. The labels stay at the 12 pt body size where the page
-gives 12 and 13 px.
+once and shows a busy strip in the Cache group with the label `Purging cache...`. The
+status bar shows the purge too (see "Status bar"). Save, Cancel, the close button, and
+Escape wait while it runs. A refused purge shows `The cache folder is not safe to purge.`
+at the left of the buttons, and the log has the raw error. The labels stay at the 12 pt
+body size where the page gives 12 and 13 px.
 
 Reason: a purge cannot be undone, so it must not wait for Save. A setting with no reader must
 say so, or the user expects an effect. A short screen must still reach Save.
@@ -965,7 +973,8 @@ a big line, and a hint.
   All scope. So the All scope with no image shows the first run card.
 - The Open Folder buttons do the same as File > Open Folder...
 - No card shows while a folder opens, so the empty card does not flash before the first cell.
-- The status bar line is not built. The app has no status bar.
+- The mockup's status line ("No folder open", "Folder scanned - 0 supported files") is not
+  built. The status bar shows only the running jobs and the selection (see "Status bar").
 
 Reason: the empty card must name only the formats the scanner indexes. A filter with no result
 needs its own text, and a button there would not help.

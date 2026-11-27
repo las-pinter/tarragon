@@ -124,7 +124,7 @@ fn watch_error(folder: &Path, reason: impl std::fmt::Display) -> ScanError {
 /// report it when a file deeper down changes, and the rescan lists only image
 /// files. Create, remove, and rename of a subfolder still count.
 /// Keep `Other` and `Any`, because they can carry the rescan-on-drop signal.
-fn is_change(event: &notify::Event) -> bool {
+pub(crate) fn is_change(event: &notify::Event) -> bool {
     match event.kind {
         EventKind::Access(_) => false,
         EventKind::Modify(ModifyKind::Name(_)) => true,

@@ -37,13 +37,24 @@ struct Frame {
     avail: f32,
 }
 
-/// Run one frame with the rows as salt 0, 1, and so on.
+/// Run one frame with the rows as salt 0, 1, and so on, and no counts.
 fn frame(ctx: &Context, raw: RawInput, rows: &[TreeRow], selected: bool) -> Frame {
+    frame_counted(ctx, raw, rows, selected, None)
+}
+
+/// Run one frame with the rows as salt 0, 1, and so on, each with `count`.
+fn frame_counted(
+    ctx: &Context,
+    raw: RawInput,
+    rows: &[TreeRow],
+    selected: bool,
+    count: Option<u32>,
+) -> Frame {
     let (mut actions, mut rects, mut avail) = (Vec::new(), Vec::new(), 0.0);
     let output = ctx.run_ui(raw, |ui| {
         avail = ui.available_width();
         for (index, row) in rows.iter().enumerate() {
-            actions.push(show_tree_row(ui, row, selected, index));
+            actions.push(show_tree_row(ui, row, selected, count, index));
             let seen = ctx.read_response(row_id(ui, index));
             rects.push(seen.expect("row registered").rect);
         }
@@ -279,4 +290,75 @@ fn a_long_name_in_a_narrow_frame_does_not_panic() {
     };
     let drawn = frame(&ctx, raw, &[long], true);
     assert_eq!(drawn.actions, [RowAction::None]);
+}
+
+/// The painted texts of one row with `count`, as (string, left x, colour).
+fn texts_with(
+    ctx: &Context,
+    name: &str,
+    count: Option<u32>,
+    width: f32,
+) -> Vec<(String, f32, f32)> {
+    let mut long = row(0, false);
+    long.name = name.to_owned();
+    let raw = RawInput {
+        screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(width, 100.0))),
+        ..Default::default()
+    };
+    frame_counted(ctx, raw, &[long], false, count)
+        .shapes
+        .iter()
+        .filter_map(|shape| match shape {
+            Shape::Text(text) => Some((
+                text.galley.job.text.clone(),
+                text.pos.x,
+                text.pos.x + text.galley.size().x,
+            )),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn a_count_paints_right_aligned_in_the_caption_size_and_tertiary_text() {
+    let ctx = ready(&[]);
+    let mut rows = row(0, false);
+    rows.name = "a".to_owned();
+    let shapes = frame_counted(&ctx, input(Vec::new()), &[rows], true, Some(48)).shapes;
+    let count = shapes
+        .iter()
+        .find_map(|shape| match shape {
+            Shape::Text(text) if text.galley.job.text == "48" => Some(text.clone()),
+            _ => None,
+        })
+        .expect("the count painted");
+    let format = &count.galley.job.sections[0].format;
+    assert_eq!(format.color, tokens::TEXT_TERTIARY, "even on the selection");
+    assert!((format.font_id.size - tokens::SIZE_CAPTION).abs() < f32::EPSILON);
+    let right = count.pos.x + count.galley.size().x;
+    assert!(
+        (right - (400.0 - ROW_PAD)).abs() < 0.5,
+        "the count ends at {right}"
+    );
+}
+
+#[test]
+fn zero_and_none_paint_no_count() {
+    let ctx = ready(&[]);
+    for count in [None, Some(0)] {
+        let texts = texts_with(&ctx, "a", count, 400.0);
+        assert_eq!(texts.len(), 1, "{count:?} painted {texts:?}");
+    }
+}
+
+#[test]
+fn a_long_name_stops_before_the_count() {
+    let ctx = ready(&[]);
+    let texts = texts_with(&ctx, &"long folder name ".repeat(6), Some(1234), 220.0);
+    let (_, count_left, _) = texts.iter().find(|t| t.0 == "1234").expect("the count");
+    let (_, _, name_right) = texts.iter().find(|t| t.0 != "1234").expect("the name");
+    assert!(
+        *name_right <= count_left - GAP + 0.5,
+        "the name ends at {name_right}, the count starts at {count_left}"
+    );
 }

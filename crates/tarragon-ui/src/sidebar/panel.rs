@@ -3,7 +3,7 @@
 //! The panel never touches the disk or the database. It queues events that
 //! the shell turns into work.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use egui::{Frame, Margin, Panel, ScrollArea, Ui};
@@ -53,6 +53,12 @@ pub struct Sidebar {
     rows: Vec<TreeRow>,
     /// Whether the tree changed since `rows` was built.
     dirty: bool,
+    /// The image count of each tree folder that has one above zero.
+    counts: HashMap<PathBuf, u32>,
+    /// The folders of the visible tree rows, as last reported.
+    visible: Vec<PathBuf>,
+    /// Whether `visible` changed since `take_visible_folders` last took it.
+    visible_changed: bool,
     /// The favorite equal to the open folder, else none; its row is highlighted.
     selected_favorite: Option<PathBuf>,
     /// Events not yet taken by the shell.
@@ -175,6 +181,31 @@ impl Sidebar {
         self.reveal();
     }
 
+    /// Show `count` images for the tree folder `path`; zero or none shows
+    /// nothing. Forgetting a count never touches the disk or the database.
+    pub fn set_count(&mut self, path: &Path, count: Option<u32>) {
+        match count.filter(|count| *count > 0) {
+            Some(count) => {
+                self.counts.insert(path.to_path_buf(), count);
+            }
+            None => {
+                self.counts.remove(path);
+            }
+        }
+    }
+
+    /// The image count shown for the tree folder `path`, or none.
+    #[must_use]
+    pub fn count(&self, path: &Path) -> Option<u32> {
+        self.counts.get(path).copied()
+    }
+
+    /// The folders of the visible tree rows when they changed since the last
+    /// call, else none. The app counts and watches these folders.
+    pub fn take_visible_folders(&mut self) -> Option<Vec<PathBuf>> {
+        std::mem::take(&mut self.visible_changed).then(|| self.visible.clone())
+    }
+
     /// The favorites in list order.
     #[must_use]
     pub fn favorites(&self) -> &[FavoriteRow] {
@@ -281,6 +312,11 @@ impl Sidebar {
     fn show_tree(&mut self, ui: &mut Ui) {
         if self.dirty {
             self.rows = self.tree.rows();
+            let visible: Vec<PathBuf> = self.rows.iter().map(|row| row.path.clone()).collect();
+            if visible != self.visible {
+                self.visible = visible;
+                self.visible_changed = true;
+            }
             self.dirty = false;
         }
         Frame::new()
@@ -290,7 +326,8 @@ impl Sidebar {
                     let mut navigate = None;
                     for (index, row) in self.rows.iter().enumerate() {
                         let open = self.state.selected() == Some(row.path.as_path());
-                        match show_tree_row(ui, row, open, index) {
+                        let count = self.counts.get(&row.path).copied();
+                        match show_tree_row(ui, row, open, count, index) {
                             RowAction::Navigate => {
                                 navigate = Some(row.path.clone());
                                 ui.ctx().request_repaint();

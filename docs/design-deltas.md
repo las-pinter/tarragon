@@ -319,8 +319,10 @@ carets, folder outlines, stars, and the add action follow the page's sizes and
 colours. Sidebar rows are painted directly. They draw no focus outline and
 publish no screen-reader information. The section heads use the Roboto Medium
 face, the nearest vendored weight to the page's 600. The row text stays at the
-12 pt body size where the page gives 13 px. The count slot at the right of a
-tree row stays empty.
+12 pt body size where the page gives 13 px. A tree row shows its folder's
+image count at the right, as the page does; a folder with no images directly
+in it, and a folder that cannot be listed, show none. Favorites show no
+count, as on the page.
 
 Reason: a tall folder tree would push the favorites out of view, so the
 favorites sit in their own panel and stay visible. The page defines no focus

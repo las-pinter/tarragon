@@ -157,7 +157,15 @@ fn paint_row(
     let star_x = rect.min.x + ROW_PAD;
     paint_star(painter, icon_origin(rect, star_x, ICON_SIZE), star);
     let name_x = star_x + ICON_SIZE + STAR_GAP;
-    paint_name(painter, label, name_x, rect, text, selected);
+    paint_name(
+        painter,
+        label,
+        name_x,
+        rect.max.x - ROW_PAD,
+        rect,
+        text,
+        selected,
+    );
 }
 
 /// Draw the dashed amber border of the lifted row.

@@ -13,6 +13,7 @@ mod editor;
 mod feed;
 mod fileops;
 mod filtering;
+mod folder_counts;
 mod framelog;
 mod instance;
 mod logging;

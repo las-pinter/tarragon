@@ -474,3 +474,38 @@ fn a_new_favorite_list_selects_the_open_folder_when_it_matches() {
     sidebar.set_favorites(vec![favorite(false)]);
     assert_eq!(sidebar.selected_favorite(), Some(Path::new("/f/x")));
 }
+
+#[test]
+fn the_visible_folders_are_reported_once_per_change() {
+    let mut sidebar = panel();
+    let ctx = ready();
+    frame(&ctx, &mut sidebar, Vec::new());
+    let paths = |list: &[&str]| list.iter().map(PathBuf::from).collect::<Vec<_>>();
+    assert_eq!(
+        sidebar.take_visible_folders(),
+        Some(paths(&["/r", "/r/a", "/r/b"]))
+    );
+    frame(&ctx, &mut sidebar, Vec::new());
+    assert_eq!(sidebar.take_visible_folders(), None, "no change, no report");
+    sidebar.tree_mut().set_expanded(Path::new("/r"), false);
+    frame(&ctx, &mut sidebar, Vec::new());
+    assert_eq!(sidebar.take_visible_folders(), Some(paths(&["/r"])));
+}
+
+#[test]
+fn a_count_shows_on_its_row_and_zero_or_none_clears_it() {
+    let mut sidebar = panel();
+    let ctx = ready();
+    sidebar.set_count(Path::new("/r/a"), Some(36));
+    warm_up(&ctx, &mut sidebar);
+    let texts = frame(&ctx, &mut sidebar, Vec::new());
+    let (row, count) = (find(&texts, "a"), find(&texts, "36"));
+    assert!((row.pos.y + row.height / 2.0 - (count.pos.y + count.height / 2.0)).abs() < 1.0);
+    for cleared in [Some(0), None] {
+        sidebar.set_count(Path::new("/r/a"), Some(36));
+        sidebar.set_count(Path::new("/r/a"), cleared);
+        assert_eq!(sidebar.count(Path::new("/r/a")), None);
+        let texts = frame(&ctx, &mut sidebar, Vec::new());
+        assert!(texts.iter().all(|text| text.string != "36"), "{cleared:?}");
+    }
+}

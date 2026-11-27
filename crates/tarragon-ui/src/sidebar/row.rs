@@ -40,12 +40,21 @@ pub(super) fn row_id(ui: &Ui, salt: usize) -> Id {
 
 /// Draw one row at the full width and report the action.
 ///
+/// A `count` above zero paints at the right edge in the caption size, and the
+/// name truncates before it; zero or none paints nothing there.
+///
 /// The caret click area sits above the row, so a caret click never also
 /// counts as a row click. A leaf keeps the caret square empty, so the icons
 /// of one depth line up. The caller sets the row gap and owns the padding
 /// around the whole tree. The focus outline and screen-reader information are
 /// not drawn yet.
-pub fn show_tree_row(ui: &mut Ui, row: &TreeRow, selected: bool, salt: usize) -> RowAction {
+pub fn show_tree_row(
+    ui: &mut Ui,
+    row: &TreeRow,
+    selected: bool,
+    count: Option<u32>,
+    salt: usize,
+) -> RowAction {
     let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), ROW_HEIGHT), Sense::hover());
     let id = row_id(ui, salt);
     let body = ui.interact(rect, id, Sense::click());
@@ -72,7 +81,12 @@ pub fn show_tree_row(ui: &mut Ui, row: &TreeRow, selected: bool, salt: usize) ->
     let icon_x = x + CARET_SIZE + GAP;
     paint_folder_icon(painter, icon_origin(rect, icon_x, ICON_SIZE), text);
     let name_x = icon_x + ICON_SIZE + GAP;
-    paint_name(painter, &row.name, name_x, rect, text, selected);
+    let right = rect.max.x - ROW_PAD;
+    let name_right = match count.filter(|count| *count > 0) {
+        Some(count) => paint_count(painter, count, right, rect) - GAP,
+        None => right,
+    };
+    paint_name(painter, &row.name, name_x, name_right, rect, text, selected);
 
     if caret.is_some_and(|caret| caret.clicked()) {
         RowAction::Toggle
@@ -95,12 +109,28 @@ pub(super) fn row_colors(selected: bool, hovered: bool) -> (Color32, Color32) {
     }
 }
 
-/// Draw a one-line name at `x`, centred in `rect`, cut with an ellipsis before
-/// the right padding. A selected name takes the medium face.
+/// Paint `count` right-aligned at `right`, centred in `rect`, and return its
+/// left edge. The page gives it the tertiary text on every fill, which passes
+/// on the coral selection too.
+fn paint_count(painter: &Painter, count: u32, right: f32, rect: Rect) -> f32 {
+    let galley = painter.layout_no_wrap(
+        count.to_string(),
+        FontId::proportional(tokens::SIZE_CAPTION),
+        tokens::TEXT_TERTIARY,
+    );
+    let left = right - galley.size().x;
+    let y = rect.center().y - galley.size().y / 2.0;
+    painter.galley(egui::pos2(left, y), galley, tokens::TEXT_TERTIARY);
+    left
+}
+
+/// Draw a one-line name from `x`, centred in `rect`, cut with an ellipsis
+/// before `right`. A selected name takes the medium face.
 pub(super) fn paint_name(
     painter: &Painter,
     name: &str,
     x: f32,
+    right: f32,
     rect: Rect,
     color: Color32,
     selected: bool,
@@ -116,7 +146,7 @@ pub(super) fn paint_name(
         color,
     );
     job.wrap = TextWrapping {
-        max_width: (rect.max.x - ROW_PAD - x).max(0.0),
+        max_width: (right - x).max(0.0),
         max_rows: 1,
         break_anywhere: true,
         overflow_character: Some('…'),

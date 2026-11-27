@@ -223,31 +223,26 @@ fn wordmark(ui: &mut Ui) {
 
 /// Draw one menu button and the menu that opens from it.
 ///
-/// A menu button has no fill at rest and the hover fill under the pointer, as
-/// the redesign top bar shows it. The gap between two buttons comes from the
-/// row that draws them.
+/// A menu button has no fill at rest and light grey text, as the redesign top
+/// bar shows it. The page gives no hover state; under the pointer, or while
+/// its menu is open, the button takes the raised fill and the primary text,
+/// because the hover step alone is too close to the bar to see. The gap
+/// between two buttons comes from the row that draws them.
 pub(super) fn menu(ui: &mut Ui, label: &str, menus: impl FnOnce(&mut Ui)) {
     ui.scope(|ui| {
+        // The text colour comes from the widget state, not one fixed colour.
+        ui.visuals_mut().override_text_color = None;
         let widgets = &mut ui.style_mut().visuals.widgets;
-        for state in [
-            &mut widgets.inactive,
-            &mut widgets.noninteractive,
-            &mut widgets.hovered,
-            &mut widgets.active,
-            &mut widgets.open,
-        ] {
+        for state in [&mut widgets.inactive, &mut widgets.noninteractive] {
             state.weak_bg_fill = Color32::TRANSPARENT;
+            state.fg_stroke.color = tokens::TEXT_TERTIARY;
         }
-        widgets.hovered.weak_bg_fill = tokens::SURFACE_HOVER;
-        widgets.open.weak_bg_fill = tokens::SURFACE_HOVER;
-        widgets.active.weak_bg_fill = tokens::SURFACE_HOVER;
+        for state in [&mut widgets.hovered, &mut widgets.active, &mut widgets.open] {
+            state.weak_bg_fill = tokens::SURFACE_HIGHLIGHT;
+            state.fg_stroke.color = tokens::TEXT_PRIMARY;
+        }
         ui.spacing_mut().button_padding = MENU_PAD;
-        ui.menu_button(
-            RichText::new(label)
-                .size(tokens::SIZE_BODY)
-                .color(tokens::TEXT_TERTIARY),
-            menus,
-        );
+        ui.menu_button(RichText::new(label).size(tokens::SIZE_BODY), menus);
     });
 }
 

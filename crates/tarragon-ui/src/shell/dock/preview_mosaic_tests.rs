@@ -159,7 +159,7 @@ fn a_big_selection_with_one_picture_ready_shows_a_one_cell_mosaic() {
 }
 
 #[test]
-fn five_pictures_fill_three_rows_the_first_one_wide() {
+fn five_pictures_read_three_then_two_in_selection_order() {
     let ctx = Context::default();
     apply_theme(&ctx);
     let mut shell = Shell::new();
@@ -168,7 +168,7 @@ fn five_pictures_fill_three_rows_the_first_one_wide() {
     let mut tops: Vec<f32> = found.iter().map(|(_, r)| r.min.y.round()).collect();
     tops.sort_by(f32::total_cmp);
     tops.dedup();
-    assert_eq!(tops.len(), 3, "{found:?}");
+    assert_eq!(tops.len(), 2, "{found:?}");
     let per_row: Vec<usize> = tops
         .iter()
         .map(|top| {
@@ -178,5 +178,16 @@ fn five_pictures_fill_three_rows_the_first_one_wide() {
                 .count()
         })
         .collect();
-    assert_eq!(per_row, [1, 2, 2]);
+    assert_eq!(per_row, [3, 2]);
+    // The pictures follow the selection order, left to right, then down.
+    let mut by_place = found.clone();
+    by_place.sort_by(|(_, a), (_, b)| {
+        (a.min.y.round(), a.min.x)
+            .partial_cmp(&(b.min.y.round(), b.min.x))
+            .expect("finite")
+    });
+    let ids: Vec<_> = by_place.iter().map(|(id, _)| *id).collect();
+    let mut sorted = ids.clone();
+    sorted.sort();
+    assert_eq!(ids, sorted, "{found:?}");
 }

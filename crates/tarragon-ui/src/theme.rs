@@ -113,7 +113,12 @@ pub fn apply_theme(ctx: &Context) {
             widget.expansion = 0.0;
         }
     });
+    ctx.options_mut(|options| options.input_options.line_scroll_speed = LINE_SCROLL_SPEED);
 }
+
+/// Points one wheel notch scrolls. egui's own 40 felt slow in a grid of
+/// 168 pt tiles; twice that moves about half a tile row per notch.
+pub const LINE_SCROLL_SPEED: f32 = 80.0;
 
 /// The solid scroll bars the flat look uses: a slim track with a raised
 /// handle, and no floating overlay.
@@ -209,6 +214,16 @@ mod tests {
         assert!((size(TextStyle::Heading) - tokens::SIZE_HEADING).abs() < f32::EPSILON);
         assert!((size(TextStyle::Small) - tokens::SIZE_SMALL).abs() < f32::EPSILON);
         assert!((size(TextStyle::Monospace) - tokens::SIZE_LOG).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn a_wheel_notch_scrolls_twice_the_egui_default() {
+        let ctx = Context::default();
+        let default = ctx.options(|options| options.input_options.line_scroll_speed);
+        apply_theme(&ctx);
+        let speed = ctx.options(|options| options.input_options.line_scroll_speed);
+        assert!((speed - LINE_SCROLL_SPEED).abs() < f32::EPSILON);
+        assert!(speed >= 2.0 * default, "{speed} against {default}");
     }
 
     #[test]

@@ -377,16 +377,21 @@ not define the tree roots. `design/mockups/library.html` lines 38-41 show only
 sample paths such as `sketches/2026-10`.
 
 After: a favorite shows the stored label when it is not blank. Otherwise it
-shows the path below the longest tree root that contains it, for example
-`sketches/2026-10`. A favorite equal to a root shows the folder name of that
-root. A path below no root, or a root with no folder name such as `/`, shows
-the full path. A favorite whose folder is missing shows dim text and a dim
-icon. The tree roots are the home folder and, when it is outside home, the
-folder given on the command line.
+shows its folder name, such as `2026-10`, as `design/redesign/main-window.html`
+does. When several favorites with no stored label share a folder name, each of
+them shows its path below the folder that their parent folders all share:
+`refs/clientA/2026-10` and `refs/clientB/2026-10` show `clientA/2026-10` and
+`clientB/2026-10`. A folder with no name, such as `/`, shows the full path,
+and so do namesakes that share no folder, such as two on different drives. A
+favorite whose folder is missing shows dim text and a dim icon. The tree roots
+are the home folder and, when it is outside home, the folder given on the
+command line.
 
 Reason: the sidebar needs a short name for each favorite and a start point for
-the tree. The home folder holds a user's files by default, and the
-command-line folder must stay reachable when it is outside home.
+the tree. A folder name is the shortest name, and the parts below the shared
+folder are the fewest that tell two namesakes apart. The home folder holds a
+user's files by default, and the command-line folder must stay reachable when
+it is outside home.
 
 ## Preview empty state and picture box
 
@@ -463,26 +468,31 @@ filled edge to edge with its picture and carries the format badge. Under it,
 "Open all in Krita" button. The page shows no tag row for a multi-selection
 and gives no rule past nine images.
 
-After: the mosaic follows the README rule and takes the height the footer
-leaves, with the 260 pt minimum of the single picture. Past nine images the
-column count is the square root rounded up, so 10 to 16 images take four
-columns; the `max_multi_preview` setting still caps the cells. Each top row
-that has a free slot starts with a cell two columns wide, so every row is
-full. A cell is the field fill with an 8 pt radius, the picture is fitted
-whole inside it, never cropped, and the grid's format badge sits in the top
-left. The footer follows the page. The size line adds " · +3 more" when the
-cap hides some of the selection. The open button names the app when every
-selected file opens in the same named app, and reads "Open all" otherwise, or
-when the name would take more than 40 percent of the row; it opens the files
-as "Open N in editor" does. "Edit tags" shows the tag row (the
-colour bars, the pills, and "+ Tag") under the footer and hides it again, and
-the row stays open across selections until it is hidden. There are no boxes
-for a picture that is still loading.
+After: the mosaic takes the height the footer leaves, with the 260 pt minimum
+of the single picture, and it is laid out by rows, not by the README's columns.
+The widest row holds the square root of the count rounded up, and the rows are
+as few as that allows. The rows differ by at most one image, and the longer
+rows come first: two images sit side by side in one row, three give two over
+one, five give three over two, seven give three over two over two, and ten give
+four over three over three. Each row splits the full width among its images, so
+a short row has wider cells, and all rows share the height. The images read
+left to right, then down, in the order of the selection. The
+`max_multi_preview` setting still caps the cells. A cell is the field fill with
+an 8 pt radius, the picture is fitted whole inside it, never cropped, and the
+grid's format badge sits in the top left. The footer follows the page. The size
+line adds " · +3 more" when the cap hides some of the selection. The open
+button names the app when every selected file opens in the same named app, and
+reads "Open all" otherwise, or when the name would take more than 40 percent of
+the row; it opens the files as "Open N in editor" does. "Edit tags" shows the
+tag row (the colour bars, the pills, and "+ Tag") under the footer and hides it
+again, and the row stays open across selections until it is hidden. There are
+no boxes for a picture that is still loading.
 
-Reason: a cropped cell would hide part of a reference image. The page gives
-no rule past nine, and the square root keeps the cells near square. The tag
-row is the only place that removes a tag from many images at once, so it
-stays one click away.
+Reason: rows read left to right in the order the images were picked, so the
+first picks stay at the top left, and a short row of wider cells leaves no slot
+empty. A cropped cell would hide part of a reference image. The square root
+keeps the cells near square at any count. The tag row is the only place that
+removes a tag from many images at once, so it stays one click away.
 
 ## Filter count pill
 
@@ -1042,6 +1052,14 @@ names a section holds its detail there.
   bar row".
 - Pictures in the grid and in the mosaic are fitted, never cropped. See "Grid
   tile" and "Preview mosaic".
+- The mosaic is laid out in balanced rows, with the longer rows first, in
+  place of the README's columns and two-column cells. See "Preview mosaic".
+- A favorite shows its folder name, and namesakes show the path below their
+  shared folder. See "Favorite labels and roots".
+- The File, View, and Settings menu buttons take the raised `#3d3b44` fill
+  and the primary text under the pointer and while open. The pages draw them
+  at rest only, and the hover step `#2a2836` is too faint on the `#1c1b22`
+  bar.
 - The preview colour bars all have the same width, because no colour share is
   stored. See "Preview colour bars".
 - The grid context menu keeps the app's items and keys. The page's "Open

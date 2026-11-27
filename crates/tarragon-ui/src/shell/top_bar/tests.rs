@@ -321,3 +321,60 @@ fn the_bar_sits_on_the_panel_fill_with_one_row() {
     assert!(bar.width() > 1300.0, "the bar is {} wide", bar.width());
     assert_eq!(bar.min, Pos2::ZERO);
 }
+
+/// The painted colour of the `File` label and whether a raised fill sits
+/// under it, after the pointer rests at `pointer`.
+fn file_menu_look(pointer: Option<Pos2>) -> (egui::Color32, bool) {
+    let ctx = Context::default();
+    apply_theme(&ctx);
+    let mut shell = Shell::new();
+    draw(&ctx, &mut shell);
+    let events = || pointer.map(Event::PointerMoved).into_iter().collect();
+    // egui paints a hover from the response of the frame before, so the
+    // last of a few frames shows it.
+    let mut look = None;
+    for _ in 0..3 {
+        let output = ctx.run_ui(screen(events()), |ui| shell.show(ui));
+        let label = output
+            .shapes
+            .iter()
+            .find_map(|clipped| match &clipped.shape {
+                egui::epaint::Shape::Text(shape) if shape.galley.job.text == "File" => {
+                    Some((shape.fallback_color, shape.visual_bounding_rect()))
+                }
+                _ => None,
+            });
+        let (color, rect) = label.expect("File is not painted");
+        let lit = output.shapes.iter().any(|clipped| match &clipped.shape {
+            egui::epaint::Shape::Rect(fill) => {
+                fill.fill == tokens::SURFACE_HIGHLIGHT && fill.rect.contains_rect(rect)
+            }
+            _ => false,
+        });
+        look = Some((color, lit));
+        output.drop_without_applying_deltas();
+    }
+    look.expect("three frames ran")
+}
+
+#[test]
+fn a_menu_button_lights_up_under_the_pointer() {
+    assert_eq!(file_menu_look(None), (tokens::TEXT_TERTIARY, false));
+    let ctx = Context::default();
+    apply_theme(&ctx);
+    let mut shell = Shell::new();
+    draw(&ctx, &mut shell);
+    let output = ctx.run_ui(input(), |ui| shell.show(ui));
+    let centre = output
+        .shapes
+        .iter()
+        .find_map(|clipped| match &clipped.shape {
+            egui::epaint::Shape::Text(shape) if shape.galley.job.text == "File" => {
+                Some(shape.visual_bounding_rect().center())
+            }
+            _ => None,
+        })
+        .expect("File is not painted");
+    output.drop_without_applying_deltas();
+    assert_eq!(file_menu_look(Some(centre)), (tokens::TEXT_PRIMARY, true));
+}

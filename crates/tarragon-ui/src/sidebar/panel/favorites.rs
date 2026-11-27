@@ -7,11 +7,11 @@ use std::path::{Path, PathBuf};
 
 use egui::{Id, Key, Ui, vec2};
 
-use super::super::display_label;
 use super::super::favorite::{
     FAVORITE_HEIGHT, FavoriteAction, paint_lifted_border, paint_lifted_row, show_empty_favorites,
     show_favorite_row,
 };
+use super::super::favorite_labels;
 use super::super::reorder::{drop_slot, new_places, reordered};
 use super::{Sidebar, SidebarEvent};
 
@@ -49,9 +49,10 @@ impl Sidebar {
             .dragging
             .map(|from| lifted_offset(ui, from, count, pitch));
         let (mut opened, mut dropped, mut lifted_rect) = (None, false, None);
+        let labels = favorite_labels(self.state.favorites());
         ui.push_id("favorites", |ui| {
             for (index, fav) in self.state.favorites().iter().enumerate() {
-                let label = display_label(&fav.path, fav.label.as_deref(), self.state.roots());
+                let label = labels[index].clone();
                 let chosen = self.selected_favorite.as_deref() == Some(fav.path.as_path());
                 let lifted = self.dragging == Some(index);
                 let (target, time) = match lifted_y {

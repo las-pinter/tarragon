@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-use super::{MosaicCell, columns, drawn, grid_cells, more_hint, places, show};
+use super::{MosaicCell, columns, drawn, grid_cells, more_hint, row_lengths, show};
 use crate::preview::image::PreviewImage;
 use egui::{Rect, pos2, vec2};
 
@@ -27,66 +27,68 @@ fn close(got: &[Rect], want: &[Rect]) -> bool {
 }
 
 #[test]
-fn the_columns_follow_the_readme_rule_then_the_square_root() {
-    let got: Vec<usize> = (2..=17).map(columns).collect();
-    assert_eq!(got, [1, 2, 2, 2, 2, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 5]);
+fn the_widest_row_holds_the_ceiling_of_the_square_root() {
+    let got: Vec<usize> = (1..=17).map(columns).collect();
+    assert_eq!(got, [1, 2, 2, 2, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 5]);
     assert_eq!(columns(100), 10);
 }
 
 #[test]
-fn two_images_stack_in_one_column() {
-    let want = [cell(0.0, 0.0, 216.0, 154.0), cell(0.0, 162.0, 216.0, 154.0)];
+fn the_rows_are_balanced_with_the_longer_rows_first() {
+    let cases: [(usize, &[usize]); 9] = [
+        (2, &[2]),
+        (3, &[2, 1]),
+        (4, &[2, 2]),
+        (5, &[3, 2]),
+        (6, &[3, 3]),
+        (7, &[3, 2, 2]),
+        (8, &[3, 3, 2]),
+        (9, &[3, 3, 3]),
+        (10, &[4, 3, 3]),
+    ];
+    for (count, want) in cases {
+        assert_eq!(row_lengths(count), want, "{count} images");
+    }
+    for count in 1..=100 {
+        let rows = row_lengths(count);
+        assert_eq!(rows.iter().sum::<usize>(), count, "{count} cells");
+        assert!(
+            rows.windows(2)
+                .all(|pair| pair[0] >= pair[1] && pair[0] - pair[1] <= 1)
+        );
+        assert!(rows[0] <= columns(count), "{count}: {rows:?}");
+    }
+}
+
+#[test]
+fn two_images_sit_side_by_side_in_one_row() {
+    let want = [cell(0.0, 0.0, 104.0, 316.0), cell(112.0, 0.0, 104.0, 316.0)];
     assert!(close(&grid_cells(2, 9, area()), &want));
 }
 
 #[test]
-fn three_images_start_with_a_cell_two_columns_wide() {
+fn three_images_give_two_on_top_and_one_full_width_below() {
     let want = [
-        cell(0.0, 0.0, 216.0, 154.0),
-        cell(0.0, 162.0, 104.0, 154.0),
-        cell(112.0, 162.0, 104.0, 154.0),
+        cell(0.0, 0.0, 104.0, 154.0),
+        cell(112.0, 0.0, 104.0, 154.0),
+        cell(0.0, 162.0, 216.0, 154.0),
     ];
     assert!(close(&grid_cells(3, 9, area()), &want));
 }
 
 #[test]
-fn seven_images_give_the_two_top_rows_a_wide_cell() {
-    let got = places(7);
-    assert_eq!(
-        got,
-        [
-            (0, 0, 2),
-            (0, 2, 1),
-            (1, 0, 2),
-            (1, 2, 1),
-            (2, 0, 1),
-            (2, 1, 1),
-            (2, 2, 1)
-        ]
-    );
+fn five_images_read_three_then_two_left_to_right() {
+    let cells = grid_cells(5, 9, area());
+    let tops: Vec<f32> = cells.iter().map(|c| c.min.y).collect();
+    assert_eq!(tops, [20.0, 20.0, 20.0, 182.0, 182.0]);
+    assert!(cells[0].min.x < cells[1].min.x && cells[1].min.x < cells[2].min.x);
+    assert!(cells[3].min.x < cells[4].min.x);
+    assert!((cells[3].width() - 104.0).abs() < 0.01, "{:?}", cells[3]);
 }
 
 #[test]
-fn every_count_fills_each_row_with_no_empty_slot() {
-    for count in 1..=100 {
-        let cols = columns(count);
-        let mut per_row = std::collections::BTreeMap::new();
-        for (row, _, span) in places(count) {
-            *per_row.entry(row).or_insert(0) += span;
-        }
-        assert_eq!(places(count).len(), count, "{count} cells");
-        for (row, used) in per_row {
-            assert_eq!(
-                used, cols,
-                "{count} images: row {row} uses {used} of {cols}"
-            );
-        }
-    }
-}
-
-#[test]
-fn the_cells_fill_the_area_for_two_three_six_and_nine() {
-    for count in [2, 3, 6, 9] {
+fn the_cells_fill_the_area_for_two_three_five_six_seven_and_nine() {
+    for count in [2, 3, 5, 6, 7, 9] {
         let cells = grid_cells(count, 9, area());
         let bounds = cells.iter().copied().reduce(Rect::union).expect("cells");
         assert!(

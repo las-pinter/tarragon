@@ -1,9 +1,9 @@
 //! The mosaic that replaces the picture box for a multi-selection.
 //!
-//! The cells fill the box: the column count follows the number of pictures,
-//! the rows share the height, and when the last row would not be full the top
-//! rows start with a cell two columns wide, so no slot stays empty. Each
-//! picture is fitted whole inside its cell.
+//! The cells fill the box in reading order. The rows are near square and
+//! balanced, longer rows first; each row splits the full width among its
+//! cells, so no slot stays empty, and the rows share the height. Each picture
+//! is fitted whole inside its cell.
 
 use std::path::PathBuf;
 
@@ -28,15 +28,10 @@ pub struct MosaicCell {
     pub path: PathBuf,
 }
 
-/// How many columns `count` cells take: one for two, two for three to six,
-/// three for seven to nine, and the ceiling of the square root above that.
+/// How many cells the widest row holds: the ceiling of the square root of
+/// `count`, so the grid stays near square.
 fn columns(count: usize) -> usize {
-    match count {
-        0..=2 => 1,
-        3..=6 => 2,
-        7..=9 => 3,
-        _ => (3..count).find(|c| c * c >= count).unwrap_or(count),
-    }
+    (1..=count).find(|c| c * c >= count).unwrap_or(1)
 }
 
 /// How many images the mosaic draws out of `count`, given the `cap`.
@@ -44,64 +39,51 @@ fn shown(count: usize, cap: usize) -> usize {
     count.min(cap)
 }
 
-/// The place of each of `count` cells: its row, its first column, and how
-/// many columns it spans.
-///
-/// The rows are as few as the columns allow. Each slot the cells do not fill
-/// goes to a cell two columns wide at the start of a row, from the top row
-/// down, so every row is full.
-fn places(count: usize) -> Vec<(usize, usize, usize)> {
+/// How many cells each row holds, top row first. The rows are as few as the
+/// columns allow, they differ by at most one cell, and the longer rows come
+/// first: three gives [2, 1], five [3, 2], and seven [3, 2, 2].
+fn row_lengths(count: usize) -> Vec<usize> {
     if count == 0 {
         return Vec::new();
     }
-    let cols = columns(count);
-    let rows = count.div_ceil(cols);
-    let mut wide = rows * cols - count;
-    let mut placed = Vec::with_capacity(count);
-    for row in 0..rows {
-        let mut col = 0;
-        while col < cols && placed.len() < count {
-            let span = if col == 0 && wide > 0 && cols > 1 {
-                wide -= 1;
-                2
-            } else {
-                1
-            };
-            placed.push((row, col, span));
-            col += span;
-        }
-    }
-    placed
+    let rows = count.div_ceil(columns(count));
+    let (base, extra) = (count / rows, count % rows);
+    (0..rows)
+        .map(|row| base + usize::from(row < extra))
+        .collect()
 }
 
-/// The cell rects for the first `cap` of `count` pictures, filling `area`.
-/// An area too small for the gaps gives no cells.
+/// The cell rects for the first `cap` of `count` pictures, filling `area`,
+/// in reading order: left to right, then top to bottom. Each row splits the
+/// full width among its cells, and the rows share the height. An area too
+/// small for the gaps gives no cells.
 #[must_use]
 #[expect(
     clippy::cast_precision_loss,
     reason = "a cell count is tiny, far below 2^24"
 )]
 pub fn grid_cells(count: usize, cap: usize, area: Rect) -> Vec<Rect> {
-    let n = shown(count, cap);
-    let places = places(n);
-    let Some(&(last_row, ..)) = places.last() else {
-        return Vec::new();
-    };
-    let (cols, rows) = (columns(n) as f32, (last_row + 1) as f32);
-    let width = (area.width() - GAP * (cols - 1.0)) / cols;
-    let height = (area.height() - GAP * (rows - 1.0)) / rows;
-    if width <= 0.0 || height <= 0.0 {
+    let lengths = row_lengths(shown(count, cap));
+    if lengths.is_empty() {
         return Vec::new();
     }
-    places
-        .into_iter()
-        .map(|(row, col, span)| {
+    let rows = lengths.len() as f32;
+    let height = (area.height() - GAP * (rows - 1.0)) / rows;
+    let widest = columns(shown(count, cap)) as f32;
+    if height <= 0.0 || area.width() - GAP * (widest - 1.0) <= 0.0 {
+        return Vec::new();
+    }
+    let mut cells = Vec::new();
+    for (row, &length) in lengths.iter().enumerate() {
+        let across = length as f32;
+        let width = (area.width() - GAP * (across - 1.0)) / across;
+        let y = area.min.y + row as f32 * (height + GAP);
+        for col in 0..length {
             let x = area.min.x + col as f32 * (width + GAP);
-            let y = area.min.y + row as f32 * (height + GAP);
-            let w = span as f32 * width + (span as f32 - 1.0) * GAP;
-            Rect::from_min_size(pos2(x, y), vec2(w, height))
-        })
-        .collect()
+            cells.push(Rect::from_min_size(pos2(x, y), vec2(width, height)));
+        }
+    }
+    cells
 }
 
 /// The note for the selected images the mosaic does not draw, or `None` when

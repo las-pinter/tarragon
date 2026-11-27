@@ -160,15 +160,16 @@ fn label(text: &str, color: Color32) -> RichText {
 }
 
 /// A toggle switch: a coral track with the knob at the right when on, a raised
-/// track with the knob at the left when off. A click flips `on`.
-pub fn toggle(ui: &mut Ui, on: &mut bool) -> Response {
+/// track with the knob at the left when off. A click flips `on`. `label` names
+/// it for screen readers.
+pub fn toggle(ui: &mut Ui, on: &mut bool, label: &str) -> Response {
     let enabled = ui.is_enabled();
     let (rect, mut response) = ui.allocate_exact_size(TOGGLE_SIZE, Sense::click());
     if enabled && response.clicked() {
         *on = !*on;
         response.mark_changed();
     }
-    response.widget_info(|| WidgetInfo::selected(WidgetType::Checkbox, enabled, *on, ""));
+    response.widget_info(|| WidgetInfo::selected(WidgetType::Checkbox, enabled, *on, label));
     let response = response.on_hover_cursor(CursorIcon::PointingHand);
     let radius = CornerRadius::same(tokens::RADIUS_XL);
     let track = if !enabled {
@@ -500,12 +501,12 @@ mod tests {
         let mut on = false;
         // The first frame gives the toggle its rect, so the click can find it.
         ctx.run_ui(test_support::input(400.0, vec![]), |ui| {
-            toggle(ui, &mut on);
+            toggle(ui, &mut on, "");
         })
         .drop_without_applying_deltas();
         let at = Pos2::new(18.0, 10.0);
         ctx.run_ui(test_support::input(400.0, test_support::click(at)), |ui| {
-            toggle(ui, &mut on);
+            toggle(ui, &mut on, "");
         })
         .drop_without_applying_deltas();
         assert!(on);
@@ -516,7 +517,7 @@ mod tests {
         let ctx = ready();
         let mut on = true;
         let shapes = shapes(&ctx, |ui| {
-            toggle(ui, &mut on);
+            toggle(ui, &mut on, "");
         });
         assert!(has_fill(&shapes, tokens::CORAL_BRIGHT), "{shapes:?}");
         let knob = circle(&shapes, tokens::BG_PRIMARY).expect("the on knob");
@@ -528,7 +529,7 @@ mod tests {
         let ctx = ready();
         let mut on = false;
         let shapes = shapes(&ctx, |ui| {
-            toggle(ui, &mut on);
+            toggle(ui, &mut on, "");
         });
         assert!(has_fill(&shapes, tokens::SURFACE_HIGHLIGHT), "{shapes:?}");
         let knob = circle(&shapes, tokens::TEXT_SECONDARY).expect("the off knob");
@@ -541,7 +542,7 @@ mod tests {
         let mut on = false;
         let shapes = shapes(&ctx, |ui| {
             ui.add_enabled_ui(false, |ui| {
-                toggle(ui, &mut on);
+                toggle(ui, &mut on, "");
             });
         });
         assert!(

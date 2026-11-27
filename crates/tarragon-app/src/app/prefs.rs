@@ -10,7 +10,7 @@ use super::{App, max_multi_preview};
 use crate::picker::Purpose;
 use crate::{colorflag, prefs, sidebar, tags};
 
-/// The Cache Size text until a measure ends, and when a measure fails.
+/// The Cache size text until a measure ends, and when a measure fails.
 const CACHE_SIZE_UNKNOWN: &str = "unknown";
 
 /// How many frames the app keeps asking for after the window opens. The form

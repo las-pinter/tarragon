@@ -1,4 +1,4 @@
-//! The Cache Size row and the Purge Cache button of the Preferences window.
+//! The Cache size row and the Purge cache button of the Preferences window.
 //!
 //! The size is measured on its own thread and the purge runs on the work
 //! thread, so the window stays responsive. The state sits in the egui context,
@@ -34,7 +34,7 @@ fn dialog_text(error: String) -> String {
 
 /// What the Preferences window knows about the cache between frames.
 pub(super) struct State {
-    /// The Cache Size text as last measured.
+    /// The Cache size text as last measured.
     pub(super) size: String,
     /// The answer of the measure thread, until it arrives.
     pub(super) measuring: Option<Receiver<Result<u64, String>>>,

@@ -2,21 +2,27 @@
 //!
 //! The window floats inside the main window and is modal: a dim layer covers
 //! the panes and takes their input. The caller sets the values when it opens
-//! the window. It gets them back only on OK.
+//! the window. It gets them back only on Save.
 
-use egui::{Align2, FontFamily, Key, Modifiers, RichText, Window, vec2};
+use egui::{Align2, CornerRadius, Key, Modifiers, Window, vec2};
 
 mod draft;
+mod fields;
 mod form;
+mod groups;
+mod nav;
 
 use draft::Draft;
 use form::{Action, View};
+pub use nav::Group;
 
 use crate::theme::dialog_frame;
-use crate::{backdrop, fonts, tokens};
+use crate::{backdrop, tokens};
 
-/// Window width, in points.
-const WIDTH: f32 = 520.0;
+/// The window size of the redesign page, in points.
+const SIZE: egui::Vec2 = vec2(800.0, 560.0);
+/// The least room the window leaves at each screen edge, in points.
+const SCREEN_EDGE: f32 = 16.0;
 
 /// Every setting the window shows.
 #[derive(Clone, Debug, PartialEq)]
@@ -52,7 +58,7 @@ pub struct PrefsValues {
 /// A choice the user made in the window. The caller acts on it.
 #[derive(Clone, Debug, PartialEq)]
 pub enum PrefsEvent {
-    /// The user pressed OK. The window is closed.
+    /// The user pressed Save. The window is closed.
     Ok(PrefsValues),
     /// The user cancelled. The window is closed.
     Cancel,
@@ -66,6 +72,8 @@ pub enum PrefsEvent {
 #[derive(Debug, Default)]
 pub struct Prefs {
     draft: Option<Draft>,
+    /// The group shown at the right; it lasts for the session.
+    group: Group,
     cache_size: String,
     purging: bool,
     error: Option<String>,
@@ -74,7 +82,7 @@ pub struct Prefs {
 
 impl Prefs {
     /// Show the window from the next frame, with `values` in the fields.
-    /// `cache_size` is the text for the Cache Size row, such as `1.4 GB`.
+    /// `cache_size` is the text for the Cache size row, such as `1.4 GB`.
     pub fn open(&mut self, values: PrefsValues, cache_size: String) {
         self.draft = Some(Draft::new(values));
         self.cache_size = cache_size;
@@ -94,7 +102,7 @@ impl Prefs {
         }
     }
 
-    /// Set the text of the Cache Size row.
+    /// Set the text of the Cache size row.
     pub fn set_cache_size(&mut self, size: String) {
         self.cache_size = size;
     }
@@ -104,9 +112,20 @@ impl Prefs {
         self.purging = purging;
     }
 
-    /// Show an error above the buttons, or clear it.
+    /// Show an error at the left of the buttons, or clear it.
     pub fn set_error(&mut self, error: Option<String>) {
         self.error = error;
+    }
+
+    /// The group the window shows.
+    #[must_use]
+    pub fn group(&self) -> Group {
+        self.group
+    }
+
+    /// Show `group` at the right of the list.
+    pub fn show_group(&mut self, group: Group) {
+        self.group = group;
     }
 
     /// Take the choices the user made since the last call.
@@ -125,19 +144,22 @@ impl Prefs {
             purging: self.purging,
             error: self.error.as_deref(),
         };
-        let title = RichText::new("Preferences")
-            .family(FontFamily::Name(fonts::MEDIUM_FAMILY.into()))
-            .color(tokens::TEXT_PRIMARY);
-        let shown = Window::new(title)
+        // The page size, held inside the screen with a little room around it.
+        let screen = ctx.content_rect().size() - vec2(2.0, 2.0) * SCREEN_EDGE;
+        let size = SIZE.min(screen).max(vec2(1.0, 1.0));
+        let frame = dialog_frame()
+            .inner_margin(0)
+            .corner_radius(CornerRadius::same(tokens::RADIUS_XL + 2));
+        let group = &mut self.group;
+        let shown = Window::new("Preferences")
+            .title_bar(false)
             .order(egui::Order::Foreground)
             .collapsible(false)
             .resizable(false)
+            .fixed_size(size)
             .anchor(Align2::CENTER_CENTER, vec2(0.0, 0.0))
-            .frame(dialog_frame())
-            .show(ctx, |ui| {
-                ui.set_width(WIDTH);
-                form::contents(ui, draft, &view)
-            });
+            .frame(frame)
+            .show(ctx, |ui| form::contents(ui, size, draft, &view, group));
         let mut action = shown.and_then(|r| r.inner).flatten();
         let escape = ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Escape));
         // The purge runs on, so Escape waits like the Cancel button does.
@@ -145,7 +167,7 @@ impl Prefs {
             action = Some(Action::Cancel);
         }
         match action {
-            Some(Action::Ok) => {
+            Some(Action::Save) => {
                 if let Some(values) = draft.parse() {
                     self.events.push(PrefsEvent::Ok(values));
                     self.draft = None;

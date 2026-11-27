@@ -746,19 +746,33 @@ strip would need a count of tile renders, and the tile cells show that already.
 Before: the mockup dialog has a close mark in its title bar and four groups of settings. It
 has no cap row, shows PNG for the cache format, and has no footnote.
 
-After: the window is 520 points wide, with the default title bar and no close mark. Cancel and
-Escape close it and discard the input. OK saves all 13 settings in one transaction. The groups
-scroll on a short screen, and the footnote and the buttons stay in view. Purge Cache acts at
-once and shows a busy strip in the dialog with the label `Purging cache...`. The gallery strip
-shows too (see "Busy strip"). Cancel, OK, and Escape wait while it runs. A refused purge shows
-`The cache folder is not safe to purge.` and the log has the raw error. The cap row reads
-`Cache size cap (GiB, 0 = off)`. Cache Format offers only `jpeg`. Number fields are text. The
-registry clamps them on save, and OK stays off while one does not parse. The cache size cap and
-the cache folder apply at the next start. Cache format, tile grid size, PSD workers, and large
-canvas threshold are saved and no code reads them yet.
+The redesign page `design/redesign/settings.html` shows an 800 by 560 px dialog: a title
+row with a close button, a list of the four groups on the left, one group shown at the right
+on the base fill, and Cancel and Save at the bottom. It draws only the Color tagging group,
+with its fields in two columns, a toggle, and a slider with the bucket colours under it.
 
-Reason: a purge cannot be undone, so it must not wait for OK. A setting with no reader must
-say so, or the user expects an effect.
+After: the dialog follows the page, held inside the screen with 16 points to spare at each
+edge. The close button, Cancel, and Escape close it and discard the input. Save saves all 13
+settings in one transaction. The chosen group stays chosen until the app quits. The other
+three groups take the page's look: their labels sit above the fields in sentence case, the
+number and choice fields go two to a row, and the on and off settings are toggles. Each group
+opens with a line on what it does and when a change applies; these lines replace the old
+footnote. Colour changes apply at the next folder open. The cache size cap and the cache
+folder apply at the next start. Cache format, tile grid size, PSD workers, and large canvas
+threshold are saved and no code reads them yet, and their group lines say so. The neutral
+saturation threshold is the page's slider, from 0 to 1 in steps of 0.01, and the arrow keys
+move it while it has the focus. The other numbers are text fields. The registry clamps them
+on save. While one does not parse, Save stays off, and the field label and the group name in
+the list turn coral, so a fault in a hidden group can be found. The cap row reads
+`Cache size cap (GiB, 0 = off)`, and Cache format offers only `jpeg`. Purge cache acts at
+once and shows a busy strip in the Cache group with the label `Purging cache...`. The gallery
+strip shows too (see "Busy strip"). Save, Cancel, the close button, and Escape wait while it
+runs. A refused purge shows `The cache folder is not safe to purge.` at the left of the
+buttons, and the log has the raw error. The labels stay at the 12 pt body size where the page
+gives 12 and 13 px.
+
+Reason: a purge cannot be undone, so it must not wait for Save. A setting with no reader must
+say so, or the user expects an effect. A short screen must still reach Save.
 
 ## Error card
 

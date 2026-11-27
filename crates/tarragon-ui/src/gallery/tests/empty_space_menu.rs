@@ -138,7 +138,7 @@ fn the_empty_space_menu_greys_paste_in_every_image_scope_and_skips_no_folder() {
         .iter()
         .find(|(text, ..)| text == "Paste")
         .expect("the row shows");
-    assert_eq!(*color, tokens::TEXT_MUTED);
+    assert_eq!(*color, tokens::TEXT_TERTIARY);
     let after = click_row(&ctx, &mut gallery, &seen, "Paste");
     assert!(paste_menu_shows(&after), "a greyed row closed the menu");
     assert_no_events(&mut gallery, "greyed Paste");

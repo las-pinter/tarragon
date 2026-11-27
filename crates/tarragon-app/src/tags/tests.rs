@@ -45,6 +45,7 @@ fn preview() -> Preview {
         dimensions: None,
         size: None,
         format: "PNG".into(),
+        modified: None,
     }));
     preview
 }
@@ -153,7 +154,7 @@ fn a_refresh_fills_the_add_menu_with_the_user_tags_only() {
     refresh_with(&mut preview, &selection(), read_from(&db));
     let mut show = |ui: &mut Ui| preview.show(ui);
     // `unused` is on no file, so only the known list can draw it.
-    let texts = click_text(&ctx, "+ add", &mut show);
+    let texts = click_text(&ctx, "+ Tag", &mut show);
     assert!(texts.contains(&"unused".to_owned()));
     assert!(!texts.contains(&"blue".to_owned()));
     assert!(!texts.contains(&"transparent".to_owned()));

@@ -1,10 +1,11 @@
 # Design deltas
 
-The mockups in `design/mockups/` stay frozen and remain the design of record.
-This file records every place where the application differs from them. Each
+The mockups in `design/mockups/` stay frozen. The flat redesign in
+`design/redesign/` wins over them on looks, and this file wins over both. Each
 entry gives the state before the change, the state after it, and the reason.
 Every colour, layout region, label, and interaction stays as designed unless
-an entry below says otherwise.
+an entry below says otherwise. "Redesign deltas" at the end lists every place
+where the application still differs from the redesign pages.
 
 ## Cache directory label
 
@@ -26,8 +27,9 @@ After: the first tier is 320 px on the longest edge. The settings text reads
 `Cache tiers: 320, 1024, full.` and the log line reads
 `tier 320 hit for sketch_014.png`. The app no longer reads old 256 folders.
 
-Reason: a grid cell of 160 pt at a display scale of 2.0 needs 320 px, so the
-thumbnail stays sharp up to that scale.
+Reason: a 160 pt thumbnail at a display scale of 2.0 needs 320 px. The grid
+tracks start at 168 pt and stretch to fill the row, so at a high display scale
+or in a narrow pane a thumbnail can be drawn larger than its 320 px tier.
 
 ## Outside references in the design folder
 
@@ -180,13 +182,14 @@ extra-small spacing of 4 px by 8 px. Panel titles use the semibold weight of
 title bar, the menu bar, the sidebar, the preview, and the log each take a one
 pixel separator border in the stylesheet, and the frame paints none of them.
 
-After: the frame draws the title bar text at the heading size, gives the panel
-titles the extra-small vertical padding and the Roboto Medium face, and paints
-no separator borders.
+After: the frame draws the wordmark in the top bar at the redesign's title size,
+gives the panel titles the extra-small vertical padding and the Roboto Medium
+face, and paints no separator borders.
 
 Reason: these four differences are visual only. Every colour, region, label,
 and interaction stays as designed. egui 0.36.2 has no weight selection, so the
-Medium face is the nearest vendored weight to 600.
+Medium face stands in for 600, keeping the lighter of the two vendored faces
+that sit beside it.
 
 ## Spacing and radii
 
@@ -199,16 +202,31 @@ metric layer.
 
 Reason: one value set for the stylesheet and the code keeps the two in step.
 
-## Grid hover scale
+## Grid tile
 
 Before: `design/mockups/theme.css` line 765 scales a hovered cell by 1.02 over
-150 ms, so the hovered cell lifts above its neighbours.
+150 ms, and a cell is a bordered card. `design/redesign/main-window.html` draws
+no card: a square thumbnail with an 8 px radius, the name under it, a 2 px
+`#e06540` selection outline 3 px outside the square, a hover outline in
+`#3d3b44`, and a bottom bar with the pixel size and the file size.
 
-After: the tile keeps its size. The hover fade changes the fill, the border,
-and the shadow only.
+After: the tile is the redesign tile. The picture is fitted inside the square
+on the field fill and never cropped, so a wide or tall picture leaves bands of
+the field fill. Only the picture corners that meet a corner of the square are
+round. The name sits 8 pt under the square in the tertiary text, and a selected
+name takes the light coral and the Roboto Medium face. Hover shows the outline
+and the info bar at once, with no scale, fade, or shadow. The bar reads
+`W × H · size`, and only the file size when the pixel size is not known yet.
+The pixel size comes from the stored row when the file has not changed since,
+or from a new render. The format badge sits 8 pt inside the top-left corner on
+the base fill with the format text colour. The grid tracks are at least 168 pt
+wide, with 16 pt between columns and 20 pt between rows, and the grid keeps a
+5 pt edge so an outline at the side is not cut off. The name stays at the
+12 pt body size.
 
-Reason: a scaled tile overlaps its neighbours, and the grid does not reflow
-its clip rect for the larger cell. The difference is visual only.
+Reason: a scaled tile overlaps its neighbours. A cropped picture would hide
+part of a reference image. A file that changed since its row was written may
+have a new pixel size, so its old one is not shown.
 
 ## New row fade
 
@@ -250,11 +268,14 @@ caption size.
 
 Before: the multi-select badge is an 18 pt coral circle with an 11 pt bold `v`
 glyph, as `design/mockups/theme.css` line 810 shows.
+`design/redesign/main-multi-select.html` draws a 22 px `#e06540` circle with a
+dark check.
 
-After: the badge paints the same circle and draws the check with two line
-segments. The filter menu tick, a `v` in `design/mockups/filter-tags.html`
-line 47, is also a painted check. It is amber when checked. An unchecked row
-keeps a blank of the same width.
+After: the badge is the redesign's 22 pt circle, 8 pt inside the top-right
+corner of the square, with the check painted as a dark line. The filter menu
+tick, a `v` in `design/mockups/filter-tags.html` line 47, is also a painted
+check. It is amber when checked. An unchecked row keeps a blank of the same
+width.
 
 Reason: the vendored Roboto family has no check glyph, and a text `v` reads as
 a letter at the caption size. The difference is visual only.
@@ -265,11 +286,10 @@ Before: `design/mockups/theme.css` drew a selected tile with two frames: the
 1.5 px coral border of `.cell.selected`, and a second 1 px coral outline on the
 thumbnail (`.cell.selected .thumb`, with an offset of -1 px).
 
-After: a selected tile draws one frame, the cell border. The mockup rule for
-the thumbnail outline is removed.
+After: a selected tile draws one frame, the redesign's 2 pt outline 3 pt
+outside the square (see "Grid tile").
 
-Reason: the second stroke over the thumbnail doubled the frame. One frame marks
-the selection clearly.
+Reason: the redesign draws one outline, and a second stroke doubled the frame.
 
 ## Log levels and toolbar
 
@@ -308,43 +328,47 @@ are not visible. Artists need to find images with transparency.
 
 ## Library sidebar layout
 
-Before: `design/mockups/library.html` shows one column. The folder tree and the
-FAVORITES section share it, and the favorites follow the tree.
+Before: `design/redesign/main-window.html` shows one column. The FOLDERS list,
+the FAVORITES list, and the "Add current folder" action share it, and the
+favorites follow the tree.
 
-After: the FAVORITES section sits in its own panel above the buttons. The panel
-fits its rows, up to half the dock, and scrolls on its own. The folder tree
-scrolls above it. Sidebar rows are painted directly. They draw no focus outline
-and publish no screen-reader information. The section heads FOLDERS and
-FAVORITES use the Roboto Medium face, the nearest vendored weight to the
-mockup's 600, with the mockup's 0.04 em letter spacing.
+After: the FAVORITES head, its rows, and "Add current folder" sit in their own
+panel at the bottom of the sidebar. The panel fits its rows, up to half the
+dock, and scrolls on its own. The folder tree scrolls above it. Rows, heads,
+carets, folder outlines, stars, and the add action follow the page's sizes and
+colours. Sidebar rows are painted directly. They draw no focus outline and
+publish no screen-reader information. The section heads use the Roboto Medium
+face in place of the page's 600. The row text stays at the
+12 pt body size where the page gives 13 px. A tree row shows its folder's
+image count at the right, as the page does; a folder with no images directly
+in it, and a folder that cannot be listed, show none. Favorites show no
+count, as on the page.
 
 Reason: a tall folder tree would push the favorites out of view, so the
-favorites sit in their own panel and stay visible. The mockups define no focus
-state for these rows.
+favorites sit in their own panel and stay visible. The page defines no focus
+state for these rows. The body size is the app-wide 12 pt.
 
 ## Favorites drag
 
-Before: `design/mockups/favorites-reorder.html` shows the `::` grip
-(`.grip`, `design/mockups/theme.css` line 437) only in the reorder state. The
-head reads "(drag to reorder)", and a hint line follows the list. The drop line
-(`.drop-line`, lines 430-435) takes 8 px of layout: 3 px margins and a 2 px
-line. The lifted row (`.fav-row.dragging`, lines 424-428) has a dashed border
-that follows the row radius.
+Before: `design/redesign/main-window.html` shows the favorites at rest only: no
+grip, no reorder state, and no remove control.
 
-After: every favorite row shows the grip. The head reads FAVORITES, and no hint
-line is drawn. The cursor is a grab hand over the grip and a closed hand during
-a drag. The lifted row follows the pointer, held inside the list, and the other
-rows slide to the places they take if the row is dropped there; the gap they
-leave is the drop target, so no drop line is drawn. Inside the favorites area,
-a pointer above or below the list means the first or the last place. On
-release, Escape, or a drop outside the favorites area, the rows slide to their
-final places. Rows also slide up when a favorite above them is removed. The
-dashed border of the lifted row has square corners.
+After: the whole row is the drag handle. A press that moves past egui's drag
+threshold starts a drag, and a press that does not is a click that opens the
+folder. The cursor is a closed hand during a drag. The lifted row follows the
+pointer, held inside the list, and the other rows slide to the places they take
+if the row is dropped there; the gap they leave is the drop target, so no drop
+line is drawn. Inside the favorites area, a pointer above or below the list
+means the first or the last place. On release, Escape, or a drop outside the
+favorites area, the rows slide to their final places. Rows also slide up when a
+favorite above them is removed. The lifted row has a dashed amber border with
+square corners. A right click on any favorite opens a menu with Remove; no
+Remove button is drawn, so Remove has no keyboard path, like the rest of the
+favorite rows.
 
-Reason: the grip is the only drag handle, so it shows on every row. egui 0.36.2
+Reason: the page draws no handle, so the row itself takes the drag. egui 0.36.2
 has no helper for a rounded dashed rectangle. A dashed path needs hand-built arc
-points, so the border keeps square corners. A permanent grip shows that the
-order can change, so the head text and the hint line add nothing.
+points, so the border keeps square corners.
 
 ## Favorite labels and roots
 
@@ -353,89 +377,122 @@ not define the tree roots. `design/mockups/library.html` lines 38-41 show only
 sample paths such as `sketches/2026-10`.
 
 After: a favorite shows the stored label when it is not blank. Otherwise it
-shows the path below the longest tree root that contains it, for example
-`sketches/2026-10`. A favorite equal to a root shows the folder name of that
-root. A path below no root, or a root with no folder name such as `/`, shows
-the full path. A favorite whose folder is missing shows dim text and a dim
-icon. The tree roots are the home folder and, when it is outside home, the
-folder given on the command line.
+shows its folder name, such as `2026-10`, as `design/redesign/main-window.html`
+does. When several favorites with no stored label share a folder name, each of
+them shows its path below the folder that their parent folders all share:
+`refs/clientA/2026-10` and `refs/clientB/2026-10` show `clientA/2026-10` and
+`clientB/2026-10`. A folder with no name, such as `/`, shows the full path,
+and so do namesakes that share no folder, such as two on different drives. A
+favorite whose folder is missing shows dim text and a dim icon. The tree roots
+are the home folder and, when it is outside home, the folder given on the
+command line.
 
 Reason: the sidebar needs a short name for each favorite and a start point for
-the tree. The home folder holds a user's files by default, and the
-command-line folder must stay reachable when it is outside home.
+the tree. A folder name is the shortest name, and the parts below the shared
+folder are the fewest that tell two namesakes apart. The home folder holds a
+user's files by default, and the command-line folder must stay reachable when
+it is outside home.
 
 ## Preview empty state and picture box
 
 Before: the mockups show the Preview panel only with a selection and define no
 empty state. In `design/mockups/preview-single.html` the picture box grows
 with the pane, with a 260 px minimum set inline. The stylesheet default is
-140 px.
+140 px. `design/redesign/main-window.html` draws the picture on a deep
+`#0d0c10` stage with a 10 px radius, 12 px of padding, and a 560 px minimum
+height.
 
 After: with nothing selected the panel shows the muted hint "Select an image to
-preview it" in the middle. The picture box keeps the mockup's growth and fixes
-the 260 px minimum in the design tokens. The metadata and the tags sit below
-it. A pane that is too short keeps the 260 px box and scrolls. The picture is
-scaled to fit inside the box with its aspect ratio kept.
+preview it" in the middle. The picture sits on the redesign's deep stage, with
+its radius and padding, and takes the height the details leave. The picture
+has 4 pt corners and is scaled to fit inside the stage with its aspect ratio
+kept. The stage keeps the 260 pt minimum of the first mockups, not the page's
+560 px. A pane too short for the stage and the details scrolls.
 
-Reason: a blank panel gives no hint about what to do.
+Reason: a blank panel gives no hint about what to do. A 560 pt minimum would
+push the name and the open button out of view on a laptop screen.
 
-## Preview colour squares
+## Preview colour bars
 
 Before: `design/mockups/preview-single.html` shows ten squares, one for each
-original bucket. The checkerboard has no colour values in the stylesheet.
+original bucket, and a click on a square toggled that colour tag.
+`design/redesign/main-window.html` shows small rounded bars of the image's own
+colours, each as wide as its share of the picture.
 
-After: the row has twelve squares: the eleven colour buckets, then a
-checkerboard square for `transparent` at the end. The two checkerboard greys
-are `#b0b0b0` and `#707070`, which have no stylesheet row. The row is hidden
-when colour tags are turned off in the settings. The opacity of a square follows
-the mockup: 1.0 when all selected images carry the colour, 0.5 when some do,
-and 0.3 when none do.
+After: the row shows one 18 by 8 pt bar for each colour the selection carries,
+in the order of the filter swatches. All bars have one width, because the app
+stores no colour share. A colour that only some of the selected images carry
+is drawn at half opacity. The `transparent` tag draws a checkerboard bar in
+`#b0b0b0` and `#707070`. The bars sit at the start of the tag row. They are
+not buttons: a click does nothing. The row has no bars when colour tags are
+turned off in the settings.
 
-Reason: the app has eleven buckets and the transparency tag, so the row shows
-them all. The row hides when colour tags are off, because its squares would act
-on tags that do not exist then.
+Reason: the share of each colour is not stored, and the page's bars show
+colours, not controls. A colour tag set by hand did not survive the next
+render, which writes the colour tags from the picture again.
 
 ## Preview tag pills and the add menu
 
 Before: in the mockup the remove x on a tag pill always shows, and a pill has
 3 px of vertical padding. The menu has a minimum width of 210 px.
+`design/redesign/main-window.html` gives each tag a colour pair of the palette
+and ends the row with a "+ Tag" pill, but says nothing about how a tag gets
+its colour.
 
-After: the x shows only while the pointer is over the pill. Its room is always
-reserved, so the pill does not change size on hover. A pill has 2 px of vertical
-padding, which is half of the 4 px spacing step. The "+ add" menu keeps the
-tags that only some of the selected images carry, so the user can apply them to
-all of them. It leaves out a tag only when every selected image has it. The
-210 px minimum width is dropped. The menu is as wide as its widest row, up to
-the width of the pane, and a long name ends in an ellipsis. The menu shows at
-most eight rows and then scrolls. "Create new..." stays in view below them.
+After: a pill takes one of the seven tag colour pairs of `palette.html`
+(vinous, sage, navy, umber, plum, teal, olive), picked from the tag name, so
+a tag keeps its colour across selections and runs. Pills have the page's
+padding and radius and use the Roboto Medium face. The x shows only while the
+pointer is over the pill. Its room is always reserved, so the pill does not
+change size on hover. The "+ Tag" pill follows the last tag on the same row.
+Its menu keeps the tags that only some of the selected images carry, so the
+user can apply them to all of them. It leaves out a tag only when every
+selected image has it. The 210 px minimum width is dropped. The menu is as
+wide as its widest row, up to the width of the pane, and a long name ends in
+an ellipsis. The menu shows at most eight rows and then scrolls.
+"Create new..." stays in view below them.
 
-Reason: a permanent x on every pill adds noise, and the mockup has no spacing
-token for 3 px. A tag that only some images carry still needs a way to reach the
-rest. A fixed wide menu could run past the edge of a narrow pane.
+Reason: the page shows colours but no rule, and a colour that changed with
+every selection would carry no meaning. A permanent x on every pill adds
+noise. A tag that only some images carry still needs a way to reach the rest.
+A fixed wide menu could run past the edge of a narrow pane.
 
 ## Preview mosaic
 
-Before: `design/mockups/preview-mosaic.html` shows a grid of cells for a
-multi-selection: equal columns, 120 px tall cells, and a short last row that
-leaves a hole. Each cell has a file-type badge. The mockup shows no caption
-under the grid.
+Before: `design/redesign/main-multi-select.html` and the redesign README fill
+the whole Preview height with the mosaic: one column for two images, two for
+three to six, three for seven to nine, rows that stretch to the height, and
+first cells two columns wide when the last row is not full. Each cell is
+filled edge to edge with its picture and carries the format badge. Under it,
+"6 selected" over "18.6 MB in all" sits beside an "Edit tags" button and an
+"Open all in Krita" button. The page shows no tag row for a multi-selection
+and gives no rule past nine images.
 
-After: the pictures sit in balanced rows. The row count is the one of a
-near-square grid, and the pictures spread over the rows as evenly as possible,
-the fuller rows first: 5 pictures give 3 and 2, 7 give 3, 2, and 2. Each cell
-has the shape of its picture, held between 1:4 and 4:1, and the cells of a row
-share the full pane width, so the row height follows. A row is at most as tall
-as the single picture box; a row held at that height is centred. When more
-images are selected than the grid shows, a caption such as "+3 more" sits
-under the grid. The cells draw no file-type badge yet, because
-the Preview has no format data for them. There are no boxes for a picture that
-is still loading or for an empty cell yet.
+After: the mosaic takes the height the footer leaves, with the 260 pt minimum
+of the single picture, and it is laid out by rows, not by the README's columns.
+The widest row holds the square root of the count rounded up, and the rows are
+as few as that allows. The rows differ by at most one image, and the longer
+rows come first: two images sit side by side in one row, three give two over
+one, five give three over two, seven give three over two over two, and ten give
+four over three over three. Each row splits the full width among its images, so
+a short row has wider cells, and all rows share the height. The images read
+left to right, then down, in the order of the selection. The
+`max_multi_preview` setting still caps the cells. A cell is the field fill with
+an 8 pt radius, the picture is fitted whole inside it, never cropped, and the
+grid's format badge sits in the top left. The footer follows the page. The size
+line adds " · +3 more" when the cap hides some of the selection. The open
+button names the app when every selected file opens in the same named app, and
+reads "Open all" otherwise, or when the name would take more than 40 percent of
+the row; it opens the files as "Open N in editor" does. "Edit tags" shows the
+tag row (the colour bars, the pills, and "+ Tag") under the footer and hides it
+again, and the row stays open across selections until it is hidden. There are
+no boxes for a picture that is still loading.
 
-Reason: fixed-height cells in equal columns left pictures small and the last
-row short; balanced rows of picture-shaped cells use the full width. The
-caption tells the user that the grid is not the whole selection.
-The badge and the loading and empty boxes wait for data the Preview does not
-have yet.
+Reason: rows read left to right in the order the images were picked, so the
+first picks stay at the top left, and a short row of wider cells leaves no slot
+empty. A cropped cell would hide part of a reference image. The square root
+keeps the cells near square at any count. The tag row is the only place that
+removes a tag from many images at once, so it stays one click away.
 
 ## Filter count pill
 
@@ -449,15 +506,19 @@ Reason: "1 filters active" reads as an error.
 ## Filter colour row
 
 Before: `design/mockups/filter-colors.html` shows ten swatches. The row is always
-there.
+there. `design/redesign/main-window.html` draws twelve round 24 px swatches,
+with a 2 px light ring 2 px outside a held swatch, and no hover or focus state.
 
-After: the row has twelve swatches of the same size: the eleven buckets, then the
-checkerboard `transparent` swatch. The outline states match
-`design/mockups/theme.css` lines 616-630. The row is hidden when the
-`color_tag_enabled` setting is off.
+After: the row has the redesign's twelve round swatches: the eleven buckets,
+then the checkerboard `transparent` swatch, cut from 4 by 4 cells with the
+top-left cell dark, as the page's pattern draws it. A held swatch takes the
+light ring. A hovered swatch takes the same ring in the raised surface colour,
+and a swatch with the keyboard focus takes it in coral, which wins over the
+held ring. The row is hidden when the `color_tag_enabled` setting is off.
 
 Reason: the app has eleven buckets and the transparency tag. With colour tags
-off, the row has nothing to filter.
+off, the row has nothing to filter. The page defines no hover or focus state,
+and a swatch can be reached with the keyboard, so it needs both.
 
 ## Folder labels
 
@@ -481,17 +542,35 @@ filter pill and the sort pills keep their size.
 
 Reason: a pill that shrinks or wraps becomes hard to read and hard to click.
 
-## Filter bar rows
+## Filter bar row
 
 Before: `design/mockups/main-window.html` lines 57-71 put the swatches and the
-"Filter Tags" button in one `filterbar` row.
+"Filter Tags" button in one `filterbar` row. `design/redesign/main-window.html`
+draws one wrapping row on the panel fill: the swatches, a divider, a chip for
+each held filter, then the "Tags" and "Clear" text actions. The chip area grows,
+so the actions sit at the right end. "Clear" always shows, and no row reaches
+the folder filter.
 
-After: the bar stacks three rows below the info bar with 12 pt gaps: colours,
-then tags, then folders. The tag button and its chips share the tags row. The
-folder button and its chips share the folders row.
+After: the bar is the redesign row, with its padding, gaps, chips, divider, and
+radius. The chips list the held colours in swatch order, then the tags and the
+folders in the order they were added. A colour chip shows the small swatch, a
+tag chip a coral dot, and a folder chip an amber dot. In the All images scope a
+coral "Folders" action sits between "Tags" and "Clear" and opens the folder
+menu. A held folder keeps its chip in the Folder scope. "Clear" shows only while
+the bar holds a filter, and it keeps the search text, which the search field
+owns. The actions sit at the right of the first line when the bar is wide enough
+for them beside a full line of swatches. A narrower bar wraps the swatches and
+chips, and the actions take a line of their own below them, at its right end.
+The divider shows only between swatches and chips. A chip name too wide for one
+line ends in an ellipsis, and its tooltip shows the whole name. The chip x and
+the text actions take the keyboard focus and show the coral focus ring. The
+action and chip text stays at the 12 pt body size where the page gives 13 px
+and 12 px.
 
-Reason: the chips of each kind wrap in their own row. The folder row shows only
-in All Images scope, or when it has chips.
+Reason: the folder filter needs a way in, and the page's text action is the
+smallest one that matches it. A "Clear" with nothing to clear does nothing. In a
+narrow gallery, actions kept beside the swatches would squeeze them into many
+short lines.
 
 ## Gallery minimum width
 
@@ -500,14 +579,14 @@ Before: the mockups set no minimum width for the Gallery panel.
 After: the Gallery panel is never narrower than 260 pt. The dock keeps this
 width when the user drags a separator.
 
-Reason: below about 224 pt the info bar clips on the left. The pills and the
-info text need the width.
+Reason: below about 224 pt the info row clips on the left. The pills need the
+width.
 
-## All Images scope
+## All images scope
 
-Before: the mockups do not say which files All Images lists.
+Before: the mockups do not say which files All images lists.
 
-After: All Images shows the whole library, read from the `thumbnails` rows. It
+After: All images shows the whole library, read from the `thumbnails` rows. It
 includes files that no longer exist on disk. They stay in the list until a
 later rescan step removes their rows. The Python application behaves the same.
 
@@ -519,7 +598,7 @@ Reason: the rows give the library without a scan of every folder. A scan of
 Before: no mockup shows how to rename or delete a tag.
 `design/mockups/tag-edit.html` shows only "Create new..." and its input.
 
-After: a "Manage tags..." row sits at the bottom of the Filter Tags menu, under
+After: a "Manage tags..." row sits at the bottom of the Tags menu, under
 a separator. A click closes the menu and opens a small window inside the app
 window. The window lists the user tags in name order with their image counts.
 Each row has an inline Rename and Delete. "Create new..." stays in the Preview
@@ -562,20 +641,6 @@ texture until the size changes or the texture is evicted. This is a known limit.
 Reason: the 1024 tier is the cache tier made for the preview. The 320 tier is
 the grid thumbnail, which is better than an empty box. The budget caps the
 texture memory.
-
-## Preview colour square click
-
-Before: the mockup shows the colour squares and does not say what a click does.
-
-After: a click on a colour square toggles that colour tag on all selected
-files. When every selected file has the colour, the click removes it from all of
-them. Otherwise the click adds it to all of them. The Python application did the
-same. The next render of a file replaces its colour tags, so a manual change
-does not survive it.
-
-Reason: the squares show the state of the colour tags, so a click that changes
-them is the expected action. The render replaces the colour tags because they
-come from the picture.
 
 ## Colour tag timing and settings
 
@@ -633,57 +698,102 @@ folder is never deleted.
 Reason: old rows and cache files would grow without limit. Keeping the tags
 protects the work of the user when a file is moved away and back.
 
-## Preview format detail
+## Preview details and open button
 
-Before: the mockup shows a format in the details of a single image and does not
-say where it comes from.
+Before: the mockups show a Metadata block of label and value rows, and give a
+format without saying where it comes from. `design/redesign/main-window.html`
+puts the name over one line of "pixel size · file size · format · date" beside an
+"Open in Krita" button and an arrow button.
 
-After: the format is the file extension in capitals. A file with no extension
-shows the unknown mark.
+After: the name uses the title size in Roboto Medium and ends in an ellipsis.
+The line under it reads `W × H · size · FORMAT · date`, and a value that is not
+known is left out. The format is the file extension in capitals, or
+`Unknown`. The date is the modified time of the file, as stored with its row
+or read from the disk, in the time zone the app had at start, as
+`Mon D, YYYY`. The coral button opens the file:
+
+- With an editor row for the extension, or for `*`, it opens with that
+  template, and the button names the program with a capital first letter,
+  such as "Open in Krita".
+- With no row, it opens with the system opener. On Linux the button names
+  the default app from its desktop entry, looked up in the background, such
+  as "Open in GIMP". The button reads "Open" until the name is known, when no
+  name is found, after an `xdg-mime` query passes its deadline, and on Windows
+  and macOS.
+
+The arrow button lists the extension row, the `*` row when it differs, and
+the default app, by name when known and as "Default app" otherwise. A row
+opens the file with that app.
 
 Reason: the file extension is the only format fact the Preview can read
-without opening the file.
+without opening the file. The app stores no display name for an editor, so the
+program name and the desktop entry are the names it has. A session that
+crosses a change of daylight saving time keeps the start offset, as the log
+times do.
 
-## Busy strip
+## Status bar
 
 Before: the mockups `scanning-busy.html` and `busy-states.html` show a strip with
-`Working...` for a scan, a purge, and a decode. It is hidden when idle. The
-mockup stylesheet lists it between the info bar and the filters.
+`Working...` in the gallery for a scan, a purge, and a decode. The redesign pages
+`main-window.html` and `main-multi-select.html` instead end the window with a status
+bar: one segment for each job (a 120 by 4 px amber bar and a text such as
+`Indexing colors 1,204 / 1,880`) and the selection count at the right.
 
-After: the gallery shows the strip while a folder or the library opens, and while
-a purge waits or runs. It stays until the last one ends. It is the last block of
-the top panel, below the filter bar, so only the grid moves down by the strip
-height while it shows. The filter buttons stay still. The strip takes no space when
-idle. The cache clean-up at start does not show it. The Preferences purge strip
-uses the same painter. No decode strip exists. The strip ends when the file list is
-ready, not when the tiles render. Each tile shows its own loading cell. While a
-folder opens, the info bar names that folder. The count still belongs to the files
-on screen, so a switch from one folder to another shows the new name with the old
-count, and a first open shows 0. The mockup shows the count of the new folder. All
-Images keeps its own name. When an open fails, the info bar shows the old folder again.
+After: the window ends with the status bar of the redesign pages, on the panel fill,
+28 points tall, always shown. Each running job has a segment, in start order, and a
+segment goes when its job ends. A folder open shows `Scanning N files` with the
+supported files found so far, and a library open shows `Loading library`; neither
+has a total, so a block slides along the bar. When the open ends, `Rendering
+thumbnails done / total` counts the tiles that have a picture or an error, and
+`Indexing colors done / total` counts those of the files that had no colours yet.
+Both wait while an open or other work runs, because their counts belong to the
+files on screen. Only an open starts these counts, so rendering again or retrying
+tiles that already show adds no segment. A purge shows `Purging cache done / total` in bytes, with a sliding
+block until a walk of the cache gives the total. Numbers group thousands with commas.
+The start-up cache clean-up shows nothing. "N selected" sits at the right end and
+leaves the gallery info row. The gallery has no busy strip. While a folder opens, the
+gallery header names that folder. The count still belongs to the files on screen, so
+a switch from one folder to another shows the new name with the old count, and a
+first open shows 0. The All images scope keeps its own name while a folder opens.
+When an open fails, the header shows the old folder again.
 
-Reason: one state machine runs all the thumbnail work, so one flag is enough. Below
-the filter bar, the strip does not move the controls under the pointer. A decode
-strip would need a count of tile renders, and the tile cells show that already.
+Reason: one bar for every job keeps the gallery still while work runs, and each count
+comes from a number the work already has. The clean-up at start is upkeep nobody
+asked for. A colour count is done when its tile settles, because the worker extracts
+the colours before it sends the tile.
 
 ## Preferences dialog
 
 Before: the mockup dialog has a close mark in its title bar and four groups of settings. It
 has no cap row, shows PNG for the cache format, and has no footnote.
 
-After: the window is 520 points wide, with the default title bar and no close mark. Cancel and
-Escape close it and discard the input. OK saves all 13 settings in one transaction. The groups
-scroll on a short screen, and the footnote and the buttons stay in view. Purge Cache acts at
-once and shows a busy strip in the dialog with the label `Purging cache...`. The gallery strip
-shows too (see "Busy strip"). Cancel, OK, and Escape wait while it runs. A refused purge shows
-`The cache folder is not safe to purge.` and the log has the raw error. The cap row reads
-`Cache size cap (GiB, 0 = off)`. Cache Format offers only `jpeg`. Number fields are text. The
-registry clamps them on save, and OK stays off while one does not parse. The cache size cap and
-the cache folder apply at the next start. Cache format, tile grid size, PSD workers, and large
-canvas threshold are saved and no code reads them yet.
+The redesign page `design/redesign/settings.html` shows an 800 by 560 px dialog: a title
+row with a close button, a list of the four groups on the left, one group shown at the right
+on the base fill, and Cancel and Save at the bottom. It draws only the Color tagging group,
+with its fields in two columns, a toggle, and a slider with the bucket colours under it.
 
-Reason: a purge cannot be undone, so it must not wait for OK. A setting with no reader must
-say so, or the user expects an effect.
+After: the dialog follows the page, held inside the screen with 16 points to spare at each
+edge. The close button, Cancel, and Escape close it and discard the input. Save saves all 13
+settings in one transaction. The chosen group stays chosen until the app quits. The other
+three groups take the page's look: their labels sit above the fields in sentence case, the
+number and choice fields go two to a row, and the on and off settings are toggles. Each group
+opens with a line on what it does and when a change applies; these lines replace the old
+footnote. Colour changes apply at the next folder open. The cache size cap and the cache
+folder apply at the next start. Cache format, tile grid size, PSD workers, and large canvas
+threshold are saved and no code reads them yet, and their group lines say so. The neutral
+saturation threshold is the page's slider, from 0 to 1 in steps of 0.01, and the arrow keys
+move it while it has the focus. The other numbers are text fields. The registry clamps them
+on save. While one does not parse, Save stays off, and the field label and the group name in
+the list turn coral, so a fault in a hidden group can be found. The cap row reads
+`Cache size cap (GiB, 0 = off)`, and Cache format offers only `jpeg`. Purge cache acts at
+once and shows a busy strip in the Cache group with the label `Purging cache...`. The
+status bar shows the purge too (see "Status bar"). Save, Cancel, the close button, and
+Escape wait while it runs. A refused purge shows `The cache folder is not safe to purge.`
+at the left of the buttons, and the log has the raw error. The labels stay at the 12 pt
+body size where the page gives 12 and 13 px.
+
+Reason: a purge cannot be undone, so it must not wait for Save. A setting with no reader must
+say so, or the user expects an effect. A short screen must still reach Save.
 
 ## Error card
 
@@ -786,7 +896,7 @@ drawn dim at the right.
   All scope.
 - Show in file manager opens the folder of the file through the system opener
   (`xdg-open` on Linux). Copy path puts the file path on the clipboard as text.
-- Add tag... opens, at the pointer, the same menu as the Preview "+ add" button: the
+- Add tag... opens, at the pointer, the same menu as the Preview "+ Tag" button: the
   known tags and Create new.... The chosen tag goes to every selected file.
 - Regenerate Thumbnail queues a new render of each selected file.
 - Rename... opens a dialog with the name without its extension. The extension shows
@@ -876,7 +986,8 @@ a big line, and a hint.
   All scope. So the All scope with no image shows the first run card.
 - The Open Folder buttons do the same as File > Open Folder...
 - No card shows while a folder opens, so the empty card does not flash before the first cell.
-- The status bar line is not built. The app has no status bar.
+- The mockup's status line ("No folder open", "Folder scanned - 0 supported files") is not
+  built. The status bar shows only the running jobs and the selection (see "Status bar").
 
 Reason: the empty card must name only the formats the scanner indexes. A filter with no result
 needs its own text, and a button there would not help.
@@ -886,7 +997,7 @@ needs its own text, and a button there would not help.
 Before: the mockup menu bar shows no shortcut text and no Quit item. The Python application
 had mnemonics only, such as `&File`.
 
-After: five shortcuts exist. The command key is Ctrl on Linux and Windows, and Cmd on macOS.
+After: six shortcuts exist. The command key is Ctrl on Linux and Windows, and Cmd on macOS.
 A chord with an extra Shift or Alt does not act.
 
 | Shortcut | Action                                        | Off when                                       |
@@ -894,21 +1005,78 @@ A chord with an extra Shift or Alt does not act.
 | Ctrl+O   | Open Folder, as File > Open Folder...         | A dialog window is open                        |
 | Ctrl+,   | Preferences, as Settings > Preferences...     | A dialog window is open                        |
 | Ctrl+F   | Focus the search field and select its text    | A dialog window is open                        |
+| Ctrl+K   | The same as Ctrl+F                            | A dialog window is open                        |
 | Ctrl+A   | Select every visible image                    | A dialog window is open, or a text field has focus |
 | Enter    | Open the selected image in its editor, when exactly one image is selected | A dialog window is open, or a widget other than a tile has focus |
 
 - The windows are the crash card, Preferences, and Manage tags. While one is open, no
   shortcut acts.
+- Ctrl+K is the key the redesign top bar prints in its search field, so both keys act.
 - Ctrl+A leaves a focused text field its own select all. Focus on a tile or a button does
   not block it. An image that the search hides is not selected.
-- No menu bar menu shows these shortcuts, because the mockup shows none. This list is the
-  only place that names them. The grid context menu does show its own keys, see "Grid
-  context menu".
+- No menu bar menu shows these shortcuts, because neither the mockup nor the redesign menu
+  bar shows any. This list is the only place that names them. The grid context menu does
+  show its own keys, see "Grid context menu".
 - Enter needs no modifier. With none or several images selected, it does nothing and is not
   consumed. A focused button or text field keeps its own Enter.
 - Not built: Escape to clear the selection, arrow keys, Ctrl+Q, and F5 to rescan. The File menu has a Quit item, which the mockup lacks. Each
   other key needs its own decision. The grid keys are in "Keyboard shortcuts for the grid".
 - egui has no mnemonics, so Alt+F is not supported.
 
-Reason: the shortcuts save a trip to the menu. The mockup wins on looks, so the menus stay
-free of shortcut text.
+Reason: the shortcuts save a trip to the menu. The menu bar menus on both design sets carry
+no shortcut text, so they stay free of it.
+
+## Redesign deltas
+
+Before: `design/redesign/` draws the main window, the multi-selection, the
+components, and the Color tagging page of the settings.
+
+After: the app follows those pages except in the places below. An item that
+names a section holds its detail there.
+
+- Body text stays at 12 pt where the pages give 13 px. Rows, fields, and
+  buttons keep the pages' heights.
+- Weights of 600 use Roboto Medium; egui cannot select a weight, and the
+  bundled faces are Regular, Medium, and Bold. See "Dock chrome".
+- The text field focus ring is the light coral `#f0997b`, not `#e06540`.
+  egui draws it from the selection stroke, which also colours a chosen option
+  on the `#4a1b0c` fill, where only the light coral passes 4.5:1.
+- The search hint reads "Search file names" where the page prints "Search
+  files and tags", because the search matches file names only.
+- The gallery keeps a row under the header with the sort pills and the filter
+  pill. The pages draw no such row, and the app has no other place for the
+  sort order and the filter count. See "Sort pill styling".
+- The favorites sit in their own panel at the bottom of the sidebar. See
+  "Library sidebar layout".
+- The All images scope adds a "Folders" action to the filter bar. See "Filter
+  bar row".
+- Pictures in the grid and in the mosaic are fitted, never cropped. See "Grid
+  tile" and "Preview mosaic".
+- The mosaic is laid out in balanced rows, with the longer rows first, in
+  place of the README's columns and two-column cells. See "Preview mosaic".
+- A favorite shows its folder name, and namesakes show the path below their
+  shared folder. See "Favorite labels and roots".
+- The File, View, and Settings menu buttons take the raised `#3d3b44` fill
+  and the primary text under the pointer and while open. The pages draw them
+  at rest only, and the hover step `#2a2836` is too faint on the `#1c1b22`
+  bar. The rows of these menus and of the panel title menu are drawn like the
+  page's context menu rows, with the `#4a1b0c` hover fill and the `#f0997b`
+  text, because the hover step is the menu fill itself. The View menu marks
+  each shown panel with the amber tick of the Tags menu.
+- The preview colour bars all have the same width, because no colour share is
+  stored. See "Preview colour bars".
+- The grid context menu keeps the app's items and keys. The page's "Open
+  with...", "Edit tags" on T, "Duplicate" on Ctrl D, and "Move to trash" are
+  not built as drawn; the app has "Add tag...", "Duplicate" with no key, and
+  "Delete". A new action or key needs its own decision. See "Grid context
+  menu" and "Keyboard shortcuts".
+- The open button names the app only when it can find a name. See "Preview
+  details and open button".
+- Rendering again or retrying tiles that already show adds no status bar
+  segment. See "Status bar".
+- The other three settings groups take the Color tagging page's look. See
+  "Preferences dialog".
+
+Reason: each item either keeps a feature that the pages do not draw, keeps text
+true to what the app does, or follows a limit of egui 0.36.2 or of the bundled
+fonts.

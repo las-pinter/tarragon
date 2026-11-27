@@ -8,11 +8,15 @@
 //! stay zero until a render fills them.
 //!
 //! The optional watcher reports a change in the open folder after a 500 ms
-//! debounce. It watches only while a folder is open.
+//! debounce. It watches only while a folder is open. A second watcher holds a
+//! changing set of folders, so the sidebar counts follow changes; `count`
+//! gives the number of supported images directly in one folder.
 //!
 //! This crate performs I/O. Among the tarragon crates it depends on
 //! `tarragon-core` only.
 
+pub mod count;
 pub mod extensions;
 pub mod scan;
 pub mod watch;
+pub mod watch_set;

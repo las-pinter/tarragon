@@ -365,6 +365,7 @@ fn system_opener(file: &Path) -> Launch {
     }
 }
 
+pub mod choices;
 #[cfg(target_os = "linux")]
 mod desktop;
 mod exec;

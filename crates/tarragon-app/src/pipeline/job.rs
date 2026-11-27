@@ -76,6 +76,9 @@ pub struct ThumbResult {
     pub key: PathBuf,
     /// The 320 px thumbnail as RGBA8, or the failure.
     pub outcome: Result<RgbaImage, ThumbError>,
+    /// The pixel size of the original after a fresh render. A cache hit gives
+    /// none, because the stored row already gave it at the open.
+    pub dimensions: Option<(u32, u32)>,
 }
 
 /// One unit of work for a worker.
@@ -98,6 +101,14 @@ pub(super) struct Job {
     /// True when a cache hit must still extract colors, because the path has
     /// no `auto_color` tag yet. A render always extracts.
     pub(super) needs_colors: bool,
+}
+
+/// The paths whose job extracts colors because the file has none yet.
+pub(super) fn color_keys(jobs: &[Job]) -> HashSet<PathBuf> {
+    jobs.iter()
+        .filter(|job| job.colors.is_some() && job.needs_colors)
+        .map(|job| job.path.clone())
+        .collect()
 }
 
 /// The color tag state read once per open.

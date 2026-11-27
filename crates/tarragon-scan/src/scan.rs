@@ -5,6 +5,7 @@
 //! is four worker threads, counted on logical CPUs, not physical cores.
 
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use rayon::prelude::*;
@@ -65,6 +66,19 @@ pub fn build_pool() -> Result<rayon::ThreadPool, rayon::ThreadPoolBuildError> {
 ///
 /// Returns [`ScanError::ReadFolder`] when the folder exists but cannot read.
 pub fn scan_folder(folder: &Path) -> Result<Vec<FileInfo>, ScanError> {
+    scan_folder_counted(folder, &AtomicU64::new(0))
+}
+
+/// Scan one folder as [`scan_folder`] does, and add one to `found` for each
+/// supported name the listing gives, so another thread can show how many
+/// files the scan has found so far. The count is of names, before the `stat`
+/// calls drop a folder or a broken link, so it can end above the length of
+/// the result.
+///
+/// # Errors
+///
+/// Returns [`ScanError::ReadFolder`] as [`scan_folder`] does.
+pub fn scan_folder_counted(folder: &Path, found: &AtomicU64) -> Result<Vec<FileInfo>, ScanError> {
     let entries = match std::fs::read_dir(folder) {
         Ok(entries) => entries,
         Err(source) => {
@@ -79,7 +93,11 @@ pub fn scan_folder(folder: &Path) -> Result<Vec<FileInfo>, ScanError> {
         }
     };
 
-    let candidates = supported_paths(folder, entries.map(|entry| entry.map(|item| item.path())))?;
+    let candidates = supported_paths(
+        folder,
+        entries.map(|entry| entry.map(|item| item.path())),
+        found,
+    )?;
 
     let mut files: Vec<FileInfo> = candidates
         .par_iter()
@@ -97,6 +115,7 @@ pub fn scan_folder(folder: &Path) -> Result<Vec<FileInfo>, ScanError> {
 fn supported_paths(
     folder: &Path,
     entries: impl Iterator<Item = std::io::Result<PathBuf>>,
+    found: &AtomicU64,
 ) -> Result<Vec<PathBuf>, ScanError> {
     let mut candidates = Vec::new();
     for entry in entries {
@@ -105,6 +124,7 @@ fn supported_paths(
             source,
         })?;
         if is_supported(&path) {
+            found.fetch_add(1, Ordering::Relaxed);
             candidates.push(path);
         }
     }
@@ -145,7 +165,7 @@ mod tests {
     use tarragon_core::error::ScanError;
     use tarragon_db::Database;
 
-    use super::scan_folder;
+    use super::{scan_folder, scan_folder_counted};
     use crate::extensions::{SUPPORTED_EXTENSIONS, is_supported};
 
     /// A temporary folder that removes itself on drop.
@@ -374,7 +394,8 @@ mod tests {
             Ok(PathBuf::from("/x/b.png")),
         ];
 
-        let result = super::supported_paths(Path::new("/x"), entries.into_iter());
+        let result =
+            super::supported_paths(Path::new("/x"), entries.into_iter(), &AtomicU64::new(0));
 
         assert!(
             matches!(result, Err(ScanError::ReadFolder { .. })),
@@ -386,9 +407,28 @@ mod tests {
     fn a_clean_listing_keeps_only_supported_paths() {
         let entries = vec![Ok(PathBuf::from("/x/a.png")), Ok(PathBuf::from("/x/b.txt"))];
 
-        let result = super::supported_paths(Path::new("/x"), entries.into_iter());
+        let result =
+            super::supported_paths(Path::new("/x"), entries.into_iter(), &AtomicU64::new(0));
 
         assert_eq!(result.expect("list"), vec![PathBuf::from("/x/a.png")]);
+    }
+
+    #[test]
+    fn the_counted_scan_adds_one_for_each_supported_name() {
+        let temp = TempDir::new("counted");
+        for name in ["a.png", "b.JPG", "notes.txt", "c.psd"] {
+            std::fs::write(temp.path().join(name), b"x").expect("write a file");
+        }
+        let found = AtomicU64::new(5);
+
+        let files = scan_folder_counted(temp.path(), &found).expect("scan the folder");
+
+        assert_eq!(files.len(), 3);
+        assert_eq!(
+            found.load(Ordering::Relaxed),
+            8,
+            "three names on top of the 5"
+        );
     }
 
     #[cfg(all(unix, not(target_os = "macos")))]

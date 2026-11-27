@@ -1,8 +1,10 @@
 //! Tests for the Library panel.
 
 use super::*;
-use crate::sidebar::paint::ICON_WIDTH;
-use crate::sidebar::row::{CARET_SLOT, GAP};
+use crate::sidebar::favorite::REMOVE_TEXT;
+use crate::sidebar::paint::{CARET_SIZE, ICON_SIZE};
+use crate::sidebar::row::GAP;
+use crate::tokens;
 use egui::vec2;
 use egui::{Color32, Context, Event, Modifiers, PointerButton, Pos2, RawInput, Rect, Shape};
 
@@ -31,7 +33,7 @@ fn favorite(missing: bool) -> FavoriteRow {
 }
 
 /// A panel with root `/r` open over `count` children named `a`, `b`, ..., and one favorite.
-fn panel_with(count: usize) -> Sidebar {
+pub(super) fn panel_with(count: usize) -> Sidebar {
     let mut sidebar = Sidebar::default();
     sidebar.set_roots(vec![PathBuf::from("/r")]);
     let kids = (0..count)
@@ -50,7 +52,7 @@ fn panel_with(count: usize) -> Sidebar {
 }
 
 /// A panel with two tree children.
-fn panel() -> Sidebar {
+pub(super) fn panel() -> Sidebar {
     panel_with(2)
 }
 
@@ -157,7 +159,7 @@ fn salt_0_rows_in_both_lists_act_alone() {
 #[test]
 fn a_caret_click_toggles_and_queues_nothing() {
     let mut sidebar = panel();
-    let to_caret = -(GAP + ICON_WIDTH + GAP + CARET_SLOT / 2.0);
+    let to_caret = -(GAP + ICON_SIZE + GAP + CARET_SIZE / 2.0);
     click(&ready(), &mut sidebar, "r", vec2(to_caret, 5.0));
     assert_eq!(sidebar.take_events(), Vec::<SidebarEvent>::new());
     assert_eq!(sidebar.tree_mut().rows().len(), 1);
@@ -172,22 +174,61 @@ fn a_favorite_click_selects_it_and_opens_it() {
     assert_eq!(sidebar.open_folder(), Some(Path::new("/f/x")));
 }
 
+/// Right-click the text `wanted`, after the layout settles, so its menu opens.
+fn right_click(ctx: &Context, sidebar: &mut Sidebar, wanted: &str) {
+    warm_up(ctx, sidebar);
+    let pos = find(&frame(ctx, sidebar, Vec::new()), wanted).pos + vec2(2.0, 5.0);
+    let press = |pressed| Event::PointerButton {
+        pos,
+        button: PointerButton::Secondary,
+        pressed,
+        modifiers: Modifiers::NONE,
+    };
+    frame(ctx, sidebar, vec![Event::PointerMoved(pos)]);
+    frame(ctx, sidebar, vec![press(true)]);
+    frame(ctx, sidebar, vec![press(false)]);
+}
+
 #[test]
-fn remove_needs_a_selected_favorite_and_clears_it() {
+fn remove_from_the_menu_acts_on_a_favorite_that_is_not_open() {
     let mut sidebar = panel();
     let ctx = ready();
-    click(&ctx, &mut sidebar, "Remove", vec2(2.0, 3.0));
+    assert_eq!(
+        sidebar.selected_favorite(),
+        None,
+        "the favorite is not open"
+    );
+    right_click(&ctx, &mut sidebar, "fav");
     assert_eq!(sidebar.take_events(), Vec::<SidebarEvent>::new());
-    click(&ctx, &mut sidebar, "fav", vec2(2.0, 5.0));
-    sidebar.take_events();
-    click(&ctx, &mut sidebar, "Remove", vec2(2.0, 3.0));
+    click(&ctx, &mut sidebar, REMOVE_TEXT, vec2(2.0, 3.0));
     assert_eq!(
         sidebar.take_events(),
         [SidebarEvent::Remove(PathBuf::from("/f/x"))]
     );
-    assert_eq!(sidebar.selected_favorite(), Some(Path::new("/f/x")));
-    sidebar.set_favorites(Vec::new());
-    assert_eq!(sidebar.selected_favorite(), None);
+    assert_eq!(sidebar.open_folder(), None, "Remove opens nothing");
+    let texts = frame(&ctx, &mut sidebar, Vec::new());
+    assert!(
+        texts.iter().all(|text| text.string != REMOVE_TEXT),
+        "the menu closes after Remove"
+    );
+}
+
+#[test]
+fn the_panel_draws_no_remove_button() {
+    let mut sidebar = panel();
+    let ctx = ready();
+    events_after(&mut sidebar, "fav");
+    let texts = frame(&ctx, &mut sidebar, Vec::new());
+    assert!(texts.iter().all(|text| text.string != REMOVE_TEXT));
+}
+
+#[test]
+fn a_tree_row_has_no_remove_menu() {
+    let mut sidebar = panel();
+    let ctx = ready();
+    right_click(&ctx, &mut sidebar, "a");
+    let texts = frame(&ctx, &mut sidebar, Vec::new());
+    assert!(texts.iter().all(|text| text.string != REMOVE_TEXT));
 }
 
 #[test]
@@ -223,65 +264,22 @@ fn set_favorites_drops_a_selection_whose_row_is_gone() {
 #[test]
 fn add_queues_add_current_and_take_drains() {
     let mut sidebar = panel();
-    click(&ready(), &mut sidebar, "Add Current Folder", vec2(2.0, 3.0));
+    click(&ready(), &mut sidebar, ADD_TEXT, vec2(2.0, 3.0));
     assert_eq!(sidebar.take_events(), [SidebarEvent::AddCurrent]);
     assert_eq!(sidebar.take_events(), Vec::<SidebarEvent>::new());
 }
 
 #[test]
-fn the_heads_and_the_empty_text_are_painted() {
-    let mut sidebar = Sidebar::default();
-    let ctx = ready();
-    warm_up(&ctx, &mut sidebar);
-    let texts = frame(&ctx, &mut sidebar, Vec::new());
-    for wanted in ["FOLDERS", "FAVORITES", "No favorites yet."] {
-        find(&texts, wanted);
-    }
-}
-
-#[test]
-fn the_heads_use_the_medium_family_and_letter_spacing() {
-    let mut sidebar = Sidebar::default();
-    let ctx = ready();
-    warm_up(&ctx, &mut sidebar);
-    let texts = frame(&ctx, &mut sidebar, Vec::new());
-    for wanted in ["FOLDERS", "FAVORITES"] {
-        let format = &find(&texts, wanted).format;
-        assert_eq!(
-            format.font_id.family,
-            egui::FontFamily::Name(crate::fonts::MEDIUM_FAMILY.into())
-        );
-        assert!((format.extra_letter_spacing - 0.44).abs() < 1e-4);
-    }
-}
-
-#[test]
-fn the_grip_is_painted_with_minus_one_letter_spacing() {
-    let mut sidebar = panel();
-    let ctx = ready();
-    warm_up(&ctx, &mut sidebar);
-    let texts = frame(&ctx, &mut sidebar, Vec::new());
-    assert_eq!(find(&texts, "::").format.extra_letter_spacing, -1.0);
-}
-
-#[test]
-fn a_missing_favorite_paints_dim() {
+fn a_missing_favorite_stays_at_the_text_floor() {
     let mut sidebar = panel();
     let ctx = ready();
     let found = find(&frame(&ctx, &mut sidebar, Vec::new()), "fav").color;
     sidebar.set_favorites(vec![favorite(true)]);
     let gone = find(&frame(&ctx, &mut sidebar, Vec::new()), "fav").color;
-    assert_eq!((found, gone), (tokens::TEXT_SECONDARY, tokens::TEXT_MUTED));
-}
-
-#[test]
-fn the_buttons_stay_on_screen_with_a_tall_tree() {
-    let mut sidebar = panel_with(60);
-    let texts = frame(&ready(), &mut sidebar, Vec::new());
-    for wanted in ["Add Current Folder", "Remove"] {
-        let y = find(&texts, wanted).pos.y;
-        assert!(y > 0.0 && y < 300.0, "{wanted} at {y}");
-    }
+    assert_eq!(
+        (found, gone),
+        (tokens::TEXT_PRIMARY, tokens::TEXT_SECONDARY)
+    );
 }
 
 /// A panel with root `/r` and nothing listed; the root events are taken.
@@ -309,7 +307,7 @@ fn expanding_an_unlisted_node_asks_once_even_after_two_clicks() {
     sidebar.set_children(Path::new("/r"), vec![PathBuf::from("/r/a")]);
     sidebar.tree_mut().set_expanded(Path::new("/r"), true);
     let ctx = ready();
-    let to_caret = -(GAP + ICON_WIDTH + GAP + CARET_SLOT / 2.0);
+    let to_caret = -(GAP + ICON_SIZE + GAP + CARET_SIZE / 2.0);
     click(&ctx, &mut sidebar, "a", vec2(to_caret, 5.0));
     assert_eq!(sidebar.take_events(), [list("/r/a")]);
     click(&ctx, &mut sidebar, "a", vec2(to_caret, 5.0));
@@ -325,7 +323,7 @@ fn expanding_a_listed_node_again_asks_for_a_fresh_listing() {
     sidebar.tree_mut().set_expanded(Path::new("/r"), true);
     sidebar.set_children(Path::new("/r/a"), vec![PathBuf::from("/r/a/old")]);
     let ctx = ready();
-    let to_caret = -(GAP + ICON_WIDTH + GAP + CARET_SLOT / 2.0);
+    let to_caret = -(GAP + ICON_SIZE + GAP + CARET_SIZE / 2.0);
     click(&ctx, &mut sidebar, "a", vec2(to_caret, 5.0));
     assert_eq!(sidebar.take_events(), [list("/r/a")]);
     let texts = frame(&ctx, &mut sidebar, Vec::new());
@@ -349,7 +347,7 @@ fn a_fresh_listing_keeps_a_folder_the_user_collapsed_on_the_way_to_the_open_fold
     sidebar.take_events();
     sidebar.tree_mut().set_expanded(Path::new("/r/a/b"), false);
     let ctx = ready();
-    let to_caret = -(GAP + ICON_WIDTH + GAP + CARET_SLOT / 2.0);
+    let to_caret = -(GAP + ICON_SIZE + GAP + CARET_SIZE / 2.0);
     click(&ctx, &mut sidebar, "a", vec2(to_caret, 5.0));
     click(&ctx, &mut sidebar, "a", vec2(to_caret, 5.0));
     assert_eq!(sidebar.take_events(), [list("/r/a")]);
@@ -475,4 +473,39 @@ fn a_new_favorite_list_selects_the_open_folder_when_it_matches() {
     assert_eq!(sidebar.selected_favorite(), None);
     sidebar.set_favorites(vec![favorite(false)]);
     assert_eq!(sidebar.selected_favorite(), Some(Path::new("/f/x")));
+}
+
+#[test]
+fn the_visible_folders_are_reported_once_per_change() {
+    let mut sidebar = panel();
+    let ctx = ready();
+    frame(&ctx, &mut sidebar, Vec::new());
+    let paths = |list: &[&str]| list.iter().map(PathBuf::from).collect::<Vec<_>>();
+    assert_eq!(
+        sidebar.take_visible_folders(),
+        Some(paths(&["/r", "/r/a", "/r/b"]))
+    );
+    frame(&ctx, &mut sidebar, Vec::new());
+    assert_eq!(sidebar.take_visible_folders(), None, "no change, no report");
+    sidebar.tree_mut().set_expanded(Path::new("/r"), false);
+    frame(&ctx, &mut sidebar, Vec::new());
+    assert_eq!(sidebar.take_visible_folders(), Some(paths(&["/r"])));
+}
+
+#[test]
+fn a_count_shows_on_its_row_and_zero_or_none_clears_it() {
+    let mut sidebar = panel();
+    let ctx = ready();
+    sidebar.set_count(Path::new("/r/a"), Some(36));
+    warm_up(&ctx, &mut sidebar);
+    let texts = frame(&ctx, &mut sidebar, Vec::new());
+    let (row, count) = (find(&texts, "a"), find(&texts, "36"));
+    assert!((row.pos.y + row.height / 2.0 - (count.pos.y + count.height / 2.0)).abs() < 1.0);
+    for cleared in [Some(0), None] {
+        sidebar.set_count(Path::new("/r/a"), Some(36));
+        sidebar.set_count(Path::new("/r/a"), cleared);
+        assert_eq!(sidebar.count(Path::new("/r/a")), None);
+        let texts = frame(&ctx, &mut sidebar, Vec::new());
+        assert!(texts.iter().all(|text| text.string != "36"), "{cleared:?}");
+    }
 }

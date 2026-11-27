@@ -3,14 +3,16 @@
 //! The values come from the `:root` block of `design/mockups/theme.css`. Each
 //! doc comment names its stylesheet token, so the two stay traceable. The
 //! exceptions are `BUCKET_PINK`, `CHECKER_LIGHT`, `CHECKER_DARK`,
-//! `WINDOW_SIZE`, and `GALLERY_MIN_WIDTH`, which have no stylesheet row.
+//! `WINDOW_SIZE`, `GALLERY_MIN_WIDTH`, `SIZE_DISPLAY`, `SIZE_TITLE`,
+//! `LABEL_SPACING_EM`, `FOCUS_RING_WIDTH`, and `BG_STAGE`, which have no
+//! stylesheet row.
 //! Colors convert to `egui::Color32` at compile time.
 
 use egui::Color32;
 
 // The whole `:root` block of `theme.css` is ported on purpose, plus
-// `BUCKET_PINK`, the checker greys, `WINDOW_SIZE` and `GALLERY_MIN_WIDTH`.
-// Some values have no consumer yet.
+// `BUCKET_PINK`, the checker greys, `WINDOW_SIZE`, `GALLERY_MIN_WIDTH`, and the
+// redesign sizes, label spacing, and focus ring. Some values have no consumer yet.
 
 /// `--bg-primary`: window and gallery background.
 pub const BG_PRIMARY: Color32 = Color32::from_rgb(0x16, 0x15, 0x1a);
@@ -18,6 +20,9 @@ pub const BG_PRIMARY: Color32 = Color32::from_rgb(0x16, 0x15, 0x1a);
 pub const BG_SECONDARY: Color32 = Color32::from_rgb(0x1c, 0x1b, 0x22);
 /// `--bg-tertiary`: rail and input background.
 pub const BG_TERTIARY: Color32 = Color32::from_rgb(0x21, 0x1f, 0x29);
+/// The deep fill behind the Preview picture, from the redesign page. It has no
+/// stylesheet row.
+pub const BG_STAGE: Color32 = Color32::from_rgb(0x0d, 0x0c, 0x10);
 /// `--surface-highlight`: pressed and highlighted surface.
 pub const SURFACE_HIGHLIGHT: Color32 = Color32::from_rgb(0x3d, 0x3b, 0x44);
 /// `--surface-hover`: hovered surface.
@@ -44,7 +49,11 @@ pub const TEXT_PRIMARY: Color32 = Color32::from_rgb(0xec, 0xe9, 0xf2);
 pub const TEXT_SECONDARY: Color32 = Color32::from_rgb(0x8d, 0x8a, 0x98);
 /// `--text-tertiary`: tertiary text.
 pub const TEXT_TERTIARY: Color32 = Color32::from_rgb(0xa8, 0xa5, 0xb0);
-/// `--text-muted`: muted text.
+/// `--text-muted`: dim marks, such as the star of a missing favorite.
+///
+/// The redesign forbids this value for text: `#8d8a98` is the lowest text
+/// color that passes the contrast bar. Text uses `TEXT_SECONDARY` or
+/// `TEXT_TERTIARY`.
 pub const TEXT_MUTED: Color32 = Color32::from_rgb(0x65, 0x62, 0x6f);
 
 /// `--border-subtle`: faint 6% white border.
@@ -177,7 +186,7 @@ pub const THUMBNAIL_SIZE: f32 = 160.0;
 /// Default window size in points. The dock split shares are computed for its
 /// width, so the app and the layout must read the same value.
 pub const WINDOW_SIZE: [f32; 2] = [1280.0, 800.0];
-/// Least Gallery dock width, in points. Below it the info bar clips. It has no
+/// Least Gallery dock width, in points. Below it the info row clips. It has no
 /// stylesheet row.
 pub const GALLERY_MIN_WIDTH: f32 = 260.0;
 /// `--sidebar-width`: default Library dock width, in points.
@@ -186,28 +195,17 @@ pub const SIDEBAR_WIDTH: f32 = 220.0;
 pub const PREVIEW_WIDTH: f32 = 490.0;
 /// `.preview-img` min-height: the Preview image box height, in points.
 pub const PREVIEW_IMAGE_HEIGHT: f32 = 260.0;
-/// `.mosaic` padding (`--space-s`): the room between the Preview mosaic grid
-/// and the panel padding, in points.
-pub const PREVIEW_MOSAIC_PADDING: f32 = SPACING_S;
-/// `.tag-pills` min-height: the least height of the Preview pill row, in
-/// points, so the "+ add" button keeps its place below an empty or short row.
-pub const PREVIEW_TAG_ROW_HEIGHT: f32 = 36.0;
-/// `.meta-key` and `.meta-val` line height: the height of one Preview metadata
-/// row, in points. With the 2 point `.meta-grid` gap it gives the 18 point row
-/// pitch of the mockup.
-pub const PREVIEW_META_ROW_HEIGHT: f32 = 16.0;
-/// `.menu-row` height: 5 point padding either side of the text line, measured
-/// at 27 points between rows in the mockup.
-pub const MENU_ROW_HEIGHT: f32 = 27.0;
+/// `.menu-row` height: the row of the redesign context menu, in points. The
+/// row padding either side of the text line gives it.
+pub const MENU_ROW_HEIGHT: f32 = 32.0;
+/// The padding inside a menu frame, in points, as the redesign context menu
+/// shows it. It does not sit on the spacing scale.
+pub const MENU_PADDING: f32 = 6.0;
 /// `.menu-row` horizontal padding, in points.
 pub const MENU_ROW_PAD_X: f32 = 10.0;
 /// The room between a popup menu and the window edge, in points. The
 /// stylesheet has no rule for it; the mockups never touch the edge.
 pub const MENU_EDGE_MARGIN: f32 = SPACING_S;
-/// The room between the `.preview-img` box edge and the picture, in points.
-/// The mockup draws the picture as a rounded `.thumb` at 88% of the 260 point
-/// box height, about 16 points a side.
-pub const PREVIEW_IMAGE_INSET: f32 = SPACING_L;
 
 /// `--font-sans`: stylesheet sans stack.
 ///
@@ -223,6 +221,19 @@ pub const FONT_MONO: &str = "ui-monospace, \"Consolas\", \"Courier New\", monosp
 pub const SIZE_BODY: f32 = 12.0;
 /// `--size-heading`: heading text size, in points.
 pub const SIZE_HEADING: f32 = 16.0;
+/// The display heading size of the redesign: the gallery folder heading. The
+/// stylesheet has no row; the redesign palette page gives 22 px.
+pub const SIZE_DISPLAY: f32 = 22.0;
+/// The title size of the redesign: the product wordmark and a card title. The
+/// stylesheet has no row; the redesign palette page gives 15 px.
+pub const SIZE_TITLE: f32 = 15.0;
+/// The letter spacing of a section label in the redesign, in em: the dock
+/// tab titles and the sidebar heads. The stylesheet has no row; the redesign
+/// pages give 0.08 em.
+pub const LABEL_SPACING_EM: f32 = 0.08;
+/// The width of the coral focus ring of the redesign, in points. The
+/// stylesheet has no row; the redesign pages give 2 px.
+pub const FOCUS_RING_WIDTH: f32 = 2.0;
 /// `--size-small`: small text size, in points.
 pub const SIZE_SMALL: f32 = 10.0;
 /// `--size-log`: log line text size, in points.

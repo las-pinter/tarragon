@@ -2,7 +2,6 @@
 
 use egui::{RichText, ScrollArea, Ui};
 
-use crate::swatch::Swatch;
 use crate::tokens;
 
 pub(crate) mod add;
@@ -13,7 +12,9 @@ mod failure;
 mod failure_tests;
 #[cfg(test)]
 mod fill_tests;
+mod footer;
 mod image;
+pub mod info;
 mod meta;
 mod mosaic;
 #[cfg(test)]
@@ -21,10 +22,13 @@ mod pane_tests;
 mod tags;
 #[cfg(test)]
 mod test_support;
-pub use colors::{ColorState, ColorStates};
+pub use colors::{BAR as COLOR_BAR, ColorState, ColorStates};
 pub use failure::PreviewFailure;
+pub use footer::{EDIT_TAGS_TEXT, MultiSummary, OPEN_ALL_TEXT};
 pub use image::PreviewImage;
+pub use info::OpenButton;
 pub use meta::{Meta, UNKNOWN, size_text};
+pub use mosaic::MosaicCell;
 pub use tags::TagPill;
 
 /// The hint shown while nothing is selected.
@@ -33,8 +37,6 @@ pub const EMPTY_HINT: &str = "Select an image to preview it";
 /// What the panel asks the app to do.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PreviewEvent {
-    /// The user clicked this color square.
-    ColorClicked(Swatch),
     /// The user clicked the x on this tag: remove it from every selected image.
     TagRemoved(String),
     /// The user clicked a partial tag: add it to every selected image.
@@ -43,32 +45,48 @@ pub enum PreviewEvent {
     RetryRender,
     /// The user asked to open the failed file in an editor.
     OpenInEditor,
+    /// The user clicked the open button.
+    Open,
+    /// The user picked this row of the caret menu.
+    OpenWith(usize),
+    /// The user clicked the open-all button of a multi-selection.
+    OpenAll,
 }
+
+/// The gap between the blocks of the panel, in points.
+const BLOCK_GAP: f32 = 14.0;
 
 /// The state of the Preview panel.
 #[derive(Debug)]
 pub struct Preview {
     /// The details of the one previewed file, when there is one.
     meta: Option<Meta>,
+    /// The open button of that file, when the app has set it.
+    open: Option<OpenButton>,
     /// The picture of that file, when it is ready.
     image: Option<PreviewImage>,
     /// Why the file has no picture; the card takes the picture's place.
     failure: Option<PreviewFailure>,
     /// The pictures of a multi-selection that are ready, in display order.
-    mosaic: Vec<PreviewImage>,
+    mosaic: Vec<MosaicCell>,
     /// How many images are selected, which can exceed `mosaic`.
     mosaic_total: usize,
     /// How many mosaic pictures show at most.
     mosaic_cap: usize,
+    /// The size and the app of the whole multi-selection.
+    summary: MultiSummary,
+    /// Whether "Edit tags" has opened the tag row under the mosaic. It lasts
+    /// across selections.
+    tags_open: bool,
     /// How many selected images carry each color.
     colors: ColorStates,
     /// The user tags of the selected images, in display order.
     tags: Vec<TagPill>,
-    /// Every known user tag name, for the "+ add" menu. Color tags are left out.
+    /// Every known user tag name, for the "+ Tag" menu. Color tags are left out.
     known_tags: Vec<String>,
-    /// Which part of the "+ add" control is open.
+    /// Which part of the "+ Tag" control is open.
     add: add::AddState,
-    /// Whether the color squares show; settings can turn color tags off.
+    /// Whether the colour bars show; settings can turn color tags off.
     colors_enabled: bool,
     /// Events not yet taken by the app.
     events: Vec<PreviewEvent>,
@@ -81,11 +99,14 @@ impl Default for Preview {
     fn default() -> Self {
         Self {
             meta: None,
+            open: None,
             image: None,
             failure: None,
             mosaic: Vec::new(),
             mosaic_total: 0,
             mosaic_cap: mosaic::DEFAULT_CAP,
+            summary: MultiSummary::default(),
+            tags_open: false,
             colors: ColorStates::default(),
             tags: Vec::new(),
             known_tags: Vec::new(),
@@ -101,6 +122,11 @@ impl Preview {
     /// Set the file details to show, or `None` for the empty state.
     pub fn set_meta(&mut self, meta: Option<Meta>) {
         self.meta = meta;
+    }
+
+    /// Set the open button of the previewed file, or `None` for no buttons.
+    pub fn set_open(&mut self, open: Option<OpenButton>) {
+        self.open = open;
     }
 
     /// Set the picture to show, or `None` for no picture. It does not clear
@@ -123,9 +149,15 @@ impl Preview {
     /// selected in all. With two or more selected and a picture ready, the
     /// mosaic replaces the single picture; the selected images it does not
     /// draw become a "+k more" hint.
-    pub fn set_mosaic(&mut self, images: Vec<PreviewImage>, total: usize) {
-        self.mosaic = images;
+    pub fn set_mosaic(&mut self, cells: Vec<MosaicCell>, total: usize) {
+        self.mosaic = cells;
         self.mosaic_total = total;
+    }
+
+    /// Set the total size and the open app of a multi-selection, for the row
+    /// under the mosaic.
+    pub fn set_summary(&mut self, summary: MultiSummary) {
+        self.summary = summary;
     }
 
     /// Set how many pictures the mosaic shows at most, to follow the
@@ -144,24 +176,24 @@ impl Preview {
         self.tags = tags;
     }
 
-    /// Set the user tag names the "+ add" menu offers. The menu hides the
+    /// Set the user tag names the "+ Tag" menu offers. The menu hides the
     /// ones every selected image already has.
     pub fn set_known_tags(&mut self, names: Vec<String>) {
         self.known_tags = names;
     }
 
-    /// Show or hide the color squares, to follow the color tags setting.
+    /// Show or hide the colour bars, to follow the color tags setting.
     pub fn set_colors_enabled(&mut self, enabled: bool) {
         self.colors_enabled = enabled;
     }
 
-    /// Whether the color squares show.
+    /// Whether the colour bars show.
     #[must_use]
     pub fn colors_enabled(&self) -> bool {
         self.colors_enabled
     }
 
-    /// Close the "+ add" menu and input. The app calls it when the selection
+    /// Close the "+ Tag" menu and input. The app calls it when the selection
     /// changes; `set_tags` must not, because tags refresh after every tag event.
     pub fn selection_changed(&mut self) {
         self.add = add::AddState::default();
@@ -176,9 +208,10 @@ impl Preview {
     /// Draw the panel body. It scrolls, so a short pane loses nothing.
     pub fn show(&mut self, ui: &mut Ui) {
         let (colors, tags, enabled) = (&self.colors, &self.tags, self.colors_enabled);
-        let (known, add) = (&self.known_tags, &mut self.add);
+        let (known, add, open) = (&self.known_tags, &mut self.add, self.open.as_ref());
         let (events, below_box) = (&mut self.events, &mut self.below_box);
         let (mosaic, total, cap) = (&self.mosaic, self.mosaic_total, self.mosaic_cap);
+        let (summary, tags_open) = (&self.summary, &mut self.tags_open);
         // A big selection with one picture ready already shows a one-cell
         // mosaic, so the panel does not flip to the single box while it fills.
         let multi = total >= 2 && !mosaic.is_empty();
@@ -198,23 +231,34 @@ impl Preview {
                     ScrollArea::vertical()
                         .auto_shrink([false, false])
                         .show_viewport(ui, |ui, viewport| {
+                            ui.spacing_mut().item_spacing.y = BLOCK_GAP;
                             let mut box_bottom = None;
                             if let Some(failure) = &self.failure {
                                 failure::show_card(ui, failure, events);
                             } else if multi {
-                                mosaic::show(ui, mosaic, total, cap);
+                                let height = image::box_height(viewport.height(), *below_box);
+                                box_bottom = Some(mosaic::show(ui, mosaic, cap, height).bottom());
                             } else if let Some(image) = image {
                                 let height = image::box_height(viewport.height(), *below_box);
                                 box_bottom = Some(image::show_box(ui, image, height).bottom());
                             }
-                            if let Some(meta) = meta {
-                                meta::show_grid(ui, meta);
+                            if multi && self.failure.is_none() {
+                                let hint = mosaic::more_hint(total, mosaic::drawn(mosaic, cap));
+                                footer::show(
+                                    ui,
+                                    total,
+                                    summary,
+                                    hint.as_deref(),
+                                    tags_open,
+                                    events,
+                                );
+                            } else if let Some(meta) = meta {
+                                info::show(ui, meta, open, events);
                             }
-                            tags::show_heading(ui);
-                            if enabled {
-                                colors::show_row(ui, colors, events);
+                            if !multi || *tags_open {
+                                let bars = enabled.then_some(colors);
+                                tags::show_chips(ui, bars, tags, known, add, events);
                             }
-                            tags::show_pills(ui, tags, known, add, events);
                             if let Some(bottom) = box_bottom {
                                 // The content below is only known after layout, so
                                 // the next frame sizes the box with it.
@@ -237,7 +281,7 @@ fn show_empty(ui: &mut Ui) {
         ui.label(
             RichText::new(EMPTY_HINT)
                 .size(tokens::SIZE_SMALL)
-                .color(tokens::TEXT_MUTED),
+                .color(tokens::TEXT_SECONDARY),
         );
     });
 }

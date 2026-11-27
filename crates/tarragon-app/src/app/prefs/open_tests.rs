@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 
 use eframe::egui::Id;
 use tarragon_db::settings::{SettingKey, SettingValue, Settings};
+use tarragon_ui::prefs::Group;
 
 use super::super::preview_tests::Rig;
 use super::open::{HOME_ID, PICKER_ID, Shared};
@@ -176,6 +177,7 @@ fn the_cache_browse_answer_fills_the_field_and_saves_only_on_ok() {
     std::fs::create_dir_all(&cache).expect("make the folder");
     let values = crate::prefs::load(&rig.app.db);
     rig.app.shell.prefs_mut().open(values, "unknown".to_owned());
+    rig.app.shell.prefs_mut().show_group(Group::Cache);
     for _ in 0..4 {
         rig.frame(Vec::new());
     }
@@ -184,7 +186,7 @@ fn the_cache_browse_answer_fills_the_field_and_saves_only_on_ok() {
     take_answer(&mut rig, &answered);
     let stored = |rig: &Rig| Settings::new(&rig.app.db).get(SettingKey::CacheDir);
     assert_eq!(stored(&rig).expect("read"), SettingValue::None);
-    rig.click("OK", false);
+    rig.click("Save", false);
     assert_eq!(
         stored(&rig).expect("read"),
         SettingValue::Text(cache.to_string_lossy().into_owned())
@@ -196,13 +198,14 @@ fn a_cancelled_cache_browse_leaves_the_field_alone() {
     let mut rig = Rig::new(&[], &[], 9);
     let values = crate::prefs::load(&rig.app.db);
     rig.app.shell.prefs_mut().open(values, "unknown".to_owned());
+    rig.app.shell.prefs_mut().show_group(Group::Cache);
     for _ in 0..4 {
         rig.frame(Vec::new());
     }
     let answered = install(&rig, None);
     rig.click("Browse...", false);
     take_answer(&mut rig, &answered);
-    rig.click("OK", false);
+    rig.click("Save", false);
     let read = Settings::new(&rig.app.db).get(SettingKey::CacheDir);
     assert_eq!(read.expect("read"), SettingValue::None);
 }

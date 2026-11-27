@@ -41,7 +41,7 @@ fn toggle_night(
 ) -> Vec<String> {
     let mut run = |ui: &mut Ui| gallery.show(ui);
     if open_menu {
-        click_text(ctx, "Filter Tags", &mut run);
+        click_text(ctx, "Tags", &mut run);
     }
     let texts = click_text(ctx, "night", &mut run);
     assert!(apply_change(gallery, db));

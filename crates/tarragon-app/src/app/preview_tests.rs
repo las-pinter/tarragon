@@ -20,7 +20,8 @@ use crate::test_ui;
 const LIMIT: Duration = Duration::from_secs(10);
 
 /// The Dimensions row the Preview shows for the stored rows.
-const DIMENSIONS: &str = "64 x 48";
+/// The start of the details line of the sample rows.
+const DIMENSIONS: &str = "64 × 48";
 
 pub(super) struct Rig {
     pub(super) dir: TempDir,
@@ -141,8 +142,9 @@ impl Rig {
         }
     }
 
+    /// Whether a painted text starts with `text`.
     fn has_text(&mut self, text: &str) -> bool {
-        self.frame(Vec::new()).0.iter().any(|t| t == text)
+        self.frame(Vec::new()).0.iter().any(|t| t.starts_with(text))
     }
 }
 
@@ -243,4 +245,36 @@ fn dropping_the_app_with_a_request_in_flight_ends() {
     ended
         .recv_timeout(LIMIT)
         .expect("the drop joined the loader");
+}
+
+#[cfg(unix)]
+#[test]
+fn open_all_names_the_app_and_opens_every_selected_file() {
+    let mut rig = Rig::new(&["a.png", "b.png"], &["a.png", "b.png"], 9);
+    let out = rig.dir.0.join("out.txt");
+    let template = format!("sh -c \"echo $0 >> {}\" {{file}}", out.display());
+    rig.app
+        .db
+        .upsert_editor_association("*", &template)
+        .expect("store the template");
+    rig.click("a.png", false);
+    rig.click("b.png", true);
+    rig.pictures_reach(2);
+    assert!(rig.has_text("2 selected"));
+    rig.click("Open all in Sh", false);
+    let end = Instant::now() + LIMIT;
+    let mut opened = loop {
+        let text = std::fs::read_to_string(&out).unwrap_or_default();
+        if text.lines().count() == 2 {
+            break text.lines().map(str::to_owned).collect::<Vec<_>>();
+        }
+        assert!(Instant::now() < end, "the files were not opened: {text:?}");
+        std::thread::sleep(Duration::from_millis(10));
+    };
+    opened.sort();
+    let want: Vec<String> = ["a.png", "b.png"]
+        .iter()
+        .map(|name| path_of(&rig, name).display().to_string())
+        .collect();
+    assert_eq!(opened, want);
 }

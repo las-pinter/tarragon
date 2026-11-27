@@ -1,6 +1,7 @@
 //! Tests for the tag filter.
 
 use super::show_tags;
+use crate::filter_bar::TAGS_TEXT;
 use crate::test_support::input;
 use egui::{Context, Event, Pos2, epaint::Shape};
 use tarragon_core::filter_bar::FilterBar;
@@ -70,66 +71,52 @@ impl Rig {
         self.click(at + egui::vec2(2.0, 2.0))
     }
 
-    fn chips(&mut self) -> Vec<String> {
-        let view = self.view();
-        let row = bar_row(&view);
-        let in_row = view.into_iter().filter(|t| (t.2.y - row).abs() < 6.0);
-        in_row
-            .map(|t| t.0)
-            .filter(|s| s != "Filter Tags" && s != "x")
-            .collect()
+    fn held(&mut self) -> Vec<String> {
+        self.view();
+        self.bar.tag_order().to_vec()
     }
 }
 
 /// The y of the button row.
 fn bar_row(view: &[Text]) -> f32 {
     view.iter()
-        .find(|t| t.0 == "Filter Tags")
+        .find(|t| t.0 == TAGS_TEXT)
         .map_or(0.0, |t| t.2.y)
 }
 
 fn open_and_tick(rig: &mut Rig, name: &str) -> bool {
     if !rig.view().iter().any(|t| t.0 == name) {
-        rig.click_text("Filter Tags", true);
+        rig.click_text(TAGS_TEXT, true);
     }
     rig.click_text(name, false)
 }
 
 #[test]
-fn chips_follow_tick_order() {
+fn ticks_add_tags_in_tick_order() {
     let mut rig = Rig::new();
     open_and_tick(&mut rig, "lighting");
     open_and_tick(&mut rig, "character");
-    assert_eq!(rig.chips(), ["lighting", "character"]);
+    assert_eq!(rig.held(), ["lighting", "character"]);
 }
 
 #[test]
-fn chip_x_unticks_the_row() {
+fn a_second_tick_drops_the_tag_and_its_tick() {
     let mut rig = Rig::new();
     open_and_tick(&mut rig, "character");
-    assert_eq!(rig.chips(), ["character"]);
+    assert_eq!(rig.held(), ["character"]);
     assert_eq!(rig.ticks, 1);
-    assert!(rig.click_text("x", true));
-    assert!(rig.bar.state.tags.is_empty());
-    assert_eq!(rig.chips().len(), 0);
-    rig.view();
+    assert!(rig.click_text("character", false));
+    assert_eq!(rig.held(), [] as [String; 0]);
     assert_eq!(rig.ticks, 0);
 }
 
 #[test]
 fn opening_and_closing_the_menu_returns_false() {
     let mut rig = Rig::new();
-    assert!(!rig.click_text("Filter Tags", true));
+    assert!(!rig.click_text(TAGS_TEXT, true));
     assert!(rig.view().iter().any(|t| t.0 == "character"));
-    assert!(!rig.click_text("Filter Tags", true));
+    assert!(!rig.click_text(TAGS_TEXT, true));
     assert!(!rig.view().iter().any(|t| t.0 == "character"));
-}
-
-#[test]
-fn unknown_tag_still_shows_its_chip() {
-    let mut rig = Rig::new();
-    rig.bar.toggle_tag("ghost");
-    assert_eq!(rig.chips(), ["ghost"]);
 }
 
 #[test]
@@ -138,7 +125,7 @@ fn changes_return_true_and_idle_returns_false() {
     assert!(!rig.frame(vec![]).0);
     assert!(open_and_tick(&mut rig, "character"));
     assert!(!rig.frame(vec![]).0);
-    assert!(rig.click_text("x", true));
+    assert!(rig.click_text("character", false));
 }
 
 #[test]
@@ -157,7 +144,7 @@ fn the_manage_row_is_the_last_row_with_no_tags_and_with_many() {
     for count in [0, 30] {
         let mut rig = Rig::new();
         rig.names = (0..count).map(|i| format!("tag-{i}")).collect();
-        rig.click_text("Filter Tags", true);
+        rig.click_text(TAGS_TEXT, true);
         let view = rig.view();
         let manage = view.iter().find(|t| t.0 == "Manage tags...");
         let manage = manage.expect("the row is drawn");
@@ -173,7 +160,7 @@ fn the_manage_row_is_the_last_row_with_no_tags_and_with_many() {
 #[test]
 fn the_manage_row_reports_once_closes_the_menu_and_toggles_no_tag() {
     let mut rig = Rig::new();
-    rig.click_text("Filter Tags", true);
+    rig.click_text(TAGS_TEXT, true);
     assert!(!rig.click_text("Manage tags...", false));
     assert!(rig.manage);
     let view = rig.view();
@@ -185,7 +172,7 @@ fn the_manage_row_reports_once_closes_the_menu_and_toggles_no_tag() {
 #[test]
 fn escape_closes_the_menu_without_reporting_the_manage_row() {
     let mut rig = Rig::new();
-    rig.click_text("Filter Tags", true);
+    rig.click_text(TAGS_TEXT, true);
     let esc = Event::Key {
         key: egui::Key::Escape,
         physical_key: None,

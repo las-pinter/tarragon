@@ -1,23 +1,20 @@
-//! Tests for the mosaic layout.
+//! Tests for the mosaic layout and paint.
 
-use super::{aspect, columns, grid_cells, grid_height, more_hint, row_sizes};
+use std::path::PathBuf;
+
+use super::{MosaicCell, columns, drawn, grid_cells, more_hint, row_lengths, show};
+use crate::preview::image::PreviewImage;
 use egui::{Rect, pos2, vec2};
 
-/// A 116 point wide area at (10, 20). The 8 point padding leaves 100 points,
-/// and gaps of 8 divide that into whole numbers.
+/// A 216 by 316 point area at (10, 20). Gaps of 8 split it into whole
+/// numbers for one, two, and three columns and rows.
 fn area() -> Rect {
-    Rect::from_min_size(pos2(10.0, 20.0), vec2(116.0, 0.0))
+    Rect::from_min_size(pos2(10.0, 20.0), vec2(216.0, 316.0))
 }
 
-/// `count` square pictures.
-fn squares(count: usize) -> Vec<(u32, u32)> {
-    vec![(50, 50); count]
-}
-
-/// A cell at `x`, `y` (relative to the padded grid), `w` wide and `h` tall.
-/// The grid starts 8 points inside the area.
+/// A cell at `x`, `y` relative to the area, `w` wide and `h` tall.
 fn cell(x: f32, y: f32, w: f32, h: f32) -> Rect {
-    Rect::from_min_size(pos2(18.0 + x, 28.0 + y), vec2(w, h))
+    Rect::from_min_size(pos2(10.0 + x, 20.0 + y), vec2(w, h))
 }
 
 /// Whether two rect lists match within a hundredth of a point.
@@ -30,111 +27,114 @@ fn close(got: &[Rect], want: &[Rect]) -> bool {
 }
 
 #[test]
-fn the_columns_are_the_ceiling_of_the_square_root() {
-    let got: Vec<usize> = (0..=10).map(columns).collect();
-    assert_eq!(got, [1, 1, 2, 2, 2, 3, 3, 3, 3, 3, 4]);
+fn the_widest_row_holds_the_ceiling_of_the_square_root() {
+    let got: Vec<usize> = (1..=17).map(columns).collect();
+    assert_eq!(got, [1, 2, 2, 2, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 5]);
+    assert_eq!(columns(100), 10);
 }
 
 #[test]
-fn the_images_spread_evenly_over_the_rows_fuller_rows_first() {
-    let got: Vec<Vec<usize>> = (0..=9).map(row_sizes).collect();
-    let want: [&[usize]; 10] = [
-        &[],
-        &[1],
-        &[2],
-        &[2, 1],
-        &[2, 2],
-        &[3, 2],
-        &[3, 3],
-        &[3, 2, 2],
-        &[3, 3, 2],
-        &[3, 3, 3],
+fn the_rows_are_balanced_with_the_longer_rows_first() {
+    let cases: [(usize, &[usize]); 9] = [
+        (2, &[2]),
+        (3, &[2, 1]),
+        (4, &[2, 2]),
+        (5, &[3, 2]),
+        (6, &[3, 3]),
+        (7, &[3, 2, 2]),
+        (8, &[3, 3, 2]),
+        (9, &[3, 3, 3]),
+        (10, &[4, 3, 3]),
     ];
-    assert_eq!(got, want);
+    for (count, want) in cases {
+        assert_eq!(row_lengths(count), want, "{count} images");
+    }
+    for count in 1..=100 {
+        let rows = row_lengths(count);
+        assert_eq!(rows.iter().sum::<usize>(), count, "{count} cells");
+        assert!(
+            rows.windows(2)
+                .all(|pair| pair[0] >= pair[1] && pair[0] - pair[1] <= 1)
+        );
+        assert!(rows[0] <= columns(count), "{count}: {rows:?}");
+    }
 }
 
 #[test]
-fn two_squares_share_the_full_width() {
-    let want = [cell(0.0, 0.0, 46.0, 46.0), cell(54.0, 0.0, 46.0, 46.0)];
-    assert!(close(&grid_cells(&squares(2), 9, area()), &want));
+fn two_images_sit_side_by_side_in_one_row() {
+    let want = [cell(0.0, 0.0, 104.0, 316.0), cell(112.0, 0.0, 104.0, 316.0)];
+    assert!(close(&grid_cells(2, 9, area()), &want));
 }
 
 #[test]
-fn five_images_give_a_row_of_three_and_a_full_width_row_of_two() {
-    let cells = grid_cells(&squares(5), 9, area());
+fn three_images_give_two_on_top_and_one_full_width_below() {
     let want = [
-        cell(0.0, 0.0, 28.0, 28.0),
-        cell(36.0, 0.0, 28.0, 28.0),
-        cell(72.0, 0.0, 28.0, 28.0),
-        cell(0.0, 36.0, 46.0, 46.0),
-        cell(54.0, 36.0, 46.0, 46.0),
+        cell(0.0, 0.0, 104.0, 154.0),
+        cell(112.0, 0.0, 104.0, 154.0),
+        cell(0.0, 162.0, 216.0, 154.0),
     ];
-    assert!(close(&cells, &want), "{cells:?}");
+    assert!(close(&grid_cells(3, 9, area()), &want));
 }
 
 #[test]
-fn each_cell_takes_the_shape_of_its_picture() {
-    let cells = grid_cells(&[(200, 100), (100, 100)], 9, area());
-    let height = 92.0 / 3.0;
-    let want = [
-        cell(0.0, 0.0, 2.0 * height, height),
-        cell(2.0 * height + 8.0, 0.0, height, height),
-    ];
-    assert!(close(&cells, &want), "{cells:?}");
+fn five_images_read_three_then_two_left_to_right() {
+    let cells = grid_cells(5, 9, area());
+    let tops: Vec<f32> = cells.iter().map(|c| c.min.y).collect();
+    assert_eq!(tops, [20.0, 20.0, 20.0, 182.0, 182.0]);
+    assert!(cells[0].min.x < cells[1].min.x && cells[1].min.x < cells[2].min.x);
+    assert!(cells[3].min.x < cells[4].min.x);
+    assert!((cells[3].width() - 104.0).abs() < 0.01, "{:?}", cells[3]);
 }
 
 #[test]
-fn a_row_taller_than_the_picture_box_keeps_its_height_and_is_centred() {
-    let wide = Rect::from_min_size(pos2(10.0, 20.0), vec2(516.0, 0.0));
-    let cells = grid_cells(&squares(3), 9, wide);
-    let last = cells[2];
-    assert!((last.height() - crate::tokens::PREVIEW_IMAGE_HEIGHT).abs() < 0.01);
-    assert!((last.center().x - wide.center().x).abs() < 0.01, "{last:?}");
-}
-
-#[test]
-fn an_extreme_or_empty_picture_gets_a_bounded_cell_shape() {
-    assert!((aspect((1000, 10)) - 4.0).abs() < f32::EPSILON);
-    assert!((aspect((10, 1000)) - 0.25).abs() < f32::EPSILON);
-    assert!((aspect((0, 40)) - 1.0).abs() < f32::EPSILON);
-    assert!((aspect((64, 48)) - 4.0 / 3.0).abs() < 1e-6);
+fn the_cells_fill_the_area_for_two_three_five_six_seven_and_nine() {
+    for count in [2, 3, 5, 6, 7, 9] {
+        let cells = grid_cells(count, 9, area());
+        let bounds = cells.iter().copied().reduce(Rect::union).expect("cells");
+        assert!(
+            (bounds.min - area().min).length() < 0.01 && (bounds.max - area().max).length() < 0.01,
+            "{count}: {bounds:?}"
+        );
+        // Each row runs from the left edge to the right edge, one gap
+        // between neighbours, so no slot is left empty.
+        let mut tops: Vec<f32> = cells.iter().map(|c| c.min.y).collect();
+        tops.dedup_by(|a, b| (*a - *b).abs() < 0.01);
+        for top in tops {
+            let mut row: Vec<Rect> = cells
+                .iter()
+                .copied()
+                .filter(|c| (c.min.y - top).abs() < 0.01)
+                .collect();
+            row.sort_by(|a, b| a.min.x.total_cmp(&b.min.x));
+            assert!(
+                (row[0].min.x - area().min.x).abs() < 0.01,
+                "{count}: {row:?}"
+            );
+            assert!(
+                (row[row.len() - 1].max.x - area().max.x).abs() < 0.01,
+                "{count}: {row:?}"
+            );
+            for pair in row.windows(2) {
+                assert!(
+                    (pair[1].min.x - pair[0].max.x - 8.0).abs() < 0.01,
+                    "{count}: {row:?}"
+                );
+            }
+        }
+    }
 }
 
 #[test]
 fn twelve_images_are_cut_to_the_cap_of_nine() {
-    assert_eq!(
-        grid_cells(&squares(12), 9, area()),
-        grid_cells(&squares(9), 9, area())
-    );
+    assert_eq!(grid_cells(12, 9, area()).len(), 9);
+    assert_eq!(grid_cells(12, 4, area()).len(), 4);
 }
 
 #[test]
-fn no_images_no_cap_or_too_little_width_give_no_cells() {
-    let none: Vec<Rect> = Vec::new();
-    let thin = Rect::from_min_size(pos2(0.0, 0.0), vec2(16.0, 500.0));
-    assert_eq!(grid_cells(&[], 9, area()), none);
-    assert_eq!(grid_cells(&squares(4), 0, area()), none);
-    assert_eq!(grid_cells(&squares(4), 9, thin), none);
-    // 10 pt inside the padding, less than the 16 pt of gaps in a row of three.
-    let narrow = Rect::from_min_size(pos2(0.0, 0.0), vec2(26.0, 0.0));
-    assert_eq!(grid_cells(&squares(6), 9, narrow), none);
-}
-
-#[test]
-fn the_widest_row_sets_the_least_width() {
-    // Five pictures make rows of 3 and 2; the row of 3 has 16 pt of gaps.
-    let inner = |width: f32| Rect::from_min_size(pos2(0.0, 0.0), vec2(width + 16.0, 0.0));
-    assert_eq!(grid_cells(&squares(5), 9, inner(16.0)), Vec::<Rect>::new());
-    let cells = grid_cells(&squares(5), 9, inner(17.0));
-    assert_eq!(cells.len(), 5);
-    assert!(cells.iter().all(|c| c.width() > 0.0 && c.height() > 0.0));
-}
-
-#[test]
-fn the_grid_height_reaches_the_last_row_and_the_padding() {
-    assert_eq!(grid_height(&[], area()), 0.0);
-    let cells = grid_cells(&squares(5), 9, area());
-    assert!((grid_height(&cells, area()) - (8.0 + 28.0 + 8.0 + 46.0 + 8.0)).abs() < 0.01);
+fn no_images_or_too_little_room_give_no_cells() {
+    assert_eq!(grid_cells(0, 9, area()), Vec::<Rect>::new());
+    let thin = Rect::from_min_size(pos2(0.0, 0.0), vec2(16.0, 300.0));
+    assert_eq!(grid_cells(9, 9, thin), Vec::<Rect>::new());
 }
 
 #[test]
@@ -142,41 +142,58 @@ fn the_hint_counts_the_selected_images_the_mosaic_does_not_draw() {
     assert_eq!(more_hint(9, 9), None);
     assert_eq!(more_hint(20, 9).as_deref(), Some("+11 more"));
     assert_eq!(more_hint(5, 3).as_deref(), Some("+2 more"));
-    assert_eq!(more_hint(3, 3), None);
+}
+
+fn cells(count: usize) -> Vec<MosaicCell> {
+    (0..count)
+        .map(|i| MosaicCell {
+            image: PreviewImage {
+                texture: egui::TextureId::User(3),
+                size: (100, 50),
+            },
+            path: PathBuf::from(format!("/a/{i}.psd")),
+        })
+        .collect()
 }
 
 #[test]
-fn each_painted_picture_carries_the_cell_corner_radius() {
-    use super::{PreviewImage, show};
+fn drawn_is_the_cell_count_held_to_the_cap() {
+    assert_eq!(drawn(&cells(3), 9), 3);
+    assert_eq!(drawn(&cells(12), 9), 9);
+}
+
+#[test]
+fn each_cell_fits_its_picture_whole_on_the_field_fill_with_its_badge() {
     let ctx = egui::Context::default();
+    crate::fonts::install(&ctx);
     let input = egui::RawInput {
-        screen_rect: Some(Rect::from_min_size(
-            pos2(0.0, 0.0),
-            egui::vec2(400.0, 600.0),
-        )),
+        screen_rect: Some(Rect::from_min_size(pos2(0.0, 0.0), vec2(400.0, 600.0))),
         ..Default::default()
     };
-    let images = [PreviewImage {
-        texture: egui::TextureId::User(3),
-        size: (50, 50),
-    }; 2];
-    let output = ctx.run_ui(input, |ui| show(ui, &images, 2, 9));
-    let (mut cells, mut pictures) = (Vec::new(), Vec::new());
+    let output = ctx.run_ui(input, |ui| {
+        show(ui, &cells(2), 9, 400.0);
+    });
+    let (mut fills, mut pictures, mut badges) = (Vec::new(), Vec::new(), Vec::new());
     for clipped in &output.shapes {
-        if let egui::Shape::Rect(r) = &clipped.shape {
-            if r.brush.is_some() {
-                pictures.push((r.rect, r.corner_radius));
-            } else if r.fill == crate::tokens::BG_SECONDARY {
-                cells.push(r.rect);
-            }
+        match &clipped.shape {
+            egui::Shape::Rect(r) if r.brush.is_some() => pictures.push(r.rect),
+            egui::Shape::Rect(r) if r.fill == crate::tokens::BG_TERTIARY => fills.push(r.rect),
+            egui::Shape::Text(t) => badges.push(t.galley.job.text.clone()),
+            _ => {}
         }
     }
     output.drop_without_applying_deltas();
-    let want = egui::CornerRadius::same(crate::tokens::RADIUS_M);
-    let expected: Vec<_> = cells
+    assert_eq!(fills.len(), 2);
+    let want: Vec<Rect> = fills
         .iter()
-        .map(|cell| (crate::preview::image::fit_rect((50, 50), *cell), want))
+        .map(|cell| crate::preview::image::fit_rect((100, 50), *cell))
         .collect();
-    assert_eq!(cells.len(), 2);
-    assert_eq!(pictures, expected);
+    assert_eq!(pictures, want);
+    for (picture, cell) in pictures.iter().zip(&fills) {
+        assert!(
+            cell.contains_rect(*picture),
+            "{picture:?} is cut by {cell:?}"
+        );
+    }
+    assert_eq!(badges, ["PSD", "PSD"]);
 }

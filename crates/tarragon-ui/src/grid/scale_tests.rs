@@ -9,7 +9,7 @@ use egui::{
     ViewportId, ViewportIdMap, ViewportInfo, epaint, vec2,
 };
 
-use super::{CELL_HEIGHT, GridItem, Selection, VirtualGrid, metrics_for};
+use super::{GridItem, Selection, VirtualGrid, metrics_for};
 use crate::shell::Shell;
 use crate::tokens;
 
@@ -117,7 +117,7 @@ fn collect(shape: &epaint::Shape, seen: &mut Seen) {
                 .map_or(0.0, |section| section.format.font_id.size);
             let name = text.galley.job.text.clone();
             seen.texts.insert((name.clone(), size.to_bits()));
-            if (size - tokens::SIZE_SMALL).abs() < EPSILON
+            if (size - tokens::SIZE_BODY).abs() < EPSILON
                 && (0..TILES).any(|index| tile_name(index) == name)
             {
                 seen.labels.push((name, text.pos + text.galley.size()));
@@ -226,11 +226,11 @@ fn assert_size(actual: Vec2, expected: Vec2, what: &str) {
 }
 
 #[test]
-fn a_thumbnail_is_one_token_square_in_points_at_every_scale() {
-    let square = Vec2::splat(tokens::THUMBNAIL_SIZE);
+fn a_square_picture_fills_the_cell_wide_square_at_every_scale() {
     for scale in SCALES {
         for seen in [grid_at(scale), shell_at(scale)] {
             assert_eq!(seen.thumbs.len(), TILES, "scale {scale}");
+            let square = Vec2::splat(seen.cells[0].width());
             for thumb in &seen.thumbs {
                 assert_size(*thumb, square, &format!("thumbnail at scale {scale}"));
             }
@@ -251,7 +251,8 @@ fn the_cell_and_the_column_count_do_not_change_with_the_scale() {
             assert_size(cell.size(), first.size(), "cell");
             assert_size(cell.min.to_vec2(), first.min.to_vec2(), "cell origin");
         }
-        assert!((seen.cells[0].height() - CELL_HEIGHT).abs() < EPSILON);
+        let square = seen.cells[0].width() + super::cell::LABEL_BLOCK;
+        assert!((seen.cells[0].height() - square).abs() < EPSILON);
     }
 }
 

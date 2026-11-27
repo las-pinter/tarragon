@@ -1,4 +1,7 @@
 use std::path::{Path, PathBuf};
+use std::sync::atomic::Ordering;
+
+use tarragon_ui::status::Job;
 
 use super::work::Work;
 use super::{Library, Queued, Slot, Target, Thumbs};
@@ -13,8 +16,8 @@ impl Thumbs {
             || self.library == Library::Wanted
     }
 
-    /// The folder that opens now or waits to open, for the info bar. A library
-    /// open has no folder.
+    /// The folder that opens now or waits to open, for the gallery header. A
+    /// library open has no folder.
     #[must_use]
     pub(crate) fn loading_folder(&self) -> Option<&Path> {
         if let Some(folder) = &self.pending {
@@ -52,13 +55,63 @@ impl Thumbs {
         }
     }
 
-    /// True while an open or a purge runs or waits. The gallery shows its busy
-    /// strip for this, so the strip stays until the last request ends. An
-    /// eviction is upkeep that nobody asked for, so it does not count.
+    /// The jobs for the status bar, in start order: the open (a folder scan
+    /// or the library), or the thumbnails and colors of the shown files,
+    /// then a purge. The thumbnail and color counts belong to the shown
+    /// files, so they wait while an open runs, and no result is taken while
+    /// other work runs. An eviction is upkeep that nobody asked for, so it
+    /// shows nothing.
     #[must_use]
-    pub(crate) fn is_busy(&self) -> bool {
-        let purging = matches!(self.is_working(), Some(Work::Purge))
-            || matches!(self.queued, Some(Queued::Purge { .. }));
-        self.is_opening() || purging
+    pub(crate) fn jobs(&self) -> Vec<Job> {
+        let mut jobs = Vec::new();
+        if self.is_opening() {
+            jobs.push(self.open_job());
+        } else if self.is_working().is_none() {
+            let progress = self.feed.progress();
+            let count = |value: usize| u64::try_from(value).unwrap_or(u64::MAX);
+            let (done, total) = progress.thumbs;
+            if done < total {
+                jobs.push(Job::Thumbnails {
+                    done: count(done),
+                    total: count(total),
+                });
+            }
+            let (done, total) = progress.colors;
+            if done < total {
+                jobs.push(Job::Colors {
+                    done: count(done),
+                    total: count(total),
+                });
+            }
+        }
+        if matches!(self.is_working(), Some(Work::Purge)) {
+            let purge = &self.counters.purge;
+            jobs.push(Job::Purge {
+                done: purge.done(),
+                total: purge.total(),
+            });
+        } else if matches!(self.queued, Some(Queued::Purge { .. })) {
+            jobs.push(Job::Purge { done: 0, total: 0 });
+        }
+        jobs
+    }
+
+    /// The open that runs or waits: the library, or a folder scan with the
+    /// files it has found. A folder that waits has found none yet.
+    fn open_job(&self) -> Job {
+        match &self.slot {
+            Slot::Opening {
+                target: Target::Library,
+                ..
+            } => Job::Library,
+            Slot::Opening {
+                target: Target::Folder(_),
+                ..
+            } => Job::Scan {
+                found: self.counters.found.load(Ordering::Relaxed),
+            },
+            _ if self.pending.is_none() && self.library == Library::Wanted => Job::Library,
+            _ => Job::Scan { found: 0 },
+        }
     }
 }

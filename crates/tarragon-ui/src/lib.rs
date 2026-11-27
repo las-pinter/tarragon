@@ -16,6 +16,7 @@ pub mod prefs;
 pub mod preview;
 pub mod shell;
 pub mod sidebar;
+pub mod status;
 pub mod swatch;
 pub mod tag_manager;
 #[cfg(test)]

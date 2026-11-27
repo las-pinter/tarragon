@@ -115,7 +115,7 @@ fn draw_row(ui: &mut Ui, row: &Row, width: f32) -> bool {
     } else {
         let size = vec2(width, tokens::MENU_ROW_HEIGHT);
         let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
-        (rect, false, tokens::TEXT_MUTED)
+        (rect, false, tokens::TEXT_TERTIARY)
     };
     let font = FontId::proportional(tokens::SIZE_BODY);
     let pad = vec2(tokens::MENU_ROW_PAD_X, 0.0);
@@ -131,7 +131,7 @@ fn draw_row(ui: &mut Ui, row: &Row, width: f32) -> bool {
         Align2::RIGHT_CENTER,
         row.shortcut,
         font,
-        tokens::TEXT_MUTED,
+        tokens::TEXT_TERTIARY,
     );
     clicked
 }

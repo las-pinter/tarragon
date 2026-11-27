@@ -50,7 +50,7 @@ pub(super) fn show_card(ui: &mut Ui, failure: &PreviewFailure, events: &mut Vec<
             ui.label(
                 RichText::new(HINT)
                     .size(tokens::SIZE_CAPTION)
-                    .color(tokens::TEXT_MUTED),
+                    .color(tokens::TEXT_SECONDARY),
             );
             ui.horizontal(|ui| {
                 if small_button(ui, "Retry").clicked() {

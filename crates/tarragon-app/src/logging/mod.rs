@@ -16,7 +16,7 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::{Registry, reload};
 
 pub use crash::install_panic_hook;
-pub use stamp::local_offset;
+pub use stamp::{display_offset, local_offset};
 
 use format::LineFormat;
 use ring::{LogRing, RingLayer};

@@ -11,6 +11,8 @@ mod rename;
 
 use rename::Edit;
 
+use crate::theme::dialog_frame;
+
 /// Window width, in points.
 const WIDTH: f32 = 360.0;
 
@@ -151,6 +153,7 @@ impl TagManager {
             .collapsible(false)
             .resizable(false)
             .anchor(Align2::CENTER_CENTER, vec2(0.0, 0.0))
+            .frame(dialog_frame())
             .show(ctx, |ui| {
                 ui.set_width(WIDTH);
                 let before = self.events.len();

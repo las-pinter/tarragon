@@ -27,19 +27,26 @@ fn busy_phase(time: f64) -> f32 {
 pub(crate) fn strip(ui: &mut Ui, label: &str) {
     ui.horizontal(|ui| {
         let label = RichText::new(label).size(tokens::SIZE_CAPTION);
-        ui.label(label.color(tokens::TEXT_MUTED));
+        ui.label(label.color(tokens::TEXT_SECONDARY));
         let size = vec2(ui.available_width(), BUSY_BAR_HEIGHT);
         let (track, _) = ui.allocate_exact_size(size, Sense::hover());
-        let painter = ui.painter().with_clip_rect(track);
-        painter.rect_filled(track, tokens::RADIUS_XS, tokens::BG_TERTIARY);
-        // The block runs from off the left edge to off the right edge.
-        let phase = busy_phase(ui.input(|i| i.time));
-        let width = track.width() * BUSY_BLOCK_SHARE;
-        let left = track.left() + track.width() * BUSY_RUN_SHARE * phase - width;
-        let block = Rect::from_min_size(pos2(left, track.top()), vec2(width, track.height()));
-        painter.rect_filled(block, tokens::RADIUS_XS, tokens::AMBER_ACCENT);
-        ui.request_repaint();
+        ui.painter()
+            .rect_filled(track, tokens::RADIUS_XS, tokens::BG_TERTIARY);
+        paint_sliding_block(ui, track, tokens::RADIUS_XS);
     });
+}
+
+/// Paint the amber block that slides across `track`, cut to it, and ask for
+/// the next frame so it keeps moving.
+pub(crate) fn paint_sliding_block(ui: &Ui, track: Rect, radius: u8) {
+    let painter = ui.painter().with_clip_rect(track);
+    // The block runs from off the left edge to off the right edge.
+    let phase = busy_phase(ui.input(|i| i.time));
+    let width = track.width() * BUSY_BLOCK_SHARE;
+    let left = track.left() + track.width() * BUSY_RUN_SHARE * phase - width;
+    let block = Rect::from_min_size(pos2(left, track.top()), vec2(width, track.height()));
+    painter.rect_filled(block, radius, tokens::AMBER_ACCENT);
+    ui.request_repaint();
 }
 
 #[cfg(test)]

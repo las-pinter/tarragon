@@ -61,6 +61,10 @@ pub struct LibraryFile {
     pub size: i64,
     /// True when the row holds a 320 px tier cache path.
     pub cached: bool,
+    /// Pixel width. Zero means unknown.
+    pub width: u32,
+    /// Pixel height. Zero means unknown.
+    pub height: u32,
 }
 
 /// A thumbnail row written after a render completes.

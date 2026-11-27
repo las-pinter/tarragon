@@ -114,7 +114,7 @@ fn the_window_is_not_drawn_until_it_is_opened() {
     let mut shell = Shell::new();
     frame(&ctx, &mut shell, vec![]);
     let texts = frame(&ctx, &mut shell, vec![]);
-    assert!(!texts.iter().any(|(t, _)| t == "Max PSD Workers"));
+    assert!(!texts.iter().any(|(t, _)| t == "Max PSD workers"));
     assert!(!shell.prefs_mut().is_open());
 }
 
@@ -125,7 +125,7 @@ fn the_shell_draws_the_window_and_hands_back_its_events() {
     shell.prefs_mut().open(values(), "1.4 GB".to_owned());
     frame(&ctx, &mut shell, vec![]);
     let texts = frame(&ctx, &mut shell, vec![]);
-    assert!(texts.iter().any(|(t, _)| t == "Max PSD Workers"));
+    assert!(texts.iter().any(|(t, _)| t == "Max PSD workers"));
 
     frame(&ctx, &mut shell, vec![escape()]);
     assert_eq!(shell.prefs_mut().take_events(), vec![PrefsEvent::Cancel]);

@@ -6,6 +6,7 @@ use tarragon_db::Database;
 use tarragon_db::repository::Thumbnail;
 use tarragon_ui::preview::budget::scaled_size;
 use tarragon_ui::preview::{Meta, UNKNOWN};
+use time::{OffsetDateTime, UtcOffset};
 
 /// The longest side of the preview tier. A picture is never drawn larger.
 const PREVIEW_SIDE: u32 = 1024;
@@ -88,7 +89,18 @@ fn item_of(path: &Path, row: &Thumbnail) -> Option<SourceItem> {
     })
 }
 
-/// The details of `path`. The row wins; the file fills a size it lacks.
+/// The modified time of `path` in epoch seconds, from the file system.
+fn file_mtime(path: &Path) -> Option<i64> {
+    let modified = std::fs::metadata(path).ok()?.modified().ok()?;
+    let seconds = modified
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()?
+        .as_secs();
+    i64::try_from(seconds).ok()
+}
+
+/// The details of `path`. The row wins; the file fills a size or a modified
+/// time it lacks.
 fn meta_of(path: &Path, row: Option<&Thumbnail>) -> Meta {
     let size = row
         .and_then(|row| u64::try_from(row.size).ok())
@@ -96,6 +108,11 @@ fn meta_of(path: &Path, row: Option<&Thumbnail>) -> Meta {
     let dimensions = row
         .filter(|row| row.width > 0 && row.height > 0)
         .map(|row| (row.width, row.height));
+    // The scan stores 0 for a time it could not read.
+    let modified = row
+        .map(|row| row.mtime)
+        .filter(|mtime| *mtime > 0)
+        .or_else(|| file_mtime(path));
     Meta {
         name: path
             .file_name()
@@ -106,7 +123,23 @@ fn meta_of(path: &Path, row: Option<&Thumbnail>) -> Meta {
             || UNKNOWN.to_owned(),
             |ext| ext.to_string_lossy().to_uppercase(),
         ),
+        modified: modified.and_then(|mtime| date_text(mtime, crate::logging::display_offset())),
     }
+}
+
+/// The English short month names, January first.
+const MONTHS: [&str; 12] = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
+
+/// An epoch time in seconds as a date at `offset`, such as "Oct 14, 2026".
+/// `None` for a time outside the calendar range.
+pub(crate) fn date_text(mtime: i64, offset: UtcOffset) -> Option<String> {
+    let date = OffsetDateTime::from_unix_timestamp(mtime)
+        .ok()?
+        .to_offset(offset);
+    let month = MONTHS[usize::from(u8::from(date.month())) - 1];
+    Some(format!("{month} {}, {}", date.day(), date.year()))
 }
 
 #[cfg(test)]

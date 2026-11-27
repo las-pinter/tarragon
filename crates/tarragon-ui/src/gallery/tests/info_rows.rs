@@ -1,4 +1,4 @@
-//! Tests for the info line and the sort controls sharing the strip rows.
+//! Tests for the header count and the info row sharing the strip width.
 
 use super::*;
 use crate::test_support;
@@ -8,7 +8,8 @@ use tarragon_core::color::ColorBucket;
 use tarragon_core::filter_bar::ColorChoice;
 
 const LONG_FOLDER: &str = "reference-sketches-and-studies";
-const WHOLE_COUNTS: &str = "6 files - 1 selected";
+const COUNT: &str = "6 files";
+const SELECTED: &str = "1 selected";
 
 /// Six items in a long folder, one selected, and `filters` colour filters.
 fn gallery(filters: usize) -> Gallery {
@@ -64,53 +65,166 @@ fn rect_where(painted: &[(String, Rect)], pick: impl Fn(&str) -> bool) -> Rect {
         .expect("the text was painted")
 }
 
-/// The info line text and rect, the Sort label rect, and the Name pill rect.
-fn rows(width: f32, filters: usize) -> (String, Rect, Rect, Rect) {
-    let painted = draw(width, filters);
-    let is_info = |t: &str| t.contains("6 files");
-    let info = rect_where(&painted, is_info);
-    let text = painted.iter().find(|(t, _)| is_info(t)).map(|(t, _)| t);
-    let sort = rect_where(&painted, |t| t == "Sort");
-    let name = rect_where(&painted, |t| t == "Name");
-    (text.cloned().unwrap_or_default(), info, sort, name)
-}
-
 #[test]
-fn the_counts_stay_whole_at_the_minimum_width() {
+fn the_header_count_stays_whole_at_the_minimum_width() {
     for filters in [0, 2] {
-        let (line, info, _, _) = rows(260.0, filters);
-        assert!(line.ends_with(WHOLE_COUNTS), "{filters}: {line:?}");
-        assert!(info.max.x <= 260.0, "{filters}: ends at {}", info.max.x);
+        let painted = draw(260.0, filters);
+        let count = rect_where(&painted, |t| t == COUNT);
+        assert!(count.max.x <= 260.0, "{filters}: ends at {}", count.max.x);
+        // The long folder name gives way before the count does.
+        assert!(
+            !painted.iter().any(|(t, _)| t == LONG_FOLDER),
+            "{filters}: the whole folder name fits in 260 points"
+        );
     }
 }
 
 #[test]
-fn the_controls_drop_below_the_info_when_they_do_not_fit_beside_it() {
-    for filters in [0, 2] {
-        let (_, info, sort, name) = rows(260.0, filters);
-        assert!(info.max.y <= sort.min.y, "{filters}: Sort is not lower");
-        assert!(info.max.y <= name.min.y, "{filters}: Name is not lower");
+fn the_info_row_holds_the_controls_on_one_line_and_leaves_the_selection_out() {
+    // The selection count lives in the status bar.
+    for width in [260.0, 1200.0] {
+        for filters in [0, 2] {
+            let painted = draw(width, filters);
+            assert!(
+                !painted.iter().any(|(t, _)| t == SELECTED),
+                "{width}, {filters}: the row paints the selection"
+            );
+            let sort = rect_where(&painted, |t| t == "Sort");
+            let date = rect_where(&painted, |t| t == "Date");
+            assert!(sort.min.y < date.max.y && date.min.y < sort.max.y);
+        }
     }
 }
 
 #[test]
-fn the_filter_pill_keeps_its_place_in_the_lower_row() {
-    let painted = draw(260.0, 2);
-    let filter = rect_where(&painted, |t| t == "2 filters active");
-    let date = rect_where(&painted, |t| t == "Date");
-    let sort = rect_where(&painted, |t| t == "Sort");
-    let info = rect_where(&painted, |t| t.contains("6 files"));
-    assert!(date.max.x <= filter.min.x, "the pill is not after Date");
-    assert!(sort.max.x <= date.min.x, "Sort is not before the pills");
-    assert!(info.max.y <= filter.min.y, "the pill is not lower");
+fn the_filter_pill_keeps_its_place_in_the_row() {
+    for width in [260.0, 1200.0] {
+        let painted = draw(width, 2);
+        let filter = rect_where(&painted, |t| t == "2 filters active");
+        let date = rect_where(&painted, |t| t == "Date");
+        let sort = rect_where(&painted, |t| t == "Sort");
+        assert!(
+            date.max.x <= filter.min.x,
+            "{width}: the pill is not after Date"
+        );
+        assert!(
+            sort.max.x <= date.min.x,
+            "{width}: Sort is not before the pills"
+        );
+    }
 }
 
 #[test]
-fn everything_shares_one_row_at_a_wide_width() {
-    for filters in [0, 2] {
-        let (line, info, sort, name) = rows(1200.0, filters);
-        assert_eq!(line, format!("{LONG_FOLDER} - {WHOLE_COUNTS}"));
-        assert!(info.min.y < sort.max.y && sort.min.y < info.max.y);
-        assert!(info.min.y < name.max.y && name.min.y < info.max.y);
+fn the_header_keeps_its_gaps() {
+    let wide = draw(600.0, 0);
+    let crumb = rect_where(&wide, |t| t == "library");
+    let heading = rect_where(&wide, |t| t == LONG_FOLDER);
+    // The glyph boxes carry the line leading, so the tight boxes sit wider
+    // than the 2 point gap; the theme's default 8 point gap would add six more.
+    let gap = heading.min.y - crumb.max.y;
+    assert!(gap < 18.0, "the breadcrumb sits {gap} above the heading");
+}
+
+/// A gallery of `count` items in the long folder, with a count that grows wide.
+fn many(count: usize) -> Gallery {
+    let mut gallery = Gallery::new(SortMode::Natural);
+    let root = PathBuf::from("/library").join(LONG_FOLDER);
+    let items = (0..count)
+        .map(|n| {
+            GridItem::new(
+                root.join(format!("{n}.png")),
+                i64::try_from(n).expect("a small index"),
+                None,
+            )
+        })
+        .collect();
+    gallery.set_items(items);
+    gallery.set_folder(Some(root));
+    gallery
+}
+
+#[test]
+fn a_wide_count_wraps_the_tabs_instead_of_overrunning() {
+    for width in [180.0, 260.0] {
+        let ctx = test_support::context();
+        crate::theme::apply_theme(&ctx);
+        let mut gallery = many(1_200);
+        let output = ctx.run_ui(test_support::input(width, vec![]), |ui| {
+            Frame::new()
+                .inner_margin(Margin::same(8))
+                .show(ui, |ui| gallery.show(ui));
+        });
+        let count = output
+            .shapes
+            .iter()
+            .find_map(|clipped| match &clipped.shape {
+                Shape::Text(shape) if shape.galley.job.text.ends_with("files") => {
+                    Some(shape.visual_bounding_rect())
+                }
+                _ => None,
+            })
+            .expect("the count is painted");
+        let track = output
+            .shapes
+            .iter()
+            .filter_map(|clipped| match &clipped.shape {
+                Shape::Rect(rect)
+                    if rect.fill == tokens::BG_TERTIARY && rect.rect.min.y < 100.0 =>
+                {
+                    Some(rect.rect)
+                }
+                _ => None,
+            })
+            .max_by(|a, b| a.width().total_cmp(&b.width()))
+            .expect("the segmented track is painted");
+        output.drop_without_applying_deltas();
+        assert!(
+            !count.intersects(track),
+            "{width}: the count {count:?} overlaps the track {track:?}"
+        );
+        // A pane too narrow for both puts the tabs on their own line.
+        if width < 200.0 {
+            assert!(
+                track.min.y >= count.max.y,
+                "{width}: the track starts at {} and the count ends at {}",
+                track.min.y,
+                count.max.y
+            );
+        }
+    }
+}
+
+#[test]
+fn the_scope_tabs_stay_inside_the_strip_padding() {
+    for width in [260.0, 900.0] {
+        let ctx = test_support::context();
+        crate::theme::apply_theme(&ctx);
+        let mut gallery = gallery(0);
+        let output = ctx.run_ui(test_support::input(width, vec![]), |ui| {
+            Frame::new()
+                .inner_margin(Margin::same(8))
+                .show(ui, |ui| gallery.show(ui));
+        });
+        // The segmented track is the widest field-filled rect of the header.
+        let track = output
+            .shapes
+            .iter()
+            .filter_map(|clipped| match &clipped.shape {
+                Shape::Rect(rect)
+                    if rect.fill == tokens::BG_TERTIARY && rect.rect.min.y < 100.0 =>
+                {
+                    Some(rect.rect)
+                }
+                _ => None,
+            })
+            .max_by(|a, b| a.width().total_cmp(&b.width()));
+        output.drop_without_applying_deltas();
+        let track = track.expect("the segmented track is painted");
+        // The fixture insets the pane by 8 points and the strip by 8 more.
+        assert!(
+            track.max.x <= width - 16.0 + 0.5,
+            "{width}: the track ends at {}",
+            track.max.x
+        );
     }
 }

@@ -7,7 +7,7 @@ use tarragon_core::tier::Tier;
 use crate::CacheError;
 use crate::store::CacheStore;
 
-use super::PurgeOutcome;
+use super::{PurgeOutcome, PurgeProgress};
 
 /// A temporary folder that removes itself on drop.
 struct TempDir {
@@ -80,6 +80,27 @@ fn purge_removes_every_tier_file_and_marker() {
             tier.as_str()
         );
     }
+}
+
+#[test]
+fn the_progress_totals_the_tier_bytes_first_and_counts_each_removal() {
+    let temp = TempDir::new("progress");
+    let store = CacheStore::new(temp.path());
+    store
+        .write_all(&source(40, 30), "gallery", "abcd1234", "art.jpg")
+        .expect("write the tiers");
+    // A user file beside the tiers is not the purge's, so it is not counted.
+    std::fs::write(temp.path().join("notes.txt"), [0u8; 1000]).expect("write a user file");
+    let tiers = store.total_size().expect("total") - 1000;
+    let progress = PurgeProgress::default();
+
+    let outcome = store.purge_with(None, &progress).expect("purge");
+
+    assert_eq!(progress.total(), tiers, "the total is the tier bytes");
+    assert_eq!(progress.done(), outcome.bytes_removed);
+    assert_eq!(progress.done(), progress.total());
+    progress.reset();
+    assert_eq!((progress.total(), progress.done()), (0, 0));
 }
 
 #[test]

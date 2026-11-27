@@ -1,29 +1,37 @@
-//! The N-up mosaic that replaces the picture box for a multi-selection.
+//! The mosaic that replaces the picture box for a multi-selection.
 //!
-//! The pictures sit in balanced, centred rows. Each cell has the shape of its
-//! picture, and each row fills the full width of the pane.
+//! The cells fill the box in reading order. The rows are near square and
+//! balanced, longer rows first; each row splits the full width among its
+//! cells, so no slot stays empty, and the rows share the height. Each picture
+//! is fitted whole inside its cell.
 
-use egui::{CornerRadius, Rect, RichText, Sense, Ui, pos2, vec2};
+use std::path::PathBuf;
 
-use super::image::{PreviewImage, paint_picture};
-use crate::tokens;
+use egui::epaint::RectShape;
+use egui::{Color32, CornerRadius, Pos2, Rect, Sense, Ui, pos2, vec2};
+
+use super::image::{PreviewImage, fit_rect};
+use crate::{grid, tokens};
 
 /// How many images the mosaic shows when the setting is not read yet.
 pub const DEFAULT_CAP: usize = 9;
 
-/// The widest and the narrowest cell shape, as width over height. A more
-/// extreme picture is fitted inside a cell of this shape, so one panorama
-/// cannot squeeze the rest of its row.
-const ASPECT_LIMITS: (f32, f32) = (0.25, 4.0);
+/// The gap between two cells, in points.
+const GAP: f32 = 8.0;
 
-/// The tallest row, in points: the height of the single-picture box. A row
-/// that would be taller keeps this height and is centred.
-const MAX_ROW_HEIGHT: f32 = tokens::PREVIEW_IMAGE_HEIGHT;
+/// One ready picture of the selection and the file it shows, for the badge.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MosaicCell {
+    /// The picture.
+    pub image: PreviewImage,
+    /// The selected file.
+    pub path: PathBuf,
+}
 
-/// How many columns a square grid of `count` cells needs: the smallest whole
-/// number whose square reaches `count`. It sets the number of rows.
+/// How many cells the widest row holds: the ceiling of the square root of
+/// `count`, so the grid stays near square.
 fn columns(count: usize) -> usize {
-    (1..=count.max(1)).find(|c| c * c >= count).unwrap_or(1)
+    (1..=count).find(|c| c * c >= count).unwrap_or(1)
 }
 
 /// How many images the mosaic draws out of `count`, given the `cap`.
@@ -31,11 +39,10 @@ fn shown(count: usize, cap: usize) -> usize {
     count.min(cap)
 }
 
-/// How many images sit in each row, top to bottom, for `count` images.
-///
-/// The row count is the one of a near-square grid. The images spread over the
-/// rows as evenly as possible, the fuller rows first: 5 gives 3 and 2.
-fn row_sizes(count: usize) -> Vec<usize> {
+/// How many cells each row holds, top row first. The rows are as few as the
+/// columns allow, they differ by at most one cell, and the longer rows come
+/// first: three gives [2, 1], five [3, 2], and seven [3, 2, 2].
+fn row_lengths(count: usize) -> Vec<usize> {
     if count == 0 {
         return Vec::new();
     }
@@ -46,115 +53,71 @@ fn row_sizes(count: usize) -> Vec<usize> {
         .collect()
 }
 
-/// The cell shape for a picture of `size` pixels, width over height, within
-/// `ASPECT_LIMITS`. A picture with a zero side gets a square cell.
-#[expect(
-    clippy::cast_precision_loss,
-    reason = "a side above 2^24 pixels rounds slightly, which is invisible"
-)]
-fn aspect((width, height): (u32, u32)) -> f32 {
-    if width == 0 || height == 0 {
-        return 1.0;
-    }
-    (width as f32 / height as f32).clamp(ASPECT_LIMITS.0, ASPECT_LIMITS.1)
-}
-
-/// The cell rects for the first `cap` pictures of `sizes`, row by row.
-///
-/// Only the top-left corner and the width of `area` count: the grid starts
-/// one padding inside them and is as tall as its rows. Each cell has the
-/// shape of its picture, and the cells of a row share the full width, so the
-/// row height follows. A row taller than `MAX_ROW_HEIGHT` keeps that height
-/// and is centred. An area too narrow for the gaps of its widest row gives
-/// no cells.
+/// The cell rects for the first `cap` of `count` pictures, filling `area`,
+/// in reading order: left to right, then top to bottom. Each row splits the
+/// full width among its cells, and the rows share the height. An area too
+/// small for the gaps gives no cells.
 #[must_use]
 #[expect(
     clippy::cast_precision_loss,
     reason = "a cell count is tiny, far below 2^24"
 )]
-pub fn grid_cells(sizes: &[(u32, u32)], cap: usize, area: Rect) -> Vec<Rect> {
-    let n = shown(sizes.len(), cap);
-    let pad = tokens::PREVIEW_MOSAIC_PADDING;
-    let width = area.width() - 2.0 * pad;
-    if n == 0 || width <= 0.0 {
+pub fn grid_cells(count: usize, cap: usize, area: Rect) -> Vec<Rect> {
+    let lengths = row_lengths(shown(count, cap));
+    if lengths.is_empty() {
         return Vec::new();
     }
-    let gap = tokens::SPACING_S;
-    let rows = row_sizes(n);
-    let widest = rows.iter().copied().max().unwrap_or(1);
-    if width <= gap * (widest - 1) as f32 {
-        // A pane narrower than the gaps of the widest row has no room for pictures.
+    let rows = lengths.len() as f32;
+    let height = (area.height() - GAP * (rows - 1.0)) / rows;
+    let widest = columns(shown(count, cap)) as f32;
+    if height <= 0.0 || area.width() - GAP * (widest - 1.0) <= 0.0 {
         return Vec::new();
     }
-    let (mut cells, mut first, mut y) = (Vec::with_capacity(n), 0, area.min.y + pad);
-    for count in rows {
-        let aspects: Vec<f32> = sizes[first..first + count]
-            .iter()
-            .map(|s| aspect(*s))
-            .collect();
-        let gaps = gap * (count - 1) as f32;
-        let room = width - gaps;
-        let height = (room / aspects.iter().sum::<f32>()).min(MAX_ROW_HEIGHT);
-        let used: f32 = aspects.iter().map(|a| a * height).sum::<f32>() + gaps;
-        let mut x = area.min.x + pad + (width - used).max(0.0) / 2.0;
-        for shape in aspects {
-            cells.push(Rect::from_min_size(
-                pos2(x, y),
-                vec2(shape * height, height),
-            ));
-            x += shape * height + gap;
+    let mut cells = Vec::new();
+    for (row, &length) in lengths.iter().enumerate() {
+        let across = length as f32;
+        let width = (area.width() - GAP * (across - 1.0)) / across;
+        let y = area.min.y + row as f32 * (height + GAP);
+        for col in 0..length {
+            let x = area.min.x + col as f32 * (width + GAP);
+            cells.push(Rect::from_min_size(pos2(x, y), vec2(width, height)));
         }
-        first += count;
-        y += height + gap;
     }
     cells
 }
 
-/// The height the grid takes below the top of `area`, padding included, so
-/// the caller can reserve it. No cells take no room.
-fn grid_height(cells: &[Rect], area: Rect) -> f32 {
-    cells
-        .iter()
-        .map(|cell| cell.max.y)
-        .reduce(f32::max)
-        .map_or(0.0, |bottom| {
-            bottom + tokens::PREVIEW_MOSAIC_PADDING - area.min.y
-        })
-}
-
-/// The hint under a mosaic that draws `shown` of `total` selected images, or
-/// `None` when it draws them all.
+/// The note for the selected images the mosaic does not draw, or `None` when
+/// it draws them all.
 #[must_use]
 pub fn more_hint(total: usize, shown: usize) -> Option<String> {
     (total > shown).then(|| format!("+{} more", total - shown))
 }
 
-/// Draw the grid of cells, each with its picture fitted inside, then the hint.
-/// `total` is the whole selection, which can be larger than `images`.
-pub fn show(ui: &mut Ui, images: &[PreviewImage], total: usize, cap: usize) {
-    let sizes: Vec<(u32, u32)> = images.iter().map(|image| image.size).collect();
-    let probe = Rect::from_min_size(ui.cursor().min, vec2(ui.available_width(), 0.0));
-    let height = grid_height(&grid_cells(&sizes, cap, probe), probe);
-    let (area, _) = ui.allocate_exact_size(vec2(probe.width(), height), Sense::hover());
-    // The cells are laid out again on the allocated rect, which can differ
-    // from the probe when the layout moves the allocation.
-    for (cell, image) in grid_cells(&sizes, cap, area).into_iter().zip(images) {
-        let painter = ui.painter();
-        painter.rect_filled(
-            cell,
-            CornerRadius::same(tokens::RADIUS_M),
-            tokens::BG_SECONDARY,
+/// How many of `cells` the mosaic draws with the `cap`.
+#[must_use]
+pub fn drawn(cells: &[MosaicCell], cap: usize) -> usize {
+    shown(cells.len(), cap)
+}
+
+/// Draw the mosaic `height` tall across the width: each cell on the field
+/// fill with its picture fitted inside and the format badge. Returns the
+/// rect the mosaic takes.
+pub fn show(ui: &mut Ui, cells: &[MosaicCell], cap: usize, height: f32) -> Rect {
+    let (area, _) = ui.allocate_exact_size(vec2(ui.available_width(), height), Sense::hover());
+    let painter = ui.painter();
+    for (rect, cell) in grid_cells(cells.len(), cap, area).into_iter().zip(cells) {
+        let radius = CornerRadius::same(tokens::RADIUS_L);
+        painter.rect_filled(rect, radius, tokens::BG_TERTIARY);
+        let picture = fit_rect(cell.image.size, rect);
+        let corners = grid::touching_corners(picture, rect, radius);
+        let uv = Rect::from_min_max(Pos2::ZERO, pos2(1.0, 1.0));
+        painter.add(
+            RectShape::filled(picture, corners, Color32::WHITE)
+                .with_texture(cell.image.texture, uv),
         );
-        paint_picture(painter, image, cell, tokens::RADIUS_M);
+        grid::paint_format_badge(painter, rect, &cell.path);
     }
-    if let Some(hint) = more_hint(total, shown(images.len(), cap)) {
-        ui.add_space(tokens::SPACING_S);
-        ui.label(
-            RichText::new(hint)
-                .size(tokens::SIZE_CAPTION)
-                .color(tokens::TEXT_MUTED),
-        );
-    }
+    area
 }
 
 #[cfg(test)]

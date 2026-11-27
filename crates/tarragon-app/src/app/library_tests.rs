@@ -1,4 +1,4 @@
-//! Tests that the All Images scope loads the stored library.
+//! Tests that the All images scope loads the stored library.
 
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
@@ -120,10 +120,12 @@ fn all_images_shows_the_files_of_both_folders() {
 }
 
 #[test]
-fn the_info_bar_count_follows_the_library() {
+fn the_header_count_follows_the_library() {
     let mut rig = Rig::new();
     rig.show_all();
-    assert!(rig.texts().contains(&"All Images - 3 files".to_owned()));
+    let texts = rig.texts();
+    assert!(texts.contains(&"All images".to_owned()), "{texts:?}");
+    assert!(texts.contains(&"3 files".to_owned()), "{texts:?}");
 }
 
 #[test]
@@ -132,14 +134,14 @@ fn a_tag_on_a_file_of_another_folder_filters_all_images_to_it() {
     rig.tag(&rig.b.join("b1.png"), "night");
     rig.show_all();
     assert!(!rig.texts().iter().any(|t| t.contains("filter")));
-    click_text(&rig.ctx.clone(), "Filter Tags", &mut |ui| {
+    click_text(&rig.ctx.clone(), "Tags", &mut |ui| {
         rig.app.ui(ui, &mut rig.frame);
     });
     let ctx = rig.ctx.clone();
     click_text(&ctx, "night", &mut |ui| rig.app.ui(ui, &mut rig.frame));
     assert_eq!(rig.visible(), 1);
     let texts = rig.texts();
-    assert!(texts.contains(&"All Images - 1 file".to_owned()));
+    assert!(texts.contains(&"1 of 3 files".to_owned()), "{texts:?}");
     assert!(texts.contains(&"1 filter active".to_owned()));
 }
 

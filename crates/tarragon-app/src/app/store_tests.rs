@@ -11,7 +11,7 @@ use tarragon_core::entity::{FileInfo, TagSource};
 use tarragon_db::Database;
 use tarragon_ui::gallery::Scope;
 use tarragon_ui::grid::GridItem;
-use tarragon_ui::preview::{ColorState, Meta};
+use tarragon_ui::preview::Meta;
 use tarragon_ui::swatch;
 
 use super::tests::new_dir;
@@ -21,8 +21,8 @@ use crate::test_ui::click_text;
 const FILE: &str = "/r/one/a.png";
 
 /// The fill of each Preview colour square one app frame paints.
-fn square_fills(ctx: &Context, app: &mut App, frame: &mut Frame) -> Vec<Color32> {
-    crate::test_ui::square_fills(ctx, &mut |ui| app.ui(ui, frame))
+fn bar_fills(ctx: &Context, app: &mut App, frame: &mut Frame) -> Vec<Color32> {
+    crate::test_ui::bar_fills(ctx, &mut |ui| app.ui(ui, frame))
 }
 
 #[test]
@@ -54,6 +54,7 @@ fn a_changed_epoch_reads_the_colours_of_the_selected_file_again() {
         dimensions: None,
         size: None,
         format: "PNG".into(),
+        modified: None,
     }));
     let gallery = app.shell.gallery_mut();
     gallery.set_items([GridItem::new(PathBuf::from(FILE), 1, None)].into());
@@ -64,17 +65,16 @@ fn a_changed_epoch_reads_the_colours_of_the_selected_file_again() {
     let mut frame = Frame::_new_kittest();
     click_text(&ctx, "a.png", &mut |ui| app.ui(ui, &mut frame));
     assert_eq!(app.shell.selected_paths(), [PathBuf::from(FILE)]);
-    let none = swatch::bucket_color(ColorBucket::Red).gamma_multiply(ColorState::None.opacity());
-    assert_eq!(square_fills(&ctx, &mut app, &mut frame)[0], none);
+    assert_eq!(bar_fills(&ctx, &mut app, &mut frame), []);
 
     // The writer stores the colour after the selection was read.
     let red = db.ensure_tag("red", TagSource::AutoColor).expect("tag");
     db.add_tags_to_files_batch(&[FILE.to_owned()], &[red])
         .expect("attach");
-    assert_eq!(square_fills(&ctx, &mut app, &mut frame)[0], none);
+    assert_eq!(bar_fills(&ctx, &mut app, &mut frame), []);
     app.watch_store(&ctx, 1, Instant::now());
     assert_eq!(
-        square_fills(&ctx, &mut app, &mut frame)[0],
-        swatch::bucket_color(ColorBucket::Red)
+        bar_fills(&ctx, &mut app, &mut frame),
+        [swatch::bucket_color(ColorBucket::Red)]
     );
 }

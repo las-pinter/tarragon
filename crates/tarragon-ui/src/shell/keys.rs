@@ -226,7 +226,8 @@ fn take_command_press(ctx: &Context, key: Key) -> bool {
 }
 
 impl Shell {
-    /// Act on Command+O, Command+Comma, Command+F, Command+A, and Enter.
+    /// Act on Command+O, Command+Comma, Command+F, Command+K, Command+A, and
+    /// Enter.
     ///
     /// A window over the dock owns the keyboard, so none of the keys act, or
     /// get consumed, while one is open. Command+A also leaves a focused text
@@ -260,7 +261,7 @@ impl Shell {
         if take_command_press(ctx, Key::Comma) {
             self.menu_events.push(MenuEvent::OpenPreferences);
         }
-        if take_command_press(ctx, Key::F) {
+        if take_command_press(ctx, Key::F) || take_command_press(ctx, Key::K) {
             self.gallery.focus_search();
         }
         if !ctx.text_edit_focused() && take_command_press(ctx, Key::A) {

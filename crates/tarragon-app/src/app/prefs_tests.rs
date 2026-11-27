@@ -94,7 +94,7 @@ fn ok_with_changed_values_stores_them() {
         debug: true,
     };
     open_with(&mut rig, changed.clone());
-    rig.click("OK", false);
+    rig.click("Save", false);
     assert!(!rig.app.shell.prefs_mut().is_open());
     assert_eq!(prefs::load(&rig.app.db), changed);
     // The stored number is the short decimal, not the widened `f32`.
@@ -113,7 +113,7 @@ fn ok_with_colour_tags_off_removes_the_swatch_row_at_once() {
             ..defaults()
         },
     );
-    rig.click("OK", false);
+    rig.click("Save", false);
     assert_eq!(rig.swatches(), 0);
 }
 
@@ -134,10 +134,10 @@ fn ok_sets_both_colour_flags_from_the_saved_setting() {
         ..defaults()
     };
     open_with(&mut rig, off);
-    rig.click("OK", false);
+    rig.click("Save", false);
     assert_eq!(colour_flags(&mut rig), (false, false));
     open_with(&mut rig, defaults());
-    rig.click("OK", false);
+    rig.click("Save", false);
     assert_eq!(colour_flags(&mut rig), (true, true));
 }
 
@@ -150,7 +150,7 @@ fn a_failed_save_leaves_both_colour_flags_unchanged() {
         ..defaults()
     };
     open_with(&mut rig, bad);
-    rig.click("OK", false);
+    rig.click("Save", false);
     assert!(rig.app.shell.prefs_mut().is_open());
     assert_eq!(colour_flags(&mut rig), (true, true));
 }
@@ -179,7 +179,7 @@ fn a_bad_tile_grid_keeps_the_window_open_with_the_error_and_stores_nothing() {
         ..defaults()
     };
     open_with(&mut rig, bad);
-    rig.click("OK", false);
+    rig.click("Save", false);
     assert!(rig.app.shell.prefs_mut().is_open());
     let (texts, _) = rig.frame(Vec::new());
     assert!(
@@ -207,7 +207,7 @@ fn ok_with_debug_switches_the_log_level_and_the_log_checkbox_state() {
                 ..defaults()
             },
         );
-        rig.click("OK", false);
+        rig.click("Save", false);
         tracing::debug!("after");
     });
     let lines: Vec<String> = lines_ring.snapshot().into_iter().map(|e| e.text).collect();
@@ -232,7 +232,7 @@ fn ok_with_a_smaller_multi_preview_shows_fewer_pictures_at_once() {
             ..defaults()
         },
     );
-    rig.click("OK", false);
+    rig.click("Save", false);
     assert_eq!(rig.app.max_multi_preview, 2);
     rig.pictures_reach(2);
 }
@@ -252,7 +252,7 @@ fn ok_with_a_larger_multi_preview_loads_the_missing_pictures() {
             ..defaults()
         },
     );
-    rig.click("OK", false);
+    rig.click("Save", false);
     rig.pictures_reach(3);
 }
 

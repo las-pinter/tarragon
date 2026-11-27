@@ -1,6 +1,6 @@
 //! Library sidebar: the folder tree and the favorites list.
 
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 pub mod favorite;
 pub mod lister;
@@ -72,34 +72,77 @@ impl SidebarState {
     }
 }
 
-/// The text a favorite row shows.
+/// The text each favorite row shows, in list order.
 ///
-/// A stored label that is not blank wins. Otherwise the row shows the path
-/// below the longest root that contains it, so nested folders stay short.
-/// Callers pass `/`-separated paths, and the output joins parts with `/`.
+/// A stored label that is not blank wins. Otherwise a row shows its folder
+/// name. When several favorites without a label share a folder name, each of
+/// them shows its path below the folder their parents all share, such as
+/// `clientA/2026-10` and `clientB/2026-10`. A folder with no name, such as
+/// `/`, shows its full path, and so do namesakes that share no folder, such as
+/// two drives. Callers pass `/`-separated paths, and the output joins parts
+/// with `/`.
 #[must_use]
-pub fn display_label(path: &Path, label: Option<&str>, roots: &[PathBuf]) -> String {
-    if let Some(stored) = label.filter(|stored| !stored.trim().is_empty()) {
-        return stored.to_owned();
-    }
-    let full = || path.to_string_lossy().into_owned();
-    let nearest = roots
+pub fn favorite_labels(favorites: &[FavoriteRow]) -> Vec<String> {
+    let stored = |fav: &FavoriteRow| {
+        fav.label
+            .as_deref()
+            .filter(|label| !label.trim().is_empty())
+            .map(ToOwned::to_owned)
+    };
+    let name = |path: &Path| {
+        path.file_name().map_or_else(
+            || path.to_string_lossy().into_owned(),
+            |name| name.to_string_lossy().into_owned(),
+        )
+    };
+    favorites
         .iter()
-        .filter(|root| !root.as_os_str().is_empty() && path.starts_with(root))
-        .max_by_key(|root| root.components().count());
-    let Some(root) = nearest else {
-        return full();
-    };
-    if path == root {
-        // A root without a last component, such as `/`, shows the full path.
-        let Some(name) = root.file_name() else {
-            return full();
-        };
-        return name.to_string_lossy().into_owned();
-    }
-    let Ok(below) = path.strip_prefix(root) else {
-        return full();
-    };
-    let parts: Vec<_> = below.iter().map(|part| part.to_string_lossy()).collect();
-    parts.join("/")
+        .map(|fav| {
+            if let Some(label) = stored(fav) {
+                return label;
+            }
+            let own = name(&fav.path);
+            let twins: Vec<&Path> = favorites
+                .iter()
+                .filter(|other| stored(other).is_none() && name(&other.path) == own)
+                .map(|other| other.path.as_path())
+                .collect();
+            if twins.len() < 2 || fav.path.file_name().is_none() {
+                return own;
+            }
+            let below: Vec<_> = fav.path.components().skip(shared_parent(&twins)).collect();
+            if below
+                .iter()
+                .any(|part| !matches!(part, Component::Normal(_)))
+            {
+                // Paths on two drives, or a relative and an absolute one,
+                // share no folder, so the row shows the full path.
+                return fav.path.to_string_lossy().into_owned();
+            }
+            let parts: Vec<_> = below
+                .iter()
+                .map(|part| part.as_os_str().to_string_lossy())
+                .collect();
+            parts.join("/")
+        })
+        .collect()
+}
+
+/// How many leading components the parent folders of `paths` all share.
+fn shared_parent(paths: &[&Path]) -> usize {
+    let parents: Vec<Vec<_>> = paths
+        .iter()
+        .map(|path| {
+            path.parent()
+                .map_or_else(Vec::new, |parent| parent.components().collect())
+        })
+        .collect();
+    let shortest = parents.iter().map(Vec::len).min().unwrap_or(0);
+    (0..shortest)
+        .take_while(|&index| {
+            parents
+                .iter()
+                .all(|parent| parent[index] == parents[0][index])
+        })
+        .count()
 }

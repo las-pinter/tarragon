@@ -19,11 +19,13 @@ const MAX_DASH_SPLITS: usize = 8;
 /// The name of the group that holds the entry keys.
 const GROUP: &str = "[Desktop Entry]";
 
-/// The default app of a type: its desktop id and its `Exec` line.
+/// The default app of a type: its desktop id, its name, and its `Exec` line.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DefaultApp {
     /// The desktop id, such as `org.kde.krita.desktop`.
     pub id: String,
+    /// The `Name` of the entry, or the id when the entry has none.
+    pub name: String,
     /// The parsed `Exec` line of the entry.
     pub exec: ExecLine,
 }
@@ -125,14 +127,16 @@ pub fn load(id: &str, env: &Env) -> Option<DefaultApp> {
     {
         return None;
     }
+    let name = fields.name.as_deref().unwrap_or(id).to_owned();
     let exec = ExecLine::parse(
         fields.exec.as_deref()?,
-        fields.name.as_deref().unwrap_or(id),
+        &name,
         fields.icon.as_deref(),
         &path,
     )?;
     Some(DefaultApp {
         id: id.to_owned(),
+        name,
         exec,
     })
 }

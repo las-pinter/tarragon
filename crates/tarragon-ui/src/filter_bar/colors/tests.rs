@@ -1,54 +1,107 @@
-//! Tests for the colour swatch row.
+//! Tests for the colour swatches.
 
-use super::show_colors;
-use crate::swatch::tests::stroked_widths;
+use super::{SWATCH_GAP, held_swatches, show_colors};
+use crate::swatch::tests::circles;
+use crate::swatch::{FILTER_SIZE, Swatch};
 use crate::test_support::input;
 use crate::tokens;
 use egui::{Context, Event, Modifiers, PointerButton, Rect, vec2};
 use tarragon_core::color::ColorBucket;
 use tarragon_core::filter_bar::{ColorChoice, FilterBar};
 
+/// The gap a test asks for after the last swatch.
+const AFTER: f32 = 16.0;
+
 struct Frame {
     shapes: Vec<egui::epaint::ClippedShape>,
     clicked: Option<ColorChoice>,
     used: Rect,
+    /// Where the next item starts after the swatches.
+    next: f32,
 }
 
-fn frame(ctx: &Context, bar: &FilterBar, enabled: bool, max: f32, raw: egui::RawInput) -> Frame {
+fn frame(ctx: &Context, bar: &FilterBar, raw: egui::RawInput) -> Frame {
     let mut out = None;
     let output = ctx.run_ui(raw, |ui| {
-        ui.scope(|ui| {
-            ui.set_max_width(max);
-            let clicked = show_colors(ui, bar, enabled);
-            out = Some((clicked, ui.min_rect()));
+        ui.horizontal(|ui| {
+            let clicked = show_colors(ui, bar, AFTER);
+            let used = ui.min_rect();
+            let next = ui
+                .allocate_exact_size(vec2(1.0, 1.0), egui::Sense::hover())
+                .0
+                .min
+                .x;
+            out = Some((clicked, used, next));
         });
     });
     let shapes = output.shapes.clone();
     output.drop_without_applying_deltas();
-    let (clicked, used) = out.expect("the closure ran");
+    let (clicked, used, next) = out.expect("the closure ran");
     Frame {
         shapes,
         clicked,
         used,
+        next,
     }
 }
 
-fn plain(bar: &FilterBar, enabled: bool, max: f32) -> Frame {
-    frame(&Context::default(), bar, enabled, max, input(600.0, vec![]))
+fn plain(bar: &FilterBar) -> Frame {
+    frame(&Context::default(), bar, input(600.0, vec![]))
+}
+
+/// The ring colours of the drawn swatches, keyed by swatch index.
+fn rings(f: &Frame) -> Vec<(usize, egui::Color32)> {
+    let step = FILTER_SIZE + SWATCH_GAP;
+    circles(&f.shapes)
+        .into_iter()
+        .filter(|c| c.3.width > 0.0)
+        .map(|(center, _, _, stroke)| {
+            let offset = center.x - f.used.min.x - FILTER_SIZE / 2.0;
+            #[expect(
+                clippy::cast_possible_truncation,
+                clippy::cast_sign_loss,
+                reason = "a swatch index is below twelve"
+            )]
+            let index = (offset / step).round() as usize;
+            (index, stroke.color)
+        })
+        .collect()
 }
 
 #[test]
-fn twelve_swatches_draw_and_the_last_is_transparent() {
-    let f = plain(&FilterBar::default(), true, 600.0);
-    assert_eq!(stroked_widths(&f.shapes).len(), 12);
+fn twelve_round_swatches_draw_with_the_page_gap() {
+    let f = plain(&FilterBar::default());
+    let fills: Vec<_> = circles(&f.shapes)
+        .into_iter()
+        .filter(|c| c.3.width == 0.0)
+        .collect();
+    assert_eq!(fills.len(), 12, "eleven buckets and the checker base");
+    assert_eq!(fills[0].2, tokens::BUCKET_RED);
+    assert_eq!(fills[11].2, tokens::CHECKER_LIGHT, "the checker is last");
+    let step = fills[1].0.x - fills[0].0.x;
+    assert_eq!(step, FILTER_SIZE + SWATCH_GAP);
+    assert_eq!(SWATCH_GAP, 8.0);
+    assert!(rings(&f).is_empty(), "no swatch is held");
+}
+
+#[test]
+fn the_gap_after_the_last_swatch_is_the_callers() {
+    let f = plain(&FilterBar::default());
+    assert_eq!(f.next - f.used.max.x, AFTER);
+}
+
+#[test]
+fn held_choices_get_the_light_ring() {
     let mut bar = FilterBar::default();
+    bar.toggle_color(ColorChoice::Bucket(ColorBucket::Red));
+    bar.toggle_color(ColorChoice::Bucket(ColorBucket::Neutral));
     bar.toggle_color(ColorChoice::Transparent);
-    let f = plain(&bar, true, 600.0);
-    let widths = stroked_widths(&f.shapes);
-    assert_eq!(widths.len(), 12);
-    assert_eq!(widths[11], (2.0, tokens::AMBER_ACCENT));
-    let rest = (1.0, tokens::BORDER_INACTIVE);
-    assert!(widths[..11].iter().all(|w| *w == rest));
+    let found = rings(&plain(&bar));
+    let want: Vec<_> = [0, 10, 11]
+        .into_iter()
+        .map(|i| (i, tokens::TEXT_PRIMARY))
+        .collect();
+    assert_eq!(found, want);
 }
 
 #[test]
@@ -61,9 +114,10 @@ fn a_click_returns_the_matching_choice() {
     ];
     for (i, choice) in want {
         let ctx = Context::default();
-        let first = frame(&ctx, &bar, true, 600.0, input(600.0, vec![]));
-        let step = 36.0 + tokens::SPACING_XS;
-        let pos = first.used.min + vec2(f32::from(i) * step + 18.0, 18.0);
+        let first = frame(&ctx, &bar, input(600.0, vec![]));
+        let step = FILTER_SIZE + SWATCH_GAP;
+        let half = FILTER_SIZE / 2.0;
+        let pos = first.used.min + vec2(f32::from(i) * step + half, half);
         let click = |pressed| Event::PointerButton {
             pos,
             button: PointerButton::Primary,
@@ -71,55 +125,23 @@ fn a_click_returns_the_matching_choice() {
             modifiers: Modifiers::NONE,
         };
         let events = vec![Event::PointerMoved(pos), click(true), click(false)];
-        let second = frame(&ctx, &bar, true, 600.0, input(600.0, events));
+        let second = frame(&ctx, &bar, input(600.0, events));
         assert_eq!(second.clicked, Some(choice), "swatch {i}");
     }
 }
 
 #[test]
-fn held_choices_get_the_amber_outline() {
+fn held_swatches_follow_the_swatch_order() {
     let mut bar = FilterBar::default();
+    bar.toggle_color(ColorChoice::Transparent);
+    bar.toggle_color(ColorChoice::Bucket(ColorBucket::Blue));
     bar.toggle_color(ColorChoice::Bucket(ColorBucket::Red));
-    bar.toggle_color(ColorChoice::Bucket(ColorBucket::Neutral));
-    let widths = stroked_widths(&plain(&bar, true, 600.0).shapes);
-    for (i, w) in widths.iter().enumerate() {
-        let want = if i == 0 || i == 10 {
-            (2.0, tokens::AMBER_ACCENT)
-        } else {
-            (1.0, tokens::BORDER_INACTIVE)
-        };
-        assert_eq!(*w, want, "swatch {i}");
-    }
-}
-
-#[test]
-fn disabled_draws_nothing_and_returns_none() {
-    let f = plain(&FilterBar::default(), false, 600.0);
-    assert_eq!(stroked_widths(&f.shapes).len(), 0);
-    assert_eq!(f.clicked, None);
-    assert_eq!(f.used.size(), vec2(0.0, 0.0));
-}
-
-#[test]
-fn the_row_wraps_at_a_narrow_width_without_overflow() {
-    let f = plain(&FilterBar::default(), true, 100.0);
-    // Two swatches fit per row, so 12 swatches take 6 rows.
-    assert!(f.used.width() <= 100.0, "{:?}", f.used);
-    let rows = 6.0;
-    let want = rows * 36.0 + (rows - 1.0) * tokens::SPACING_XS;
-    assert_eq!(f.used.height(), want);
-}
-
-#[test]
-fn the_row_leaves_the_callers_item_spacing_alone() {
-    let ctx = Context::default();
-    let mut seen = None;
-    let output = ctx.run_ui(input(600.0, vec![]), |ui| {
-        let before = ui.spacing().item_spacing;
-        show_colors(ui, &FilterBar::default(), true);
-        seen = Some((before, ui.spacing().item_spacing));
-    });
-    output.drop_without_applying_deltas();
-    let (before, after) = seen.expect("the closure ran");
-    assert_eq!(before, after);
+    assert_eq!(
+        held_swatches(&bar),
+        [
+            Swatch::Bucket(ColorBucket::Red),
+            Swatch::Bucket(ColorBucket::Blue),
+            Swatch::Transparent
+        ]
+    );
 }

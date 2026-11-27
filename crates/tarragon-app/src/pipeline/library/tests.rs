@@ -16,6 +16,8 @@ fn file(path: &str, cached: bool) -> LibraryFile {
         mtime: 100,
         size: 7,
         cached,
+        width: 0,
+        height: 0,
     }
 }
 

@@ -1,10 +1,12 @@
 //! Tests for the Preferences window.
 
 use super::draft::{CANVAS, CAP, Draft, MULTI, NEUTRAL, PALETTE, SHARE, WORKERS};
-use super::{Prefs, PrefsEvent, PrefsValues};
+use super::{Group, Prefs, PrefsEvent, PrefsValues};
 use crate::{test_support, tokens};
 use egui::epaint::Shape;
 use egui::{Color32, Context, Event, Id, Key, Modifiers, Pos2, Rect, vec2};
+
+mod groups;
 
 fn values() -> PrefsValues {
     PrefsValues {
@@ -95,6 +97,32 @@ fn click_text(ctx: &Context, prefs: &mut Prefs, want: &str) {
     frame(ctx, prefs, test_support::click(at));
 }
 
+/// An open window that shows `group`.
+fn open_on(group: Group) -> (Context, Prefs) {
+    let (ctx, mut prefs) = open_prefs();
+    prefs.show_group(group);
+    frame(&ctx, &mut prefs, vec![]);
+    (ctx, prefs)
+}
+
+fn has(texts: &Texts, want: &str) -> bool {
+    texts.iter().any(|(t, _, _)| t == want)
+}
+
+fn rect_of(texts: &Texts, want: &str) -> Rect {
+    texts
+        .iter()
+        .find_map(|(t, rect, _)| (t == want).then_some(*rect))
+        .unwrap_or_else(|| panic!("no text {want:?} in {texts:?}"))
+}
+
+fn colour_of(texts: &Texts, want: &str) -> Color32 {
+    texts
+        .iter()
+        .find_map(|(t, _, c)| (t == want).then_some(*c))
+        .unwrap_or_else(|| panic!("no text {want:?} in {texts:?}"))
+}
+
 #[test]
 fn the_typed_text_of_every_number_parses_back_to_the_values() {
     assert_eq!(Draft::new(values()).parse(), Some(values()));
@@ -139,26 +167,17 @@ fn spaces_around_a_number_are_ignored() {
 }
 
 #[test]
-fn a_frame_shows_a_row_for_each_number() {
-    let (ctx, mut prefs) = open_prefs();
-    let texts = frame(&ctx, &mut prefs, vec![]);
-    for label in ["Max PSD Workers", "Cache size cap (GiB, 0 = off)", "OK"] {
-        assert!(texts.iter().any(|(t, _, _)| t == label), "{label}");
-    }
-}
-
-#[test]
-fn a_bad_number_disables_ok_and_a_good_one_enables_it() {
+fn a_bad_number_disables_save_and_a_good_one_enables_it() {
     let (ctx, mut prefs) = open_prefs();
     type_into(&mut prefs, WORKERS, "abc");
     frame(&ctx, &mut prefs, vec![]);
-    click_text(&ctx, &mut prefs, "OK");
+    click_text(&ctx, &mut prefs, "Save");
     assert_eq!(prefs.take_events().len(), 0);
     assert!(prefs.is_open());
 
     type_into(&mut prefs, WORKERS, "4");
     frame(&ctx, &mut prefs, vec![]);
-    click_text(&ctx, &mut prefs, "OK");
+    click_text(&ctx, &mut prefs, "Save");
     let events = prefs.take_events();
     let expected = PrefsValues {
         max_psd_workers: 4,
@@ -169,13 +188,20 @@ fn a_bad_number_disables_ok_and_a_good_one_enables_it() {
 }
 
 #[test]
-fn a_bad_number_shows_its_label_in_coral() {
+fn a_bad_number_turns_its_label_and_its_group_coral() {
     let (ctx, mut prefs) = open_prefs();
-    type_into(&mut prefs, WORKERS, "abc");
+    type_into(&mut prefs, CAP, "abc");
     let texts = frame(&ctx, &mut prefs, vec![]);
-    let colour_of = |want: &str| texts.iter().find(|(t, _, _)| t == want).map(|(_, _, c)| *c);
-    assert_eq!(colour_of("Max PSD Workers"), Some(tokens::CORAL_STRONG));
-    assert_eq!(colour_of("Max Multi-Preview"), Some(tokens::TEXT_PRIMARY));
+    // The Cache group is not shown, so only its list row tells.
+    assert_eq!(colour_of(&texts, "Cache"), tokens::CORAL_STRONG);
+    assert_eq!(colour_of(&texts, "Debug"), tokens::TEXT_PRIMARY);
+    prefs.show_group(Group::Cache);
+    let texts = frame(&ctx, &mut prefs, vec![]);
+    assert_eq!(
+        colour_of(&texts, "Cache size cap (GiB, 0 = off)"),
+        tokens::CORAL_STRONG
+    );
+    assert_eq!(colour_of(&texts, "Cache format"), tokens::TEXT_TERTIARY);
 }
 
 #[test]
@@ -202,12 +228,30 @@ fn escape_cancels_and_drops_the_typed_text() {
     assert!(prefs.draft.is_none());
 }
 
+/// The centre of the close button: the cross at the right of the title row.
+fn close_spot(texts: &Texts) -> Pos2 {
+    let title = rect_of(texts, "Preferences");
+    let save = rect_of(texts, "Save");
+    // The button is 32 points wide, and its right edge lines up with the
+    // right edge of Save.
+    Pos2::new(save.right() - 16.0, title.center().y)
+}
+
 #[test]
-fn the_picked_cache_folder_comes_back_with_ok() {
+fn the_close_button_cancels() {
+    let (ctx, mut prefs) = open_prefs();
+    let texts = frame(&ctx, &mut prefs, vec![]);
+    let at = close_spot(&texts);
+    frame(&ctx, &mut prefs, test_support::click(at));
+    assert_eq!(prefs.take_events(), vec![PrefsEvent::Cancel]);
+}
+
+#[test]
+fn the_picked_cache_folder_comes_back_with_save() {
     let (ctx, mut prefs) = open_prefs();
     prefs.set_cache_dir("/data/cache".to_owned());
     frame(&ctx, &mut prefs, vec![]);
-    click_text(&ctx, &mut prefs, "OK");
+    click_text(&ctx, &mut prefs, "Save");
     let events = prefs.take_events();
     let Some(PrefsEvent::Ok(got)) = events.first() else {
         panic!("no Ok event: {events:?}");
@@ -225,92 +269,9 @@ fn a_closed_window_draws_nothing_and_ignores_the_picked_folder() {
     assert_eq!(prefs.take_events().len(), 0);
 }
 
-fn has(texts: &Texts, want: &str) -> bool {
-    texts.iter().any(|(t, _, _)| t == want)
-}
-
-#[test]
-fn a_frame_shows_the_four_groups_and_the_thirteen_value_rows() {
-    let (ctx, mut prefs) = open_prefs();
-    let texts = frame(&ctx, &mut prefs, vec![]);
-    for group in ["Performance", "Color Tagging", "Cache", "Debug"] {
-        assert!(has(&texts, group), "group {group}");
-    }
-    let rows = [
-        "Max PSD Workers",
-        "Max Multi-Preview",
-        "Large Canvas Threshold (MP)",
-        "Tile Grid Size",
-        "Enable Color Tagging",
-        "Color Tag Palette Size",
-        "Color Tag Minimum Share",
-        "Neutral Saturation Threshold",
-        "Cache Directory",
-        "Cache Format",
-        "Clear Full-Res Cache on Exit",
-        "Cache size cap (GiB, 0 = off)",
-        "Enable Debug Logging",
-    ];
-    for row in rows {
-        assert!(has(&texts, row), "row {row}");
-    }
-    assert!(has(&texts, "Cache Size"));
-    assert!(has(&texts, "1.4 GB"));
-    assert!(has(&texts, "Default cache directory"));
-    assert!(!has(&texts, "Purging cache..."));
-}
-
-#[test]
-fn the_footnote_names_when_changes_apply_and_the_unread_settings() {
-    let (ctx, mut prefs) = open_prefs();
-    let texts = frame(&ctx, &mut prefs, vec![]);
-    let note = texts
-        .iter()
-        .find(|(t, _, _)| t.starts_with("Color tagging changes"))
-        .expect("the footnote");
-    assert!(note.0.contains("next folder open"), "{}", note.0);
-    assert!(
-        note.0
-            .contains("cache size cap and the cache folder apply at the next start"),
-        "{}",
-        note.0
-    );
-    assert!(note.0.contains("nothing reads them yet"));
-}
-
-#[test]
-fn the_choices_are_the_registry_choices() {
-    assert_eq!(
-        super::form::TILE_GRIDS,
-        tarragon_db::settings::TILE_GRID_SIZES
-    );
-    assert_eq!(
-        super::form::CACHE_FORMATS,
-        tarragon_db::settings::CACHE_FORMATS
-    );
-    assert_eq!(super::form::TILE_GRIDS, ["1x1", "2x2", "3x3", "4x4"]);
-}
-
-#[test]
-fn the_choice_rows_show_the_current_choice() {
-    let (ctx, mut prefs) = open_prefs();
-    let texts = frame(&ctx, &mut prefs, vec![]);
-    assert!(has(&texts, "3x3"));
-    assert!(has(&texts, "jpeg"));
-}
-
-#[test]
-fn a_picked_cache_folder_replaces_the_default_text() {
-    let (ctx, mut prefs) = open_prefs();
-    prefs.set_cache_dir("/data/cache".to_owned());
-    let texts = frame(&ctx, &mut prefs, vec![]);
-    assert!(has(&texts, "/data/cache"));
-    assert!(!has(&texts, "Default cache directory"));
-}
-
 #[test]
 fn browse_queues_an_event_and_keeps_the_window_open() {
-    let (ctx, mut prefs) = open_prefs();
+    let (ctx, mut prefs) = open_on(Group::Cache);
     click_text(&ctx, &mut prefs, "Browse...");
     assert_eq!(prefs.take_events(), vec![PrefsEvent::BrowseCacheDir]);
     assert!(prefs.is_open());
@@ -318,21 +279,23 @@ fn browse_queues_an_event_and_keeps_the_window_open() {
 
 #[test]
 fn purge_queues_an_event_and_keeps_the_window_open() {
-    let (ctx, mut prefs) = open_prefs();
-    click_text(&ctx, &mut prefs, "Purge Cache");
+    let (ctx, mut prefs) = open_on(Group::Cache);
+    click_text(&ctx, &mut prefs, "Purge cache");
     assert_eq!(prefs.take_events(), vec![PrefsEvent::PurgeCache]);
     assert!(prefs.is_open());
 }
 
 #[test]
-fn while_purging_the_strip_shows_and_ok_cancel_purge_and_escape_do_nothing() {
-    let (ctx, mut prefs) = open_prefs();
+fn while_purging_the_strip_shows_and_save_cancel_purge_close_and_escape_do_nothing() {
+    let (ctx, mut prefs) = open_on(Group::Cache);
     prefs.set_purging(true);
     let texts = frame(&ctx, &mut prefs, vec![]);
     assert!(has(&texts, "Purging cache..."));
-    for button in ["OK", "Cancel", "Purge Cache"] {
+    for button in ["Save", "Cancel", "Purge cache"] {
         click_text(&ctx, &mut prefs, button);
     }
+    let at = close_spot(&frame(&ctx, &mut prefs, vec![]));
+    frame(&ctx, &mut prefs, test_support::click(at));
     frame(&ctx, &mut prefs, vec![escape()]);
     assert_eq!(prefs.take_events().len(), 0);
     assert!(prefs.is_open());
@@ -340,7 +303,7 @@ fn while_purging_the_strip_shows_and_ok_cancel_purge_and_escape_do_nothing() {
 
 #[test]
 fn while_purging_browse_still_works_and_the_buttons_work_again_after() {
-    let (ctx, mut prefs) = open_prefs();
+    let (ctx, mut prefs) = open_on(Group::Cache);
     prefs.set_purging(true);
     click_text(&ctx, &mut prefs, "Browse...");
     assert_eq!(prefs.take_events(), vec![PrefsEvent::BrowseCacheDir]);
@@ -353,23 +316,14 @@ fn while_purging_browse_still_works_and_the_buttons_work_again_after() {
 }
 
 #[test]
-fn the_cache_size_text_can_change_while_the_window_is_open() {
-    let (ctx, mut prefs) = open_prefs();
-    prefs.set_cache_size("0 B".to_owned());
-    let texts = frame(&ctx, &mut prefs, vec![]);
-    assert!(has(&texts, "0 B"));
-    assert!(!has(&texts, "1.4 GB"));
-}
-
-#[test]
-fn an_error_shows_above_the_buttons_and_opening_clears_it() {
+fn an_error_shows_in_the_footer_and_opening_clears_it() {
     let (ctx, mut prefs) = open_prefs();
     prefs.set_error(Some("could not save".to_owned()));
     let texts = frame(&ctx, &mut prefs, vec![]);
-    assert!(has(&texts, "could not save"));
-    let error_y = rect_of(&texts, "could not save").top();
-    let ok_y = rect_of(&texts, "OK").top();
-    assert!(error_y < ok_y, "{error_y:?} {ok_y:?}");
+    let error = rect_of(&texts, "could not save");
+    let cancel = rect_of(&texts, "Cancel");
+    assert!(error.right() < cancel.left(), "{error:?} {cancel:?}");
+    assert!((error.center().y - cancel.center().y).abs() < 2.0);
 
     prefs.set_error(None);
     assert!(!has(&frame(&ctx, &mut prefs, vec![]), "could not save"));
@@ -379,81 +333,60 @@ fn an_error_shows_above_the_buttons_and_opening_clears_it() {
     assert!(!has(&frame(&ctx, &mut prefs, vec![]), "old"));
 }
 
-fn rect_of(texts: &Texts, want: &str) -> Rect {
-    texts
-        .iter()
-        .find_map(|(t, rect, _)| (t == want).then_some(*rect))
-        .unwrap_or_else(|| panic!("no text {want:?} in {texts:?}"))
-}
-
 #[test]
-fn ok_sits_left_of_cancel() {
+fn save_sits_right_of_cancel() {
     let (ctx, mut prefs) = open_prefs();
     let texts = frame(&ctx, &mut prefs, vec![]);
-    assert!(rect_of(&texts, "OK").center().x < rect_of(&texts, "Cancel").center().x);
+    assert!(rect_of(&texts, "Save").center().x > rect_of(&texts, "Cancel").center().x);
 }
 
 #[test]
-fn on_a_short_screen_the_buttons_stay_on_screen_and_ok_still_works() {
+fn on_a_short_screen_the_buttons_stay_on_screen_and_save_still_works() {
     let ctx = test_support::context();
     let mut prefs = Prefs::default();
     prefs.open(values(), "1.4 GB".to_owned());
     frame_on(&ctx, &mut prefs, vec![], 450.0);
     let texts = frame_on(&ctx, &mut prefs, vec![], 450.0);
-    for button in ["OK", "Cancel"] {
+    for button in ["Save", "Cancel"] {
         let rect = rect_of(&texts, button);
         assert!(
             rect.top() >= 0.0 && rect.bottom() <= 450.0,
             "{button}: {rect:?}"
         );
     }
-    let at = rect_of(&texts, "OK").center();
+    let at = rect_of(&texts, "Save").center();
     frame_on(&ctx, &mut prefs, test_support::click(at), 450.0);
     assert_eq!(prefs.take_events(), vec![PrefsEvent::Ok(values())]);
 }
 
-#[test]
-fn on_a_tall_screen_the_dialog_is_not_cut_short() {
-    let (ctx, mut prefs) = open_prefs();
-    let texts = frame(&ctx, &mut prefs, vec![]);
-    // The last group is in view without a scroll.
-    assert!(rect_of(&texts, "Enable Debug Logging").bottom() < 1200.0);
-    assert!(rect_of(&texts, "Debug").top() > rect_of(&texts, "Cache Size").top());
-}
-
-#[test]
-fn the_cache_size_value_sits_right_of_its_label_without_overlap() {
-    let (ctx, mut prefs) = open_prefs();
-    let texts = frame(&ctx, &mut prefs, vec![]);
-    let label = rect_of(&texts, "Cache Size");
-    let value = rect_of(&texts, "1.4 GB");
-    assert!(!label.intersects(value), "{label:?} {value:?}");
-    assert!(value.left() >= label.right(), "{label:?} {value:?}");
-}
-
-/// The height of the whole window frame, with the room below the buttons.
-fn window_height(ctx: &Context) -> f32 {
+/// The rect of the whole window.
+fn window_rect(ctx: &Context) -> Rect {
     // egui hashes the title as an optional string to make the window id.
     ctx.memory(|m| m.area_rect(Id::new(Some("Preferences"))))
         .expect("the window is drawn")
-        .height()
 }
 
 #[test]
-fn the_dialog_returns_to_its_height_when_the_purge_ends() {
+fn the_window_takes_the_page_size_held_inside_the_screen() {
     let (ctx, mut prefs) = open_prefs();
-    let before = window_height(&ctx);
+    frame(&ctx, &mut prefs, vec![]);
+    let rect = window_rect(&ctx);
+    // The 800 point test screen holds 768 of the page's 800 points.
+    assert!((rect.width() - 768.0).abs() < 0.5, "{rect:?}");
+    assert!((rect.height() - 560.0).abs() < 0.5, "{rect:?}");
+    frame_on(&ctx, &mut prefs, vec![], 450.0);
+    frame_on(&ctx, &mut prefs, vec![], 450.0);
+    let short = window_rect(&ctx);
+    assert!((short.height() - 418.0).abs() < 0.5, "{short:?}");
+}
+
+#[test]
+fn the_window_keeps_its_size_while_the_purge_runs() {
+    let (ctx, mut prefs) = open_on(Group::Cache);
+    let before = window_rect(&ctx);
     prefs.set_purging(true);
     for _ in 0..6 {
         frame(&ctx, &mut prefs, vec![]);
     }
-    let during = window_height(&ctx);
-    assert!(during > before, "the strip adds height: {during} {before}");
-    prefs.set_purging(false);
-    for _ in 0..6 {
-        frame(&ctx, &mut prefs, vec![]);
-    }
-    let after = window_height(&ctx);
-    // The slack is for float rounding only.
-    assert!((after - before).abs() < 0.5, "{after} vs {before}");
+    assert_eq!(window_rect(&ctx), before);
 }

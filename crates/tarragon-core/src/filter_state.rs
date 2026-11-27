@@ -39,8 +39,8 @@ impl FilterState {
     ///
     /// The text counts once. Each color, the transparent flag, each tag, and
     /// each folder counts once. Folder chips count in global scope only. This
-    /// is the single filter-count source for the info bar. The text is used as-is, so a whitespace-only
-    /// text still counts once.
+    /// is the single filter-count source for the info row. The text is used
+    /// as-is, so a whitespace-only text still counts once.
     #[must_use]
     pub fn active_count(&self, scope: FilterScope) -> usize {
         let text = usize::from(!self.text.is_empty());

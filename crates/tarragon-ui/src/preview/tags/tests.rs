@@ -1,6 +1,6 @@
-//! Tests for the Tags heading and the pill row.
+//! Tests for the chip row: the tag pills and their colours.
 
-use super::TagPill;
+use super::{TAG_COLORS, TagPill, tag_colors};
 use crate::preview::test_support::{pill, preview};
 use crate::preview::{ColorState, Preview, PreviewEvent};
 use crate::tokens;
@@ -14,17 +14,19 @@ fn input(width: f32, events: Vec<Event>) -> egui::RawInput {
     }
 }
 
-/// Whether a fill is the coral-dark pill background at one of the three opacities.
+/// Whether a fill is a tag pill background at one of the three opacities.
 fn is_pill_fill(fill: Color32) -> bool {
-    [1.0, 0.5, 0.3]
-        .into_iter()
-        .any(|o| fill == tokens::CORAL_DARK.gamma_multiply(o))
+    TAG_COLORS.iter().any(|(pill, _)| {
+        [1.0, 0.5, 0.3]
+            .into_iter()
+            .any(|o| fill == pill.gamma_multiply(o))
+    })
 }
 
 /// What one frame painted that the tests look at.
 #[derive(Default)]
 struct Painted {
-    /// Pill backgrounds: the rect and fill of each coral-dark shape.
+    /// Pill backgrounds: the rect and fill of each tag-coloured shape.
     pills: Vec<(Rect, Color32)>,
     /// Every text: the string, the colour of its first section, and its place.
     texts: Vec<(String, Color32, Pos2)>,
@@ -100,26 +102,37 @@ fn pills_paint_their_names_in_order_with_the_opacity_of_their_state() {
     }
     for (i, tag) in tags.iter().enumerate() {
         let opacity = tag.state.opacity();
-        assert_eq!(
-            found.pills[i].1,
-            tokens::CORAL_DARK.gamma_multiply(opacity),
-            "pill {i}"
-        );
-        assert_eq!(
-            placed[i].1,
-            tokens::CORAL_STRONG.gamma_multiply(opacity),
-            "text {i}"
-        );
+        let (fill, text) = tag_colors(&tag.name);
+        assert_eq!(found.pills[i].1, fill.gamma_multiply(opacity), "pill {i}");
+        assert_eq!(placed[i].1, text.gamma_multiply(opacity), "text {i}");
     }
 }
 
 #[test]
-fn the_tags_heading_stays_when_colour_tags_are_disabled() {
-    let mut preview = preview(vec![]);
+fn a_tag_keeps_its_colour_pair_and_the_pairs_come_from_the_palette() {
+    assert_eq!(tag_colors("character"), tag_colors("character"));
+    assert!(TAG_COLORS.contains(&tag_colors("lighting")));
+    assert_eq!(
+        TAG_COLORS[0],
+        (tokens::BADGE_BG_VINOUS, tokens::BADGE_FG_VINOUS)
+    );
+    // A few names spread over more than one pair.
+    let names = ["character", "blue", "lighting", "todo", "hands", "sky"];
+    let pairs: std::collections::HashSet<_> = names.iter().map(|n| tag_colors(n)).collect();
+    assert!(pairs.len() > 1);
+}
+
+#[test]
+fn the_panel_draws_no_tags_or_metadata_heading() {
+    let mut preview = preview(vec![pill("hands", ColorState::All)]);
     let ctx = ctx_with_fonts(&mut preview);
-    preview.set_colors_enabled(false);
     let found = frame(&ctx, &mut preview, 400.0, vec![]);
-    assert!(found.texts.iter().any(|(t, ..)| t == "Tags"));
+    assert!(
+        !found
+            .texts
+            .iter()
+            .any(|(t, ..)| t == "Tags" || t == "Metadata")
+    );
 }
 
 fn click_at(at: Pos2) -> Vec<Event> {

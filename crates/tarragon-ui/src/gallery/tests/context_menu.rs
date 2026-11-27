@@ -234,7 +234,7 @@ fn shortcuts_are_dim_and_right_aligned() {
     };
     let (_, long, color) = find("Shift+Del");
     let (_, short, _) = find("Ctrl+C");
-    assert_eq!(*color, tokens::TEXT_MUTED);
+    assert_eq!(*color, tokens::TEXT_TERTIARY);
     assert!((long.max.x - short.max.x).abs() < 0.5, "not right-aligned");
     let (_, label, _) = find("Delete permanently...");
     assert!(label.max.x < long.min.x, "the label meets the shortcut");
@@ -250,7 +250,7 @@ fn single_only_rows_are_greyed_and_send_no_event_with_three_selected() {
             .iter()
             .find(|(text, ..)| text == label)
             .expect("the row shows");
-        assert_eq!(*color, tokens::TEXT_MUTED, "{label:?} is not greyed");
+        assert_eq!(*color, tokens::TEXT_TERTIARY, "{label:?} is not greyed");
         seen = click_row(&ctx, &mut gallery, &seen, label);
         assert!(menu_shows(&seen), "a greyed row closed the menu");
         assert_no_events(&mut gallery, label);
@@ -332,7 +332,7 @@ fn paste_is_greyed_when_every_image_shows() {
         .iter()
         .find(|(text, ..)| text == "Paste")
         .expect("the row shows");
-    assert_eq!(*color, tokens::TEXT_MUTED);
+    assert_eq!(*color, tokens::TEXT_TERTIARY);
     let after = click_row(&ctx, &mut gallery, &seen, "Paste");
     assert!(menu_shows(&after));
     assert_no_events(&mut gallery, "Paste");

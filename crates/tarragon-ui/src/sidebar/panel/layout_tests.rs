@@ -84,24 +84,31 @@ fn drag(ctx: &Context, sidebar: &mut Sidebar, start: Pos2, end: Pos2) {
     frame(ctx, sidebar, Vec::new());
 }
 
-/// The grips of the rows inside the favorites viewport, with their row index.
-fn visible_grips(texts: &[Painted]) -> Vec<(usize, Pos2)> {
-    let top = find(texts, "FAVORITES").pos.y + 16.0;
-    let bottom = find(texts, "Add Current Folder").pos.y - 8.0;
-    texts
+/// The favorite labels inside the favorites viewport, with their row index.
+///
+/// The labels are `f0`, `f1`, ..., so the index is the number in the label.
+fn visible_favorites(texts: &[Painted]) -> Vec<(usize, Pos2)> {
+    // A label sits 10 pt below its row top, and the viewport starts about
+    // 21 pt below the head text, so a label 32 pt down has its whole row in view.
+    let top = find(texts, "FAVORITES").pos.y + 32.0;
+    let bottom = find(texts, ADD_TEXT).pos.y - 8.0;
+    let mut rows: Vec<(usize, Pos2)> = texts
         .iter()
-        .filter(|t| t.string == "::")
-        .enumerate()
-        .filter(|(_, t)| t.pos.y >= top && t.pos.y + 14.0 <= bottom)
-        .map(|(index, t)| (index, t.pos))
-        .collect()
+        .filter(|t| t.pos.y >= top && t.pos.y + 14.0 <= bottom)
+        .filter_map(|t| {
+            let index = t.string.strip_prefix('f')?.parse().ok()?;
+            Some((index, t.pos))
+        })
+        .collect();
+    rows.sort_by_key(|(index, _)| *index);
+    rows
 }
 
 #[test]
 fn the_favorites_stay_on_screen_under_a_tall_tree() {
     let mut sidebar = crowded(60, 3);
     let texts = settle(&ready(), &mut sidebar, 3);
-    let buttons = find(&texts, "Add Current Folder").pos.y;
+    let buttons = find(&texts, ADD_TEXT).pos.y;
     let head = find(&texts, "FAVORITES").pos.y;
     let first = find(&texts, "f0").pos.y;
     assert!(head >= 0.0 && head + 14.0 <= first, "head at {head}");
@@ -114,15 +121,23 @@ fn the_favorites_stay_on_screen_under_a_tall_tree() {
 
 /// The height of the favorites panel in a settled frame.
 ///
-/// It runs from 22 px above the head text (gap 14, margin 8) to 11 px above
-/// the button text (margin 8, button padding 3).
+/// It runs from 20 pt above the head text to the top of the add panel: 8 pt
+/// of gap above the 34 pt action, whose text is centred in it.
 fn panel_height(texts: &[Painted]) -> f32 {
-    (find(texts, "Add Current Folder").pos.y - 11.0) - (find(texts, "FAVORITES").pos.y - 22.0)
+    let add = find(texts, ADD_TEXT);
+    let add_top = add.pos.y - (17.0 - add.height / 2.0) - 8.0;
+    add_top - (find(texts, "FAVORITES").pos.y - 20.0)
 }
 
-/// The height of the favorites head: gap 14, margins 8 and 4, and the text.
+/// The height of the favorites head: 20 pt above the text, the text, 4 pt of
+/// margin below it, and the 4 pt row gap before the rows.
 fn head_height(texts: &[Painted]) -> f32 {
-    26.0 + find(texts, "FAVORITES").height
+    28.0 + find(texts, "FAVORITES").height
+}
+
+/// The content height of `count` favorite rows: 34 pt each and 4 pt between.
+fn rows_height(count: u8) -> f32 {
+    34.0 * f32::from(count) + 4.0 * f32::from(count.saturating_sub(1))
 }
 
 #[test]
@@ -130,7 +145,7 @@ fn forty_favorites_take_half_the_dock_and_the_tree_shows() {
     let mut sidebar = crowded(60, 40);
     let texts = settle(&ready(), &mut sidebar, 4);
     let head = find(&texts, "FAVORITES").pos.y;
-    let buttons = find(&texts, "Add Current Folder").pos.y;
+    let buttons = find(&texts, ADD_TEXT).pos.y;
     assert!(sidebar.favorites_height > 150.0, "the rows must overflow");
     let panel = panel_height(&texts);
     assert!(
@@ -146,8 +161,8 @@ fn forty_favorites_take_half_the_dock_and_the_tree_shows() {
 }
 
 #[test]
-fn three_favorites_take_the_head_and_the_rows() {
-    let mut sidebar = crowded(60, 3);
+fn two_favorites_take_the_head_and_the_rows() {
+    let mut sidebar = crowded(60, 2);
     let texts = settle(&ready(), &mut sidebar, 4);
     let content = sidebar.favorites_height;
     assert!(content > 64.0 && content < 150.0, "content is {content}");
@@ -157,8 +172,8 @@ fn three_favorites_take_the_head_and_the_rows() {
 }
 
 #[test]
-fn two_favorites_are_not_forced_taller_than_their_rows() {
-    let mut sidebar = crowded(60, 2);
+fn one_favorite_is_not_forced_taller_than_its_row() {
+    let mut sidebar = crowded(60, 1);
     let texts = settle(&ready(), &mut sidebar, 4);
     let content = sidebar.favorites_height;
     assert!(content < 64.0, "content is {content}");
@@ -167,19 +182,15 @@ fn two_favorites_are_not_forced_taller_than_their_rows() {
     assert!((panel - want).abs() <= 1.0, "panel {panel}, want {want}");
 }
 
-/// The height of one favorite row, measured from `count` rows in the panel.
-fn row_height(sidebar: &Sidebar, count: u8) -> f32 {
-    sidebar.favorites_height / f32::from(count)
-}
-
 #[test]
 fn a_changed_favorites_height_asks_for_a_repaint_and_settles() {
     let ctx = ready();
-    let mut sidebar = crowded(60, 3);
+    let mut sidebar = crowded(60, 1);
     settle(&ctx, &mut sidebar, 8);
     assert!(!panel_asked_for_a_repaint(&ctx), "repaint at rest");
-    let row = row_height(&sidebar, 3);
-    for count in [4_u8, 3] {
+    assert!((sidebar.favorites_height - rows_height(1)).abs() <= 0.5);
+    // Two rows still fit below the cap of half the dock.
+    for count in [2_u8, 1] {
         sidebar.set_favorites(favorite_rows(usize::from(count)));
         frame(&ctx, &mut sidebar, Vec::new());
         frame(&ctx, &mut sidebar, Vec::new());
@@ -189,11 +200,11 @@ fn a_changed_favorites_height_asks_for_a_repaint_and_settles() {
         let got = frame(&ctx, &mut sidebar, Vec::new());
         // A growing panel changes its rect in the repaint frame, and the
         // panel asks for frame 3 itself. A shrinking one is done by then.
-        if count == 4 {
+        if count == 2 {
             assert!(panel_asked_for_a_repaint(&ctx), "no frame 3 at {count}");
         }
         let panel = panel_height(&got);
-        let want = head_height(&got) + row * f32::from(count);
+        let want = head_height(&got) + rows_height(count);
         assert!(
             (panel - want).abs() <= 1.0,
             "{count} favorites: panel {panel}, want {want}"
@@ -239,7 +250,7 @@ fn a_drag_reorder_inside_the_scrolled_favorites_area_gives_the_new_order() {
     };
     frame(&ctx, &mut sidebar, vec![wheel]);
     let texts = settle(&ctx, &mut sidebar, 30);
-    let grips = visible_grips(&texts);
+    let grips = visible_favorites(&texts);
     let ((a, _), (b, grip)) = (grips[0], grips[1]);
     assert!(a > 0, "the list did not scroll");
     let top = find(&texts, &format!("f{a}")).pos.y;
@@ -261,9 +272,9 @@ fn a_drag_released_below_the_favorites_viewport_queues_nothing() {
     let mut sidebar = crowded(60, 40);
     let ctx = ready();
     let texts = settle(&ctx, &mut sidebar, 3);
-    let grip = texts.iter().find(|t| t.string == "::").unwrap().pos;
+    let grip = find(&texts, "f0").pos;
     let start = grip + vec2(2.0, 5.0);
-    let end = Pos2::new(start.x, find(&texts, "Add Current Folder").pos.y);
+    let end = Pos2::new(start.x, find(&texts, ADD_TEXT).pos.y);
     drag(&ctx, &mut sidebar, start, end);
     frame(&ctx, &mut sidebar, vec![press(false, end)]);
     assert_eq!(sidebar.take_events(), Vec::<SidebarEvent>::new());

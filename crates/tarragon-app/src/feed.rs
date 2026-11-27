@@ -37,6 +37,8 @@ pub trait Tiles {
     fn clear_texture(&mut self, key: &Path);
     /// Show the error mark on the tile. Return false for an unknown key.
     fn mark_failed(&mut self, key: &Path, error: TileError) -> bool;
+    /// Record the pixel size of the original on the tile.
+    fn set_dimensions(&mut self, key: &Path, dimensions: (u32, u32));
 }
 
 /// What `apply` did with one result.
@@ -57,6 +59,16 @@ pub enum Applied {
     Unknown,
 }
 
+/// Settled and total tiles of the open folder, and of the tiles that need
+/// colors.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Progress {
+    /// Settled tiles and all tiles.
+    pub thumbs: (usize, usize),
+    /// Settled tiles and all tiles whose job extracts colors.
+    pub colors: (usize, usize),
+}
+
 /// The state behind the tiles of the open folder.
 pub struct Feed {
     /// The generation of the open folder.
@@ -69,6 +81,10 @@ pub struct Feed {
     waiting: HashSet<PathBuf>,
     /// How many tiles the folder has.
     total: usize,
+    /// Tiles whose job extracts colors and has not settled yet.
+    color_waiting: HashSet<PathBuf>,
+    /// How many tiles of the folder need colors.
+    color_total: usize,
     /// Tiles that show an error mark, with the error behind each mark.
     failed: HashMap<PathBuf, ThumbError>,
     /// The tiles of the last `show` call.
@@ -89,6 +105,8 @@ impl Feed {
             dropped: HashSet::new(),
             waiting: HashSet::new(),
             total: 0,
+            color_waiting: HashSet::new(),
+            color_total: 0,
             failed: HashMap::new(),
             shown: HashSet::new(),
             resync: false,
@@ -105,7 +123,33 @@ impl Feed {
         self.resync = false;
         self.waiting = keys.into_iter().collect();
         self.total = self.waiting.len();
+        self.color_waiting.clear();
+        self.color_total = 0;
         self.failed.clear();
+    }
+
+    /// Name the tiles of the folder whose job extracts colors. Call it after
+    /// `reset`; keys that are not tiles are left out.
+    pub fn set_color_keys(&mut self, keys: impl IntoIterator<Item = PathBuf>) {
+        self.color_waiting = keys
+            .into_iter()
+            .filter(|key| self.waiting.contains(key))
+            .collect();
+        self.color_total = self.color_waiting.len();
+    }
+
+    /// How far the folder has come: settled tiles of all tiles, and settled
+    /// tiles of the ones that need colors. A tile settles with a texture, an
+    /// error, or a texture kept back for room.
+    #[must_use]
+    pub fn progress(&self) -> Progress {
+        Progress {
+            thumbs: (self.total - self.waiting.len(), self.total),
+            colors: (
+                self.color_total - self.color_waiting.len(),
+                self.color_total,
+            ),
+        }
     }
 
     /// The number of tiles, and how many of them show an error mark.
@@ -147,6 +191,10 @@ impl Feed {
         if !tiles.contains(&key) {
             return Applied::Unknown;
         }
+        // A fresh render knows the pixel size even when the texture waits.
+        if let Some(dimensions) = result.dimensions {
+            tiles.set_dimensions(&key, dimensions);
+        }
         match result.outcome {
             Ok(image) => {
                 let bytes =
@@ -156,7 +204,7 @@ impl Feed {
                 // and the dropped one may be in view. Keep the image back.
                 let over = self.budget.total_bytes().saturating_add(bytes) > self.budget.capacity();
                 if over && !self.shown.contains(&key) && !self.budget.contains(&key) {
-                    self.waiting.remove(&key);
+                    self.settle(&key);
                     self.failed.remove(&key);
                     self.dropped.insert(key);
                     return Applied::Deferred;
@@ -164,7 +212,7 @@ impl Feed {
                 if !tiles.set_texture(&key, upload(&image)) {
                     return Applied::Unknown;
                 }
-                self.waiting.remove(&key);
+                self.settle(&key);
                 self.dropped.remove(&key);
                 self.failed.remove(&key);
                 for old in self.budget.insert(key, bytes) {
@@ -179,13 +227,20 @@ impl Feed {
                 if !tiles.mark_failed(&key, error.kind.into()) {
                     return Applied::Unknown;
                 }
-                self.waiting.remove(&key);
+                self.settle(&key);
                 self.dropped.remove(&key);
                 self.budget.remove(&key);
                 self.failed.insert(key, error);
                 Applied::Failed
             }
         }
+    }
+
+    /// The tile of `key` has its texture or its error, and its colors were
+    /// extracted before the result was sent.
+    fn settle(&mut self, key: &Path) {
+        self.waiting.remove(key);
+        self.color_waiting.remove(key);
     }
 
     /// The visible tiles changed. Mark them as just used, so the budget drops
@@ -222,271 +277,4 @@ impl Feed {
 }
 
 #[cfg(test)]
-mod tests {
-    use std::collections::{HashMap, HashSet};
-
-    use super::*;
-    use crate::pipeline::ThumbError;
-
-    /// A fake grid that records what the feed did.
-    #[derive(Default)]
-    struct Fake {
-        known: HashSet<PathBuf>,
-        textures: HashMap<PathBuf, u32>,
-        failed: HashMap<PathBuf, TileError>,
-    }
-
-    impl Fake {
-        fn with(keys: &[&str]) -> Self {
-            Self {
-                known: keys.iter().map(PathBuf::from).collect(),
-                ..Self::default()
-            }
-        }
-    }
-
-    impl Tiles for Fake {
-        type Texture = u32;
-
-        fn contains(&self, key: &Path) -> bool {
-            self.known.contains(key)
-        }
-
-        fn set_texture(&mut self, key: &Path, texture: u32) -> bool {
-            if !self.known.contains(key) {
-                return false;
-            }
-            self.failed.remove(key);
-            self.textures.insert(key.to_path_buf(), texture);
-            true
-        }
-
-        fn clear_texture(&mut self, key: &Path) {
-            self.textures.remove(key);
-        }
-
-        fn mark_failed(&mut self, key: &Path, error: TileError) -> bool {
-            if !self.known.contains(key) {
-                return false;
-            }
-            self.textures.remove(key);
-            self.failed.insert(key.to_path_buf(), error);
-            true
-        }
-    }
-
-    /// One 2x2 thumbnail is 16 bytes.
-    const TILE_BYTES: usize = 16;
-
-    fn ok(generation: u64, key: &str) -> ThumbResult {
-        ThumbResult {
-            generation,
-            key: PathBuf::from(key),
-            outcome: Ok(RgbaImage::new(2, 2)),
-        }
-    }
-
-    fn err(generation: u64, key: &str, kind: ErrorKind) -> ThumbResult {
-        ThumbResult {
-            generation,
-            key: PathBuf::from(key),
-            outcome: Err(ThumbError {
-                kind,
-                message: "failed".to_owned(),
-            }),
-        }
-    }
-
-    fn feed_for(keys: &[&str], capacity: usize) -> Feed {
-        let mut feed = Feed::new(capacity);
-        feed.reset(3, keys.iter().map(PathBuf::from));
-        feed
-    }
-
-    #[test]
-    fn every_error_kind_maps_to_a_tile_error() {
-        let cases = [
-            (ErrorKind::Io, TileError::Read),
-            (ErrorKind::Decode, TileError::Decode),
-            (ErrorKind::UnsupportedFormat, TileError::Unsupported),
-            (ErrorKind::TooLarge, TileError::TooLarge),
-            (ErrorKind::Timeout, TileError::Timeout),
-            (ErrorKind::Panicked, TileError::Other),
-            (ErrorKind::InvalidName, TileError::Other),
-            (ErrorKind::Cancelled, TileError::Other),
-        ];
-        for (kind, expected) in cases {
-            assert_eq!(TileError::from(kind), expected, "{kind:?}");
-        }
-    }
-
-    #[test]
-    fn a_stale_generation_changes_nothing() {
-        let mut feed = feed_for(&["a"], 1000);
-        let mut tiles = Fake::with(&["a"]);
-        let mut uploads = 0;
-        let applied = feed.apply(&mut tiles, ok(2, "a"), |_| {
-            uploads += 1;
-            1
-        });
-        assert_eq!(applied, Applied::Stale);
-        assert_eq!(uploads, 0, "a stale image is never uploaded");
-        assert!(tiles.textures.is_empty() && tiles.failed.is_empty());
-        let applied = feed.apply(&mut tiles, err(2, "a", ErrorKind::Decode), |_| 0);
-        assert_eq!(applied, Applied::Stale);
-        assert!(tiles.failed.is_empty());
-        assert!(!feed.all_settled());
-    }
-
-    #[test]
-    fn an_ok_result_sets_the_texture_and_settles_the_tile() {
-        let mut feed = feed_for(&["a"], 1000);
-        let mut tiles = Fake::with(&["a"]);
-        assert_eq!(feed.apply(&mut tiles, ok(3, "a"), |_| 7), Applied::Textured);
-        assert_eq!(tiles.textures.get(Path::new("a")), Some(&7));
-        assert!(feed.all_settled());
-    }
-
-    #[test]
-    fn an_error_marks_the_tile_with_the_mapped_kind() {
-        let mut feed = feed_for(&["a"], 1000);
-        let mut tiles = Fake::with(&["a"]);
-        let applied = feed.apply(&mut tiles, err(3, "a", ErrorKind::Io), |_| 0);
-        assert_eq!(applied, Applied::Failed);
-        assert_eq!(tiles.failed.get(Path::new("a")), Some(&TileError::Read));
-        assert!(feed.all_settled());
-        assert_eq!(feed.counts(), (1, 1));
-    }
-
-    #[test]
-    fn a_cancelled_result_does_not_mark_the_tile() {
-        let mut feed = feed_for(&["a"], 1000);
-        let mut tiles = Fake::with(&["a"]);
-        let applied = feed.apply(&mut tiles, err(3, "a", ErrorKind::Cancelled), |_| 0);
-        assert_eq!(applied, Applied::Cancelled);
-        assert!(tiles.failed.is_empty());
-        assert!(!feed.all_settled());
-    }
-
-    #[test]
-    fn an_unknown_key_is_not_uploaded_into_the_budget() {
-        let mut feed = feed_for(&["a"], TILE_BYTES);
-        let mut tiles = Fake::with(&["a"]);
-        assert_eq!(feed.apply(&mut tiles, ok(3, "a"), |_| 1), Applied::Textured);
-        assert_eq!(
-            feed.apply(&mut tiles, ok(3, "gone"), |_| 2),
-            Applied::Unknown
-        );
-        assert_eq!(tiles.textures.len(), 1, "the unknown key evicted nothing");
-    }
-
-    #[test]
-    fn a_shown_result_over_budget_clears_the_oldest_texture() {
-        let mut feed = feed_for(&["a", "b", "c"], 2 * TILE_BYTES);
-        let mut tiles = Fake::with(&["a", "b", "c"]);
-        feed.apply(&mut tiles, ok(3, "a"), |_| 0);
-        feed.apply(&mut tiles, ok(3, "b"), |_| 0);
-        let _ = feed.show([Path::new("b"), Path::new("c")].into_iter());
-        feed.apply(&mut tiles, ok(3, "c"), |_| 0);
-        assert!(!tiles.textures.contains_key(Path::new("a")));
-        assert!(tiles.textures.contains_key(Path::new("b")));
-        assert!(tiles.textures.contains_key(Path::new("c")));
-        assert!(feed.all_settled(), "a dropped tile stays settled");
-    }
-
-    #[test]
-    fn a_dropped_tile_is_requested_once_when_it_is_shown() {
-        let mut feed = feed_for(&["a", "b", "c"], 2 * TILE_BYTES);
-        let mut tiles = Fake::with(&["a", "b", "c"]);
-        feed.apply(&mut tiles, ok(3, "a"), |_| 0);
-        feed.apply(&mut tiles, ok(3, "b"), |_| 0);
-        let _ = feed.show([Path::new("b"), Path::new("c")].into_iter());
-        feed.apply(&mut tiles, ok(3, "c"), |_| 0);
-        let shown = [Path::new("b"), Path::new("a")];
-        let again = feed.show(shown.into_iter());
-        assert_eq!(again, HashSet::from([PathBuf::from("a")]));
-        let once = feed.show(shown.into_iter());
-        assert!(once.is_empty(), "the request is not repeated");
-    }
-
-    #[test]
-    fn losing_a_shown_tile_asks_for_another_show() {
-        let mut feed = feed_for(&["a", "b", "c"], 2 * TILE_BYTES);
-        let mut tiles = Fake::with(&["a", "b", "c"]);
-        feed.apply(&mut tiles, ok(3, "a"), |_| 0);
-        feed.apply(&mut tiles, ok(3, "b"), |_| 0);
-        // The view holds more tiles than the budget, so one must give way.
-        let _ = feed.show([Path::new("a"), Path::new("b"), Path::new("c")].into_iter());
-        assert!(!feed.take_resync());
-        feed.apply(&mut tiles, ok(3, "c"), |_| 0);
-        assert!(feed.take_resync());
-        assert!(!feed.take_resync(), "the flag is taken once");
-    }
-
-    #[test]
-    fn a_static_view_keeps_its_tiles_while_more_results_arrive() {
-        let names: Vec<String> = (0..10).map(|n| format!("t{n}")).collect();
-        let keys: Vec<&str> = names.iter().map(String::as_str).collect();
-        let mut feed = feed_for(&keys, 3 * TILE_BYTES);
-        let mut tiles = Fake::with(&keys);
-        for key in &keys[..2] {
-            feed.apply(&mut tiles, ok(3, key), |_| 0);
-        }
-        let shown = [Path::new("t0"), Path::new("t1")];
-        let _ = feed.show(shown.into_iter());
-        let mut uploads = 0;
-        for key in &keys[2..] {
-            feed.keep_shown();
-            feed.apply(&mut tiles, ok(3, key), |_| {
-                uploads += 1;
-                0
-            });
-            assert!(tiles.textures.contains_key(Path::new("t0")));
-            assert!(tiles.textures.contains_key(Path::new("t1")));
-        }
-        assert!(!feed.take_resync(), "no shown tile was cleared");
-        assert!(uploads == 1, "deferred keys are not uploaded: {uploads}");
-        assert!(feed.all_settled(), "a deferred tile counts as settled");
-        // A deferred tile that scrolls into view is asked for again.
-        let again = feed.show([Path::new("t9")].into_iter());
-        assert_eq!(again, HashSet::from([PathBuf::from("t9")]));
-    }
-
-    #[test]
-    fn a_deferred_result_reports_deferred_and_skips_the_upload() {
-        let mut feed = feed_for(&["a", "b"], TILE_BYTES);
-        let mut tiles = Fake::with(&["a", "b"]);
-        feed.apply(&mut tiles, ok(3, "a"), |_| 0);
-        let mut uploaded = false;
-        let applied = feed.apply(&mut tiles, ok(3, "b"), |_| {
-            uploaded = true;
-            0
-        });
-        assert_eq!(applied, Applied::Deferred);
-        assert!(!uploaded);
-        assert!(!tiles.textures.contains_key(Path::new("b")));
-    }
-
-    #[test]
-    fn an_unknown_key_costs_no_upload() {
-        let mut feed = feed_for(&["a"], 1000);
-        let mut tiles = Fake::with(&["a"]);
-        let mut uploaded = false;
-        let applied = feed.apply(&mut tiles, ok(3, "gone"), |_| {
-            uploaded = true;
-            0
-        });
-        assert_eq!(applied, Applied::Unknown);
-        assert!(!uploaded);
-    }
-
-    #[test]
-    fn a_new_folder_forgets_the_old_state() {
-        let mut feed = feed_for(&["a", "b"], 1000);
-        let mut tiles = Fake::with(&["a"]);
-        feed.apply(&mut tiles, ok(3, "a"), |_| 0);
-        feed.reset(4, [PathBuf::from("x")]);
-        assert!(!feed.all_settled());
-        assert_eq!(feed.apply(&mut tiles, ok(3, "a"), |_| 0), Applied::Stale);
-    }
-}
+mod tests;

@@ -48,7 +48,7 @@ fn a_tab_click_switches_the_scope_and_the_visible_count() {
     click(
         &ctx,
         &mut gallery,
-        Id::new(("tarragon-scope-tab", "All Images")),
+        Id::new(("tarragon-scope-tab", "All images")),
     );
 
     assert_eq!(gallery.scope(), Scope::All, "the tab switched the scope");
@@ -64,10 +64,9 @@ fn the_search_timer_wakes_itself_without_further_input() {
     gallery.set_items(items());
     frame(&ctx, &mut gallery, Vec::new()).drop_without_applying_deltas();
 
-    // Focus the search field and type.
-    click(&ctx, &mut gallery, Id::new("tarragon-gallery-search"));
-    frame(&ctx, &mut gallery, vec![Event::Text("a 2".to_owned())]).drop_without_applying_deltas();
-    assert_eq!(gallery.search, "a 2", "the text reached the field");
+    // The shell owns the search field, so the test types into the gallery.
+    gallery.search = "a 2".to_owned();
+    gallery.arm_search(Instant::now());
     assert_eq!(gallery.visible_len(), 4, "the filter still waits");
 
     // A wake frame arrives early and must ask for the time that is left. The

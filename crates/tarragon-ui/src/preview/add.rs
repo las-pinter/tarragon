@@ -1,4 +1,4 @@
-//! The "+ add" control: a ghost button, a menu of known tags, and the inline
+//! The "+ Tag" control: a pill button, a menu of known tags, and the inline
 //! input for a new tag name.
 
 use egui::{
@@ -13,17 +13,22 @@ use super::PreviewEvent;
 use crate::popup::{menu_frame, menu_placement, row_frame, text_width};
 use crate::theme::points;
 use crate::tokens;
-use crate::widgets::ghost_button;
 
 mod menu_layout;
 
 /// The label of the menu row that opens the name input.
 pub const CREATE_NEW: &str = "Create new...";
+/// The text of the button that opens the menu.
+pub const ADD_TEXT: &str = "+ Tag";
+/// The padding inside the button, in points, as the tag pills.
+const BUTTON_PAD: egui::Vec2 = vec2(9.0, 3.0);
+/// The button corner radius, as the tag pills.
+const BUTTON_RADIUS: u8 = 12;
 
 /// Which part of the control is open.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub enum AddState {
-    /// Only the "+ add" button shows.
+    /// Only the "+ Tag" button shows.
     #[default]
     Closed,
     /// The menu of known tags is open under the button.
@@ -40,9 +45,9 @@ pub enum AddState {
     },
 }
 
-/// Draw the ghost button. A click opens the menu, or closes it when open.
+/// Draw the "+ Tag" pill. A click opens the menu, or closes it when open.
 pub fn show_button(ui: &mut Ui, state: &mut AddState) -> Response {
-    let response = ghost_button(ui, "+ add");
+    let response = tag_button(ui);
     if response.clicked() {
         *state = if *state == AddState::Menu {
             AddState::Closed
@@ -50,6 +55,36 @@ pub fn show_button(ui: &mut Ui, state: &mut AddState) -> Response {
             AddState::Menu
         };
     }
+    response
+}
+
+/// The "+ Tag" pill: the hover fill with tertiary text, a step lighter on
+/// hover, and the coral ring while it has the keyboard focus.
+fn tag_button(ui: &mut Ui) -> Response {
+    let font = FontId::proportional(tokens::SIZE_BODY);
+    let text = ui
+        .painter()
+        .layout_no_wrap(ADD_TEXT.to_owned(), font, tokens::TEXT_TERTIARY);
+    let (rect, response) =
+        ui.allocate_exact_size(text.size() + BUTTON_PAD * 2.0, egui::Sense::click());
+    response.widget_info(|| {
+        egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), ADD_TEXT)
+    });
+    let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
+    let lit = response.hovered() || response.has_focus();
+    let fill = if lit {
+        tokens::SURFACE_HIGHLIGHT
+    } else {
+        tokens::SURFACE_HOVER
+    };
+    let radius = CornerRadius::same(BUTTON_RADIUS);
+    let painter = ui.painter();
+    painter.rect_filled(rect, radius, fill);
+    if response.has_focus() {
+        let ring = Stroke::new(tokens::FOCUS_RING_WIDTH, tokens::CORAL_STRONG);
+        painter.rect_stroke(rect, radius, ring, StrokeKind::Inside);
+    }
+    painter.galley(rect.min + BUTTON_PAD, text, tokens::TEXT_TERTIARY);
     response
 }
 
@@ -201,7 +236,7 @@ pub fn show_input(ui: &mut Ui, id: Id, state: &mut AddState, events: &mut Vec<Pr
         Some(error) => (error.to_string(), tokens::TAG_ERROR_TEXT),
         None => (
             "Press Enter to add. Escape or focus loss cancels.".to_owned(),
-            tokens::TEXT_MUTED,
+            tokens::TEXT_TERTIARY,
         ),
     };
     ui.label(

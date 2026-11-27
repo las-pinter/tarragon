@@ -155,7 +155,7 @@ fn column(ui: &mut Ui, kind: EmptyKind) -> bool {
                 Label::new(
                     RichText::new(hint)
                         .size(tokens::SIZE_CAPTION)
-                        .color(tokens::TEXT_MUTED),
+                        .color(tokens::TEXT_SECONDARY),
                 )
                 .halign(Align::Center)
                 .selectable(false),

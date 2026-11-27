@@ -35,7 +35,7 @@ macOS. On Linux the copied files stay on the clipboard while Tarragon runs.
 
 ![One color swatch is selected in the Gallery. The grid shows only the images with that color.](docs/screenshots/color-filter.png)
 
-![The Filter Tags menu lists the tags moodboard and reference, with a Manage tags entry.](docs/screenshots/tags.png)
+![The tag filter menu lists the tags moodboard and reference, with a Manage tags entry.](docs/screenshots/tags.png)
 
 ![A layered PSD file in the Preview panel, with its dimensions, size, and format.](docs/screenshots/psd-preview.png)
 
@@ -65,13 +65,16 @@ Windows and macOS are not released yet.
 1. Launch Tarragon. You see the Library, Gallery, and Preview panels.
 2. Choose File, then Open Folder..., and pick a folder with images.
 3. Browse. Click a thumbnail to preview it. Double-click to open it in your
-   editor. Right-click for more actions.
-4. Tag. Right-click an image and choose Add tag..., or use the + add button in
-   the Preview panel.
-5. Filter by color. Click a color swatch above the grid. Click it again to
-   clear the filter.
+   editor, or use the Open button under the preview; its arrow lists the
+   other apps. Right-click for more actions.
+4. Tag. Right-click an image and choose Add tag..., or use the + Tag button in
+   the Preview panel. With several images selected, click Edit tags under
+   the preview first; Open all opens them together.
+5. Filter by color. Click a color swatch above the grid. Click it again, or
+   the x on its chip, to drop that filter. Clear drops every filter.
 
-To save a folder, select it and choose Add Current Folder under Favorites.
+To save a folder, select it and choose Add current folder under Favorites.
+Drag a favorite to reorder the list, or right-click it and choose Remove.
 
 You can also name a folder on the command line: `tarragon <folder>`. When
 Tarragon already runs, the folder opens in that window instead.

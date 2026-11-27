@@ -71,6 +71,7 @@ fn the_box_fills_what_the_content_below_leaves_and_never_drops_under_the_minimum
 /// the painted shapes.
 fn paint_box(height: f32) -> (Rect, Vec<egui::Shape>) {
     let ctx = egui::Context::default();
+    crate::fonts::install(&ctx);
     let input = egui::RawInput {
         screen_rect: Some(Rect::from_min_size(pos2(0.0, 0.0), vec2(400.0, 600.0))),
         ..Default::default()
@@ -103,19 +104,19 @@ fn the_picture_is_inset_from_the_box_and_keeps_its_rounded_corners() {
     let (rect, shapes) = paint_box(300.0);
     let pictures = textured(&shapes);
     assert_eq!(pictures.len(), 1);
-    let inner = rect.shrink(tokens::PREVIEW_IMAGE_INSET);
+    let inner = rect.shrink(super::STAGE_PAD);
     assert_eq!(pictures[0].rect, fit_rect((64, 48), inner));
     assert_eq!(
         pictures[0].corner_radius,
-        CornerRadius::same(tokens::RADIUS_L)
+        CornerRadius::same(tokens::RADIUS_S)
     );
 }
 
 #[test]
-fn a_picture_that_fills_the_inner_area_stays_16_points_off_every_box_edge() {
-    // 64 x 48 fits exactly in a 4:3 inner area: 400 - 32 = 368 wide, 276 tall.
-    let (rect, shapes) = paint_box(276.0 + 32.0);
+fn a_picture_that_fills_the_inner_area_stays_12_points_off_every_box_edge() {
+    // 64 x 48 fits exactly in a 4:3 inner area: 400 - 24 = 376 wide, 282 tall.
+    let (rect, shapes) = paint_box(282.0 + 24.0);
     let picture = textured(&shapes)[0].rect;
-    assert_eq!(picture.min - rect.min, vec2(16.0, 16.0));
-    assert_eq!(rect.max - picture.max, vec2(16.0, 16.0));
+    assert_eq!(picture.min - rect.min, vec2(12.0, 12.0));
+    assert_eq!(rect.max - picture.max, vec2(12.0, 12.0));
 }

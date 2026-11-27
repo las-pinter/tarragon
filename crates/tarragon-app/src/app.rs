@@ -13,10 +13,12 @@ use tarragon_ui::Shell;
 use tarragon_ui::gallery::{Scope, scroll_offset};
 use tarragon_ui::shell::{LogPanelEvents, LogView};
 
+use crate::app_names::AppNames;
 use crate::colorflag;
 use crate::crashcard;
 use crate::data_dir;
 use crate::filtering;
+use crate::folder_counts::FolderCounts;
 use crate::instance::Guard;
 use crate::logging::LogControl;
 use crate::logging::ring::LogRing;
@@ -31,6 +33,8 @@ use crate::storewatch::StoreWatch;
 use crate::tags;
 use crate::thumbs::{ExitClear, ExitWait, Thumbs};
 use crate::window;
+
+use self::open_button::OpenState;
 
 /// How often the open Log panel looks for new lines. The ring cannot wake the
 /// UI, and egui otherwise repaints only on input.
@@ -86,6 +90,10 @@ pub struct App {
     cache_root: PathBuf,
     /// The window context for worker threads, set once the window exists.
     repaint_ctx: Arc<OnceLock<Context>>,
+    /// The image counts of the visible sidebar folders.
+    folder_counts: FolderCounts,
+    /// The Preview's open button for the selected file.
+    open_button: OpenState,
     /// The `PATH` for the system opener, or none to inherit the process one.
     /// Tests point it at a stand-in so no real application starts.
     opener_path: Option<std::ffi::OsString>,
@@ -167,6 +175,8 @@ impl App {
         // Queued before any folder open, so the open sees the evicted cache.
         thumbs.upkeep_at_start(cache_cap_gb(&db));
         let preview_loader = PreviewLoader::new(repaint_of(&repaint_ctx))?;
+        let folder_counts = FolderCounts::start(repaint_of(&repaint_ctx));
+        let open_button = OpenState::new(AppNames::start(repaint_of(&repaint_ctx)));
         let max_multi_preview = max_multi_preview(&db);
         shell.preview_mut().set_max_multi_preview(max_multi_preview);
         let crash_path = startup
@@ -190,6 +200,8 @@ impl App {
             data_root: data_dir::data_root(path),
             cache_root,
             repaint_ctx,
+            folder_counts,
+            open_button,
             opener_path: None,
             close_when_loaded: startup.close_when_loaded,
             exit_wait: startup.exit_wait,
@@ -210,6 +222,28 @@ impl App {
     /// as not maximized.
     pub fn maximized(&self) -> bool {
         self.window_state.maximized.unwrap_or(false)
+    }
+
+    /// Act on the sidebar events, then count and watch the folders the tree
+    /// shows and hand it the counts that arrived.
+    fn apply_sidebar(&mut self, ctx: &Context) {
+        let handled = sidebar::handle_events(&mut self.shell, &self.db);
+        if let Some(path) = handled.navigate {
+            self.navigate(&path);
+        }
+        if handled.any {
+            ctx.request_repaint();
+        }
+        if let Some(folders) = self.shell.sidebar_mut().take_visible_folders() {
+            self.folder_counts.set_visible(&folders);
+        }
+        if self.folder_counts.apply(self.shell.sidebar_mut()) {
+            ctx.request_repaint();
+        }
+        if self.open_button.poll() {
+            self.show_open_buttons();
+            ctx.request_repaint();
+        }
     }
 
     /// Make an activate request repaint the window.
@@ -292,6 +326,8 @@ impl App {
     /// An empty selection clears the details and the pictures.
     fn feed_preview(&mut self) {
         let selected = self.shell.selected_paths();
+        self.open_button.select(&self.db, &selected);
+        self.show_open_buttons();
         if selected.is_empty() {
             self.preview_total = 0;
             self.shell.preview_mut().set_meta(None);
@@ -460,15 +496,9 @@ impl eframe::App for App {
         self.apply_log_events(events);
         self.apply_menu_events(&ctx);
         self.apply_prefs_events(&ctx);
-        let handled = sidebar::handle_events(&mut self.shell, &self.db);
-        if let Some(path) = handled.navigate {
-            self.navigate(&path);
-        }
-        if handled.any {
-            ctx.request_repaint();
-        }
+        self.apply_sidebar(&ctx);
         let events = self.shell.take_preview_events();
-        self.apply_card_events(&events);
+        self.apply_card_events(&ctx, &events);
         self.apply_open_request();
         if tags::apply_preview_events(&mut self.shell, &self.db, events) {
             ctx.request_repaint();
@@ -546,6 +576,7 @@ mod filter_tests;
 mod library_tests;
 mod menu;
 mod open;
+mod open_button;
 mod prefs;
 #[cfg(test)]
 mod prefs_tests;

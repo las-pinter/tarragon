@@ -65,6 +65,7 @@ fn box_width(height: f32) -> f32 {
         dimensions: None,
         size: None,
         format: "PNG".into(),
+        modified: None,
     }));
     preview.set_image(Some(PreviewImage {
         texture: TextureId::User(1),
@@ -78,8 +79,8 @@ fn box_width(height: f32) -> f32 {
         .into_iter()
         .find_map(|s| match s {
             Shape::Rect(r)
-                if r.corner_radius == CornerRadius::same(tokens::RADIUS_L)
-                    && r.fill == tokens::BG_SECONDARY =>
+                if r.corner_radius == CornerRadius::same(tokens::RADIUS_XL)
+                    && r.fill == tokens::BG_STAGE =>
             {
                 Some(r.rect.width())
             }
@@ -105,6 +106,7 @@ fn showing_the_panel_leaves_the_callers_scroll_style_alone() {
         dimensions: None,
         size: None,
         format: "PNG".into(),
+        modified: None,
     }));
     let input = egui::RawInput {
         screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(WIDTH, 600.0))),

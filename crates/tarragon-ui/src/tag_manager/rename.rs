@@ -101,7 +101,7 @@ pub(super) fn list(
     events: &mut Vec<TagManagerEvent>,
 ) {
     if rows.is_empty() {
-        ui.label(RichText::new("No user tags yet").color(tokens::TEXT_MUTED));
+        ui.label(RichText::new("No user tags yet").color(tokens::TEXT_SECONDARY));
         return;
     }
     ScrollArea::vertical()
@@ -176,7 +176,7 @@ fn plain_row(ui: &mut egui::Ui, row: &TagRow, error: Option<&str>) -> Click {
                         );
                     });
                 } else {
-                    ui.label(RichText::new(count_text(row.count)).color(tokens::TEXT_MUTED));
+                    ui.label(RichText::new(count_text(row.count)).color(tokens::TEXT_SECONDARY));
                 }
                 (click, ui.available_rect_before_wrap())
             },

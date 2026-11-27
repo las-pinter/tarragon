@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use super::*;
 
 /// A temporary folder that removes itself on drop.
-struct TempDir(PathBuf);
+pub(super) struct TempDir(pub(super) PathBuf);
 
 impl Drop for TempDir {
     fn drop(&mut self) {
@@ -12,7 +12,7 @@ impl Drop for TempDir {
 }
 
 /// A database with the given `(extension, template)` rows.
-fn db_with(rows: &[(&str, &str)]) -> (TempDir, Database) {
+pub(super) fn db_with(rows: &[(&str, &str)]) -> (TempDir, Database) {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let id = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let dir = std::env::temp_dir().join(format!(
@@ -173,7 +173,7 @@ fn open_of_a_missing_program_names_it() {
 
 /// Wait up to three seconds for `path` to hold a full line.
 #[cfg(unix)]
-fn wait_for_text(path: &Path) -> Option<String> {
+pub(super) fn wait_for_text(path: &Path) -> Option<String> {
     for _ in 0..60 {
         if let Ok(text) = std::fs::read_to_string(path)
             && text.ends_with('\n')

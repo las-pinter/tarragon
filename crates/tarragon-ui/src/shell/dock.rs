@@ -4,10 +4,12 @@ use egui::{FontFamily, Id, Margin, RichText, Ui, WidgetText};
 use egui_dock::{NodePath, TabViewer};
 
 use super::log_panel::{self, LogPanelEvents, LogView};
+use super::menu::RESET_LAYOUT;
 use super::{DOCK_GALLERY, DOCK_LIBRARY, DOCK_LOG, DOCK_PREVIEW};
 use crate::fonts;
 use crate::gallery::Gallery;
 use crate::layout::Pane;
+use crate::popup::Rows;
 use crate::preview::Preview;
 use crate::sidebar::panel::Sidebar;
 use crate::theme::panel_frame;
@@ -39,6 +41,9 @@ pub(super) enum TabMenu {
     Reset,
 }
 
+/// The tab menu row that hides the panel.
+const HIDE_PANEL: &str = "Hide panel";
+
 impl TabViewer for Panes<'_> {
     type Tab = Pane;
 
@@ -46,23 +51,26 @@ impl TabViewer for Panes<'_> {
         Id::new(name(*tab))
     }
 
-    // The tab bar is the panel title strip, so the text matches the mockup title.
-    // The color is set here because the theme's override text color beats the
-    // tab style color, so the style alone would paint the titles near white.
+    // The tab bar is the panel title strip: a small gray upper-case label. The
+    // color is set here because the theme's override text color beats the tab
+    // style color.
     fn title(&mut self, tab: &mut Pane) -> WidgetText {
-        RichText::new(name(*tab))
-            .size(tokens::SIZE_BODY)
-            .color(tokens::AMBER_ACCENT)
+        RichText::new(title(*tab))
+            .size(tokens::SIZE_CAPTION)
+            .color(tokens::TEXT_SECONDARY)
             .family(FontFamily::Name(fonts::MEDIUM_FAMILY.into()))
+            .extra_letter_spacing(tokens::SIZE_CAPTION * tokens::LABEL_SPACING_EM)
             .into()
     }
 
     fn context_menu(&mut self, ui: &mut Ui, tab: &mut Pane, _path: NodePath) {
-        if ui.button("Hide panel").clicked() {
+        ui.spacing_mut().item_spacing.y = 0.0;
+        let rows = Rows::new(ui, &[HIDE_PANEL, RESET_LAYOUT], false);
+        if rows.row(ui, HIDE_PANEL, false) {
             *self.menu = Some(TabMenu::Hide(*tab));
             ui.close();
         }
-        if ui.button("Reset Window Layout").clicked() {
+        if rows.row(ui, RESET_LAYOUT, false) {
             *self.menu = Some(TabMenu::Reset);
             ui.close();
         }
@@ -99,7 +107,7 @@ impl TabViewer for Panes<'_> {
     }
 }
 
-/// The panel name: the tab title and the tab id.
+/// The panel name: the tab id and the View menu label.
 pub(super) fn name(pane: Pane) -> &'static str {
     match pane {
         Pane::Library => DOCK_LIBRARY,
@@ -107,6 +115,11 @@ pub(super) fn name(pane: Pane) -> &'static str {
         Pane::Preview => DOCK_PREVIEW,
         Pane::Log => DOCK_LOG,
     }
+}
+
+/// The tab title: the upper-case section label of the redesign.
+pub(super) fn title(pane: Pane) -> String {
+    name(pane).to_uppercase()
 }
 
 #[cfg(test)]

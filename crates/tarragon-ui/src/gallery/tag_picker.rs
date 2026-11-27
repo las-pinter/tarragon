@@ -1,4 +1,4 @@
-//! The tag picker: the menu of the Preview "+ add" button, opened at the
+//! The tag picker: the menu of the Preview "+ Tag" button, opened at the
 //! pointer for a list of files.
 //!
 //! The picker acts on the paths it was opened with. A change of the selection

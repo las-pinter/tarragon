@@ -4,7 +4,8 @@ use eframe::egui::epaint::Shape;
 use eframe::egui::{
     Color32, Context, Event, Modifiers, PointerButton, Pos2, RawInput, Rect, TextureId, Ui, vec2,
 };
-use tarragon_ui::swatch::{self, FILTER_SIZE};
+use tarragon_ui::preview::COLOR_BAR;
+use tarragon_ui::swatch::FILTER_SIZE;
 
 /// What one frame painted.
 pub struct Painted {
@@ -30,7 +31,9 @@ pub fn frame_at(
     events: Vec<Event>,
     run: &mut impl FnMut(&mut Ui),
 ) -> Painted {
-    let screen = Rect::from_min_size(Pos2::ZERO, vec2(1200.0, 800.0));
+    // Tall enough for two rows of gallery tiles below the header and the
+    // filter bar.
+    let screen = Rect::from_min_size(Pos2::ZERO, vec2(1200.0, 1100.0));
     let input = RawInput {
         screen_rect: Some(screen),
         time,
@@ -58,28 +61,30 @@ fn tally(shape: &Shape, painted: &mut Painted) {
         Shape::Text(t) => painted.texts.push((t.galley.text().to_owned(), t.pos)),
         Shape::Mesh(m) if m.texture_id != TextureId::default() => painted.pictures += 1,
         Shape::Rect(r) if r.brush.is_some() => painted.pictures += 1,
-        Shape::Rect(r) if r.rect.size() == vec2(FILTER_SIZE, FILTER_SIZE) => {
+        // A filter swatch is a filled circle; its ring has no fill.
+        Shape::Circle(c) if c.radius == FILTER_SIZE / 2.0 && c.fill != Color32::TRANSPARENT => {
             painted.swatches += 1;
         }
         _ => {}
     }
 }
 
-/// The fill of each Preview colour square that one frame paints.
+/// The fill of each Preview colour bar that one frame paints, left to right.
 ///
-/// The transparent square paints smaller checker cells, so 11 squares match,
-/// not 12.
-pub fn square_fills(ctx: &Context, run: &mut impl FnMut(&mut Ui)) -> Vec<Color32> {
+/// The transparent bar paints smaller checker cells, so it never matches.
+pub fn bar_fills(ctx: &Context, run: &mut impl FnMut(&mut Ui)) -> Vec<Color32> {
     fn collect(shape: &Shape, found: &mut Vec<Color32>) {
         match shape {
             Shape::Vec(shapes) => shapes.iter().for_each(|s| collect(s, found)),
-            Shape::Rect(r) if r.rect.size() == vec2(swatch::SIZE, swatch::SIZE) => {
+            Shape::Rect(r) if r.rect.size() == COLOR_BAR => {
                 found.push(r.fill);
             }
             _ => {}
         }
     }
-    let screen = Rect::from_min_size(Pos2::ZERO, vec2(1200.0, 800.0));
+    // Tall enough for two rows of gallery tiles below the header and the
+    // filter bar.
+    let screen = Rect::from_min_size(Pos2::ZERO, vec2(1200.0, 1100.0));
     let input = RawInput {
         screen_rect: Some(screen),
         ..Default::default()
@@ -93,7 +98,7 @@ pub fn square_fills(ctx: &Context, run: &mut impl FnMut(&mut Ui)) -> Vec<Color32
     found
 }
 
-/// Open the Manage tags window from the Filter Tags menu and return the texts
+/// Open the Manage tags window from the Tags menu and return the texts
 /// of the settled frame. The filter lists must hold a tag, or the menu is empty.
 pub fn open_manager(ctx: &Context, run: &mut impl FnMut(&mut Ui)) -> Vec<String> {
     // A menu that is open already must not be toggled shut.
@@ -102,7 +107,7 @@ pub fn open_manager(ctx: &Context, run: &mut impl FnMut(&mut Ui)) -> Vec<String>
         .iter()
         .any(|t| t.0 == "Manage tags...");
     if !menu_open {
-        click_text(ctx, "Filter Tags", run);
+        click_text(ctx, "Tags", run);
     }
     click_text(ctx, "Manage tags...", run);
     frame(ctx, Vec::new(), run);

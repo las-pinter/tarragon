@@ -1,8 +1,5 @@
 //! Tests for applying the Preview tag events.
 
-mod color;
-
-use std::collections::HashMap;
 use std::path::PathBuf;
 
 use eframe::egui::{Context, Event, Modifiers, PointerButton, Ui, vec2};
@@ -12,7 +9,6 @@ use tarragon_ui::Shell;
 use tarragon_ui::gallery::Scope;
 use tarragon_ui::grid::GridItem;
 use tarragon_ui::preview::{ColorState, Meta, PreviewEvent, TagPill};
-use tarragon_ui::swatch::Swatch;
 
 use super::{Store, apply_events, write_events};
 use crate::filtering::tests::seeded;
@@ -67,6 +63,7 @@ fn selected_shell() -> (Context, Shell) {
         dimensions: None,
         size: None,
         format: "PNG".into(),
+        modified: None,
     }));
     let items = [A, B, C].map(|p| GridItem::new(PathBuf::from(p), 1, None));
     shell.set_items(items.into());
@@ -120,8 +117,6 @@ enum Failing {
     Attach,
     Lookup,
     Detach,
-    EnsureAuto,
-    Read,
 }
 
 fn fail() -> DbError {
@@ -161,40 +156,6 @@ impl Store for Failing {
             Err(fail())
         } else {
             Ok(1)
-        }
-    }
-
-    fn ensure_auto(&self, name: &str) -> Result<Tag, DbError> {
-        if *self == Failing::EnsureAuto {
-            return Err(fail());
-        }
-        Ok(Tag {
-            id: 8,
-            name: name.to_owned(),
-            source: TagSource::AutoColor,
-        })
-    }
-
-    fn auto_tag_id(&self, _name: &str) -> Result<Option<i64>, DbError> {
-        Ok(Some(8))
-    }
-
-    fn file_tags(&self, paths: &[String]) -> Result<HashMap<String, Vec<Tag>>, DbError> {
-        match self {
-            Failing::Read => Err(fail()),
-            // Every file already holds the red colour, so a click detaches it.
-            Failing::Detach => Ok(paths
-                .iter()
-                .map(|path| {
-                    let red = Tag {
-                        id: 8,
-                        name: "red".to_owned(),
-                        source: TagSource::AutoColor,
-                    };
-                    (path.clone(), vec![red])
-                })
-                .collect()),
-            _ => Ok(HashMap::new()),
         }
     }
 }
@@ -314,7 +275,7 @@ fn a_write_runs_an_active_tag_filter_again_and_a_refused_one_does_not() {
     shell
         .gallery_mut()
         .set_filter_lists(vec!["night".into()], Vec::new());
-    click_text(&ctx, "Filter Tags", &mut |ui: &mut Ui| {
+    click_text(&ctx, "Tags", &mut |ui: &mut Ui| {
         shell.gallery_mut().show(ui);
     });
     click_text(&ctx, "night", &mut |ui: &mut Ui| {
@@ -356,11 +317,10 @@ fn one_failed_event_does_not_stop_the_next() {
 fn an_empty_selection_writes_nothing() {
     let (db, _dir) = seeded();
     let before = db.all_tags().expect("read").len();
-    let click = PreviewEvent::ColorClicked(Swatch::ALL[0]);
     assert!(!write_events(
         &db,
         &[],
-        vec![applied("cat"), removed("night"), click]
+        vec![applied("cat"), removed("night")]
     ));
     assert_eq!(db.all_tags().expect("read").len(), before);
     assert_eq!(user_tags(&db, A), ["night"]);

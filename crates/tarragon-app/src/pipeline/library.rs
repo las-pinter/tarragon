@@ -8,7 +8,7 @@ use tarragon_cache::store::SourceStamp;
 use tarragon_core::entity::FileInfo;
 use tarragon_db::repository::LibraryFile;
 
-use super::job::{ColorState, Job};
+use super::job::{ColorState, Job, color_keys};
 use super::{Failures, Opened, Pipeline, PipelineError, new_folder_id};
 
 #[cfg(test)]
@@ -20,7 +20,8 @@ impl Pipeline {
     /// files. Jobs of the old open are dropped.
     ///
     /// The database reads run on the calling thread, so call it from a
-    /// worker thread and not from the UI. The files have no pixel size.
+    /// worker thread and not from the UI. The files carry the stored pixel
+    /// size, zero when no render stored one.
     /// It keeps the remembered failures: a file outside the old folder may
     /// have failed before.
     ///
@@ -65,6 +66,7 @@ impl Pipeline {
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .clear();
         }
+        let color_keys = color_keys(&jobs);
         self.jobs = jobs
             .iter()
             .map(|job| (job.path.clone(), job.clone()))
@@ -76,11 +78,15 @@ impl Pipeline {
                 path: PathBuf::from(row.path),
                 size: u64::try_from(row.size).unwrap_or(0),
                 mtime: row.mtime,
-                width: 0,
-                height: 0,
+                width: row.width,
+                height: row.height,
             })
             .collect();
-        Ok(Opened { generation, files })
+        Ok(Opened {
+            generation,
+            files,
+            color_keys,
+        })
     }
 }
 

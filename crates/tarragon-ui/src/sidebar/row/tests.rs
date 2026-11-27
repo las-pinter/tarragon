@@ -1,7 +1,8 @@
 //! Tests for the tree row widget.
 
 use super::*;
-use egui::{Context, Event, Modifiers, PointerButton, Pos2, RawInput, Shape};
+use crate::sidebar::paint::CARET_SIZE;
+use egui::{Context, Event, Modifiers, PointerButton, Pos2, RawInput, Shape, pos2};
 use std::path::PathBuf;
 
 /// A row with the given depth and caret.
@@ -36,13 +37,24 @@ struct Frame {
     avail: f32,
 }
 
-/// Run one frame with the rows as salt 0, 1, and so on.
+/// Run one frame with the rows as salt 0, 1, and so on, and no counts.
 fn frame(ctx: &Context, raw: RawInput, rows: &[TreeRow], selected: bool) -> Frame {
+    frame_counted(ctx, raw, rows, selected, None)
+}
+
+/// Run one frame with the rows as salt 0, 1, and so on, each with `count`.
+fn frame_counted(
+    ctx: &Context,
+    raw: RawInput,
+    rows: &[TreeRow],
+    selected: bool,
+    count: Option<u32>,
+) -> Frame {
     let (mut actions, mut rects, mut avail) = (Vec::new(), Vec::new(), 0.0);
     let output = ctx.run_ui(raw, |ui| {
         avail = ui.available_width();
         for (index, row) in rows.iter().enumerate() {
-            actions.push(show_tree_row(ui, row, selected, index));
+            actions.push(show_tree_row(ui, row, selected, count, index));
             let seen = ctx.read_response(row_id(ui, index));
             rects.push(seen.expect("row registered").rect);
         }
@@ -94,15 +106,24 @@ fn has_fill(shapes: &[Shape], fill: egui::Color32) -> bool {
         .any(|shape| matches!(shape, Shape::Rect(rect) if rect.fill == fill))
 }
 
-/// The left edge of the first icon body of this colour.
-fn icon_x(shapes: &[Shape], color: egui::Color32) -> f32 {
+/// The folder outline: the one closed path.
+fn folder(shapes: &[Shape]) -> &egui::epaint::PathShape {
     shapes
         .iter()
         .find_map(|shape| match shape {
-            Shape::Rect(rect) if rect.fill == color => Some(rect.rect.min.x),
+            Shape::Path(path) if path.closed => Some(path),
             _ => None,
         })
-        .expect("the icon painted")
+        .expect("the folder painted")
+}
+
+/// The left edge of the folder outline.
+fn icon_x(shapes: &[Shape]) -> f32 {
+    folder(shapes)
+        .points
+        .iter()
+        .map(|point| point.x)
+        .fold(f32::INFINITY, f32::min)
 }
 
 #[test]
@@ -119,7 +140,7 @@ fn a_click_on_the_caret_toggles_without_navigating() {
     let rows = [row(0, true)];
     let ctx = ready(&rows);
     let rect = first_rect(&ctx, &rows);
-    let pos = pos2(rect.min.x + ROW_PAD + CARET_SLOT / 2.0, rect.center().y);
+    let pos = pos2(rect.min.x + ROW_PAD + CARET_SIZE / 2.0, rect.center().y);
     assert_eq!(click(&ctx, pos, &rows), [RowAction::Toggle]);
 }
 
@@ -137,7 +158,7 @@ fn a_click_on_a_leaf_slot_navigates() {
     let rows = [row(0, false)];
     let ctx = ready(&rows);
     let rect = first_rect(&ctx, &rows);
-    let pos = pos2(rect.min.x + ROW_PAD + CARET_SLOT / 2.0, rect.center().y);
+    let pos = pos2(rect.min.x + ROW_PAD + CARET_SIZE / 2.0, rect.center().y);
     assert_eq!(click(&ctx, pos, &rows), [RowAction::Navigate]);
 }
 
@@ -157,27 +178,67 @@ fn a_leaf_paints_no_caret() {
         let shapes = frame(&ctx, input(Vec::new()), &[row(0, has_caret)], false).shapes;
         shapes
             .iter()
-            .filter(|shape| matches!(shape, Shape::Path(_)))
+            .filter(|shape| matches!(shape, Shape::Path(path) if !path.closed))
             .count()
     };
     assert_eq!((paths(false), paths(true)), (0, 1));
 }
 
 #[test]
-fn the_selected_row_paints_the_tertiary_fill() {
+fn the_selected_row_paints_the_coral_deep_fill() {
     let ctx = ready(&[]);
     let fills = |selected| {
         let shapes = frame(&ctx, input(Vec::new()), &[row(0, false)], selected).shapes;
-        has_fill(&shapes, tokens::BG_TERTIARY)
+        has_fill(&shapes, tokens::CORAL_DARK)
     };
     assert_eq!((fills(false), fills(true)), (false, true));
 }
 
 #[test]
-fn the_selected_row_paints_a_coral_icon() {
+fn the_selected_row_paints_its_marks_and_name_in_light_coral() {
     let ctx = ready(&[]);
-    let shapes = frame(&ctx, input(Vec::new()), &[row(0, false)], true).shapes;
-    assert!(has_fill(&shapes, tokens::CORAL_STRONG));
+    let shapes = frame(&ctx, input(Vec::new()), &[row(0, true)], true).shapes;
+    let stroke = |shape: &Shape| match shape {
+        Shape::Path(path) => Some(path.stroke.color.clone()),
+        _ => None,
+    };
+    let strokes: Vec<_> = shapes.iter().filter_map(stroke).collect();
+    assert_eq!(strokes.len(), 2, "the caret and the folder");
+    for color in strokes {
+        assert_eq!(color, egui::epaint::ColorMode::Solid(tokens::CORAL_STRONG));
+    }
+    let text = shapes.iter().find_map(|shape| match shape {
+        Shape::Text(text) => Some(text.galley.job.sections[0].format.clone()),
+        _ => None,
+    });
+    let format = text.expect("the name painted");
+    assert_eq!(format.color, tokens::CORAL_STRONG);
+    assert_eq!(
+        format.font_id.family,
+        egui::FontFamily::Name(crate::fonts::MEDIUM_FAMILY.into())
+    );
+}
+
+#[test]
+fn a_row_at_rest_paints_no_fill_and_primary_text() {
+    let ctx = ready(&[]);
+    let shapes = frame(&ctx, input(Vec::new()), &[row(0, false)], false).shapes;
+    let fills: Vec<_> = shapes
+        .iter()
+        .filter_map(|shape| match shape {
+            Shape::Rect(rect) => Some(rect.fill),
+            _ => None,
+        })
+        .collect();
+    assert!(
+        fills.iter().all(|fill| *fill == egui::Color32::TRANSPARENT),
+        "{fills:?}"
+    );
+    let text = shapes.iter().find_map(|shape| match shape {
+        Shape::Text(text) => Some(text.galley.job.sections[0].format.color),
+        _ => None,
+    });
+    assert_eq!(text, Some(tokens::TEXT_PRIMARY));
 }
 
 #[test]
@@ -195,7 +256,7 @@ fn the_icon_moves_right_with_depth() {
     let ctx = ready(&[]);
     let at = |depth| {
         let shapes = frame(&ctx, input(Vec::new()), &[row(depth, false)], false).shapes;
-        icon_x(&shapes, tokens::TEXT_SECONDARY)
+        icon_x(&shapes)
     };
     assert!((at(2) - at(0) - 2.0 * INDENT_STEP).abs() < f32::EPSILON);
 }
@@ -205,16 +266,16 @@ fn a_leaf_and_a_caret_row_share_the_icon_x() {
     let ctx = ready(&[]);
     let at = |has_caret| {
         let shapes = frame(&ctx, input(Vec::new()), &[row(1, has_caret)], false).shapes;
-        icon_x(&shapes, tokens::TEXT_SECONDARY)
+        icon_x(&shapes)
     };
     assert!((at(true) - at(false)).abs() < f32::EPSILON);
 }
 
 #[test]
-fn a_row_is_25_tall_and_full_width() {
+fn a_row_is_34_tall_and_full_width() {
     let ctx = ready(&[]);
     let drawn = frame(&ctx, input(Vec::new()), &[row(0, true)], false);
-    assert!((drawn.rects[0].height() - 25.0).abs() < f32::EPSILON);
+    assert!((drawn.rects[0].height() - 34.0).abs() < f32::EPSILON);
     assert!((drawn.rects[0].width() - drawn.avail).abs() < f32::EPSILON);
 }
 
@@ -229,4 +290,75 @@ fn a_long_name_in_a_narrow_frame_does_not_panic() {
     };
     let drawn = frame(&ctx, raw, &[long], true);
     assert_eq!(drawn.actions, [RowAction::None]);
+}
+
+/// The painted texts of one row with `count`, as (string, left x, colour).
+fn texts_with(
+    ctx: &Context,
+    name: &str,
+    count: Option<u32>,
+    width: f32,
+) -> Vec<(String, f32, f32)> {
+    let mut long = row(0, false);
+    long.name = name.to_owned();
+    let raw = RawInput {
+        screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(width, 100.0))),
+        ..Default::default()
+    };
+    frame_counted(ctx, raw, &[long], false, count)
+        .shapes
+        .iter()
+        .filter_map(|shape| match shape {
+            Shape::Text(text) => Some((
+                text.galley.job.text.clone(),
+                text.pos.x,
+                text.pos.x + text.galley.size().x,
+            )),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn a_count_paints_right_aligned_in_the_caption_size_and_tertiary_text() {
+    let ctx = ready(&[]);
+    let mut rows = row(0, false);
+    rows.name = "a".to_owned();
+    let shapes = frame_counted(&ctx, input(Vec::new()), &[rows], true, Some(48)).shapes;
+    let count = shapes
+        .iter()
+        .find_map(|shape| match shape {
+            Shape::Text(text) if text.galley.job.text == "48" => Some(text.clone()),
+            _ => None,
+        })
+        .expect("the count painted");
+    let format = &count.galley.job.sections[0].format;
+    assert_eq!(format.color, tokens::TEXT_TERTIARY, "even on the selection");
+    assert!((format.font_id.size - tokens::SIZE_CAPTION).abs() < f32::EPSILON);
+    let right = count.pos.x + count.galley.size().x;
+    assert!(
+        (right - (400.0 - ROW_PAD)).abs() < 0.5,
+        "the count ends at {right}"
+    );
+}
+
+#[test]
+fn zero_and_none_paint_no_count() {
+    let ctx = ready(&[]);
+    for count in [None, Some(0)] {
+        let texts = texts_with(&ctx, "a", count, 400.0);
+        assert_eq!(texts.len(), 1, "{count:?} painted {texts:?}");
+    }
+}
+
+#[test]
+fn a_long_name_stops_before_the_count() {
+    let ctx = ready(&[]);
+    let texts = texts_with(&ctx, &"long folder name ".repeat(6), Some(1234), 220.0);
+    let (_, count_left, _) = texts.iter().find(|t| t.0 == "1234").expect("the count");
+    let (_, _, name_right) = texts.iter().find(|t| t.0 != "1234").expect("the name");
+    assert!(
+        *name_right <= count_left - GAP + 0.5,
+        "the name ends at {name_right}, the count starts at {count_left}"
+    );
 }

@@ -26,14 +26,17 @@ mod scale_tests;
 #[cfg(test)]
 mod tests;
 
-pub(crate) use cell::{ERROR_MARK_SIZE, paint_error};
+pub(crate) use cell::{ERROR_MARK_SIZE, paint_error, paint_format_badge, touching_corners};
 pub use items::{GridItem, TileError, items_in_order};
 pub use selection::Selection;
 
-/// Width of one grid track, in points. The stylesheet track is 196 px.
-const TRACK_WIDTH: f32 = 196.0;
-/// Height of one grid cell, in points. The stylesheet cell is about 208 px.
-const CELL_HEIGHT: f32 = 208.0;
+/// The narrowest grid track, in points: the page's `minmax(168px, 1fr)`.
+const TRACK_MIN: f32 = 168.0;
+/// The gap between two tiles across and down, in points.
+const GAP: Vec2 = vec2(16.0, 20.0);
+/// The room around the tiles, in points, so the selection and hover outlines
+/// outside the thumbnail stay inside the scroll area's clip.
+pub(crate) const EDGE: f32 = cell::OUTLINE_REACH;
 
 /// Fixed geometry of one grid. All values are in points.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -42,15 +45,16 @@ pub struct GridMetrics {
     pub columns: usize,
     /// Width and height of one cell.
     pub cell: Vec2,
-    /// Gap between two cells. The gap is not added after the last cell.
-    pub spacing: f32,
+    /// Gap between two cells across and down. The gap is not added after the
+    /// last cell.
+    pub gap: Vec2,
 }
 
 impl GridMetrics {
     /// Distance from one cell origin to the next cell origin.
     #[must_use]
     pub fn stride(&self) -> Vec2 {
-        self.cell + Vec2::splat(self.spacing)
+        self.cell + self.gap
     }
 
     /// Number of rows that hold `item_count` items.
@@ -75,8 +79,8 @@ impl GridMetrics {
         }
         let stride = self.stride();
         vec2(
-            (self.columns as f32 * stride.x - self.spacing).max(0.0),
-            (rows as f32 * stride.y - self.spacing).max(0.0),
+            (self.columns as f32 * stride.x - self.gap.x).max(0.0),
+            (rows as f32 * stride.y - self.gap.y).max(0.0),
         )
     }
 
@@ -113,9 +117,10 @@ impl GridMetrics {
 
     /// Stretch the cell width so `columns` tracks fill `width`.
     ///
-    /// The cell height stays fixed. The column count is the largest track
-    /// count that fits, so a narrow grid keeps one column. This matches the
-    /// stylesheet `minmax(196px, 1fr)` track.
+    /// The thumbnail is square, so the cell is as tall as it is wide plus
+    /// the name below. The column count is the largest track count that
+    /// fits, so a narrow grid keeps one column. This matches the page's
+    /// `minmax(168px, 1fr)` track.
     #[must_use]
     #[expect(
         clippy::cast_possible_truncation,
@@ -124,15 +129,15 @@ impl GridMetrics {
         reason = "the column count is a small positive number"
     )]
     pub fn stretched(self, width: f32) -> Self {
-        let columns = ((width + self.spacing) / (TRACK_WIDTH + self.spacing))
+        let columns = ((width + self.gap.x) / (TRACK_MIN + self.gap.x))
             .floor()
             .max(1.0) as usize;
-        let gaps = self.spacing * (columns.saturating_sub(1)) as f32;
-        let cell_width = ((width - gaps) / columns as f32).max(TRACK_WIDTH);
+        let gaps = self.gap.x * (columns.saturating_sub(1)) as f32;
+        let cell_width = ((width - gaps) / columns as f32).max(TRACK_MIN);
         Self {
             columns,
-            cell: vec2(cell_width, self.cell.y),
-            spacing: self.spacing,
+            cell: vec2(cell_width, cell_width + cell::LABEL_BLOCK),
+            gap: self.gap,
         }
     }
 }
@@ -171,7 +176,7 @@ fn scroll_style() -> egui::style::ScrollStyle {
 /// The size of one grid cell.
 #[must_use]
 pub fn cell_size() -> Vec2 {
-    vec2(TRACK_WIDTH, CELL_HEIGHT)
+    vec2(TRACK_MIN, TRACK_MIN + cell::LABEL_BLOCK)
 }
 
 /// The grid geometry for an available `width`, in points.
@@ -183,7 +188,7 @@ pub fn metrics_for(width: f32) -> GridMetrics {
     GridMetrics {
         columns: 1,
         cell: cell_size(),
-        spacing: tokens::GRID_GAP,
+        gap: GAP,
     }
     .stretched(width)
 }
@@ -289,21 +294,27 @@ impl VirtualGrid {
             ui.spacing_mut().scroll = scroll_style();
             area.show_viewport(ui, |ui, viewport| {
                 // The inner width excludes the scrollbar, so the columns fit.
-                let metrics = self.metrics.stretched(ui.available_width());
+                // The edge leaves room for the outlines on every side.
+                let metrics = self
+                    .metrics
+                    .stretched((ui.available_width() - 2.0 * EDGE).max(0.0));
                 let content = metrics.content_size(self.item_count);
                 let row_count = metrics.row_count(self.item_count);
-                ui.set_min_size(content);
+                ui.set_min_size(content + Vec2::splat(2.0 * EDGE));
                 let backdrop =
                     ui.interact(ui.clip_rect(), ui.id().with("grid-backdrop"), Sense::CLICK);
                 empty_click = backdrop.secondary_clicked();
-                let origin = ui.max_rect().min;
+                let origin = ui.max_rect().min + Vec2::splat(EDGE);
+                // The rows and columns count from the first tile, not the edge.
+                let viewport = viewport.translate(-Vec2::splat(EDGE));
                 if let Scroll::Reveal(position) = scroll
                     && metrics.columns > 0
                     && position < self.item_count
                 {
                     let cell =
                         metrics.cell_rect(position / metrics.columns, position % metrics.columns);
-                    let rect = cell.translate(origin.to_vec2());
+                    // With its outline, so a revealed tile shows whole.
+                    let rect = cell.translate(origin.to_vec2()).expand(EDGE);
                     ui.scroll_to_rect_animation(rect, None, egui::style::ScrollAnimation::none());
                 }
                 let cols = metrics.visible_cols(viewport);

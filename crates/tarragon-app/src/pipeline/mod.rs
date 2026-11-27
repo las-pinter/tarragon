@@ -35,6 +35,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crossbeam_channel::{Receiver, Sender};
 use image::DynamicImage;
+use tarragon_cache::purge::PurgeProgress;
 use tarragon_cache::store::{CacheStore, SourceStamp};
 use tarragon_core::entity::FileInfo;
 use tarragon_core::error::{RenderError, ScanError};
@@ -125,6 +126,19 @@ pub struct Opened {
     pub generation: u64,
     /// The scanned files, so the caller can show a tile for each at once.
     pub files: Vec<FileInfo>,
+    /// The files whose job extracts colors because they have none yet. It is
+    /// empty while color tagging is off.
+    pub color_keys: HashSet<PathBuf>,
+}
+
+/// Live counts of the long jobs, for the status bar. The pipeline writes
+/// them on its own threads; the UI reads them each frame.
+#[derive(Debug, Default)]
+pub struct Counters {
+    /// The supported files the running folder scan has found so far.
+    pub found: AtomicU64,
+    /// The bytes of the running purge.
+    pub purge: PurgeProgress,
 }
 
 /// The receiving end for the UI. It never returns a stale result.
@@ -196,6 +210,7 @@ pub struct Pipeline {
     rows: Option<Sender<writer::Message>>,
     workers: Vec<JoinHandle<()>>,
     writer: Option<JoinHandle<()>>,
+    counters: Arc<Counters>,
 }
 
 impl Pipeline {
@@ -241,6 +256,7 @@ impl Pipeline {
             rows: Some(row_tx.clone()),
             workers: Vec::new(),
             writer: None,
+            counters: Arc::default(),
         };
         // A failed spawn drops `pipeline`, which stops the threads so far.
         pipeline.writer = Some(
@@ -378,6 +394,13 @@ impl Pipeline {
     /// scan order behind them.
     pub fn reprioritise(&self, visible: &HashSet<PathBuf>) {
         self.queue.reprioritise(visible);
+    }
+
+    /// The live counts of the scan and the purge. The handle stays valid
+    /// while the pipeline sits in an open or a work thread.
+    #[must_use]
+    pub fn counters(&self) -> Arc<Counters> {
+        Arc::clone(&self.counters)
     }
 
     /// Drop every queued job and wait until no worker is rendering.

@@ -21,6 +21,23 @@ impl Gallery {
             .collect()
     }
 
+    /// How many items are selected.
+    #[must_use]
+    pub fn selected_count(&self) -> usize {
+        self.selection.len()
+    }
+
+    /// The size of the selected items together, in bytes, from the sizes the
+    /// scan or the stored rows gave.
+    #[must_use]
+    pub fn selected_bytes(&self) -> u64 {
+        self.selection
+            .iter()
+            .filter_map(|index| self.items.get(index))
+            .map(|item| item.size)
+            .sum()
+    }
+
     /// The path of the selected item when exactly one is selected. It copies
     /// nothing, so a caller can ask every frame.
     #[must_use]

@@ -49,6 +49,7 @@ fn selected_shell(db: &Database) -> (Context, Shell) {
         dimensions: None,
         size: None,
         format: "PNG".into(),
+        modified: None,
     }));
     let items = [A, B, C].map(|p| GridItem::new(PathBuf::from(p), 1, None));
     shell.set_items(items.into());
@@ -136,7 +137,7 @@ fn a_rename_reaches_the_db_the_lists_the_rows_the_chip_and_the_pills() {
     let (ctx, mut shell) = selected_shell(&db);
     let id = id_of(&db, "night");
     // The chip to rename.
-    click_text(&ctx, "Filter Tags", &mut |ui: &mut Ui| {
+    click_text(&ctx, "Tags", &mut |ui: &mut Ui| {
         shell.gallery_mut().show(ui);
     });
     click_text(&ctx, "night", &mut |ui: &mut Ui| {
@@ -248,7 +249,7 @@ fn deleting_a_used_tag_drops_its_rows_chip_and_pill() {
     let (db, _dir) = seeded();
     let (ctx, mut shell) = selected_shell(&db);
     let id = id_of(&db, "night");
-    click_text(&ctx, "Filter Tags", &mut |ui: &mut Ui| {
+    click_text(&ctx, "Tags", &mut |ui: &mut Ui| {
         shell.gallery_mut().show(ui);
     });
     click_text(&ctx, "night", &mut |ui: &mut Ui| {
@@ -288,7 +289,7 @@ fn deleting_a_tag_that_is_already_gone_refreshes_quietly() {
     assert!(shell.gallery_mut().take_filter_change().is_some());
     assert_eq!(shell.gallery_mut().filter_lists().0, ["night"]);
     // The window still draws after the refresh.
-    assert!(gallery_texts(&ctx, &mut shell).contains(&"Filter Tags".to_owned()));
+    assert!(gallery_texts(&ctx, &mut shell).contains(&"Tags".to_owned()));
 }
 
 #[test]

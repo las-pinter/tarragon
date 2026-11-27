@@ -13,7 +13,7 @@ use tarragon_ui::grid::{GridItem, TileError};
 use tarragon_ui::texture_budget::GRID_BUDGET_BYTES;
 
 use crate::feed::{Feed, Tiles};
-use crate::pipeline::{Opened, Pipeline, PipelineError, Repaint, Results, ThumbError};
+use crate::pipeline::{Counters, Opened, Pipeline, PipelineError, Repaint, Results, ThumbError};
 pub use exit::{ExitClear, ExitWait};
 use handoff::Answer;
 use work::Queued;
@@ -43,6 +43,10 @@ impl Tiles for Gallery {
 
     fn mark_failed(&mut self, key: &Path, error: TileError) -> bool {
         Self::mark_failed(self, key, error)
+    }
+
+    fn set_dimensions(&mut self, key: &Path, dimensions: (u32, u32)) {
+        Self::set_dimensions(self, key, dimensions);
     }
 }
 
@@ -123,6 +127,9 @@ pub struct Thumbs {
     shown: Option<Instant>,
     started: Instant,
     repaint: Repaint,
+    /// The live counts of the scan and the purge, read while the pipeline
+    /// sits in a thread.
+    counters: Arc<Counters>,
 }
 
 impl Thumbs {
@@ -136,7 +143,9 @@ impl Thumbs {
         folder: Option<PathBuf>,
         repaint: Repaint,
     ) -> Self {
+        let counters = pipeline.counters();
         Self {
+            counters,
             slot: Slot::Idle(pipeline),
             results,
             feed: Feed::new(GRID_BUDGET_BYTES),
@@ -200,7 +209,7 @@ impl Thumbs {
     /// waiting request and does nothing else. A request equal to the waiting
     /// one does nothing. The caller passes a normalized path. Without a
     /// pipeline nothing could take the request, so it is dropped; a kept
-    /// request would hold the busy strip on for good.
+    /// request would hold the scan in the status bar for good.
     pub fn navigate(&mut self, folder: PathBuf) {
         if matches!(self.slot, Slot::Gone) {
             tracing::warn!("the pipeline is gone; {} cannot open", folder.display());
@@ -374,6 +383,11 @@ impl Thumbs {
         // stays. One still owed describes the tiles that the library swaps in,
         // so its clock restarts with them.
         if matches!(target, Target::Folder(_)) {
+            // The open thread resets it too; this keeps the last scan's count
+            // off the first frames.
+            self.counters
+                .found
+                .store(0, std::sync::atomic::Ordering::Relaxed);
             self.announced = false;
             self.opened = false;
             self.started = Instant::now();
@@ -445,10 +459,14 @@ impl Thumbs {
             Ok(opened) => {
                 let keys = opened.files.iter().map(|file| file.path.clone());
                 self.feed.reset(opened.generation, keys);
+                self.feed.set_color_keys(opened.color_keys);
                 let items = opened
                     .files
                     .into_iter()
-                    .map(|file| GridItem::new(file.path, file.mtime, None))
+                    .map(|file| {
+                        GridItem::new(file.path, file.mtime, None)
+                            .with_meta(file.size, (file.width, file.height))
+                    })
                     .collect();
                 gallery.set_folder(Some(folder.clone()));
                 gallery.set_items(items);
@@ -479,10 +497,14 @@ impl Thumbs {
                 // the feed drops every result.
                 let keys = opened.files.iter().map(|file| file.path.clone());
                 self.feed.reset(opened.generation, keys);
+                self.feed.set_color_keys(opened.color_keys);
                 let items = opened
                     .files
                     .into_iter()
-                    .map(|file| GridItem::new(file.path, file.mtime, None))
+                    .map(|file| {
+                        GridItem::new(file.path, file.mtime, None)
+                            .with_meta(file.size, (file.width, file.height))
+                    })
                     .collect();
                 gallery.set_items(items);
                 self.library = Library::Loaded;
@@ -504,6 +526,8 @@ pub(crate) fn color_image(image: &RgbaImage) -> ColorImage {
 
 mod exit;
 mod handoff;
+#[cfg(test)]
+mod jobs_tests;
 #[cfg(test)]
 mod library_tests;
 mod opening;

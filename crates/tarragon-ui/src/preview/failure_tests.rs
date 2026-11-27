@@ -30,6 +30,7 @@ fn with_picture() -> Preview {
         dimensions: None,
         size: None,
         format: "PSD".into(),
+        modified: None,
     }));
     preview.set_image(Some(PreviewImage {
         texture: TextureId::User(1),
@@ -49,7 +50,7 @@ fn frame(
     fn rects(shape: &Shape, found: &mut Vec<(CornerRadius, Stroke)>) {
         match shape {
             Shape::Vec(shapes) => shapes.iter().for_each(|s| rects(s, found)),
-            Shape::Rect(r) if r.fill == tokens::BG_SECONDARY => {
+            Shape::Rect(r) if [tokens::BG_SECONDARY, tokens::BG_STAGE].contains(&r.fill) => {
                 found.push((r.corner_radius, r.stroke));
             }
             _ => {}
@@ -149,7 +150,7 @@ fn clearing_the_failure_brings_the_picture_box_back() {
         texts.iter().all(|(t, _)| t != "Preview failed"),
         "{texts:?}"
     );
-    let box_radius = CornerRadius::same(tokens::RADIUS_L);
+    let box_radius = CornerRadius::same(tokens::RADIUS_XL);
     assert!(
         boxes
             .iter()

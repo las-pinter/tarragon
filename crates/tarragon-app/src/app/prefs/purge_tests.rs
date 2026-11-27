@@ -1,4 +1,4 @@
-//! Tests of the Cache Size row and the Purge Cache button. Every frame is
+//! Tests of the Cache size row and the Purge cache button. Every frame is
 //! headless; the database and the cache sit in a temp folder.
 
 use std::path::{Path, PathBuf};
@@ -10,6 +10,7 @@ use crossbeam_channel::Sender;
 use image::{DynamicImage, RgbaImage};
 use tarragon_cache::store::CacheStore;
 use tarragon_ui::gallery::Scope;
+use tarragon_ui::prefs::Group;
 use tarragon_ui::preview::size_text;
 use time::UtcOffset;
 use tracing_subscriber::layer::SubscriberExt;
@@ -134,8 +135,9 @@ impl Held {
     /// Open the window from the menu and draw until the form has its buttons.
     fn open_window(&mut self) {
         open_from_menu(&mut self.rig);
+        self.rig.app.shell.prefs_mut().show_group(Group::Cache);
         self.until("the form shows", |_, texts| {
-            texts.iter().any(|t| t == "Purge Cache")
+            texts.iter().any(|t| t == "Purge cache")
         });
     }
 
@@ -191,6 +193,8 @@ fn opening_the_window_shows_the_size_of_the_cache_files() {
     let mut rig = Rig::new(&[], &[], 9);
     fill_cache(&rig.app.cache_root, &[1000, 2000, 3000]);
     open_from_menu(&mut rig);
+    // The size row is on the Cache page.
+    rig.app.shell.prefs_mut().show_group(Group::Cache);
     let want = size_text(6000);
     let end = Instant::now() + LIMIT;
     while !shows(&rig.frame(Vec::new()).0, &want) {
@@ -214,6 +218,8 @@ fn a_cache_that_cannot_be_read_shows_unknown_and_logs_a_warning() {
         .with(RingLayer::new(lines_ring.clone(), UtcOffset::UTC));
     tracing::subscriber::with_default(subscriber, || {
         open_from_menu(&mut rig);
+        // The size row is on the Cache page.
+        rig.app.shell.prefs_mut().show_group(Group::Cache);
         let end = Instant::now() + LIMIT;
         while lock(&shared(&rig.ctx)).measuring.is_some() {
             rig.frame(Vec::new());
@@ -253,7 +259,7 @@ fn a_purge_empties_the_cache_and_keeps_the_rows_and_the_folder_renders_again() {
 
     // The reopened tiles wait at the gate, so the empty state can be checked.
     held.arm();
-    held.rig.click("Purge Cache", false);
+    held.rig.click("Purge cache", false);
     held.until_purged();
     assert!(files_under(&cache).is_empty(), "no tier file is left");
     // The purge keeps the file rows. None of them points at a tier file,
@@ -300,7 +306,7 @@ fn a_cache_in_the_data_folder_shows_an_error_and_keeps_the_database() {
     let mut held = Held::new(true);
     held.open_and_settle();
     held.open_window();
-    held.rig.click("Purge Cache", false);
+    held.rig.click("Purge cache", false);
     held.until_purged();
     held.until("the error shows", |_, texts| {
         shows(texts, "The cache folder is not safe to purge.")
@@ -314,7 +320,7 @@ fn the_window_stays_drawable_and_shows_the_strip_while_the_purge_waits_for_a_ren
     let mut held = Held::new(false);
     held.open_held();
     held.open_window();
-    held.rig.click("Purge Cache", false);
+    held.rig.click("Purge cache", false);
     held.until("the purge runs", |rig, _| {
         rig.app.thumbs.is_working() == Some(Work::Purge)
     });
@@ -351,6 +357,8 @@ fn a_failed_save_reopens_the_window_with_the_measured_size_and_asks_for_frames()
     let mut rig = Rig::new(&[], &[], 9);
     fill_cache(&rig.app.cache_root, &[1000, 2000, 3000]);
     open_from_menu(&mut rig);
+    // The size row is on the Cache page.
+    rig.app.shell.prefs_mut().show_group(Group::Cache);
     let want = size_text(6000);
     let end = Instant::now() + LIMIT;
     while !shows(&rig.frame(Vec::new()).0, &want) {
@@ -369,7 +377,7 @@ fn a_failed_save_reopens_the_window_with_the_measured_size_and_asks_for_frames()
     for _ in 0..4 {
         rig.frame(Vec::new());
     }
-    rig.click("OK", false);
+    rig.click("Save", false);
     let left = rig.ctx.data(|d| d.get_temp::<u8>(Id::new(SETTLE_ID)));
     assert!(left.is_some_and(|n| n > 0), "{left:?}");
     let texts = rig.frame(Vec::new()).0;
@@ -383,7 +391,7 @@ fn reopening_the_window_during_a_purge_shows_the_strip() {
     let mut held = Held::new(false);
     held.open_held();
     held.open_window();
-    held.rig.click("Purge Cache", false);
+    held.rig.click("Purge cache", false);
     held.until("the purge runs", |rig, _| {
         rig.app.thumbs.is_working() == Some(Work::Purge)
     });

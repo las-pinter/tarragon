@@ -8,7 +8,7 @@ use egui::{
     Window, vec2,
 };
 
-use crate::theme::points;
+use crate::theme::{dialog_frame, points};
 use crate::widgets::{ghost_button, small_button};
 use crate::{backdrop, fonts, tokens};
 
@@ -76,6 +76,7 @@ impl CrashCard {
             .collapsible(false)
             .resizable(false)
             .anchor(Align2::CENTER_CENTER, vec2(0.0, 0.0))
+            .frame(dialog_frame())
             .show(ctx, |ui| {
                 ui.set_width(WIDTH);
                 ui.spacing_mut().item_spacing.y = tokens::SPACING_S;

@@ -1,6 +1,5 @@
 //! Tests for the gallery strip and the search timer.
 
-mod busy;
 mod context_menu;
 mod debounce;
 mod delete_dialog;
@@ -11,9 +10,9 @@ mod filter_bar;
 mod filter_pill;
 mod filter_result;
 mod frames;
-mod info_fit;
 mod info_rows;
 mod keys;
+mod loading;
 mod notice;
 mod open;
 mod rename_dialog;

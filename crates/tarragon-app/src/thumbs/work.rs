@@ -103,6 +103,9 @@ impl Thumbs {
     /// before any waiting folder open. A newer work request replaces a waiting
     /// one. `data_root` is the directory the purge refuses to delete.
     pub fn purge(&mut self, data_root: PathBuf) {
+        // The work thread resets it too; this keeps the last purge's bytes off
+        // the status bar while this one waits.
+        self.counters.purge.reset();
         self.queued = Some(Queued::Purge { data_root });
         (self.repaint)();
     }
@@ -127,7 +130,7 @@ impl Thumbs {
         true
     }
 
-    /// The work that runs now, for the busy strip.
+    /// The work that runs now, for the status bar.
     #[must_use]
     pub fn is_working(&self) -> Option<Work> {
         match &self.slot {

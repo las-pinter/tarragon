@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tarragon settings dialog</title>
+<style>
+body{margin:0}
+a{color:#f0997b}a:hover{color:#fac775}
+button{font:inherit}
+input{font:inherit}
+</style>
+</head>
+<body>
+<div style="width: 880px; height: 640px; box-sizing: border-box; padding: 40px; background: #0d0c10; font-family: Roboto, system-ui, sans-serif; font-size: 13px; color: #ece9f2; display: flex">
+  <div role="dialog" aria-label="Preferences" style="flex: 1; display: flex; flex-direction: column; background: #1c1b22; border-radius: 12px; overflow: hidden">
+    <div style="display: flex; align-items: center; padding: 16px 20px">
+      <h1 style="margin: 0; font-size: 16px; font-weight: 700">Preferences</h1>
+      <button aria-label="Close" style="margin-left: auto; width: 32px; height: 32px; border: 0; border-radius: 8px; background: transparent; color: #a8a5b0; display: grid; place-items: center"><svg width="12" height="12" viewBox="0 0 12 12" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M2 2l8 8M10 2 2 10"></path></svg></button>
+    </div>
+    <div style="flex: 1; display: flex; min-height: 0">
+      <nav aria-label="Settings groups" style="width: 200px; padding: 4px 12px; display: flex; flex-direction: column; gap: 2px">
+        <button style="height: 34px; padding: 0 10px; border: 0; border-radius: 6px; background: transparent; color: #ece9f2; text-align: left">Performance</button>
+        <button aria-current="page" style="height: 34px; padding: 0 10px; border: 0; border-radius: 6px; background: #4a1b0c; color: #f0997b; font-weight: 600; text-align: left">Color tagging</button>
+        <button style="height: 34px; padding: 0 10px; border: 0; border-radius: 6px; background: transparent; color: #ece9f2; text-align: left">Cache</button>
+        <button style="height: 34px; padding: 0 10px; border: 0; border-radius: 6px; background: transparent; color: #ece9f2; text-align: left">Debug</button>
+      </nav>
+      <div style="flex: 1; padding: 4px 28px 24px; display: flex; flex-direction: column; gap: 20px; background: #16151a; border-radius: 10px 0 0 0; padding-top: 24px">
+        <div>
+          <h2 style="margin: 0; font-size: 15px; font-weight: 600">Color tagging</h2>
+          <p style="margin: 4px 0 0; color: #8d8a98">Sort each image into color buckets for the gallery filter.</p>
+        </div>
+        <label style="display: flex; align-items: center; gap: 12px">
+          <span style="width: 36px; height: 20px; border-radius: 10px; background: #e06540; position: relative; display: inline-block"><span style="position: absolute; top: 2px; left: 18px; width: 16px; height: 16px; border-radius: 8px; background: #16151a"></span></span>
+          Enable color tagging
+        </label>
+        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px">
+          <label style="display: flex; flex-direction: column; gap: 6px; color: #a8a5b0; font-size: 12px">Palette size
+            <input value="8" style="height: 36px; padding: 0 12px; border: 0; border-radius: 8px; background: #211f29; color: #ece9f2; font-size: 13px">
+          </label>
+          <label style="display: flex; flex-direction: column; gap: 6px; color: #a8a5b0; font-size: 12px">Minimum share
+            <input value="0.10" style="height: 36px; padding: 0 12px; border: 0; border-radius: 8px; background: #211f29; color: #ece9f2; font-size: 13px">
+          </label>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 10px">
+          <div style="display: flex; justify-content: space-between; color: #a8a5b0; font-size: 12px"><span>Neutral saturation threshold</span><span style="font-family: 'Roboto Mono', ui-monospace, monospace; color: #ece9f2">0.15</span></div>
+          <div style="position: relative; height: 20px">
+            <div style="position: absolute; top: 8px; left: 0; right: 0; height: 4px; border-radius: 2px; background: #2a2836"></div>
+            <div style="position: absolute; top: 8px; left: 0; width: 30%; height: 4px; border-radius: 2px; background: #e06540"></div>
+            <div style="position: absolute; top: 2px; left: calc(30% - 8px); width: 16px; height: 16px; border-radius: 8px; background: #ece9f2"></div>
+          </div>
+          <div style="display: flex; gap: 6px">
+            <span style="flex: 1; height: 24px; border-radius: 4px; background: #7f8c8d"></span>
+            <span style="flex: 1; height: 24px; border-radius: 4px; background: #e74c3c"></span>
+            <span style="flex: 1; height: 24px; border-radius: 4px; background: #f39c12"></span>
+            <span style="flex: 1; height: 24px; border-radius: 4px; background: #f1c40f"></span>
+            <span style="flex: 1; height: 24px; border-radius: 4px; background: #27ae60"></span>
+            <span style="flex: 1; height: 24px; border-radius: 4px; background: #1abc9c"></span>
+            <span style="flex: 1; height: 24px; border-radius: 4px; background: #00bcd4"></span>
+            <span style="flex: 1; height: 24px; border-radius: 4px; background: #3498db"></span>
+            <span style="flex: 1; height: 24px; border-radius: 4px; background: #9b59b6"></span>
+            <span style="flex: 1; height: 24px; border-radius: 4px; background: #e91e63"></span>
+            <span style="flex: 1; height: 24px; border-radius: 4px; background: #ff80ab"></span>
+          </div>
+          <div style="color: #8d8a98; font-size: 12px">Colors below the threshold count as Neutral.</div>
+        </div>
+      </div>
+    </div>
+    <div style="display: flex; justify-content: flex-end; gap: 8px; padding: 14px 20px">
+      <button style="height: 36px; padding: 0 16px; border: 0; border-radius: 8px; background: #2a2836; color: #ece9f2; font-weight: 500">Cancel</button>
+      <button style="height: 36px; padding: 0 20px; border: 0; border-radius: 8px; background: #e06540; color: #16151a; font-weight: 600">Save</button>
+    </div>
+  </div>
+</div>
+</body>
+</html>

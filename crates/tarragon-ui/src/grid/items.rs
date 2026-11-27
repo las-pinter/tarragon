@@ -38,6 +38,10 @@ pub struct GridItem {
     pub texture: Option<egui::TextureHandle>,
     /// Why the thumbnail failed, or none. A texture hides the error mark.
     pub error: Option<TileError>,
+    /// The file size in bytes.
+    pub size: u64,
+    /// The pixel width and height of the original, when known.
+    pub dimensions: Option<(u32, u32)>,
     /// The lower-case file name, or an empty string when the name is not text.
     name_lower: String,
 }
@@ -52,8 +56,19 @@ impl GridItem {
             mtime,
             texture,
             error: None,
+            size: 0,
+            dimensions: None,
             name_lower,
         }
+    }
+
+    /// Set the file size and the pixel size. A zero width or height means the
+    /// pixel size is unknown.
+    #[must_use]
+    pub fn with_meta(mut self, size: u64, (width, height): (u32, u32)) -> Self {
+        self.size = size;
+        self.dimensions = (width > 0 && height > 0).then_some((width, height));
+        self
     }
 
     /// Recompute the cached lower-case name from the current path.
@@ -148,5 +163,14 @@ mod tests {
         let item = GridItem::new(PathBuf::from("/images/Sketch 2.PSD"), 5, None);
         assert_eq!(item.name_lower(), "sketch 2.psd");
         assert_eq!(item.path, PathBuf::from("/images/Sketch 2.PSD"));
+    }
+
+    #[test]
+    fn with_meta_keeps_a_pixel_size_only_when_both_sides_are_known() {
+        let item = || GridItem::new(PathBuf::from("/images/a.png"), 5, None);
+        assert_eq!(item().with_meta(9, (64, 48)).dimensions, Some((64, 48)));
+        assert_eq!(item().with_meta(9, (0, 48)).dimensions, None);
+        assert_eq!(item().with_meta(9, (64, 0)).dimensions, None);
+        assert_eq!(item().with_meta(9, (0, 0)).size, 9);
     }
 }

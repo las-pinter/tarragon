@@ -146,16 +146,16 @@ none.
 ### Grid benchmark
 
 The grid benchmark measures the CPU cost of one frame at the target geometry:
-196 pt minimum tracks, 208 pt cell height, and a 14 pt gap. The run covers two
+168 pt minimum tracks, a square thumbnail with a 24 pt name block under it, and
+gaps of 16 pt across and 20 pt down. The run covers two
 widths: 874 by 900 pt for the shell grid width, and 1600 by 900 pt for a wide
 viewport. It runs headless. It measures egui layout, the paint list build, and
 tessellation. It measures no GPU work.
 
 Two passes run at each width. The first pass paints the grid container only and
 sweeps the whole 10,000 item list. The second pass paints the whole gallery
-(`Gallery::show`: the tabs, the search field, the info bar, the sort pills, and
-the grid) and sends no input, so it measures one quiet frame that reads the
-cached visible order.
+(`Gallery::show`: the header, the info row, and the grid) and sends no input,
+so it measures one quiet frame that reads the cached visible order.
 
 Warning: the run covers the simplified data set. A tile carries a file name, a
 badge derived from the path, and no texture. A real frame adds the uploaded

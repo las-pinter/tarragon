@@ -193,13 +193,15 @@ fn a_retry_that_works_shows_the_size_of_the_new_file() {
     let new_size = std::fs::metadata(&rig.bad).expect("stat").len();
     // Both files are under 1 KiB, so the row reads as whole bytes.
     assert!(new_size > 9 && new_size < 1024, "{new_size}");
-    let want = format!("{new_size} B");
-    let old = "9 B".to_owned();
+    // The details line reads "W × H · size · format · date".
+    let want = format!(" · {new_size} B · ");
+    let old = " · 9 B · ".to_owned();
+    let shows = |texts: &[String], part: &str| texts.iter().any(|t| t.contains(part));
     rig.press("Retry");
-    rig.until("the size row shows the new size", |rig| {
-        rig.frame(Vec::new()).0.contains(&want)
+    rig.until("the details line shows the new size", |rig| {
+        shows(&rig.frame(Vec::new()).0, &want)
     });
-    assert!(!rig.frame(Vec::new()).0.contains(&old));
+    assert!(!shows(&rig.frame(Vec::new()).0, &old));
 }
 
 #[cfg(unix)]

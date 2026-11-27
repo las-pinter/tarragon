@@ -176,3 +176,48 @@ fn a_zero_size_row_takes_the_size_of_the_tier_file() {
     assert_eq!(source.items[0].size, (320, 100));
     assert_eq!(source.meta.expect("meta").dimensions, None);
 }
+
+#[test]
+fn the_modified_date_reads_month_day_and_year_at_the_offset() {
+    use time::UtcOffset;
+    // 2026-10-14 23:30 UTC.
+    let mtime = 1_792_020_600;
+    assert_eq!(
+        super::date_text(mtime, UtcOffset::UTC).as_deref(),
+        Some("Oct 14, 2026")
+    );
+    let east = UtcOffset::from_hms(2, 0, 0).expect("offset");
+    assert_eq!(
+        super::date_text(mtime, east).as_deref(),
+        Some("Oct 15, 2026")
+    );
+    assert_eq!(super::date_text(i64::MAX, UtcOffset::UTC), None);
+}
+
+#[test]
+fn a_row_with_no_modified_time_takes_the_file_date() {
+    let dir = TempDir::new();
+    let db = dir.db();
+    let path = dir.png("f.png", (4, 4));
+    let record = ThumbnailWrite {
+        path: path.to_string_lossy().into_owned(),
+        mtime: 0,
+        size: 1,
+        width: 4,
+        height: 4,
+        cache_uuid: "u".into(),
+        thumbnail_cache_path: Some(text(&path)),
+        preview_cache_path: None,
+        full_cache_path: None,
+        last_accessed: 1,
+    };
+    db.upsert_thumbnail(&record).expect("store the row");
+    let meta = read(&db, std::slice::from_ref(&path), 4)
+        .meta
+        .expect("meta");
+    let date = meta.modified.expect("a date from the file");
+    assert!(
+        !date.ends_with("1970") && !date.ends_with("1969"),
+        "the stored 0 was read as a time: {date}"
+    );
+}

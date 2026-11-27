@@ -2,11 +2,10 @@
 
 use egui::{Align2, Area, Color32, FontId, Id, Key, Order, Rect, ScrollArea, Sense, Ui, vec2};
 
-use self::layout::{
-    FOOTER_HEIGHT, FOOTER_SEPARATOR, LEAD_GAP, MENU_ROWS, TICK_WIDTH, menu_height, paint_tick,
-    tick_box,
+use self::layout::{FOOTER_HEIGHT, FOOTER_SEPARATOR, MENU_ROWS, menu_height};
+use crate::popup::{
+    LEAD_GAP, TICK_WIDTH, menu_frame, menu_placement, paint_tick, row_frame, text_width, tick_box,
 };
-use crate::popup::{menu_frame, menu_placement, row_frame, text_width};
 use crate::tokens;
 
 mod layout;
@@ -64,7 +63,7 @@ pub fn show_check_menu(
                             if rows.is_empty() {
                                 let size = vec2(width, tokens::MENU_ROW_HEIGHT);
                                 let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
-                                paint_label(ui, rect, "No items", tokens::TEXT_MUTED);
+                                paint_label(ui, rect, "No items", tokens::TEXT_TERTIARY);
                             }
                             rows.iter()
                                 .enumerate()

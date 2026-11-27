@@ -19,14 +19,16 @@ struct Frame {
     result: MenuResult,
     texts: Vec<(String, Pos2)>,
     ticks: usize,
-    /// Filled rects with a visible border: the menu frame.
+    /// Filled rects taller than a row: the menu frame.
     frames: Vec<Rect>,
 }
 
 fn walk(shape: &Shape, f: &mut Frame) {
     match shape {
         Shape::Vec(v) => v.iter().for_each(|s| walk(s, f)),
-        Shape::Rect(r) if r.fill.a() > 0 && r.stroke.color.a() > 0 => f.frames.push(r.rect),
+        Shape::Rect(r) if r.fill.a() > 0 && r.rect.height() > tokens::MENU_ROW_HEIGHT => {
+            f.frames.push(r.rect);
+        }
         Shape::Text(t) => f.texts.push((t.galley.job.text.clone(), t.pos)),
         Shape::Path(_) => f.ticks += 1,
         _ => {}
@@ -277,7 +279,7 @@ fn escape_closes_a_menu_with_a_footer() {
 fn the_footer_flips_the_menu_above_sooner() {
     let ctx = context();
     let list = rows(3);
-    let at = button(260.0);
+    let at = button(240.0);
     run(&ctx, at, &list, vec![]);
     let plain = run(&ctx, at, &list, vec![]);
     run_with(&ctx, at, &list, Some(FOOTER), vec![]);

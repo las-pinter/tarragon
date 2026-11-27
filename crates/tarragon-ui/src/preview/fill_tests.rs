@@ -23,6 +23,7 @@ fn preview() -> Preview {
         dimensions: Some((64, 48)),
         size: Some(10),
         format: "PNG".into(),
+        modified: None,
     }));
     preview.set_image(Some(PreviewImage {
         texture: TextureId::User(1),
@@ -36,8 +37,8 @@ fn find(shape: &egui::Shape) -> Option<Rect> {
     match shape {
         egui::Shape::Vec(shapes) => shapes.iter().find_map(find),
         egui::Shape::Rect(r)
-            if r.corner_radius == CornerRadius::same(tokens::RADIUS_L)
-                && r.fill == tokens::BG_SECONDARY =>
+            if r.corner_radius == CornerRadius::same(tokens::RADIUS_XL)
+                && r.fill == tokens::BG_STAGE =>
         {
             Some(r.rect)
         }

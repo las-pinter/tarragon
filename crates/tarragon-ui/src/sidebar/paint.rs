@@ -1,80 +1,131 @@
-//! Sidebar row marks: the folder icon and the open/closed caret.
+//! Sidebar row marks: the folder outline, the chevron caret, and the star.
 //!
-//! The sizes follow design/mockups/theme.css.
+//! Each mark is drawn on the grid of its icon on the redesign page: 16 units
+//! for the folder and the star, 12 for the caret.
 
-use egui::epaint::PathShape;
-use egui::{Color32, CornerRadius, Painter, Pos2, Rect, Shape, pos2, vec2};
+use std::f32::consts::{FRAC_PI_2, PI};
 
-/// Folder body width, in points.
-pub const ICON_WIDTH: f32 = 13.0;
-/// Folder body height, in points.
-pub const ICON_HEIGHT: f32 = 10.0;
-/// Folder tab width, in points.
-const TAB_WIDTH: f32 = 6.0;
-/// How far the folder tab paints above the icon origin, in points.
-pub const ICON_OVERHANG: f32 = 3.0;
-/// Caret length along its pointing direction, in points.
-const CARET_DEPTH: f32 = 4.0;
-/// Caret width across its pointing direction, in points.
-const CARET_SPAN: f32 = 6.0;
+use egui::epaint::{Mesh, PathShape, PathStroke};
+use egui::{Color32, Painter, Pos2, Rect, Shape, Stroke, pos2, vec2};
 
-/// The body and tab rects of a folder icon whose body starts at `origin`.
-fn icon_rects(origin: Pos2) -> (Rect, Rect) {
-    let body = Rect::from_min_size(origin, vec2(ICON_WIDTH, ICON_HEIGHT));
-    let tab = Rect::from_min_size(
-        pos2(origin.x, origin.y - ICON_OVERHANG),
-        vec2(TAB_WIDTH, ICON_OVERHANG),
-    );
-    (body, tab)
+/// The folder and star icon square, in points.
+pub const ICON_SIZE: f32 = 16.0;
+/// The caret square, in points.
+pub const CARET_SIZE: f32 = 12.0;
+/// The folder outline width on the 16 unit grid.
+const FOLDER_STROKE: f32 = 1.5;
+/// The caret stroke width on the 12 unit grid.
+const CARET_STROKE: f32 = 1.6;
+/// The corner radius of the folder outline on its grid.
+const FOLDER_CORNER: f32 = 1.5;
+/// Points on each rounded corner of the folder outline.
+const CORNER_STEPS: usize = 4;
+
+/// The star corners on the 16 unit grid, outer and inner by turns.
+const STAR: [(f32, f32); 10] = [
+    (8.0, 1.8),
+    (9.9, 5.7),
+    (14.2, 6.3),
+    (11.1, 9.3),
+    (11.8, 13.6),
+    (8.0, 11.6),
+    (4.2, 13.6),
+    (4.9, 9.3),
+    (1.8, 6.3),
+    (6.1, 5.7),
+];
+/// A point inside the star that sees every corner, so a fan from it fills
+/// the star without crossing an edge.
+const STAR_CENTRE: (f32, f32) = (8.0, 8.2);
+
+/// The points of the folder outline in the square at `origin`, on its grid.
+///
+/// The outline runs clockwise from the left edge: the top-left corner, the
+/// tab, the step down to the body, and the three other rounded corners.
+fn folder_points(origin: Pos2) -> Vec<Pos2> {
+    let corner = |centre: (f32, f32), from: f32, points: &mut Vec<Pos2>| {
+        for step in 0..=CORNER_STEPS {
+            #[expect(
+                clippy::cast_precision_loss,
+                reason = "a corner has a handful of steps"
+            )]
+            let angle = from + FRAC_PI_2 * step as f32 / CORNER_STEPS as f32;
+            points.push(
+                origin
+                    + vec2(
+                        centre.0 + FOLDER_CORNER * angle.cos(),
+                        centre.1 + FOLDER_CORNER * angle.sin(),
+                    ),
+            );
+        }
+    };
+    let mut points = Vec::new();
+    corner((3.5, 4.5), PI, &mut points);
+    points.push(origin + vec2(6.0, 3.0));
+    points.push(origin + vec2(7.5, 4.5));
+    corner((12.5, 6.0), -FRAC_PI_2, &mut points);
+    corner((12.5, 11.5), 0.0, &mut points);
+    corner((3.5, 11.5), FRAC_PI_2, &mut points);
+    points
 }
 
-/// The triangle corners of a caret centered in `rect`.
+/// The three points of a chevron caret in the square at `origin`.
 ///
-/// It points down when open and right when closed.
-fn caret_points(rect: Rect, expanded: bool) -> [Pos2; 3] {
-    let c = rect.center().round();
-    let (w, h) = (CARET_SPAN / 2.0, CARET_DEPTH / 2.0);
-    if expanded {
-        [
-            pos2(c.x - w, c.y - h),
-            pos2(c.x + w, c.y - h),
-            pos2(c.x, c.y + h),
-        ]
-    } else {
-        [
-            pos2(c.x - h, c.y - w),
-            pos2(c.x + h, c.y),
-            pos2(c.x - h, c.y + w),
-        ]
-    }
+/// It points right when closed and down when open: the open caret is the
+/// closed one turned a quarter turn about the centre of its square.
+fn caret_points(origin: Pos2, expanded: bool) -> [Pos2; 3] {
+    let closed = [(4.5, 3.0), (7.5, 6.0), (4.5, 9.0)];
+    let half = CARET_SIZE / 2.0;
+    closed.map(|(x, y)| {
+        let (dx, dy) = (x - half, y - half);
+        let (x, y) = if expanded {
+            (half - dy, half + dx)
+        } else {
+            (x, y)
+        };
+        origin + vec2(x, y)
+    })
 }
 
-/// Paint a folder icon whose body starts at `origin`.
-///
-/// The tab paints `ICON_OVERHANG` above `origin`, outside the body box.
+/// Paint a folder outline in the icon square at `origin`.
 pub fn paint_folder_icon(painter: &Painter, origin: Pos2, color: Color32) {
-    let (body, tab) = icon_rects(origin);
-    painter.rect_filled(body, CornerRadius::same(2), color);
-    painter.rect_filled(
-        tab,
-        CornerRadius {
-            nw: 1,
-            ne: 1,
-            sw: 0,
-            se: 0,
-        },
-        color,
-    );
+    painter.add(Shape::Path(PathShape::closed_line(
+        folder_points(origin),
+        PathStroke::new(FOLDER_STROKE, color),
+    )));
 }
 
-/// Paint a caret centred in `rect`.
-pub fn paint_caret(painter: &Painter, rect: Rect, expanded: bool, color: Color32) {
-    let points = caret_points(rect, expanded).to_vec();
-    painter.add(Shape::Path(PathShape::convex_polygon(
-        points,
-        color,
-        egui::Stroke::NONE,
-    )));
+/// Paint a chevron caret in the caret square at `origin`.
+pub fn paint_caret(painter: &Painter, origin: Pos2, expanded: bool, color: Color32) {
+    painter.add(Shape::line(
+        caret_points(origin, expanded).to_vec(),
+        Stroke::new(CARET_STROKE, color),
+    ));
+}
+
+/// Paint a filled star in the icon square at `origin`.
+///
+/// The star is not convex, so it is filled as a fan of triangles from a point
+/// that sees every corner.
+pub fn paint_star(painter: &Painter, origin: Pos2, color: Color32) {
+    let at = |(x, y): (f32, f32)| origin + vec2(x, y);
+    let mut mesh = Mesh::default();
+    mesh.colored_vertex(at(STAR_CENTRE), color);
+    for corner in STAR {
+        mesh.colored_vertex(at(corner), color);
+    }
+    #[expect(clippy::cast_possible_truncation, reason = "the star has ten corners")]
+    let count = STAR.len() as u32;
+    for index in 0..count {
+        mesh.add_triangle(0, 1 + index, 1 + (index + 1) % count);
+    }
+    painter.add(Shape::mesh(mesh));
+}
+
+/// The icon square centred on the row `rect` at `x`, snapped to whole points.
+#[must_use]
+pub fn icon_origin(rect: Rect, x: f32, size: f32) -> Pos2 {
+    pos2(x, (rect.center().y - size / 2.0).round())
 }
 
 #[cfg(test)]

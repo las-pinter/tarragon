@@ -1,4 +1,4 @@
-//! More tests for the "+ add" control: scrolling, ids, resets, and the cursor.
+//! More tests for the "+ Tag" control: scrolling, ids, resets, and the cursor.
 
 use super::{
     AddState, CREATE_NEW, Preview, PreviewEvent, click, find, frame, has, open_input, open_menu,
@@ -53,7 +53,7 @@ fn two_previews_in_one_context_keep_separate_add_state() {
     let adds = |texts: &[(String, Pos2)]| -> Vec<Pos2> {
         texts
             .iter()
-            .filter(|(t, _)| t == "+ add")
+            .filter(|(t, _)| t == "+ Tag")
             .map(|(_, p)| *p)
             .collect()
     };
@@ -102,7 +102,7 @@ fn selection_changed_closes_the_menu_and_the_input_but_set_tags_does_not() {
     open_input(&ctx, &mut preview);
     preview.selection_changed();
     let texts = frame(&ctx, &mut preview, vec![]);
-    assert!(has(&texts, "+ add") && !has(&texts, "Tag name..."));
+    assert!(has(&texts, "+ Tag") && !has(&texts, "Tag name..."));
 }
 
 #[test]
@@ -120,10 +120,11 @@ fn drawing_the_empty_hint_resets_a_hidden_input() {
         dimensions: None,
         size: None,
         format: "PNG".into(),
+        modified: None,
     }));
     let texts = frame(&ctx, &mut preview, vec![]);
     assert!(
-        has(&texts, "+ add"),
+        has(&texts, "+ Tag"),
         "the button is back, not a stale input"
     );
 }
@@ -135,7 +136,7 @@ fn a_press_outside_the_open_input_closes_it_with_no_event() {
     open_input(&ctx, &mut preview);
     frame(&ctx, &mut preview, vec![Event::Text("blue".into())]);
     frame(&ctx, &mut preview, click(Pos2::new(380.0, 580.0)));
-    assert!(has(&frame(&ctx, &mut preview, vec![]), "+ add"));
+    assert!(has(&frame(&ctx, &mut preview, vec![]), "+ Tag"));
     assert_eq!(preview.take_events(), Vec::<PreviewEvent>::new());
 }
 
@@ -159,7 +160,7 @@ fn the_button_and_the_menu_rows_show_the_hand_cursor() {
     preview.set_known_tags(vec!["hands".into()]);
     let ctx = setup(&mut preview);
     let texts = frame(&ctx, &mut preview, vec![]);
-    let button = find(&texts, "+ add").unwrap() + vec2(3.0, 3.0);
+    let button = find(&texts, "+ Tag").unwrap() + vec2(3.0, 3.0);
     frame(&ctx, &mut preview, vec![Event::PointerMoved(button)]);
     assert_eq!(run(&ctx, &mut preview, vec![]).1, CursorIcon::PointingHand);
 
@@ -265,7 +266,7 @@ fn a_very_narrow_pane_still_opens_the_menu_without_a_panic() {
     };
     narrow(&ctx, &mut preview, vec![]);
     let texts = narrow(&ctx, &mut preview, vec![]);
-    let at = find(&texts, "+ add").expect("the button is drawn") + vec2(3.0, 3.0);
+    let at = find(&texts, "+ Tag").expect("the button is drawn") + vec2(3.0, 3.0);
     narrow(&ctx, &mut preview, vec![Event::PointerMoved(at)]);
     narrow(&ctx, &mut preview, click(at));
     narrow(&ctx, &mut preview, vec![]);

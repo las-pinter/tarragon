@@ -101,7 +101,8 @@ fn write_events(store: &impl Store, paths: &[PathBuf], events: Vec<PreviewEvent>
             PreviewEvent::RetryRender
             | PreviewEvent::OpenInEditor
             | PreviewEvent::Open
-            | PreviewEvent::OpenWith(_) => Ok(false),
+            | PreviewEvent::OpenWith(_)
+            | PreviewEvent::OpenAll => Ok(false),
         };
         match result {
             Ok(done) => wrote |= done,

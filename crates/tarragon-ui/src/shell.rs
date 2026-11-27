@@ -153,6 +153,12 @@ impl Shell {
         self.gallery.selected_paths()
     }
 
+    /// The size of the selected gallery items together, in bytes.
+    #[must_use]
+    pub fn selected_bytes(&self) -> u64 {
+        self.gallery.selected_bytes()
+    }
+
     /// The selected path when exactly one gallery item is selected.
     #[must_use]
     pub fn sole_selected(&self) -> Option<&std::path::Path> {

@@ -4,7 +4,7 @@ use std::sync::Arc;
 use crossbeam_channel::Receiver;
 use eframe::egui::{Context, TextureHandle, TextureId};
 use image::{Rgba, RgbaImage};
-use tarragon_ui::preview::{Preview, PreviewImage};
+use tarragon_ui::preview::{MosaicCell, Preview, PreviewImage};
 
 use super::{PreviewFeed, route};
 use crate::pipeline::Repaint;
@@ -68,20 +68,28 @@ fn image(id: u64) -> PreviewImage {
     }
 }
 
+/// A held picture of the file `/a/<id>.png`.
+fn cell(id: u64) -> MosaicCell {
+    MosaicCell {
+        image: image(id),
+        path: format!("/a/{id}.png").into(),
+    }
+}
+
 #[test]
 fn route_sends_zero_selected_to_nothing() {
-    assert_eq!(route(vec![image(1)], 0), (None, vec![], 0));
+    assert_eq!(route(vec![cell(1)], 0), (None, vec![], 0));
 }
 
 #[test]
 fn route_sends_one_selected_to_the_single_picture() {
-    assert_eq!(route(vec![image(1)], 1), (Some(image(1)), vec![], 1));
+    assert_eq!(route(vec![cell(1)], 1), (Some(image(1)), vec![], 1));
     assert_eq!(route(vec![], 1), (None, vec![], 1));
 }
 
 #[test]
 fn route_sends_a_partial_mosaic_with_the_full_total() {
-    let held = vec![image(1), image(2), image(3)];
+    let held = vec![cell(1), cell(2), cell(3)];
     assert_eq!(route(held.clone(), 5), (None, held, 5));
 }
 

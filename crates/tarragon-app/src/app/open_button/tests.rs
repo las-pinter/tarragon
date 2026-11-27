@@ -32,7 +32,7 @@ fn answered(state: &mut OpenState) -> Option<OpenButton> {
 fn with_no_row_the_button_names_the_default_app_once_known() {
     let (db, _dir) = seeded();
     let mut state = state(Some("GIMP"));
-    let button = state.select(&db, Some(Path::new("/a/x.png")));
+    let button = state.select(&db, &[PathBuf::from("/a/x.png")]);
     assert_eq!(
         button,
         Some(OpenButton {
@@ -53,7 +53,7 @@ fn with_no_row_the_button_names_the_default_app_once_known() {
 fn an_unknown_default_app_keeps_the_plain_button() {
     let (db, _dir) = seeded();
     let mut state = state(None);
-    state.select(&db, Some(Path::new("/a/x.png")));
+    state.select(&db, &[PathBuf::from("/a/x.png")]);
     let button = answered(&mut state).expect("a button");
     assert_eq!(button.label, OPEN_TEXT);
 }
@@ -65,7 +65,7 @@ fn an_editor_row_names_the_button_and_leads_the_menu() {
         .expect("upsert");
     let mut state = state(None);
     let button = state
-        .select(&db, Some(Path::new("/a/x.psd")))
+        .select(&db, &[PathBuf::from("/a/x.psd")])
         .expect("a button");
     assert_eq!(button.label, "Open in Krita");
     assert_eq!(button.choices, ["Krita", DEFAULT_APP]);
@@ -77,17 +77,61 @@ fn a_default_app_named_like_an_editor_row_shows_once() {
     db.upsert_editor_association("psd", "krita {file}")
         .expect("upsert");
     let mut state = state(Some("Krita"));
-    state.select(&db, Some(Path::new("/a/x.psd")));
+    state.select(&db, &[PathBuf::from("/a/x.psd")]);
     let button = answered(&mut state).expect("a button");
     assert_eq!(button.label, "Open in Krita");
     assert_eq!(button.choices, ["Krita"]);
 }
 
 #[test]
+fn many_files_with_one_editor_row_open_all_in_that_app() {
+    let (db, _dir) = seeded();
+    db.upsert_editor_association("*", "krita {file}")
+        .expect("upsert");
+    let mut state = state(Some("GIMP"));
+    let button = state.select(&db, &[PathBuf::from("/a/x.png"), PathBuf::from("/a/y.psd")]);
+    assert_eq!(button, None, "many files have no single button");
+    assert_eq!(state.open_all_app().as_deref(), Some("Krita"));
+}
+
+#[test]
+fn many_files_that_open_in_different_apps_name_none() {
+    let (db, _dir) = seeded();
+    db.upsert_editor_association("psd", "krita {file}")
+        .expect("upsert");
+    let mut state = state(Some("GIMP"));
+    state.select(&db, &[PathBuf::from("/a/x.png"), PathBuf::from("/a/y.psd")]);
+    // The first ask sends the lookup of the PNG default app.
+    assert_eq!(state.open_all_app(), None);
+    answered(&mut state);
+    assert_eq!(state.open_all_app(), None, "GIMP and Krita differ");
+}
+
+#[test]
+fn many_files_of_the_default_app_take_its_name_once_known() {
+    let (db, _dir) = seeded();
+    let mut state = state(Some("GIMP"));
+    state.select(&db, &[PathBuf::from("/a/x.png"), PathBuf::from("/a/y.PNG")]);
+    assert_eq!(state.open_all_app(), None, "the name is not known yet");
+    answered(&mut state);
+    assert_eq!(state.open_all_app().as_deref(), Some("GIMP"));
+}
+
+#[test]
+fn a_single_file_names_no_open_all_app() {
+    let (db, _dir) = seeded();
+    db.upsert_editor_association("*", "krita {file}")
+        .expect("upsert");
+    let mut state = state(None);
+    state.select(&db, &[PathBuf::from("/a/x.png")]);
+    assert_eq!(state.open_all_app(), None);
+}
+
+#[test]
 fn no_single_file_gives_no_button_and_ignores_clicks() {
     let (db, _dir) = seeded();
     let mut state = state(None);
-    assert_eq!(state.select(&db, None), None);
+    assert_eq!(state.select(&db, &[]), None);
     assert!(state.apply(&[PreviewEvent::Open], None).is_none());
 }
 
@@ -100,7 +144,7 @@ fn a_menu_row_opens_the_file_with_that_app() {
     db.upsert_editor_association("*", &template)
         .expect("upsert");
     let mut state = state(None);
-    state.select(&db, Some(Path::new("/a/x.png")));
+    state.select(&db, &[PathBuf::from("/a/x.png")]);
     assert!(state.apply(&[PreviewEvent::OpenWith(0)], None).is_none());
     let start = Instant::now();
     let text = loop {

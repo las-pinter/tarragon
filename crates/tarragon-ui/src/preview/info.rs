@@ -40,12 +40,9 @@ pub fn show(ui: &mut Ui, meta: &Meta, open: Option<&OpenButton>, events: &mut Ve
         ui.spacing_mut().item_spacing.x = BUTTON_GAP;
         if let Some(open) = open {
             show_caret(ui, open, events);
-            ui.scope(|ui| {
-                ui.spacing_mut().interact_size.y = ROW_HEIGHT;
-                if widgets::primary_button(ui, &open.label).clicked() {
-                    events.push(PreviewEvent::Open);
-                }
-            });
+            if widgets::primary_button_with_height(ui, &open.label, ROW_HEIGHT).clicked() {
+                events.push(PreviewEvent::Open);
+            }
             ui.add_space(GAP - BUTTON_GAP);
         }
         ui.with_layout(Layout::top_down(Align::Min), |ui| {

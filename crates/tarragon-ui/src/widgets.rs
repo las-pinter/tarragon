@@ -53,25 +53,37 @@ pub(crate) fn action_button(ui: &mut Ui, text: &str) -> Response {
 /// A primary action: a coral fill with dark text, as the redesign shows. The
 /// dark text is what keeps the label above the contrast bar on this fill.
 pub fn primary_button(ui: &mut Ui, text: &str) -> Response {
-    flat_button(
-        ui,
-        text,
-        tokens::CORAL_BRIGHT,
-        tokens::CORAL_STRONG,
-        tokens::BG_PRIMARY,
-    )
+    primary_button_with_height(ui, text, BUTTON_HEIGHT)
+}
+
+/// A primary action `height` points tall, for a row that sets its own height.
+pub fn primary_button_with_height(ui: &mut Ui, text: &str, height: f32) -> Response {
+    let fills = (tokens::CORAL_BRIGHT, tokens::CORAL_STRONG);
+    flat_button(ui, text, fills, tokens::BG_PRIMARY, height)
 }
 
 /// A secondary action: the hover fill with primary text, lifted by a step on
 /// hover.
 pub fn secondary_button(ui: &mut Ui, text: &str) -> Response {
-    flat_button(
-        ui,
-        text,
-        tokens::SURFACE_HOVER,
-        tokens::SURFACE_HIGHLIGHT,
-        tokens::TEXT_PRIMARY,
-    )
+    let fills = (tokens::SURFACE_HOVER, tokens::SURFACE_HIGHLIGHT);
+    flat_button(ui, text, fills, tokens::TEXT_PRIMARY, BUTTON_HEIGHT)
+}
+
+/// A secondary action that holds a state: the raised step while `on`, so the
+/// open state reads at a glance, and the state reported to screen readers.
+/// The raised step is the top surface, so a lit button keeps its fill on
+/// hover. It is `height` points tall.
+pub fn secondary_toggle_button(ui: &mut Ui, text: &str, on: bool, height: f32) -> Response {
+    let fill = if on {
+        tokens::SURFACE_HIGHLIGHT
+    } else {
+        tokens::SURFACE_HOVER
+    };
+    let enabled = ui.is_enabled();
+    let fills = (fill, tokens::SURFACE_HIGHLIGHT);
+    let response = flat_button(ui, text, fills, tokens::TEXT_PRIMARY, height);
+    response.widget_info(|| WidgetInfo::selected(WidgetType::Button, enabled, on, text));
+    response
 }
 
 /// A text action: no frame at rest, coral text, as the redesign shows.
@@ -98,15 +110,15 @@ pub fn text_button(ui: &mut Ui, text: &str) -> Response {
     .inner
 }
 
-/// Draw a flat button of the given fill and text color. The fill steps up on
-/// hover and the disabled state takes the disabled fill, so the button never
-/// looks enabled while it cannot act.
+/// Draw a flat button `height` points tall with the text in `color`. `fills`
+/// is the rest fill and the hover fill, and the disabled state takes the
+/// disabled fill, so the button never looks enabled while it cannot act.
 fn flat_button(
     ui: &mut Ui,
     text: &str,
-    fill: Color32,
-    hover_fill: Color32,
+    (fill, hover_fill): (Color32, Color32),
     color: Color32,
+    height: f32,
 ) -> Response {
     // A disabled button keeps the inactive state, so its fill is chosen here
     // rather than by the widget state.
@@ -132,7 +144,7 @@ fn flat_button(
             Button::new(label(text, color))
                 .stroke(Stroke::NONE)
                 .corner_radius(CornerRadius::same(tokens::RADIUS_L))
-                .min_size(vec2(0.0, BUTTON_HEIGHT)),
+                .min_size(vec2(0.0, height)),
         )
     })
     .inner

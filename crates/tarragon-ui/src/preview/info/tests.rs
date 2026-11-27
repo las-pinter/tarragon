@@ -156,3 +156,25 @@ fn a_long_name_ends_before_the_button() {
         "{name:?} runs under {label:?}"
     );
 }
+
+#[test]
+fn the_open_button_is_the_row_height() {
+    let (ctx, mut preview) = setup("a.png", Some(open()));
+    let texts = frame(&ctx, &mut preview, vec![]);
+    let at = find(&texts, "Open in Krita").2.center();
+    let input = egui::RawInput {
+        screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(400.0, 600.0))),
+        ..Default::default()
+    };
+    let output = ctx.run_ui(input, |ui| preview.show(ui));
+    let button = output
+        .shapes
+        .iter()
+        .find_map(|clipped| match &clipped.shape {
+            Shape::Rect(r) if r.fill == tokens::CORAL_BRIGHT && r.rect.contains(at) => Some(r.rect),
+            _ => None,
+        })
+        .expect("the coral button fill");
+    output.drop_without_applying_deltas();
+    assert!((button.height() - ROW_HEIGHT).abs() < 0.01, "{button:?}");
+}

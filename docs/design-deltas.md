@@ -452,27 +452,35 @@ A fixed wide menu could run past the edge of a narrow pane.
 
 ## Preview mosaic
 
-Before: `design/mockups/preview-mosaic.html` shows a grid of cells for a
-multi-selection: equal columns, 120 px tall cells, and a short last row that
-leaves a hole. Each cell has a file-type badge. The mockup shows no caption
-under the grid.
+Before: `design/redesign/main-multi-select.html` and the redesign README fill
+the whole Preview height with the mosaic: one column for two images, two for
+three to six, three for seven to nine, rows that stretch to the height, and
+first cells two columns wide when the last row is not full. Each cell is
+filled edge to edge with its picture and carries the format badge. Under it,
+"6 selected" over "18.6 MB in all" sits beside an "Edit tags" button and an
+"Open all in Krita" button. The page shows no tag row for a multi-selection
+and gives no rule past nine images.
 
-After: the pictures sit in balanced rows. The row count is the one of a
-near-square grid, and the pictures spread over the rows as evenly as possible,
-the fuller rows first: 5 pictures give 3 and 2, 7 give 3, 2, and 2. Each cell
-has the shape of its picture, held between 1:4 and 4:1, and the cells of a row
-share the full pane width, so the row height follows. A row is at most as tall
-as the single picture box; a row held at that height is centred. When more
-images are selected than the grid shows, a caption such as "+3 more" sits
-under the grid. The cells draw no file-type badge yet, because
-the Preview has no format data for them. There are no boxes for a picture that
-is still loading or for an empty cell yet.
+After: the mosaic follows the README rule and takes the height the footer
+leaves, with the 260 pt minimum of the single picture. Past nine images the
+column count is the square root rounded up, so 10 to 16 images take four
+columns; the `max_multi_preview` setting still caps the cells. Each top row
+that has a free slot starts with a cell two columns wide, so every row is
+full. A cell is the field fill with an 8 pt radius, the picture is fitted
+whole inside it, never cropped, and the grid's format badge sits in the top
+left. The footer follows the page. The size line adds " · +3 more" when the
+cap hides some of the selection. The open button names the app when every
+selected file opens in the same named app, and reads "Open all" otherwise, or
+when the name would take more than 40 percent of the row; it opens the files
+as "Open N in editor" does. "Edit tags" shows the tag row (the
+colour bars, the pills, and "+ Tag") under the footer and hides it again, and
+the row stays open across selections until it is hidden. There are no boxes
+for a picture that is still loading.
 
-Reason: fixed-height cells in equal columns left pictures small and the last
-row short; balanced rows of picture-shaped cells use the full width. The
-caption tells the user that the grid is not the whole selection.
-The badge and the loading and empty boxes wait for data the Preview does not
-have yet.
+Reason: a cropped cell would hide part of a reference image. The page gives
+no rule past nine, and the square root keeps the cells near square. The tag
+row is the only place that removes a tag from many images at once, so it
+stays one click away.
 
 ## Filter count pill
 

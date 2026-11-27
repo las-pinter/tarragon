@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 use eframe::egui::{Context, TextureHandle, TextureOptions};
 use tarragon_ui::preview::budget::PreviewTextures;
-use tarragon_ui::preview::{Preview, PreviewImage};
+use tarragon_ui::preview::{MosaicCell, Preview, PreviewImage};
 use tarragon_ui::texture_budget::PREVIEW_BUDGET_BYTES;
 
 use crate::preview_loader::{LoadItem, Loaded, PreviewLoader};
@@ -185,15 +185,18 @@ impl PreviewFeed<TextureHandle> {
         let images: Vec<_> = self
             .wanted
             .iter()
-            .filter_map(|key| self.held.get(key))
-            .map(|handle| {
+            .filter_map(|key| self.held.get(key).map(|handle| (key, handle)))
+            .map(|(key, handle)| {
                 let [width, height] = handle.size();
-                PreviewImage {
-                    texture: handle.id(),
-                    size: (
-                        u32::try_from(width).unwrap_or(u32::MAX),
-                        u32::try_from(height).unwrap_or(u32::MAX),
-                    ),
+                MosaicCell {
+                    image: PreviewImage {
+                        texture: handle.id(),
+                        size: (
+                            u32::try_from(width).unwrap_or(u32::MAX),
+                            u32::try_from(height).unwrap_or(u32::MAX),
+                        ),
+                    },
+                    path: key.clone(),
                 }
             })
             .collect();
@@ -206,13 +209,10 @@ impl PreviewFeed<TextureHandle> {
 /// Split the ready pictures into what the Preview takes: the single picture,
 /// the mosaic pictures, and the selected count. One image goes to the single
 /// picture, two or more to the mosaic.
-fn route(
-    images: Vec<PreviewImage>,
-    total: usize,
-) -> (Option<PreviewImage>, Vec<PreviewImage>, usize) {
+fn route(images: Vec<MosaicCell>, total: usize) -> (Option<PreviewImage>, Vec<MosaicCell>, usize) {
     match total {
         0 => (None, Vec::new(), 0),
-        1 => (images.first().copied(), Vec::new(), 1),
+        1 => (images.first().map(|cell| cell.image), Vec::new(), 1),
         _ => (None, images, total),
     }
 }

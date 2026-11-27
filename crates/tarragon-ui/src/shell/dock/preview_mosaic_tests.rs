@@ -1,19 +1,27 @@
 //! Tests for the Preview pane with a multi-selection.
 
 use super::preview_tests::painted_pictures;
-use crate::preview::{ColorState, PreviewImage, TagPill};
+use crate::preview::{ColorState, MosaicCell, PreviewImage, TagPill};
 use crate::shell::Shell;
 use crate::shell::tests::{input, leaf_rect, painted_text};
 use crate::theme::apply_theme;
 use egui::{Context, TextureId};
 
-fn images(count: u64) -> Vec<PreviewImage> {
+fn images(count: u64) -> Vec<MosaicCell> {
     (0..count)
-        .map(|i| PreviewImage {
-            texture: TextureId::User(100 + i),
-            size: (64, 48),
+        .map(|i| MosaicCell {
+            image: PreviewImage {
+                texture: TextureId::User(100 + i),
+                size: (64, 48),
+            },
+            path: format!("/a/{i}.png").into(),
         })
         .collect()
+}
+
+/// Whether a painted text holds `want`.
+fn shows(text: &[String], want: &str) -> bool {
+    text.iter().any(|t| t.contains(want))
 }
 
 /// Run two frames; return the pictures and the texts of the second.
@@ -39,7 +47,10 @@ fn a_multi_selection_paints_each_texture_once_inside_the_pane() {
     textures.sort_by_key(|t| format!("{t:?}"));
     assert_eq!(
         textures,
-        images(4).iter().map(|i| i.texture).collect::<Vec<_>>()
+        images(4)
+            .iter()
+            .map(|i| i.image.texture)
+            .collect::<Vec<_>>()
     );
     for (_, rect) in &found {
         assert!(pane.contains_rect(*rect), "{rect:?} is outside {pane:?}");
@@ -75,16 +86,16 @@ fn more_images_than_the_cap_show_the_cap_and_a_hint() {
     spots.sort_unstable();
     spots.dedup();
     assert_eq!(spots.len(), 9, "cells overlap: {found:?}");
-    assert!(text.iter().any(|t| t == "+3 more"), "{text:?}");
+    assert!(shows(&text, "+3 more"), "{text:?}");
 
     shell.preview.set_max_multi_preview(4);
     let (found, text) = settle(&ctx, &mut shell);
     assert_eq!(found.len(), 4, "{found:?}");
-    assert!(text.iter().any(|t| t == "+8 more"), "{text:?}");
+    assert!(shows(&text, "+8 more"), "{text:?}");
 }
 
 #[test]
-fn a_multi_selection_without_meta_still_shows_the_tags_area() {
+fn a_multi_selection_shows_the_footer_and_hides_the_tag_row() {
     let ctx = Context::default();
     apply_theme(&ctx);
     let mut shell = Shell::new();
@@ -94,14 +105,18 @@ fn a_multi_selection_without_meta_still_shows_the_tags_area() {
         state: ColorState::Some,
     }]);
     let (_, text) = settle(&ctx, &mut shell);
-    for want in ["Tags", "hands", "+ Tag"] {
+    for want in [
+        "3 selected",
+        crate::preview::EDIT_TAGS_TEXT,
+        crate::preview::OPEN_ALL_TEXT,
+    ] {
         assert!(
             text.iter().any(|t| t == want),
             "{want} is missing: {text:?}"
         );
     }
+    assert!(!text.iter().any(|t| t == "hands"), "{text:?}");
     assert!(!text.iter().any(|t| t == crate::preview::EMPTY_HINT));
-    assert!(!text.iter().any(|t| t == "Metadata"), "{text:?}");
 }
 
 #[test]
@@ -123,12 +138,12 @@ fn the_hint_counts_the_whole_selection_when_few_pictures_are_ready() {
     shell.preview.set_mosaic(images(9), 20);
     let (found, text) = settle(&ctx, &mut shell);
     assert_eq!(found.len(), 9);
-    assert!(text.iter().any(|t| t == "+11 more"), "{text:?}");
+    assert!(shows(&text, "+11 more"), "{text:?}");
 
     shell.preview.set_mosaic(images(3), 5);
     let (found, text) = settle(&ctx, &mut shell);
     assert_eq!(found.len(), 3);
-    assert!(text.iter().any(|t| t == "+2 more"), "{text:?}");
+    assert!(shows(&text, "+2 more"), "{text:?}");
 }
 
 #[test]
@@ -139,39 +154,29 @@ fn a_big_selection_with_one_picture_ready_shows_a_one_cell_mosaic() {
     shell.preview.set_mosaic(images(1), 3);
     let (found, text) = settle(&ctx, &mut shell);
     assert_eq!(found.len(), 1, "{found:?}");
-    assert!(text.iter().any(|t| t == "+2 more"), "{text:?}");
+    assert!(shows(&text, "+2 more"), "{text:?}");
     assert!(!text.iter().any(|t| t == crate::preview::EMPTY_HINT));
 }
 
 #[test]
-fn five_pictures_fill_two_rows_of_the_same_width() {
+fn five_pictures_fill_three_rows_the_first_one_wide() {
     let ctx = Context::default();
     apply_theme(&ctx);
     let mut shell = Shell::new();
     shell.preview.set_mosaic(images(5), 5);
     let (found, _) = settle(&ctx, &mut shell);
     let mut tops: Vec<f32> = found.iter().map(|(_, r)| r.min.y.round()).collect();
+    tops.sort_by(f32::total_cmp);
     tops.dedup();
-    assert_eq!(tops.len(), 2, "{found:?}");
-    let span = |top: f32| {
-        let row: Vec<_> = found
-            .iter()
-            .filter(|(_, r)| (r.min.y.round() - top).abs() < 0.5)
-            .collect();
-        let left = row
-            .iter()
-            .map(|(_, r)| r.min.x)
-            .fold(f32::INFINITY, f32::min);
-        let right = row
-            .iter()
-            .map(|(_, r)| r.max.x)
-            .fold(f32::NEG_INFINITY, f32::max);
-        (row.len(), left, right)
-    };
-    let (first, second) = (span(tops[0]), span(tops[1]));
-    assert_eq!((first.0, second.0), (3, 2));
-    assert!(
-        (first.1 - second.1).abs() < 0.5 && (first.2 - second.2).abs() < 0.5,
-        "{first:?} {second:?}"
-    );
+    assert_eq!(tops.len(), 3, "{found:?}");
+    let per_row: Vec<usize> = tops
+        .iter()
+        .map(|top| {
+            found
+                .iter()
+                .filter(|(_, r)| (r.min.y.round() - top).abs() < 0.5)
+                .count()
+        })
+        .collect();
+    assert_eq!(per_row, [1, 2, 2]);
 }

@@ -12,6 +12,7 @@ mod failure;
 mod failure_tests;
 #[cfg(test)]
 mod fill_tests;
+mod footer;
 mod image;
 pub mod info;
 mod meta;
@@ -23,9 +24,11 @@ mod tags;
 mod test_support;
 pub use colors::{BAR as COLOR_BAR, ColorState, ColorStates};
 pub use failure::PreviewFailure;
+pub use footer::{EDIT_TAGS_TEXT, MultiSummary, OPEN_ALL_TEXT};
 pub use image::PreviewImage;
 pub use info::OpenButton;
 pub use meta::{Meta, UNKNOWN, size_text};
+pub use mosaic::MosaicCell;
 pub use tags::TagPill;
 
 /// The hint shown while nothing is selected.
@@ -46,6 +49,8 @@ pub enum PreviewEvent {
     Open,
     /// The user picked this row of the caret menu.
     OpenWith(usize),
+    /// The user clicked the open-all button of a multi-selection.
+    OpenAll,
 }
 
 /// The gap between the blocks of the panel, in points.
@@ -63,11 +68,16 @@ pub struct Preview {
     /// Why the file has no picture; the card takes the picture's place.
     failure: Option<PreviewFailure>,
     /// The pictures of a multi-selection that are ready, in display order.
-    mosaic: Vec<PreviewImage>,
+    mosaic: Vec<MosaicCell>,
     /// How many images are selected, which can exceed `mosaic`.
     mosaic_total: usize,
     /// How many mosaic pictures show at most.
     mosaic_cap: usize,
+    /// The size and the app of the whole multi-selection.
+    summary: MultiSummary,
+    /// Whether "Edit tags" has opened the tag row under the mosaic. It lasts
+    /// across selections.
+    tags_open: bool,
     /// How many selected images carry each color.
     colors: ColorStates,
     /// The user tags of the selected images, in display order.
@@ -95,6 +105,8 @@ impl Default for Preview {
             mosaic: Vec::new(),
             mosaic_total: 0,
             mosaic_cap: mosaic::DEFAULT_CAP,
+            summary: MultiSummary::default(),
+            tags_open: false,
             colors: ColorStates::default(),
             tags: Vec::new(),
             known_tags: Vec::new(),
@@ -137,9 +149,15 @@ impl Preview {
     /// selected in all. With two or more selected and a picture ready, the
     /// mosaic replaces the single picture; the selected images it does not
     /// draw become a "+k more" hint.
-    pub fn set_mosaic(&mut self, images: Vec<PreviewImage>, total: usize) {
-        self.mosaic = images;
+    pub fn set_mosaic(&mut self, cells: Vec<MosaicCell>, total: usize) {
+        self.mosaic = cells;
         self.mosaic_total = total;
+    }
+
+    /// Set the total size and the open app of a multi-selection, for the row
+    /// under the mosaic.
+    pub fn set_summary(&mut self, summary: MultiSummary) {
+        self.summary = summary;
     }
 
     /// Set how many pictures the mosaic shows at most, to follow the
@@ -193,6 +211,7 @@ impl Preview {
         let (known, add, open) = (&self.known_tags, &mut self.add, self.open.as_ref());
         let (events, below_box) = (&mut self.events, &mut self.below_box);
         let (mosaic, total, cap) = (&self.mosaic, self.mosaic_total, self.mosaic_cap);
+        let (summary, tags_open) = (&self.summary, &mut self.tags_open);
         // A big selection with one picture ready already shows a one-cell
         // mosaic, so the panel does not flip to the single box while it fills.
         let multi = total >= 2 && !mosaic.is_empty();
@@ -217,16 +236,29 @@ impl Preview {
                             if let Some(failure) = &self.failure {
                                 failure::show_card(ui, failure, events);
                             } else if multi {
-                                mosaic::show(ui, mosaic, total, cap);
+                                let height = image::box_height(viewport.height(), *below_box);
+                                box_bottom = Some(mosaic::show(ui, mosaic, cap, height).bottom());
                             } else if let Some(image) = image {
                                 let height = image::box_height(viewport.height(), *below_box);
                                 box_bottom = Some(image::show_box(ui, image, height).bottom());
                             }
-                            if let Some(meta) = meta {
+                            if multi && self.failure.is_none() {
+                                let hint = mosaic::more_hint(total, mosaic::drawn(mosaic, cap));
+                                footer::show(
+                                    ui,
+                                    total,
+                                    summary,
+                                    hint.as_deref(),
+                                    tags_open,
+                                    events,
+                                );
+                            } else if let Some(meta) = meta {
                                 info::show(ui, meta, open, events);
                             }
-                            let bars = enabled.then_some(colors);
-                            tags::show_chips(ui, bars, tags, known, add, events);
+                            if !multi || *tags_open {
+                                let bars = enabled.then_some(colors);
+                                tags::show_chips(ui, bars, tags, known, add, events);
+                            }
                             if let Some(bottom) = box_bottom {
                                 // The content below is only known after layout, so
                                 // the next frame sizes the box with it.

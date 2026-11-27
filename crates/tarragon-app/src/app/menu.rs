@@ -94,7 +94,7 @@ impl App {
     /// app lookups start helper programs that can take seconds. Files that
     /// share an app go into one start when the app takes many files. No call
     /// waits for an editor. A failure shows one notice with the counts.
-    fn open_in_editor(&mut self, ctx: &Context, paths: Vec<PathBuf>) {
+    pub(super) fn open_in_editor(&mut self, ctx: &Context, paths: Vec<PathBuf>) {
         let (sender, receiver) = crossbeam_channel::bounded(1);
         let db = Arc::clone(&self.db);
         let wake = ctx.clone();

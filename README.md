@@ -68,7 +68,8 @@ Windows and macOS are not released yet.
    editor, or use the Open button under the preview; its arrow lists the
    other apps. Right-click for more actions.
 4. Tag. Right-click an image and choose Add tag..., or use the + Tag button in
-   the Preview panel.
+   the Preview panel. With several images selected, click Edit tags under
+   the preview first; Open all opens them together.
 5. Filter by color. Click a color swatch above the grid. Click it again, or
    the x on its chip, to drop that filter. Clear drops every filter.
 

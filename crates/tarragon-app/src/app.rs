@@ -241,8 +241,7 @@ impl App {
             ctx.request_repaint();
         }
         if self.open_button.poll() {
-            let button = self.open_button.button();
-            self.shell.preview_mut().set_open(button);
+            self.show_open_buttons();
             ctx.request_repaint();
         }
     }
@@ -327,12 +326,8 @@ impl App {
     /// An empty selection clears the details and the pictures.
     fn feed_preview(&mut self) {
         let selected = self.shell.selected_paths();
-        let sole = match selected.as_slice() {
-            [file] => Some(file.as_path()),
-            _ => None,
-        };
-        let button = self.open_button.select(&self.db, sole);
-        self.shell.preview_mut().set_open(button);
+        self.open_button.select(&self.db, &selected);
+        self.show_open_buttons();
         if selected.is_empty() {
             self.preview_total = 0;
             self.shell.preview_mut().set_meta(None);
@@ -503,7 +498,7 @@ impl eframe::App for App {
         self.apply_prefs_events(&ctx);
         self.apply_sidebar(&ctx);
         let events = self.shell.take_preview_events();
-        self.apply_card_events(&events);
+        self.apply_card_events(&ctx, &events);
         self.apply_open_request();
         if tags::apply_preview_events(&mut self.shell, &self.db, events) {
             ctx.request_repaint();

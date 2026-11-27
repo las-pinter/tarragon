@@ -26,7 +26,7 @@ mod scale_tests;
 #[cfg(test)]
 mod tests;
 
-pub(crate) use cell::{ERROR_MARK_SIZE, paint_error};
+pub(crate) use cell::{ERROR_MARK_SIZE, paint_error, paint_format_badge, touching_corners};
 pub use items::{GridItem, TileError, items_in_order};
 pub use selection::Selection;
 

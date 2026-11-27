@@ -97,12 +97,7 @@ fn paint(painter: &Painter, rect: Rect, item: &GridItem, state: TileState) {
     let radius = CornerRadius::same(tokens::RADIUS_L);
     let thumb = thumbnail_rect(rect);
     paint_thumbnail(painter, thumb, item, radius);
-    paint_badge(
-        painter,
-        thumb,
-        &extension_label(&item.path),
-        badge_color(&item.path),
-    );
+    paint_format_badge(painter, thumb, &item.path);
     if state.hovered {
         paint_info(painter, thumb, item);
     }
@@ -203,7 +198,7 @@ fn paint_thumbnail(painter: &Painter, rect: Rect, item: &GridItem, radius: Corne
 /// The corners of `inner` that lie on a corner of `outer` keep `radius`; the
 /// rest are square. A letterboxed picture then meets the rounded thumbnail
 /// without rounded corners floating inside it.
-fn touching_corners(inner: Rect, outer: Rect, radius: CornerRadius) -> CornerRadius {
+pub(crate) fn touching_corners(inner: Rect, outer: Rect, radius: CornerRadius) -> CornerRadius {
     let near = |a: f32, b: f32| (a - b).abs() < 0.5;
     let (left, right) = (
         near(inner.min.x, outer.min.x),
@@ -245,6 +240,12 @@ pub(crate) fn paint_error(painter: &Painter, rect: Rect, radius: CornerRadius) {
         FontId::new(ERROR_MARK_FONT, FontFamily::Name(fonts::BOLD_FAMILY.into())),
         tokens::CORAL_STRONG,
     );
+}
+
+/// Paint the format badge of `path` at the top left of `thumb`. The Preview
+/// mosaic uses it too.
+pub(crate) fn paint_format_badge(painter: &Painter, thumb: Rect, path: &Path) {
+    paint_badge(painter, thumb, &extension_label(path), badge_color(path));
 }
 
 /// Paint the file-type badge at the thumbnail top left: the format colour on

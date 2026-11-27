@@ -4,7 +4,8 @@
 use std::collections::HashSet;
 use std::path::Path;
 
-use tarragon_ui::preview::{PreviewEvent, PreviewFailure};
+use eframe::egui::Context;
+use tarragon_ui::preview::{MultiSummary, PreviewEvent, PreviewFailure};
 
 use super::App;
 use crate::editor;
@@ -25,8 +26,25 @@ impl App {
         self.shell.preview_mut().set_failure(failure);
     }
 
-    /// Act on the card buttons and the open button for the one selected file.
-    pub(super) fn apply_card_events(&mut self, events: &[PreviewEvent]) {
+    /// Give the Preview the open button of one file and the summary of many.
+    pub(super) fn show_open_buttons(&mut self) {
+        let button = self.open_button.button();
+        let app = self.open_button.open_all_app();
+        let bytes = self.shell.selected_bytes();
+        let preview = self.shell.preview_mut();
+        preview.set_open(button);
+        preview.set_summary(MultiSummary { bytes, app });
+    }
+
+    /// Act on the card buttons, the open button for the one selected file,
+    /// and the open-all button.
+    pub(super) fn apply_card_events(&mut self, ctx: &Context, events: &[PreviewEvent]) {
+        if events.contains(&PreviewEvent::OpenAll) {
+            let paths = self.shell.selected_paths();
+            if !paths.is_empty() {
+                self.open_in_editor(ctx, paths);
+            }
+        }
         for event in events {
             let Some(path) = self.shell.sole_selected().map(Path::to_path_buf) else {
                 return;

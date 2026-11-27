@@ -1,10 +1,11 @@
 # Design deltas
 
-The mockups in `design/mockups/` stay frozen and remain the design of record.
-This file records every place where the application differs from them. Each
+The mockups in `design/mockups/` stay frozen. The flat redesign in
+`design/redesign/` wins over them on looks, and this file wins over both. Each
 entry gives the state before the change, the state after it, and the reason.
 Every colour, layout region, label, and interaction stays as designed unless
-an entry below says otherwise.
+an entry below says otherwise. "Redesign deltas" at the end lists every place
+where the application still differs from the redesign pages.
 
 ## Cache directory label
 
@@ -187,7 +188,8 @@ face, and paints no separator borders.
 
 Reason: these four differences are visual only. Every colour, region, label,
 and interaction stays as designed. egui 0.36.2 has no weight selection, so the
-Medium face is the nearest vendored weight to 600.
+Medium face stands in for 600, keeping the lighter of the two vendored faces
+that sit beside it.
 
 ## Spacing and radii
 
@@ -336,7 +338,7 @@ dock, and scrolls on its own. The folder tree scrolls above it. Rows, heads,
 carets, folder outlines, stars, and the add action follow the page's sizes and
 colours. Sidebar rows are painted directly. They draw no focus outline and
 publish no screen-reader information. The section heads use the Roboto Medium
-face, the nearest vendored weight to the page's 600. The row text stays at the
+face in place of the page's 600. The row text stays at the
 12 pt body size where the page gives 13 px. A tree row shows its folder's
 image count at the right, as the page does; a folder with no images directly
 in it, and a folder that cannot be listed, show none. Favorites show no
@@ -742,7 +744,8 @@ The start-up cache clean-up shows nothing. "N selected" sits at the right end an
 leaves the gallery info row. The gallery has no busy strip. While a folder opens, the
 gallery header names that folder. The count still belongs to the files on screen, so
 a switch from one folder to another shows the new name with the old count, and a
-first open shows 0. When an open fails, the header shows the old folder again.
+first open shows 0. The All images scope keeps its own name while a folder opens.
+When an open fails, the header shows the old folder again.
 
 Reason: one bar for every job keeps the gallery still while work runs, and each count
 comes from a number the work already has. The clean-up at start is upkeep nobody
@@ -1001,14 +1004,58 @@ A chord with an extra Shift or Alt does not act.
 - Ctrl+K is the key the redesign top bar prints in its search field, so both keys act.
 - Ctrl+A leaves a focused text field its own select all. Focus on a tile or a button does
   not block it. An image that the search hides is not selected.
-- No menu bar menu shows these shortcuts, because the mockup shows none. This list is the
-  only place that names them. The grid context menu does show its own keys, see "Grid
-  context menu".
+- No menu bar menu shows these shortcuts, because neither the mockup nor the redesign menu
+  bar shows any. This list is the only place that names them. The grid context menu does
+  show its own keys, see "Grid context menu".
 - Enter needs no modifier. With none or several images selected, it does nothing and is not
   consumed. A focused button or text field keeps its own Enter.
 - Not built: Escape to clear the selection, arrow keys, Ctrl+Q, and F5 to rescan. The File menu has a Quit item, which the mockup lacks. Each
   other key needs its own decision. The grid keys are in "Keyboard shortcuts for the grid".
 - egui has no mnemonics, so Alt+F is not supported.
 
-Reason: the shortcuts save a trip to the menu. The mockup wins on looks, so the menus stay
-free of shortcut text.
+Reason: the shortcuts save a trip to the menu. The menu bar menus on both design sets carry
+no shortcut text, so they stay free of it.
+
+## Redesign deltas
+
+Before: `design/redesign/` draws the main window, the multi-selection, the
+components, and the Color tagging page of the settings.
+
+After: the app follows those pages except in the places below. An item that
+names a section holds its detail there.
+
+- Body text stays at 12 pt where the pages give 13 px. Rows, fields, and
+  buttons keep the pages' heights.
+- Weights of 600 use Roboto Medium; egui cannot select a weight, and the
+  bundled faces are Regular, Medium, and Bold. See "Dock chrome".
+- The text field focus ring is the light coral `#f0997b`, not `#e06540`.
+  egui draws it from the selection stroke, which also colours a chosen option
+  on the `#4a1b0c` fill, where only the light coral passes 4.5:1.
+- The search hint reads "Search file names" where the page prints "Search
+  files and tags", because the search matches file names only.
+- The gallery keeps a row under the header with the sort pills and the filter
+  pill. The pages draw no such row, and the app has no other place for the
+  sort order and the filter count. See "Sort pill styling".
+- The favorites sit in their own panel at the bottom of the sidebar. See
+  "Library sidebar layout".
+- The All images scope adds a "Folders" action to the filter bar. See "Filter
+  bar row".
+- Pictures in the grid and in the mosaic are fitted, never cropped. See "Grid
+  tile" and "Preview mosaic".
+- The preview colour bars all have the same width, because no colour share is
+  stored. See "Preview colour bars".
+- The grid context menu keeps the app's items and keys. The page's "Open
+  with...", "Edit tags" on T, "Duplicate" on Ctrl D, and "Move to trash" are
+  not built as drawn; the app has "Add tag...", "Duplicate" with no key, and
+  "Delete". A new action or key needs its own decision. See "Grid context
+  menu" and "Keyboard shortcuts".
+- The open button names the app only when it can find a name. See "Preview
+  details and open button".
+- Rendering again or retrying tiles that already show adds no status bar
+  segment. See "Status bar".
+- The other three settings groups take the Color tagging page's look. See
+  "Preferences dialog".
+
+Reason: each item either keeps a feature that the pages do not draw, keeps text
+true to what the app does, or follows a limit of egui 0.36.2 or of the bundled
+fonts.

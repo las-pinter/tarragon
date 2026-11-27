@@ -443,7 +443,7 @@ fn every_panel_title_paints_as_a_gray_section_label() {
     shell.toggle_log();
     panel_title_formats(&ctx, &mut shell);
     let formats = panel_title_formats(&ctx, &mut shell);
-    let spacing = tokens::SIZE_CAPTION * TAB_SPACING_EM;
+    let spacing = tokens::SIZE_CAPTION * tokens::LABEL_SPACING_EM;
     for pane in [Pane::Library, Pane::Gallery, Pane::Preview, Pane::Log] {
         let label = title(pane);
         assert_eq!(

@@ -3,15 +3,15 @@
 //! The values come from the `:root` block of `design/mockups/theme.css`. Each
 //! doc comment names its stylesheet token, so the two stay traceable. The
 //! exceptions are `BUCKET_PINK`, `CHECKER_LIGHT`, `CHECKER_DARK`,
-//! `WINDOW_SIZE`, `GALLERY_MIN_WIDTH`, `SIZE_DISPLAY`, and `SIZE_TITLE`, which
-//! have no stylesheet row.
+//! `WINDOW_SIZE`, `GALLERY_MIN_WIDTH`, `SIZE_DISPLAY`, `SIZE_TITLE`,
+//! `LABEL_SPACING_EM`, and `FOCUS_RING_WIDTH`, which have no stylesheet row.
 //! Colors convert to `egui::Color32` at compile time.
 
 use egui::Color32;
 
 // The whole `:root` block of `theme.css` is ported on purpose, plus
 // `BUCKET_PINK`, the checker greys, `WINDOW_SIZE`, `GALLERY_MIN_WIDTH`, and the
-// two redesign sizes. Some values have no consumer yet.
+// redesign sizes, label spacing, and focus ring. Some values have no consumer yet.
 
 /// `--bg-primary`: window and gallery background.
 pub const BG_PRIMARY: Color32 = Color32::from_rgb(0x16, 0x15, 0x1a);
@@ -45,7 +45,7 @@ pub const TEXT_PRIMARY: Color32 = Color32::from_rgb(0xec, 0xe9, 0xf2);
 pub const TEXT_SECONDARY: Color32 = Color32::from_rgb(0x8d, 0x8a, 0x98);
 /// `--text-tertiary`: tertiary text.
 pub const TEXT_TERTIARY: Color32 = Color32::from_rgb(0xa8, 0xa5, 0xb0);
-/// `--text-muted`: dim marks, such as the favorites grip.
+/// `--text-muted`: dim marks, such as the star of a missing favorite.
 ///
 /// The redesign forbids this value for text: `#8d8a98` is the lowest text
 /// color that passes the contrast bar. Text uses `TEXT_SECONDARY` or
@@ -237,6 +237,13 @@ pub const SIZE_DISPLAY: f32 = 22.0;
 /// The title size of the redesign: the product wordmark and a card title. The
 /// stylesheet has no row; the redesign palette page gives 15 px.
 pub const SIZE_TITLE: f32 = 15.0;
+/// The letter spacing of a section label in the redesign, in em: the dock
+/// tab titles and the sidebar heads. The stylesheet has no row; the redesign
+/// pages give 0.08 em.
+pub const LABEL_SPACING_EM: f32 = 0.08;
+/// The width of the coral focus ring of the redesign, in points. The
+/// stylesheet has no row; the redesign pages give 2 px.
+pub const FOCUS_RING_WIDTH: f32 = 2.0;
 /// `--size-small`: small text size, in points.
 pub const SIZE_SMALL: f32 = 10.0;
 /// `--size-log`: log line text size, in points.

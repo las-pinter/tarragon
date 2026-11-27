@@ -1,7 +1,7 @@
 //! Tests for the favorite row widget.
 
 use super::*;
-use egui::{Color32, Context, Event, Modifiers, PointerButton, Pos2, RawInput, Rect, Shape};
+use egui::{Color32, Context, Event, Modifiers, PointerButton, Pos2, RawInput, Rect, Shape, pos2};
 
 /// Raw input for a 400 by 300 screen.
 fn input(events: Vec<Event>) -> RawInput {
@@ -59,10 +59,18 @@ fn has_fill(shapes: &[Shape], fill: Color32) -> bool {
         .any(|shape| matches!(shape, Shape::Rect(rect) if rect.fill == fill))
 }
 
-/// Whether any painted text other than the grip has this colour.
+/// The colour of the painted star, or none when no star painted.
+fn star_color(shapes: &[Shape]) -> Option<Color32> {
+    shapes.iter().find_map(|shape| match shape {
+        Shape::Mesh(mesh) => mesh.vertices.first().map(|vertex| vertex.color),
+        _ => None,
+    })
+}
+
+/// Whether any painted text has this colour.
 fn has_text_color(shapes: &[Shape], color: Color32) -> bool {
     shapes.iter().any(|shape| match shape {
-        Shape::Text(text) if text.galley.job.text != "::" => text
+        Shape::Text(text) => text
             .galley
             .job
             .sections
@@ -105,13 +113,26 @@ fn rows_with_the_same_label_act_alone() {
 }
 
 #[test]
-fn the_selected_row_paints_the_tertiary_fill_and_coral_icon() {
+fn the_selected_row_paints_the_coral_deep_fill_and_light_coral_text() {
     let ctx = ready(1);
     let plain = frame(&ctx, input(Vec::new()), 1, false, false).shapes;
     let chosen = frame(&ctx, input(Vec::new()), 1, true, false).shapes;
-    assert!(!has_fill(&plain, tokens::BG_TERTIARY));
-    assert!(has_fill(&chosen, tokens::BG_TERTIARY));
-    assert!(has_fill(&chosen, tokens::CORAL_STRONG));
+    assert!(!has_fill(&plain, tokens::CORAL_DARK));
+    assert!(has_fill(&chosen, tokens::CORAL_DARK));
+    assert!(has_text_color(&chosen, tokens::CORAL_STRONG));
+    assert_eq!(star_color(&chosen), Some(tokens::AMBER_ACCENT));
+}
+
+#[test]
+fn a_row_paints_an_amber_star_and_primary_text() {
+    let ctx = ready(1);
+    let shapes = frame(&ctx, input(Vec::new()), 1, false, false).shapes;
+    assert_eq!(star_color(&shapes), Some(tokens::AMBER_ACCENT));
+    assert!(has_text_color(&shapes, tokens::TEXT_PRIMARY));
+    assert!(
+        shapes.iter().all(|shape| !matches!(shape, Shape::Path(_))),
+        "no folder outline: the star stands in for it"
+    );
 }
 
 #[test]
@@ -119,7 +140,7 @@ fn a_missing_row_keeps_the_text_floor() {
     let ctx = ready(1);
     let found = frame(&ctx, input(Vec::new()), 1, false, false).shapes;
     let gone = frame(&ctx, input(Vec::new()), 1, false, true).shapes;
-    assert!(has_text_color(&found, tokens::TEXT_SECONDARY));
+    assert!(has_text_color(&found, tokens::TEXT_PRIMARY));
     assert!(has_text_color(&gone, tokens::TEXT_SECONDARY));
     assert!(!has_text_color(&gone, tokens::TEXT_MUTED));
 }
@@ -151,12 +172,13 @@ fn a_hovered_row_paints_the_hover_fill_and_primary_text() {
 }
 
 #[test]
-fn a_selected_missing_row_keeps_the_fill_but_dims_the_icon() {
+fn a_selected_missing_row_keeps_the_fill_but_dims_the_star() {
     let ctx = ready(1);
     let shapes = frame(&ctx, input(Vec::new()), 1, true, true).shapes;
-    assert!(has_fill(&shapes, tokens::BG_TERTIARY));
-    assert!(has_text_color(&shapes, tokens::TEXT_SECONDARY));
-    assert!(!has_fill(&shapes, tokens::CORAL_STRONG));
+    assert!(has_fill(&shapes, tokens::CORAL_DARK));
+    // The floor is too dark on the coral deep fill, so the text is lighter.
+    assert!(has_text_color(&shapes, tokens::TEXT_TERTIARY));
+    assert_eq!(star_color(&shapes), Some(tokens::TEXT_MUTED));
 }
 
 #[test]
@@ -193,16 +215,14 @@ fn a_lifted_missing_row_uses_the_light_text() {
 }
 
 #[test]
-fn a_missing_row_paints_a_dim_icon() {
+fn a_missing_row_paints_a_dim_star() {
     let ctx = ready(1);
-    let found = frame(&ctx, input(Vec::new()), 1, false, false).shapes;
     let gone = frame(&ctx, input(Vec::new()), 1, false, true).shapes;
-    assert!(!has_fill(&found, tokens::TEXT_MUTED));
-    assert!(has_fill(&gone, tokens::TEXT_MUTED));
+    assert_eq!(star_color(&gone), Some(tokens::TEXT_MUTED));
 }
 
 #[test]
-fn the_fill_is_inset_6_on_each_side() {
+fn the_row_is_34_tall_and_inset_by_the_panel_padding() {
     let ctx = ready(1);
     let (mut min_x, mut avail) = (0.0, 0.0);
     let output = ctx.run_ui(input(Vec::new()), |ui| {
@@ -214,13 +234,14 @@ fn the_fill_is_inset_6_on_each_side() {
         .shapes
         .iter()
         .find_map(|clipped| match &clipped.shape {
-            Shape::Rect(rect) if rect.fill == tokens::BG_TERTIARY => Some(rect.rect),
+            Shape::Rect(rect) if rect.fill == tokens::CORAL_DARK => Some(rect.rect),
             _ => None,
         })
         .expect("the fill painted");
     output.drop_without_applying_deltas();
-    assert!((fill.min.x - (min_x + 6.0)).abs() < f32::EPSILON);
-    assert!((fill.width() - (avail - 12.0)).abs() < f32::EPSILON);
+    assert!((fill.min.x - (min_x + 12.0)).abs() < f32::EPSILON);
+    assert!((fill.width() - (avail - 24.0)).abs() < f32::EPSILON);
+    assert!((fill.height() - 34.0).abs() < f32::EPSILON);
 }
 
 /// The painted shapes of two rows, the first one lifted when `lift` is set.
@@ -262,7 +283,10 @@ fn the_lifted_border_is_dashed_dimmed_amber() {
     let ctx = Context::default();
     crate::apply_theme(&ctx);
     let output = ctx.run_ui(input(Vec::new()), |ui| {
-        paint_lifted_border(ui, Rect::from_min_size(pos2(6.0, 10.0), vec2(100.0, 27.0)));
+        paint_lifted_border(
+            ui,
+            Rect::from_min_size(pos2(12.0, 10.0), vec2(100.0, FAVORITE_HEIGHT)),
+        );
     });
     let dash = tokens::AMBER_ACCENT.gamma_multiply(0.75);
     let found = output
@@ -278,7 +302,7 @@ fn the_row_after_a_lifted_row_is_not_dimmed() {
     let count = |shapes: &[Shape]| {
         shapes
             .iter()
-            .filter(|s| matches!(s, Shape::Rect(r) if r.fill == tokens::TEXT_SECONDARY))
+            .filter(|s| star_color(std::slice::from_ref(*s)) == Some(tokens::AMBER_ACCENT))
             .count()
     };
     let (plain, lifted) = (count(&two_rows(false)), count(&two_rows(true)));
@@ -308,7 +332,7 @@ fn a_shift_moves_the_row_but_not_its_place() {
     });
     for clipped in &output.shapes {
         if let Shape::Rect(rect) = &clipped.shape
-            && rect.fill == tokens::BG_TERTIARY
+            && rect.fill == tokens::CORAL_DARK
         {
             fill = Some(rect.rect);
         }
@@ -320,39 +344,67 @@ fn a_shift_moves_the_row_but_not_its_place() {
     );
 }
 
-/// The cursor after hovering the grip of one row, with the button down when `press` is set.
-fn cursor_over_grip(press: bool) -> egui::CursorIcon {
+/// Press at the centre of row 0, move down by `moved`, and return each
+/// frame's action and the last cursor.
+fn press_and_move(moved: f32) -> (Vec<FavoriteAction>, egui::CursorIcon) {
     let ctx = ready(1);
-    let at = pos2(6.0 + crate::sidebar::row::ROW_PAD + 2.0, 13.0);
-    let button = |pressed| Event::PointerButton {
-        pos: at,
+    let at = frame(&ctx, input(Vec::new()), 1, false, false).rects[0].center();
+    let button = |pos, pressed| Event::PointerButton {
+        pos,
         button: PointerButton::Primary,
         pressed,
         modifiers: Modifiers::NONE,
     };
-    let mut steps = vec![vec![Event::PointerMoved(at)], Vec::new()];
-    if press {
-        steps.push(vec![button(true)]);
-        steps.push(vec![Event::PointerMoved(at + vec2(0.0, 8.0))]);
-        steps.push(Vec::new());
-    }
-    let mut cursor = egui::CursorIcon::Default;
+    let to = at + vec2(0.0, moved);
+    let steps = [
+        vec![Event::PointerMoved(at)],
+        vec![button(at, true)],
+        vec![Event::PointerMoved(to)],
+        Vec::new(),
+    ];
+    let (mut actions, mut cursor) = (Vec::new(), egui::CursorIcon::Default);
     for events in steps {
         let output = ctx.run_ui(input(events), |ui| {
-            show_favorite_row(ui, "same", false, false, false, 0, 0.0);
+            actions.push(show_favorite_row(ui, "same", false, false, false, 0, 0.0).0);
         });
         cursor = output.platform_output.cursor_icon;
         output.drop_without_applying_deltas();
     }
-    cursor
+    (actions, cursor)
 }
 
 #[test]
-fn the_cursor_is_a_grab_hand_over_the_grip() {
-    assert_eq!(cursor_over_grip(false), egui::CursorIcon::Grab);
+fn a_press_that_moves_starts_a_drag_anywhere_on_the_row() {
+    let (actions, cursor) = press_and_move(12.0);
+    assert!(
+        actions.contains(&FavoriteAction::DragStarted),
+        "{actions:?}"
+    );
+    assert!(!actions.contains(&FavoriteAction::Open));
+    assert_eq!(cursor, egui::CursorIcon::Grabbing);
 }
 
 #[test]
-fn the_cursor_is_a_closed_hand_while_dragging_the_grip() {
-    assert_eq!(cursor_over_grip(true), egui::CursorIcon::Grabbing);
+fn the_row_shows_no_grab_hand_at_rest() {
+    let (actions, cursor) = press_and_move(0.0);
+    assert!(
+        !actions.contains(&FavoriteAction::DragStarted),
+        "{actions:?}"
+    );
+    assert_ne!(cursor, egui::CursorIcon::Grab);
+    assert_ne!(cursor, egui::CursorIcon::Grabbing);
+}
+
+#[test]
+fn no_grip_is_painted() {
+    let ctx = ready(1);
+    let shapes = frame(&ctx, input(Vec::new()), 1, false, false).shapes;
+    let texts: Vec<_> = shapes
+        .iter()
+        .filter_map(|shape| match shape {
+            Shape::Text(text) => Some(text.galley.job.text.clone()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(texts, ["same"]);
 }

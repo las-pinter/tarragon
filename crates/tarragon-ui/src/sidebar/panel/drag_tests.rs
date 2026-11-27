@@ -2,6 +2,7 @@
 
 use super::tests::{click, find, frame, ready, warm_up};
 use super::*;
+use crate::tokens;
 use egui::{
     Context, Event, Key, Modifiers, PointerButton, Pos2, RawInput, Rect, Shape, pos2, vec2,
 };
@@ -34,12 +35,13 @@ fn order(sidebar: &Sidebar) -> Vec<PathBuf> {
         .collect()
 }
 
-/// Press the grip of favorite `row`, drag to `drop_y` above or below its label, and stop before release.
+/// Press the label of favorite `row`, drag to `drop_y`, and stop before release.
+///
+/// The whole row is the handle, so the press lands on the label.
 fn drag_to(ctx: &Context, sidebar: &mut Sidebar, row: usize, drop_y: f32) -> Pos2 {
     warm_up(ctx, sidebar);
     let texts = frame(ctx, sidebar, Vec::new());
-    let grip = texts.iter().filter(|t| t.string == "::").nth(row).unwrap();
-    let start = grip.pos + vec2(2.0, 5.0);
+    let start = find(&texts, ["fa", "fb", "fc"][row]).pos + vec2(2.0, 5.0);
     let end = pos2(start.x, drop_y);
     let press = |pressed, pos| Event::PointerButton {
         pos,
@@ -198,11 +200,13 @@ fn the_lifted_border_is_painted_after_the_selected_row_fill() {
             })
             .collect();
         assert!(!dashes.is_empty(), "no dashed border for row {lifted}");
+        let mut selected = 0;
         for (at, shape) in shapes.iter().enumerate() {
             let Shape::Rect(fill) = shape else { continue };
-            if fill.fill != tokens::BG_TERTIARY {
+            if fill.fill != tokens::CORAL_DARK {
                 continue;
             }
+            selected += 1;
             for (dash_at, dash_rect) in &dashes {
                 if fill.rect.intersects(dash_rect.expand(0.5)) {
                     assert!(
@@ -212,6 +216,7 @@ fn the_lifted_border_is_painted_after_the_selected_row_fill() {
                 }
             }
         }
+        assert_eq!(selected, 1, "the selected row fill is painted once");
     }
 }
 
@@ -228,8 +233,8 @@ fn label_ys(ctx: &Context, sidebar: &mut Sidebar, names: [&str; 3]) -> [f32; 3] 
     names.map(|name| find(&texts, name).pos.y)
 }
 
-/// The distance between two favorite rows.
-const PITCH: f32 = 27.0;
+/// The distance between two favorite rows: the row height and the row gap.
+const PITCH: f32 = 38.0;
 
 #[test]
 fn the_rows_between_slide_down_while_a_row_is_dragged_up() {
@@ -249,8 +254,8 @@ fn the_lifted_row_follows_the_pointer() {
     warm_up(&ctx, &mut sidebar);
     let before = label_ys(&ctx, &mut sidebar, ["fa", "fb", "fc"]);
     let texts = frame(&ctx, &mut sidebar, Vec::new());
-    let grip_y = texts.iter().find(|t| t.string == "::").unwrap().pos.y + 5.0;
-    drag_to(&ctx, &mut sidebar, 0, grip_y + 20.0);
+    let start_y = find(&texts, "fa").pos.y + 5.0;
+    drag_to(&ctx, &mut sidebar, 0, start_y + 20.0);
     let after = label_ys(&ctx, &mut sidebar, ["fa", "fb", "fc"]);
     assert!((after[0] - (before[0] + 20.0)).abs() < 0.01, "{after:?}");
 }

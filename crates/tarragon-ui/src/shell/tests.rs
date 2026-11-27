@@ -353,35 +353,40 @@ fn the_library_paddings_start_at_the_panel_edge() {
     shell.set_folder(Some(PathBuf::from("/r")));
     draw(&ctx, &mut shell);
     let output = ctx.run_ui(input(), |ui| shell.show(ui));
-    // The tab bar, its tab, and the selected row share one fill; sort top down.
-    let mut rects: Vec<Rect> = output
-        .shapes
-        .iter()
-        .filter_map(|clipped| match &clipped.shape {
-            egui::epaint::Shape::Rect(shape)
-                if shape.fill == tokens::BG_TERTIARY && shape.rect.min.x < 20.0 =>
-            {
-                Some(shape.rect)
-            }
-            _ => None,
-        })
-        .collect();
-    rects.sort_by(|a, b| a.min.y.total_cmp(&b.min.y));
+    // The tab bar fill and the selected row fill, at the left edge, top down.
+    let rects_of = |fill| {
+        let mut rects: Vec<Rect> = output
+            .shapes
+            .iter()
+            .filter_map(|clipped| match &clipped.shape {
+                egui::epaint::Shape::Rect(shape)
+                    if shape.fill == fill && shape.rect.min.x < 20.0 =>
+                {
+                    Some(shape.rect)
+                }
+                _ => None,
+            })
+            .collect();
+        rects.sort_by(|a, b| a.min.y.total_cmp(&b.min.y));
+        rects
+    };
+    let rects = rects_of(tokens::BG_TERTIARY);
+    let rows = rects_of(tokens::CORAL_DARK);
     let button_x = output
         .shapes
         .iter()
         .find_map(|clipped| match &clipped.shape {
-            egui::Shape::Text(text) if text.galley.job.text == "Add Current Folder" => {
+            egui::Shape::Text(text) if text.galley.job.text == crate::sidebar::panel::ADD_TEXT => {
                 Some(text.pos.x)
             }
             _ => None,
         })
-        .expect("the button is painted");
+        .expect("the add action is painted");
     output.drop_without_applying_deltas();
 
     // The first rect is the tab bar, the panel title strip.
     let title = rects[0];
-    let row = *rects
+    let row = *rows
         .iter()
         .find(|rect| rect.min.y >= title.max.y)
         .expect("the selected row is painted");
@@ -389,10 +394,15 @@ fn the_library_paddings_start_at_the_panel_edge() {
     // The dock body ends at the Library leaf edge; the divider lies outside it.
     let edge = leaf_rect(&shell, Pane::Library).max.x;
     assert!((title.max.x - edge).abs() < 0.5, "title is {title:?}");
-    assert!((row.min.x - 6.0).abs() < 0.5, "row starts at {}", row.min.x);
-    assert!((row.max.x - (edge - 6.0)).abs() < 0.5);
-    // The button text sits 8 pt of inset plus 8 pt of button padding in.
-    assert!((button_x - 16.0).abs() < 0.5, "button text at {button_x}");
+    assert!(
+        (row.min.x - 12.0).abs() < 0.5,
+        "row starts at {}",
+        row.min.x
+    );
+    assert!((row.max.x - (edge - 12.0)).abs() < 0.5);
+    // The add text sits after the 12 pt panel padding, the 8 pt action
+    // padding, the 16 pt plus, and the 8 pt gap.
+    assert!((button_x - 44.0).abs() < 0.5, "add text at {button_x}");
 }
 
 #[test]

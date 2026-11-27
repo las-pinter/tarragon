@@ -75,6 +75,9 @@ impl Sidebar {
                     }
                     FavoriteAction::DragStarted => self.dragging = Some(index),
                     FavoriteAction::Dropped => dropped = true,
+                    FavoriteAction::Remove => {
+                        self.events.push(SidebarEvent::Remove(fav.path.clone()));
+                    }
                     FavoriteAction::None => {}
                 }
             }

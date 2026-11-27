@@ -308,43 +308,45 @@ are not visible. Artists need to find images with transparency.
 
 ## Library sidebar layout
 
-Before: `design/mockups/library.html` shows one column. The folder tree and the
-FAVORITES section share it, and the favorites follow the tree.
+Before: `design/redesign/main-window.html` shows one column. The FOLDERS list,
+the FAVORITES list, and the "Add current folder" action share it, and the
+favorites follow the tree.
 
-After: the FAVORITES section sits in its own panel above the buttons. The panel
-fits its rows, up to half the dock, and scrolls on its own. The folder tree
-scrolls above it. Sidebar rows are painted directly. They draw no focus outline
-and publish no screen-reader information. The section heads FOLDERS and
-FAVORITES use the Roboto Medium face, the nearest vendored weight to the
-mockup's 600, with the mockup's 0.04 em letter spacing.
+After: the FAVORITES head, its rows, and "Add current folder" sit in their own
+panel at the bottom of the sidebar. The panel fits its rows, up to half the
+dock, and scrolls on its own. The folder tree scrolls above it. Rows, heads,
+carets, folder outlines, stars, and the add action follow the page's sizes and
+colours. Sidebar rows are painted directly. They draw no focus outline and
+publish no screen-reader information. The section heads use the Roboto Medium
+face, the nearest vendored weight to the page's 600. The row text stays at the
+12 pt body size where the page gives 13 px. The count slot at the right of a
+tree row stays empty.
 
 Reason: a tall folder tree would push the favorites out of view, so the
-favorites sit in their own panel and stay visible. The mockups define no focus
-state for these rows.
+favorites sit in their own panel and stay visible. The page defines no focus
+state for these rows. The body size is the app-wide 12 pt.
 
 ## Favorites drag
 
-Before: `design/mockups/favorites-reorder.html` shows the `::` grip
-(`.grip`, `design/mockups/theme.css` line 437) only in the reorder state. The
-head reads "(drag to reorder)", and a hint line follows the list. The drop line
-(`.drop-line`, lines 430-435) takes 8 px of layout: 3 px margins and a 2 px
-line. The lifted row (`.fav-row.dragging`, lines 424-428) has a dashed border
-that follows the row radius.
+Before: `design/redesign/main-window.html` shows the favorites at rest only: no
+grip, no reorder state, and no remove control.
 
-After: every favorite row shows the grip. The head reads FAVORITES, and no hint
-line is drawn. The cursor is a grab hand over the grip and a closed hand during
-a drag. The lifted row follows the pointer, held inside the list, and the other
-rows slide to the places they take if the row is dropped there; the gap they
-leave is the drop target, so no drop line is drawn. Inside the favorites area,
-a pointer above or below the list means the first or the last place. On
-release, Escape, or a drop outside the favorites area, the rows slide to their
-final places. Rows also slide up when a favorite above them is removed. The
-dashed border of the lifted row has square corners.
+After: the whole row is the drag handle. A press that moves past egui's drag
+threshold starts a drag, and a press that does not is a click that opens the
+folder. The cursor is a closed hand during a drag. The lifted row follows the
+pointer, held inside the list, and the other rows slide to the places they take
+if the row is dropped there; the gap they leave is the drop target, so no drop
+line is drawn. Inside the favorites area, a pointer above or below the list
+means the first or the last place. On release, Escape, or a drop outside the
+favorites area, the rows slide to their final places. Rows also slide up when a
+favorite above them is removed. The lifted row has a dashed amber border with
+square corners. A right click on any favorite opens a menu with Remove; no
+Remove button is drawn, so Remove has no keyboard path, like the rest of the
+favorite rows.
 
-Reason: the grip is the only drag handle, so it shows on every row. egui 0.36.2
+Reason: the page draws no handle, so the row itself takes the drag. egui 0.36.2
 has no helper for a rounded dashed rectangle. A dashed path needs hand-built arc
-points, so the border keeps square corners. A permanent grip shows that the
-order can change, so the head text and the hint line add nothing.
+points, so the border keeps square corners.
 
 ## Favorite labels and roots
 

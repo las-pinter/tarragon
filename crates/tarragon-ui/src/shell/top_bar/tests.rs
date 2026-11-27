@@ -127,6 +127,34 @@ fn the_search_field_takes_the_text_and_the_delay() {
     output.drop_without_applying_deltas();
 }
 
+/// Whether the last frame painted the coral ring around the point `inside`.
+fn ring_around(output: &egui::FullOutput, inside: Pos2) -> bool {
+    let ring = egui::Stroke::new(tokens::FOCUS_RING_WIDTH, tokens::CORAL_STRONG);
+    output.shapes.iter().any(|clipped| {
+        matches!(&clipped.shape, egui::Shape::Rect(rect)
+            if rect.stroke == ring && rect.rect.contains(inside))
+    })
+}
+
+#[test]
+fn a_focused_search_field_paints_the_coral_ring() {
+    let ctx = Context::default();
+    apply_theme(&ctx);
+    let mut shell = Shell::new();
+    draw(&ctx, &mut shell);
+    let pos = centre(&ctx, Id::new(SEARCH_ID));
+    let idle = ctx.run_ui(input(), |ui| shell.show(ui));
+    assert!(!ring_around(&idle, pos), "the ring shows without focus");
+    idle.drop_without_applying_deltas();
+    frame(&ctx, &mut shell, click(pos));
+    let focused = ctx.run_ui(input(), |ui| shell.show(ui));
+    assert!(
+        ring_around(&focused, pos),
+        "no ring around the focused field"
+    );
+    focused.drop_without_applying_deltas();
+}
+
 #[test]
 fn typing_in_the_field_narrows_the_gallery_after_the_quiet_window() {
     let ctx = Context::default();
@@ -282,11 +310,10 @@ fn the_bar_sits_on_the_panel_fill_with_one_row() {
         });
     output.drop_without_applying_deltas();
     let bar = bar.expect("the bar fill is not painted");
-    // The bar is the field plus its padding, and the panel keeps a point of its
-    // own at the edge for the separator.
+    // The bar is the field plus the room above and below it.
     let want = SEARCH_HEIGHT + 2.0 * BAR_PAD_Y;
     assert!(
-        (bar.height() - want).abs() < 1.5,
+        (bar.height() - want).abs() < 0.5,
         "the bar is {} tall, want {want}",
         bar.height()
     );

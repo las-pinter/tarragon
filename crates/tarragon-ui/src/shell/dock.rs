@@ -13,10 +13,6 @@ use crate::sidebar::panel::Sidebar;
 use crate::theme::panel_frame;
 use crate::tokens;
 
-/// The letter spacing of a tab title, in em. The redesign gives a section
-/// label wide spacing.
-const TAB_SPACING_EM: f32 = 0.08;
-
 /// What the four panels need to draw one frame.
 pub(super) struct Panes<'a> {
     /// The Library panel.
@@ -58,7 +54,7 @@ impl TabViewer for Panes<'_> {
             .size(tokens::SIZE_CAPTION)
             .color(tokens::TEXT_SECONDARY)
             .family(FontFamily::Name(fonts::MEDIUM_FAMILY.into()))
-            .extra_letter_spacing(tokens::SIZE_CAPTION * TAB_SPACING_EM)
+            .extra_letter_spacing(tokens::SIZE_CAPTION * tokens::LABEL_SPACING_EM)
             .into()
     }
 

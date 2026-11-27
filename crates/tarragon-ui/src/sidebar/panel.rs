@@ -1,4 +1,4 @@
-//! The Library panel body: folder tree, favorites list, and the two buttons.
+//! The Library panel body: folder tree, favorites list, and the add action.
 //!
 //! The panel never touches the disk or the database. It queues events that
 //! the shell turns into work.
@@ -6,15 +6,19 @@
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
-use egui::{FontFamily, Frame, Margin, Panel, RichText, ScrollArea, Ui};
+use egui::{Frame, Margin, Panel, ScrollArea, Ui};
 
 use super::row::{RowAction, show_tree_row};
 use super::tree::{TreeModel, TreeRow};
 use super::{FavoriteRow, SidebarState};
-use crate::widgets::small_button;
-use crate::{fonts, tokens};
+use chrome::{
+    ADD_GAP, EDGE_PAD, FAVORITES_HEAD_TOP, FOLDERS_HEAD_TOP, ROW_GAP, SIDE_PAD, add_action, head,
+};
 
+mod chrome;
 mod favorites;
+
+pub use chrome::ADD_TEXT;
 
 /// What the panel asks the shell to do.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -23,7 +27,7 @@ pub enum SidebarEvent {
     Navigate(PathBuf),
     /// Add the open folder to the favorites.
     AddCurrent,
-    /// Remove this favorite.
+    /// Remove this favorite, chosen from its context menu.
     Remove(PathBuf),
     /// List the subfolders of this folder, then call `set_children`.
     ///
@@ -38,7 +42,7 @@ pub enum SidebarEvent {
 /// The panel state and its event queue.
 ///
 /// `SidebarState.selected` is the open folder. The selected favorite follows
-/// it: the favorite equal to the open folder, else none. Remove acts on it.
+/// it: the favorite equal to the open folder, else none.
 #[derive(Debug, Default)]
 pub struct Sidebar {
     /// Favorites, roots, and the open folder.
@@ -49,7 +53,7 @@ pub struct Sidebar {
     rows: Vec<TreeRow>,
     /// Whether the tree changed since `rows` was built.
     dirty: bool,
-    /// The favorite equal to the open folder, else none; Remove acts on it.
+    /// The favorite equal to the open folder, else none; its row is highlighted.
     selected_favorite: Option<PathBuf>,
     /// Events not yet taken by the shell.
     events: Vec<SidebarEvent>,
@@ -189,7 +193,7 @@ impl Sidebar {
         self.tree.rows()
     }
 
-    /// The favorite that Remove acts on, or none.
+    /// The favorite equal to the open folder, or none.
     #[must_use]
     pub fn selected_favorite(&self) -> Option<&Path> {
         self.selected_favorite.as_deref()
@@ -213,7 +217,7 @@ impl Sidebar {
         std::mem::take(&mut self.events)
     }
 
-    /// Draw the panel body, bottom up: the buttons, the favorites, then the tree.
+    /// Draw the panel body, bottom up: the add action, the favorites, then the tree.
     ///
     /// The favorites take their content height, at most half the dock, and
     /// scroll on their own, so they stay in view however tall the tree is.
@@ -224,16 +228,25 @@ impl Sidebar {
         Panel::bottom("tarragon-sidebar-buttons")
             .resizable(false)
             .show_separator_line(false)
-            .frame(Frame::NONE.inner_margin(Margin::same(8)))
-            .show(ui, |ui| self.show_buttons(ui));
+            .frame(Frame::NONE.inner_margin(Margin {
+                left: SIDE_PAD,
+                right: SIDE_PAD,
+                top: ADD_GAP,
+                bottom: EDGE_PAD,
+            }))
+            .show(ui, |ui| {
+                if add_action(ui).clicked() {
+                    self.events.push(SidebarEvent::AddCurrent);
+                }
+            });
         let favorites = Panel::bottom("tarragon-sidebar-favorites")
             .resizable(false)
             .show_separator_line(false)
             .frame(Frame::NONE)
             .max_size(half)
             .show(ui, |ui| {
-                ui.spacing_mut().item_spacing.y = 0.0;
-                head(ui, "Favorites", 14.0);
+                ui.spacing_mut().item_spacing.y = f32::from(ROW_GAP);
+                head(ui, "Favorites", FAVORITES_HEAD_TOP);
                 let room = (half - ui.min_rect().height()).max(0.0);
                 ScrollArea::vertical()
                     .id_salt("favorites-scroll")
@@ -257,8 +270,9 @@ impl Sidebar {
             .id_salt("tree-scroll")
             .auto_shrink([false, false])
             .show(ui, |ui| {
-                ui.spacing_mut().item_spacing.y = 0.0;
-                head(ui, "Folders", 0.0);
+                ui.spacing_mut().item_spacing.y = f32::from(ROW_GAP);
+                ui.add_space(f32::from(EDGE_PAD));
+                head(ui, "Folders", FOLDERS_HEAD_TOP);
                 self.show_tree(ui);
             });
     }
@@ -270,7 +284,7 @@ impl Sidebar {
             self.dirty = false;
         }
         Frame::new()
-            .inner_margin(Margin::symmetric(6, 2))
+            .inner_margin(Margin::symmetric(SIDE_PAD, 0))
             .show(ui, |ui| {
                 ui.push_id("tree", |ui| {
                     let mut navigate = None;
@@ -306,25 +320,6 @@ impl Sidebar {
                 });
             });
     }
-
-    /// Draw the buttons; Remove needs a selected favorite.
-    fn show_buttons(&mut self, ui: &mut Ui) {
-        ui.horizontal(|ui| {
-            ui.spacing_mut().item_spacing.x = tokens::SPACING_S;
-            if small_button(ui, "Add Current Folder").clicked() {
-                self.events.push(SidebarEvent::AddCurrent);
-            }
-            let enabled = self.selected_favorite.is_some();
-            let remove = ui
-                .add_enabled_ui(enabled, |ui| small_button(ui, "Remove"))
-                .inner;
-            if remove.clicked()
-                && let Some(path) = self.selected_favorite.clone()
-            {
-                self.events.push(SidebarEvent::Remove(path));
-            }
-        });
-    }
 }
 
 /// Queue a `ListChildren` for a folder that is not listed and not asked for yet.
@@ -352,32 +347,8 @@ fn ask_relisting(
     }
 }
 
-/// Head letter spacing, in em: 0.04em in `.side-head` of design/mockups/theme.css.
-const HEAD_SPACING_EM: f32 = 0.04;
-
-/// Draw a section head: upper case, caption size, muted, with `gap` above it.
-///
-/// The head uses the Medium family and a letter spacing of `HEAD_SPACING_EM`.
-fn head(ui: &mut Ui, text: &str, gap: f32) {
-    ui.add_space(gap);
-    Frame::new()
-        .inner_margin(Margin {
-            left: 8,
-            right: 8,
-            top: 8,
-            bottom: 4,
-        })
-        .show(ui, |ui| {
-            ui.label(
-                RichText::new(text.to_uppercase())
-                    .size(tokens::SIZE_CAPTION)
-                    .family(FontFamily::Name(fonts::MEDIUM_FAMILY.into()))
-                    .extra_letter_spacing(tokens::SIZE_CAPTION * HEAD_SPACING_EM)
-                    .color(tokens::TEXT_SECONDARY),
-            );
-        });
-}
-
+#[cfg(test)]
+mod chrome_tests;
 #[cfg(test)]
 mod drag_tests;
 #[cfg(test)]

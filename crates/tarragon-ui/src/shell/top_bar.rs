@@ -24,6 +24,8 @@ pub(super) const BAR_PAD_X: i8 = 16;
 /// it. It only sizes the bar: the panel has no vertical margin and centres the
 /// row in that height.
 const BAR_PAD_Y: f32 = 10.0;
+/// The letter spacing of the wordmark, in em, as the redesign gives it.
+const WORDMARK_SPACING_EM: f32 = -0.01;
 /// The room between the logo and the wordmark, in points.
 const LOGO_GAP: f32 = 10.0;
 /// The gap between two menu buttons, in points, as the design shows it.
@@ -148,7 +150,7 @@ impl Shell {
             ui.painter().rect_stroke(
                 response.response.rect,
                 CornerRadius::same(tokens::RADIUS_L),
-                egui::Stroke::new(2.0, tokens::CORAL_STRONG),
+                egui::Stroke::new(tokens::FOCUS_RING_WIDTH, tokens::CORAL_STRONG),
                 egui::StrokeKind::Inside,
             );
         }
@@ -165,8 +167,7 @@ fn logo(ui: &mut Ui) {
     let painter = ui.painter();
     painter.rect_filled(rect, CornerRadius::same(LOGO_RADIUS), tokens::CORAL_BRIGHT);
     // The two bezier halves of the leaf, sampled and closed.
-    let scale = rect.width() / LOGO_SIZE;
-    let at = |x: f32, y: f32| rect.min + vec2(x, y) * scale;
+    let at = |x: f32, y: f32| rect.min + vec2(x, y);
     let mut path = cubic(at(6.0, 16.0), at(8.0, 9.0), at(12.0, 6.0), at(16.0, 6.0));
     path.extend(cubic(
         at(16.0, 6.0),
@@ -216,7 +217,7 @@ fn wordmark(ui: &mut Ui) {
             .size(tokens::SIZE_TITLE)
             .family(FontFamily::Name(fonts::BOLD_FAMILY.into()))
             .color(tokens::TEXT_PRIMARY)
-            .extra_letter_spacing(-0.01 * tokens::SIZE_TITLE),
+            .extra_letter_spacing(WORDMARK_SPACING_EM * tokens::SIZE_TITLE),
     );
 }
 

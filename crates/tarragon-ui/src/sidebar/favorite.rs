@@ -1,26 +1,25 @@
 //! One favorite row and the empty-list text.
 //!
-//! The sizes follow the favorites rules in design/mockups/theme.css.
+//! The sizes follow the Favorites list of design/redesign/main-window.html.
 
-use std::sync::Arc;
-
-use egui::text::LayoutJob;
 use egui::{
-    Color32, CornerRadius, CursorIcon, FontId, Frame, Galley, Margin, Painter, Rect, RichText,
-    Sense, Shape, Stroke, TextFormat, Ui, pos2, vec2,
+    Color32, CornerRadius, CursorIcon, Frame, Margin, Painter, Rect, RichText, Sense, Shape,
+    Stroke, Ui, vec2,
 };
 
-use super::paint::{ICON_WIDTH, paint_folder_icon};
-use super::row::{GAP, ROW_PAD, icon_y, paint_name, row_colors, row_id};
+use super::paint::{ICON_SIZE, icon_origin, paint_star};
+use super::row::{ROW_HEIGHT, ROW_PAD, paint_name, row_colors, row_id};
 use crate::tokens;
 
-/// Row height, in points: 5 px padding twice plus a 12 px line at 1.45.
-pub(super) const FAVORITE_HEIGHT: f32 = 27.0;
-/// Space at the left and right of the row fill, in points.
-const MARGIN: f32 = 6.0;
-
-/// Grip letter spacing, in points: `.grip` in design/mockups/theme.css.
-const GRIP_SPACING: f32 = -1.0;
+/// Row height, in points: the height of a tree row.
+pub(super) const FAVORITE_HEIGHT: f32 = ROW_HEIGHT;
+/// Space at the left and right of the row fill, in points: the side padding
+/// of the panel.
+pub(super) const MARGIN: f32 = 12.0;
+/// Gap between the star and the name, in points.
+const STAR_GAP: f32 = 10.0;
+/// The text of the context menu entry that removes a favorite.
+pub const REMOVE_TEXT: &str = "Remove";
 
 /// What the user did to a favorite row this frame.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -29,18 +28,21 @@ pub enum FavoriteAction {
     None,
     /// The row was clicked, so the folder opens in the gallery.
     Open,
-    /// The user began to drag the grip.
+    /// The user began to drag the row.
     DragStarted,
-    /// The user let go of the grip.
+    /// The user let go of the row.
     Dropped,
+    /// The user chose Remove in the row's context menu.
+    Remove,
 }
 
 /// Draw one favorite row and report the action.
 ///
-/// A missing folder draws dim but stays clickable, so the user can still
-/// select and remove it. The grip is the only drag handle, so a click on the
-/// row never starts a drag. The row draws no focus outline. The cursor is a
-/// grab hand over the grip and a closed hand while the grip is dragged.
+/// A missing folder draws dim but stays clickable, so the user can still open
+/// and remove it. The whole row is the drag handle: a press that moves past
+/// egui's drag threshold starts a drag, and one that does not is a click. The
+/// cursor is a closed hand while the row is dragged. A right click opens a
+/// menu with Remove. The row draws no focus outline.
 ///
 /// The row takes its place in the layout and is drawn `shift` points below
 /// it, so rows can slide during a drag. With `lifted` set the row paints
@@ -70,33 +72,34 @@ pub fn show_favorite_row(
     let home = outer.shrink2(vec2(MARGIN, 0.0));
     let rect = home.translate(vec2(0.0, shift));
     let id = row_id(ui, salt);
-    let body = ui.interact(rect, id, Sense::click());
-    let grip = grip_galley(ui);
-    let grip_rect = Rect::from_min_size(
-        pos2(rect.min.x + ROW_PAD, rect.min.y),
-        vec2(grip.size().x, rect.height()),
-    );
-    let handle = ui.interact(grip_rect, id.with("grip"), Sense::drag());
-    if handle.dragged() {
+    let body = ui.interact(rect, id, Sense::click_and_drag());
+    if body.dragged() {
         ui.ctx().set_cursor_icon(CursorIcon::Grabbing);
-    } else if handle.hovered() {
-        ui.ctx().set_cursor_icon(CursorIcon::Grab);
     }
+    let mut removed = false;
+    body.context_menu(|ui| {
+        if ui.button(REMOVE_TEXT).clicked() {
+            removed = true;
+            ui.close();
+        }
+    });
     if !lifted {
-        let (fill, text, icon) = row_colors(selected, body.hovered());
+        let (fill, text) = row_colors(selected, body.hovered());
         paint_row(
             ui.painter(),
-            &grip,
             label,
             rect,
             fill,
-            colors(missing, text, icon, fill),
+            colors(missing, text, fill),
+            selected,
         );
     }
 
-    let action = if handle.drag_started() {
+    let action = if removed {
+        FavoriteAction::Remove
+    } else if body.drag_started() {
         FavoriteAction::DragStarted
-    } else if handle.drag_stopped() {
+    } else if body.drag_stopped() {
         FavoriteAction::Dropped
     } else if body.clicked() {
         FavoriteAction::Open
@@ -110,32 +113,30 @@ pub fn show_favorite_row(
 ///
 /// The panel calls it after the other rows, so the lifted row covers them.
 pub fn paint_lifted_row(ui: &Ui, label: &str, selected: bool, missing: bool, rect: Rect) {
-    let grip = grip_galley(ui);
-    let (_, text, icon) = row_colors(selected, false);
+    let (_, text) = row_colors(selected, false);
     let mut painter = ui.painter().clone();
-    // The mockup dims the dragged row to 0.75; `paint_lifted_border` dashes the border.
+    // The dragged row dims to 0.75; `paint_lifted_border` dashes the border.
     painter.set_opacity(0.75);
     paint_row(
         &painter,
-        &grip,
         label,
         rect,
         tokens::SURFACE_HIGHLIGHT,
-        colors(missing, text, icon, tokens::SURFACE_HIGHLIGHT),
+        colors(missing, text, tokens::SURFACE_HIGHLIGHT),
+        selected,
     );
 }
 
-/// The text and icon colors: muted for a missing folder.
+/// The text and star colors: amber for a folder on disk, muted for a missing one.
 ///
 /// A missing folder keeps the lowest readable text for its fill: the floor on
-/// the base, panel, and field steps, and the lighter tertiary text on the
-/// hover and raised steps, where the floor is too dark. Its icon stays dim.
-fn colors(missing: bool, text: Color32, icon: Color32, fill: Color32) -> (Color32, Color32) {
+/// the panel, and the lighter tertiary text on the hover, raised, and selected
+/// fills, where the floor is too dark. Its star stays dim.
+fn colors(missing: bool, text: Color32, fill: Color32) -> (Color32, Color32) {
     if !missing {
-        return (text, icon);
+        return (text, tokens::AMBER_ACCENT);
     }
-    let on_low_step = fill == Color32::TRANSPARENT || fill == tokens::BG_TERTIARY;
-    let text = if on_low_step {
+    let text = if fill == Color32::TRANSPARENT {
         tokens::TEXT_SECONDARY
     } else {
         tokens::TEXT_TERTIARY
@@ -143,38 +144,20 @@ fn colors(missing: bool, text: Color32, icon: Color32, fill: Color32) -> (Color3
     (text, tokens::TEXT_MUTED)
 }
 
-/// The laid-out `::` grip.
-fn grip_galley(ui: &Ui) -> Arc<Galley> {
-    ui.painter().layout_job(LayoutJob::single_section(
-        "::".to_owned(),
-        TextFormat {
-            font_id: FontId::proportional(tokens::SIZE_CAPTION),
-            color: tokens::TEXT_MUTED,
-            extra_letter_spacing: GRIP_SPACING,
-            ..Default::default()
-        },
-    ))
-}
-
-/// Paint the row fill, grip, folder icon, and name at `rect`.
+/// Paint the row fill, star, and name at `rect`.
 fn paint_row(
     painter: &Painter,
-    grip: &Arc<Galley>,
     label: &str,
     rect: Rect,
     fill: Color32,
-    (text, icon): (Color32, Color32),
+    (text, star): (Color32, Color32),
+    selected: bool,
 ) {
-    let grip_x = rect.min.x + ROW_PAD;
     painter.rect_filled(rect, CornerRadius::same(tokens::RADIUS_M), fill);
-    painter.galley(
-        pos2(grip_x, rect.center().y - grip.size().y / 2.0),
-        grip.clone(),
-        tokens::TEXT_MUTED,
-    );
-    let icon_x = grip_x + grip.size().x + GAP;
-    paint_folder_icon(painter, pos2(icon_x, icon_y(rect)), icon);
-    paint_name(painter, label, icon_x + ICON_WIDTH + GAP, rect, text);
+    let star_x = rect.min.x + ROW_PAD;
+    paint_star(painter, icon_origin(rect, star_x, ICON_SIZE), star);
+    let name_x = star_x + ICON_SIZE + STAR_GAP;
+    paint_name(painter, label, name_x, rect, text, selected);
 }
 
 /// Draw the dashed amber border of the lifted row.
@@ -202,7 +185,7 @@ pub fn paint_lifted_border(ui: &Ui, rect: Rect) {
 /// Draw the muted text that shows when the user has no favorites.
 pub fn show_empty_favorites(ui: &mut Ui) {
     Frame::new()
-        .inner_margin(Margin::symmetric(10, 6))
+        .inner_margin(Margin::symmetric(20, 6))
         .show(ui, |ui| {
             ui.label(
                 RichText::new("No favorites yet.")

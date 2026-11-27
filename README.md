@@ -71,7 +71,8 @@ Windows and macOS are not released yet.
 5. Filter by color. Click a color swatch above the grid. Click it again to
    clear the filter.
 
-To save a folder, select it and choose Add Current Folder under Favorites.
+To save a folder, select it and choose Add current folder under Favorites.
+Drag a favorite to reorder the list, or right-click it and choose Remove.
 
 You can also name a folder on the command line: `tarragon <folder>`. When
 Tarragon already runs, the folder opens in that window instead.

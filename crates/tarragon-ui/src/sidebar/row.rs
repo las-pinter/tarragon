@@ -1,26 +1,24 @@
-//! One folder tree row: indent, caret slot, folder icon, and a truncated name.
+//! One folder tree row: indent, chevron caret, folder outline, and a truncated name.
 //!
-//! The sizes follow the tree rules in design/mockups/theme.css.
+//! The sizes follow the Folders list of design/redesign/main-window.html.
 
 use egui::text::{LayoutJob, TextWrapping};
-use egui::{Color32, CornerRadius, FontId, Id, Painter, Rect, Sense, Ui, pos2, vec2};
+use egui::{Color32, CornerRadius, FontFamily, FontId, Id, Painter, Rect, Sense, Ui, vec2};
 
-use super::paint::{ICON_HEIGHT, ICON_WIDTH, paint_caret, paint_folder_icon};
+use super::paint::{CARET_SIZE, ICON_SIZE, icon_origin, paint_caret, paint_folder_icon};
 use super::tree::TreeRow;
-use crate::tokens;
+use crate::{fonts, tokens};
 
-/// Row height, in points: 4 px padding twice plus a 12 px line at 1.45.
-const ROW_HEIGHT: f32 = 25.0;
+/// Row height, in points.
+pub(super) const ROW_HEIGHT: f32 = 34.0;
 /// Row padding at the left and right edge, in points.
-pub(super) const ROW_PAD: f32 = 6.0;
+pub(super) const ROW_PAD: f32 = 8.0;
 /// Extra indent for each depth level, in points.
-const INDENT_STEP: f32 = 14.0;
-/// Gap between the caret slot, the icon, and the name, in points.
-pub(super) const GAP: f32 = 6.0;
-/// Caret slot width, in points. It stays when a leaf draws no caret.
-pub(super) const CARET_SLOT: f32 = 4.0;
-/// How far the caret click area reaches past its slot, in points.
-const CARET_REACH: f32 = 3.0;
+const INDENT_STEP: f32 = 16.0;
+/// Gap between the caret, the icon, and the name, in points.
+pub(super) const GAP: f32 = 8.0;
+/// How far the caret click area reaches past its square, in points.
+const CARET_REACH: f32 = 4.0;
 
 /// What the user did to a row this frame.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -40,12 +38,13 @@ pub(super) fn row_id(ui: &Ui, salt: usize) -> Id {
     ui.id().with(("tarragon-sidebar-row", salt))
 }
 
-/// Draw one row at the full panel width and report the action.
+/// Draw one row at the full width and report the action.
 ///
 /// The caret click area sits above the row, so a caret click never also
-/// counts as a row click. The caller sets `item_spacing.y` to 0 for a gapless
-/// list and owns the padding around the whole tree. The focus outline and
-/// screen-reader information are not drawn yet.
+/// counts as a row click. A leaf keeps the caret square empty, so the icons
+/// of one depth line up. The caller sets the row gap and owns the padding
+/// around the whole tree. The focus outline and screen-reader information are
+/// not drawn yet.
 pub fn show_tree_row(ui: &mut Ui, row: &TreeRow, selected: bool, salt: usize) -> RowAction {
     let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), ROW_HEIGHT), Sense::hover());
     let id = row_id(ui, salt);
@@ -55,25 +54,25 @@ pub fn show_tree_row(ui: &mut Ui, row: &TreeRow, selected: bool, salt: usize) ->
         reason = "a tree is far shallower than 2^24 levels"
     )]
     let x = rect.min.x + ROW_PAD + INDENT_STEP * row.depth as f32;
-    let slot = Rect::from_min_size(pos2(x, rect.min.y), vec2(CARET_SLOT, ROW_HEIGHT));
+    let caret_origin = icon_origin(rect, x, CARET_SIZE);
     let caret = row.has_caret.then(|| {
-        let area = slot.expand2(vec2(CARET_REACH, 0.0));
+        let square = Rect::from_min_size(caret_origin, vec2(CARET_SIZE, CARET_SIZE));
+        let area =
+            Rect::from_x_y_ranges(square.x_range(), rect.y_range()).expand2(vec2(CARET_REACH, 0.0));
         ui.interact(area, id.with("caret"), Sense::click())
     });
     let hovered = body.hovered() || caret.as_ref().is_some_and(egui::Response::hovered);
 
-    let (fill, text, icon_color) = row_colors(selected, hovered);
+    let (fill, text) = row_colors(selected, hovered);
     let painter = ui.painter();
     painter.rect_filled(rect, CornerRadius::same(tokens::RADIUS_M), fill);
     if row.has_caret {
-        paint_caret(painter, slot, row.expanded, text);
+        paint_caret(painter, caret_origin, row.expanded, text);
     }
-    let icon_x = slot.max.x + GAP;
-    let icon_y = icon_y(rect);
-    paint_folder_icon(painter, pos2(icon_x, icon_y), icon_color);
-
-    let name_x = icon_x + ICON_WIDTH + GAP;
-    paint_name(painter, &row.name, name_x, rect, text);
+    let icon_x = x + CARET_SIZE + GAP;
+    paint_folder_icon(painter, icon_origin(rect, icon_x, ICON_SIZE), text);
+    let name_x = icon_x + ICON_SIZE + GAP;
+    paint_name(painter, &row.name, name_x, rect, text, selected);
 
     if caret.is_some_and(|caret| caret.clicked()) {
         RowAction::Toggle
@@ -84,39 +83,36 @@ pub fn show_tree_row(ui: &mut Ui, row: &TreeRow, selected: bool, salt: usize) ->
     }
 }
 
-/// The fill, text, and icon colors of a folder row, from the mockup's selected and hover rules.
-pub(super) fn row_colors(selected: bool, hovered: bool) -> (Color32, Color32, Color32) {
+/// The fill and text colors of a row: the coral selection, the hover step,
+/// or no fill. The marks take the text color, as the page draws them.
+pub(super) fn row_colors(selected: bool, hovered: bool) -> (Color32, Color32) {
     if selected {
-        (
-            tokens::BG_TERTIARY,
-            tokens::TEXT_PRIMARY,
-            tokens::CORAL_STRONG,
-        )
+        (tokens::CORAL_DARK, tokens::CORAL_STRONG)
     } else if hovered {
-        (
-            tokens::SURFACE_HOVER,
-            tokens::TEXT_PRIMARY,
-            tokens::TEXT_SECONDARY,
-        )
+        (tokens::SURFACE_HOVER, tokens::TEXT_PRIMARY)
     } else {
-        (
-            Color32::TRANSPARENT,
-            tokens::TEXT_SECONDARY,
-            tokens::TEXT_SECONDARY,
-        )
+        (Color32::TRANSPARENT, tokens::TEXT_PRIMARY)
     }
 }
 
-/// The top of the folder icon, centred in `rect` and snapped to a whole point.
-pub(super) fn icon_y(rect: Rect) -> f32 {
-    (rect.center().y - ICON_HEIGHT / 2.0).round()
-}
-
-/// Draw a one-line name at `x`, centred in `rect`, cut with an ellipsis before the right padding.
-pub(super) fn paint_name(painter: &Painter, name: &str, x: f32, rect: Rect, color: Color32) {
+/// Draw a one-line name at `x`, centred in `rect`, cut with an ellipsis before
+/// the right padding. A selected name takes the medium face.
+pub(super) fn paint_name(
+    painter: &Painter,
+    name: &str,
+    x: f32,
+    rect: Rect,
+    color: Color32,
+    selected: bool,
+) {
+    let family = if selected {
+        FontFamily::Name(fonts::MEDIUM_FAMILY.into())
+    } else {
+        FontFamily::Proportional
+    };
     let mut job = LayoutJob::simple_singleline(
         name.to_owned(),
-        FontId::proportional(tokens::SIZE_BODY),
+        FontId::new(tokens::SIZE_BODY, family),
         color,
     );
     job.wrap = TextWrapping {
@@ -127,7 +123,7 @@ pub(super) fn paint_name(painter: &Painter, name: &str, x: f32, rect: Rect, colo
     };
     let galley = painter.layout_job(job);
     painter.galley(
-        pos2(x, rect.center().y - galley.size().y / 2.0),
+        egui::pos2(x, rect.center().y - galley.size().y / 2.0),
         galley,
         color,
     );

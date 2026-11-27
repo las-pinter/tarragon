@@ -49,7 +49,7 @@ pub fn apply_theme(ctx: &Context) {
     // option draws it as its text color. The light coral passes the contrast
     // bar on the deep coral fill, so one value serves both.
     visuals.selection.bg_fill = tokens::CORAL_DARK;
-    visuals.selection.stroke = Stroke::new(2.0, tokens::CORAL_STRONG);
+    visuals.selection.stroke = Stroke::new(tokens::FOCUS_RING_WIDTH, tokens::CORAL_STRONG);
     ctx.set_visuals(visuals);
 
     ctx.all_styles_mut(|style| {
@@ -290,7 +290,7 @@ mod tests {
             matches!(
                 &clipped.shape,
                 egui::epaint::Shape::Rect(rect)
-                    if rect.stroke == Stroke::new(2.0, tokens::CORAL_STRONG)
+                    if rect.stroke == Stroke::new(tokens::FOCUS_RING_WIDTH, tokens::CORAL_STRONG)
                         && rect.fill == tokens::BG_TERTIARY
             )
         });

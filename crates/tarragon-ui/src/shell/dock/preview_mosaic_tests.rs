@@ -94,7 +94,7 @@ fn a_multi_selection_without_meta_still_shows_the_tags_area() {
         state: ColorState::Some,
     }]);
     let (_, text) = settle(&ctx, &mut shell);
-    for want in ["Tags", "hands", "+ add"] {
+    for want in ["Tags", "hands", "+ Tag"] {
         assert!(
             text.iter().any(|t| t == want),
             "{want} is missing: {text:?}"

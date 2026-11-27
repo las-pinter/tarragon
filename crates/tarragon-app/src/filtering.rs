@@ -112,7 +112,7 @@ pub(crate) mod tests {
     use super::filter_paths;
 
     /// A temporary folder, unique per call, removed on drop.
-    pub(crate) struct TempDir(PathBuf);
+    pub(crate) struct TempDir(pub(crate) PathBuf);
 
     impl Drop for TempDir {
         fn drop(&mut self) {

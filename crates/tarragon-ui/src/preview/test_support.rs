@@ -20,6 +20,7 @@ pub(super) fn preview(tags: Vec<TagPill>) -> Preview {
         dimensions: None,
         size: None,
         format: "PNG".into(),
+        modified: None,
     }));
     preview.set_tags(tags);
     preview

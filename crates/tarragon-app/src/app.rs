@@ -13,6 +13,7 @@ use tarragon_ui::Shell;
 use tarragon_ui::gallery::{Scope, scroll_offset};
 use tarragon_ui::shell::{LogPanelEvents, LogView};
 
+use crate::app_names::AppNames;
 use crate::colorflag;
 use crate::crashcard;
 use crate::data_dir;
@@ -32,6 +33,8 @@ use crate::storewatch::StoreWatch;
 use crate::tags;
 use crate::thumbs::{ExitClear, ExitWait, Thumbs};
 use crate::window;
+
+use self::open_button::OpenState;
 
 /// How often the open Log panel looks for new lines. The ring cannot wake the
 /// UI, and egui otherwise repaints only on input.
@@ -89,6 +92,8 @@ pub struct App {
     repaint_ctx: Arc<OnceLock<Context>>,
     /// The image counts of the visible sidebar folders.
     folder_counts: FolderCounts,
+    /// The Preview's open button for the selected file.
+    open_button: OpenState,
     /// The `PATH` for the system opener, or none to inherit the process one.
     /// Tests point it at a stand-in so no real application starts.
     opener_path: Option<std::ffi::OsString>,
@@ -171,6 +176,7 @@ impl App {
         thumbs.upkeep_at_start(cache_cap_gb(&db));
         let preview_loader = PreviewLoader::new(repaint_of(&repaint_ctx))?;
         let folder_counts = FolderCounts::start(repaint_of(&repaint_ctx));
+        let open_button = OpenState::new(AppNames::start(repaint_of(&repaint_ctx)));
         let max_multi_preview = max_multi_preview(&db);
         shell.preview_mut().set_max_multi_preview(max_multi_preview);
         let crash_path = startup
@@ -195,6 +201,7 @@ impl App {
             cache_root,
             repaint_ctx,
             folder_counts,
+            open_button,
             opener_path: None,
             close_when_loaded: startup.close_when_loaded,
             exit_wait: startup.exit_wait,
@@ -231,6 +238,11 @@ impl App {
             self.folder_counts.set_visible(&folders);
         }
         if self.folder_counts.apply(self.shell.sidebar_mut()) {
+            ctx.request_repaint();
+        }
+        if self.open_button.poll() {
+            let button = self.open_button.button();
+            self.shell.preview_mut().set_open(button);
             ctx.request_repaint();
         }
     }
@@ -315,6 +327,12 @@ impl App {
     /// An empty selection clears the details and the pictures.
     fn feed_preview(&mut self) {
         let selected = self.shell.selected_paths();
+        let sole = match selected.as_slice() {
+            [file] => Some(file.as_path()),
+            _ => None,
+        };
+        let button = self.open_button.select(&self.db, sole);
+        self.shell.preview_mut().set_open(button);
         if selected.is_empty() {
             self.preview_total = 0;
             self.shell.preview_mut().set_meta(None);
@@ -563,6 +581,7 @@ mod filter_tests;
 mod library_tests;
 mod menu;
 mod open;
+mod open_button;
 mod prefs;
 #[cfg(test)]
 mod prefs_tests;

@@ -47,6 +47,9 @@ pub fn paint_picture(painter: &Painter, image: &PreviewImage, area: Rect, radius
     );
 }
 
+/// The padding between the box edge and the picture, in points.
+const STAGE_PAD: f32 = 12.0;
+
 /// The room, in points, that the box leaves free at the bottom.
 const SLACK: f32 = 0.5;
 
@@ -60,19 +63,18 @@ pub fn box_height(viewport: f32, below: f32) -> f32 {
     (viewport - below - SLACK).max(tokens::PREVIEW_IMAGE_HEIGHT)
 }
 
-/// Draw the dark box, `height` tall, and the picture inside it. Returns the
-/// box rect.
+/// Draw the deep stage, `height` tall, and the picture fitted inside it.
+/// Returns the stage rect.
 pub fn show_box(ui: &mut Ui, image: &PreviewImage, height: f32) -> Rect {
     let size = vec2(ui.available_width(), height);
     let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
     let painter = ui.painter();
     painter.rect_filled(
         rect,
-        CornerRadius::same(tokens::RADIUS_L),
-        tokens::BG_SECONDARY,
+        CornerRadius::same(tokens::RADIUS_XL),
+        tokens::BG_STAGE,
     );
-    let inner = rect.shrink(tokens::PREVIEW_IMAGE_INSET);
-    paint_picture(painter, image, inner, tokens::RADIUS_L);
+    paint_picture(painter, image, rect.shrink(STAGE_PAD), tokens::RADIUS_S);
     rect
 }
 

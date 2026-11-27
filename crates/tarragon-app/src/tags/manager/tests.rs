@@ -49,6 +49,7 @@ fn selected_shell(db: &Database) -> (Context, Shell) {
         dimensions: None,
         size: None,
         format: "PNG".into(),
+        modified: None,
     }));
     let items = [A, B, C].map(|p| GridItem::new(PathBuf::from(p), 1, None));
     shell.set_items(items.into());

@@ -32,10 +32,11 @@ fn the_x_is_bright_under_the_pointer_and_muted_beside_it() {
     let ctx = ctx_with_fonts(&mut preview);
     let rect = first_pill(&ctx, &mut preview);
     let x_color = |found: &Painted| found.texts.iter().find(|(t, ..)| t == "x").map(|t| t.1);
+    let text = crate::preview::tags::tag_colors("blue").1;
     let off = hover_frame(&ctx, &mut preview, body_pos(rect));
-    assert_eq!(x_color(&off), Some(tokens::CORAL_MUTED));
+    assert_eq!(x_color(&off), Some(text.gamma_multiply(0.6)));
     let on = hover_frame(&ctx, &mut preview, cross_pos(rect));
-    assert_eq!(x_color(&on), Some(tokens::CORAL_STRONG));
+    assert_eq!(x_color(&on), Some(text));
 }
 
 #[test]

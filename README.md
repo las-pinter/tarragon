@@ -65,8 +65,9 @@ Windows and macOS are not released yet.
 1. Launch Tarragon. You see the Library, Gallery, and Preview panels.
 2. Choose File, then Open Folder..., and pick a folder with images.
 3. Browse. Click a thumbnail to preview it. Double-click to open it in your
-   editor. Right-click for more actions.
-4. Tag. Right-click an image and choose Add tag..., or use the + add button in
+   editor, or use the Open button under the preview; its arrow lists the
+   other apps. Right-click for more actions.
+4. Tag. Right-click an image and choose Add tag..., or use the + Tag button in
    the Preview panel.
 5. Filter by color. Click a color swatch above the grid. Click it again, or
    the x on its chip, to drop that filter. Clear drops every filter.

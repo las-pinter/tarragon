@@ -79,13 +79,13 @@ fn an_empty_selection_gives_all_none() {
     assert_eq!(color_states(&HashMap::new(), 0), ColorStates::default());
 }
 
-/// The fill of each bucket square one frame of the Preview paints.
-fn square_fills(ctx: &Context, preview: &mut Preview) -> Vec<Color32> {
-    crate::test_ui::square_fills(ctx, &mut |ui| preview.show(ui))
+/// The fill of each colour bar one frame of the Preview paints.
+fn bar_fills(ctx: &Context, preview: &mut Preview) -> Vec<Color32> {
+    crate::test_ui::bar_fills(ctx, &mut |ui| preview.show(ui))
 }
 
 #[test]
-fn a_refresh_paints_the_colour_squares_of_the_selection() {
+fn a_refresh_paints_a_bar_for_each_colour_of_the_selection() {
     let (db, _dir) = seeded();
     let ctx = Context::default();
     tarragon_ui::install(&ctx);
@@ -93,15 +93,19 @@ fn a_refresh_paints_the_colour_squares_of_the_selection() {
     let mut preview = preview();
     // Files `a` and `b` both have red; neither has blue.
     refresh_with(&mut preview, &selection(), read_from(&db));
-    let fills = square_fills(&ctx, &mut preview);
-    assert_eq!(fills.len(), 11);
-    assert_eq!(fills[0], swatch::bucket_color(ColorBucket::Red));
-    let faint = swatch::bucket_color(ColorBucket::Blue).gamma_multiply(ColorState::None.opacity());
-    assert_eq!(fills[6], faint);
+    let fills = bar_fills(&ctx, &mut preview);
+    assert_eq!(fills.first(), Some(&swatch::bucket_color(ColorBucket::Red)));
+    let blue = swatch::bucket_color(ColorBucket::Blue);
+    assert!(
+        !fills
+            .iter()
+            .any(|fill| *fill == blue || *fill == blue.gamma_multiply(0.5)),
+        "a colour no file carries has no bar: {fills:?}"
+    );
 }
 
 #[test]
-fn the_colour_flag_shows_or_hides_the_squares() {
+fn the_colour_flag_shows_or_hides_the_bars() {
     let (db, _dir) = seeded();
     let ctx = Context::default();
     tarragon_ui::install(&ctx);
@@ -109,7 +113,8 @@ fn the_colour_flag_shows_or_hides_the_squares() {
     let mut preview = preview();
     preview.set_colors_enabled(false);
     refresh_with(&mut preview, &selection(), read_from(&db));
-    assert_eq!(square_fills(&ctx, &mut preview).len(), 0);
+    assert_eq!(bar_fills(&ctx, &mut preview), []);
     preview.set_colors_enabled(true);
-    assert_eq!(square_fills(&ctx, &mut preview).len(), 11);
+    let red = swatch::bucket_color(ColorBucket::Red);
+    assert_eq!(bar_fills(&ctx, &mut preview).first(), Some(&red));
 }

@@ -25,7 +25,7 @@ fn the_preview_pane_shows_the_empty_hint_when_nothing_is_selected() {
 }
 
 #[test]
-fn the_preview_pane_shows_the_metadata_labels_and_values_once_set() {
+fn the_preview_pane_shows_the_name_and_the_details_line_once_set() {
     let ctx = Context::default();
     apply_theme(&ctx);
     let mut shell = Shell::new();
@@ -34,6 +34,7 @@ fn the_preview_pane_shows_the_metadata_labels_and_values_once_set() {
         dimensions: Some((2048, 1536)),
         size: Some(2_516_582),
         format: "PNG".into(),
+        modified: None,
     }));
 
     let mut text = Vec::new();
@@ -42,17 +43,7 @@ fn the_preview_pane_shows_the_metadata_labels_and_values_once_set() {
         text = painted_text(&output);
         output.drop_without_applying_deltas();
     }
-    for want in [
-        "Metadata",
-        "File",
-        "sketch_014.png",
-        "Dimensions",
-        "2048 x 1536",
-        "Size",
-        "2.4 MB",
-        "Format",
-        "PNG",
-    ] {
+    for want in ["sketch_014.png", "2048 × 1536 · 2.4 MB · PNG"] {
         assert!(
             text.iter().any(|t| t == want),
             "{want} is not drawn: {text:?}"
@@ -165,7 +156,7 @@ fn text_pos(output: &egui::FullOutput, want: &str) -> Option<egui::Pos2> {
 }
 
 #[test]
-fn a_short_pane_scrolls_so_the_metadata_can_be_reached() {
+fn a_short_pane_scrolls_so_the_details_can_be_reached() {
     let ctx = Context::default();
     apply_theme(&ctx);
     let mut shell = Shell::new();
@@ -178,19 +169,20 @@ fn a_short_pane_scrolls_so_the_metadata_can_be_reached() {
         dimensions: Some((64, 48)),
         size: Some(10),
         format: "PNG".into(),
+        modified: None,
     }));
     // The screen is too short for the box and the grid together.
     let short = |events: Vec<egui::Event>| egui::RawInput {
         screen_rect: Some(egui::Rect::from_min_size(
             egui::Pos2::ZERO,
-            egui::vec2(1400.0, 420.0),
+            egui::vec2(1400.0, 360.0),
         )),
         events,
         ..Default::default()
     };
     let frame = |ctx: &Context, shell: &mut Shell, events| {
         let output = ctx.run_ui(short(events), |ui| shell.show(ui));
-        let pos = text_pos(&output, "Format");
+        let pos = text_pos(&output, "+ Tag");
         output.drop_without_applying_deltas();
         pos
     };
@@ -201,7 +193,7 @@ fn a_short_pane_scrolls_so_the_metadata_can_be_reached() {
     let before = frame(&ctx, &mut shell, vec![]);
     assert!(
         !visible(before),
-        "the last row is already visible before scrolling"
+        "the chip row is already visible before scrolling"
     );
 
     let wheel = vec![
@@ -221,5 +213,5 @@ fn a_short_pane_scrolls_so_the_metadata_can_be_reached() {
         }
         found = visible(frame(&ctx, &mut shell, vec![]));
     }
-    assert!(found, "the last row is still hidden after scrolling");
+    assert!(found, "the chip row is still hidden after scrolling");
 }

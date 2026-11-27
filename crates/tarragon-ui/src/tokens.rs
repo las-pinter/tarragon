@@ -4,7 +4,8 @@
 //! doc comment names its stylesheet token, so the two stay traceable. The
 //! exceptions are `BUCKET_PINK`, `CHECKER_LIGHT`, `CHECKER_DARK`,
 //! `WINDOW_SIZE`, `GALLERY_MIN_WIDTH`, `SIZE_DISPLAY`, `SIZE_TITLE`,
-//! `LABEL_SPACING_EM`, and `FOCUS_RING_WIDTH`, which have no stylesheet row.
+//! `LABEL_SPACING_EM`, `FOCUS_RING_WIDTH`, and `BG_STAGE`, which have no
+//! stylesheet row.
 //! Colors convert to `egui::Color32` at compile time.
 
 use egui::Color32;
@@ -19,6 +20,9 @@ pub const BG_PRIMARY: Color32 = Color32::from_rgb(0x16, 0x15, 0x1a);
 pub const BG_SECONDARY: Color32 = Color32::from_rgb(0x1c, 0x1b, 0x22);
 /// `--bg-tertiary`: rail and input background.
 pub const BG_TERTIARY: Color32 = Color32::from_rgb(0x21, 0x1f, 0x29);
+/// The deep fill behind the Preview picture, from the redesign page. It has no
+/// stylesheet row.
+pub const BG_STAGE: Color32 = Color32::from_rgb(0x0d, 0x0c, 0x10);
 /// `--surface-highlight`: pressed and highlighted surface.
 pub const SURFACE_HIGHLIGHT: Color32 = Color32::from_rgb(0x3d, 0x3b, 0x44);
 /// `--surface-hover`: hovered surface.
@@ -194,13 +198,6 @@ pub const PREVIEW_IMAGE_HEIGHT: f32 = 260.0;
 /// `.mosaic` padding (`--space-s`): the room between the Preview mosaic grid
 /// and the panel padding, in points.
 pub const PREVIEW_MOSAIC_PADDING: f32 = SPACING_S;
-/// `.tag-pills` min-height: the least height of the Preview pill row, in
-/// points, so the "+ add" button keeps its place below an empty or short row.
-pub const PREVIEW_TAG_ROW_HEIGHT: f32 = 36.0;
-/// `.meta-key` and `.meta-val` line height: the height of one Preview metadata
-/// row, in points. With the 2 point `.meta-grid` gap it gives the 18 point row
-/// pitch of the mockup.
-pub const PREVIEW_META_ROW_HEIGHT: f32 = 16.0;
 /// `.menu-row` height: the row of the redesign context menu, in points. The
 /// row padding either side of the text line gives it.
 pub const MENU_ROW_HEIGHT: f32 = 32.0;
@@ -212,10 +209,6 @@ pub const MENU_ROW_PAD_X: f32 = 10.0;
 /// The room between a popup menu and the window edge, in points. The
 /// stylesheet has no rule for it; the mockups never touch the edge.
 pub const MENU_EDGE_MARGIN: f32 = SPACING_S;
-/// The room between the `.preview-img` box edge and the picture, in points.
-/// The mockup draws the picture as a rounded `.thumb` at 88% of the 260 point
-/// box height, about 16 points a side.
-pub const PREVIEW_IMAGE_INSET: f32 = SPACING_L;
 
 /// `--font-sans`: stylesheet sans stack.
 ///

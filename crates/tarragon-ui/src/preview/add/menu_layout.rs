@@ -1,4 +1,4 @@
-//! How tall the "+ add" menu is.
+//! How tall the "+ Tag" menu is.
 
 use crate::tokens;
 

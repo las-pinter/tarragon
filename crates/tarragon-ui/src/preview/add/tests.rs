@@ -1,4 +1,4 @@
-//! Tests for the "+ add" control.
+//! Tests for the "+ Tag" control.
 
 use super::{AddState, CREATE_NEW};
 use crate::preview::test_support::{collect, pill, preview};
@@ -87,7 +87,7 @@ fn click_text(ctx: &Context, preview: &mut Preview, label: &str) {
 
 /// Open the menu and let it paint.
 fn open_menu(ctx: &Context, preview: &mut Preview) {
-    click_text(ctx, preview, "+ add");
+    click_text(ctx, preview, "+ Tag");
     frame(ctx, preview, vec![]);
 }
 
@@ -100,10 +100,10 @@ fn open_input(ctx: &Context, preview: &mut Preview) {
 }
 
 #[test]
-fn the_add_button_paints_below_the_tag_pills_and_also_with_no_tags() {
+fn the_add_button_follows_the_tag_pills_and_also_shows_with_no_tags() {
     let mut empty = preview_with(vec![], &[]);
     let ctx = setup(&mut empty);
-    assert!(has(&frame(&ctx, &mut empty, vec![]), "+ add"));
+    assert!(has(&frame(&ctx, &mut empty, vec![]), "+ Tag"));
 
     let mut full = preview_with(
         vec![pill("one", ColorState::All), pill("two", ColorState::Some)],
@@ -111,8 +111,11 @@ fn the_add_button_paints_below_the_tag_pills_and_also_with_no_tags() {
     );
     let ctx = setup(&mut full);
     let texts = frame(&ctx, &mut full, vec![]);
-    let (two, add) = (find(&texts, "two").unwrap(), find(&texts, "+ add").unwrap());
-    assert!(add.y > two.y + 20.0 && add.x <= two.x, "{two:?} {add:?}");
+    let (two, add) = (find(&texts, "two").unwrap(), find(&texts, "+ Tag").unwrap());
+    assert!(
+        add.x > two.x && (add.y - two.y).abs() < 1.0,
+        "{two:?} {add:?}"
+    );
 }
 
 #[test]
@@ -123,7 +126,7 @@ fn a_click_on_the_button_opens_the_menu_and_a_second_click_closes_it() {
     open_menu(&ctx, &mut preview);
     let texts = frame(&ctx, &mut preview, vec![]);
     assert!(has(&texts, "hands") && has(&texts, CREATE_NEW));
-    click_text(&ctx, &mut preview, "+ add");
+    click_text(&ctx, &mut preview, "+ Tag");
     assert!(!has(&frame(&ctx, &mut preview, vec![]), "hands"));
     assert_eq!(preview.take_events(), Vec::<PreviewEvent>::new());
 }
@@ -170,7 +173,7 @@ fn enter_applies_the_trimmed_name() {
         [PreviewEvent::TagApplied("cat".into())]
     );
     assert!(
-        has(&frame(&ctx, &mut preview, vec![]), "+ add"),
+        has(&frame(&ctx, &mut preview, vec![]), "+ Tag"),
         "button is back"
     );
 }
@@ -184,7 +187,7 @@ fn enter_on_a_blank_name_queues_nothing_and_keeps_the_input_open() {
     frame(&ctx, &mut preview, vec![key(Key::Enter)]);
     assert_eq!(preview.take_events(), Vec::<PreviewEvent>::new());
     let texts = frame(&ctx, &mut preview, vec![]);
-    assert!(has(&texts, "Enter a tag name") && !has(&texts, "+ add"));
+    assert!(has(&texts, "Enter a tag name") && !has(&texts, "+ Tag"));
 }
 
 #[test]
@@ -198,7 +201,7 @@ fn escape_closes_the_menu_and_the_input_with_no_event() {
     open_input(&ctx, &mut preview);
     frame(&ctx, &mut preview, vec![Event::Text("blue".into())]);
     frame(&ctx, &mut preview, vec![key(Key::Escape)]);
-    assert!(has(&frame(&ctx, &mut preview, vec![]), "+ add"));
+    assert!(has(&frame(&ctx, &mut preview, vec![]), "+ Tag"));
     assert_eq!(preview.take_events(), Vec::<PreviewEvent>::new());
 }
 

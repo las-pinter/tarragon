@@ -391,49 +391,64 @@ command-line folder must stay reachable when it is outside home.
 Before: the mockups show the Preview panel only with a selection and define no
 empty state. In `design/mockups/preview-single.html` the picture box grows
 with the pane, with a 260 px minimum set inline. The stylesheet default is
-140 px.
+140 px. `design/redesign/main-window.html` draws the picture on a deep
+`#0d0c10` stage with a 10 px radius, 12 px of padding, and a 560 px minimum
+height.
 
 After: with nothing selected the panel shows the muted hint "Select an image to
-preview it" in the middle. The picture box keeps the mockup's growth and fixes
-the 260 px minimum in the design tokens. The metadata and the tags sit below
-it. A pane that is too short keeps the 260 px box and scrolls. The picture is
-scaled to fit inside the box with its aspect ratio kept.
+preview it" in the middle. The picture sits on the redesign's deep stage, with
+its radius and padding, and takes the height the details leave. The picture
+has 4 pt corners and is scaled to fit inside the stage with its aspect ratio
+kept. The stage keeps the 260 pt minimum of the first mockups, not the page's
+560 px. A pane too short for the stage and the details scrolls.
 
-Reason: a blank panel gives no hint about what to do.
+Reason: a blank panel gives no hint about what to do. A 560 pt minimum would
+push the name and the open button out of view on a laptop screen.
 
-## Preview colour squares
+## Preview colour bars
 
 Before: `design/mockups/preview-single.html` shows ten squares, one for each
-original bucket. The checkerboard has no colour values in the stylesheet.
+original bucket, and a click on a square toggled that colour tag.
+`design/redesign/main-window.html` shows small rounded bars of the image's own
+colours, each as wide as its share of the picture.
 
-After: the row has twelve squares: the eleven colour buckets, then a
-checkerboard square for `transparent` at the end. The two checkerboard greys
-are `#b0b0b0` and `#707070`, which have no stylesheet row. The row is hidden
-when colour tags are turned off in the settings. The opacity of a square follows
-the mockup: 1.0 when all selected images carry the colour, 0.5 when some do,
-and 0.3 when none do.
+After: the row shows one 18 by 8 pt bar for each colour the selection carries,
+in the order of the filter swatches. All bars have one width, because the app
+stores no colour share. A colour that only some of the selected images carry
+is drawn at half opacity. The `transparent` tag draws a checkerboard bar in
+`#b0b0b0` and `#707070`. The bars sit at the start of the tag row. They are
+not buttons: a click does nothing. The row has no bars when colour tags are
+turned off in the settings.
 
-Reason: the app has eleven buckets and the transparency tag, so the row shows
-them all. The row hides when colour tags are off, because its squares would act
-on tags that do not exist then.
+Reason: the share of each colour is not stored, and the page's bars show
+colours, not controls. A colour tag set by hand did not survive the next
+render, which writes the colour tags from the picture again.
 
 ## Preview tag pills and the add menu
 
 Before: in the mockup the remove x on a tag pill always shows, and a pill has
 3 px of vertical padding. The menu has a minimum width of 210 px.
+`design/redesign/main-window.html` gives each tag a colour pair of the palette
+and ends the row with a "+ Tag" pill, but says nothing about how a tag gets
+its colour.
 
-After: the x shows only while the pointer is over the pill. Its room is always
-reserved, so the pill does not change size on hover. A pill has 2 px of vertical
-padding, which is half of the 4 px spacing step. The "+ add" menu keeps the
-tags that only some of the selected images carry, so the user can apply them to
-all of them. It leaves out a tag only when every selected image has it. The
-210 px minimum width is dropped. The menu is as wide as its widest row, up to
-the width of the pane, and a long name ends in an ellipsis. The menu shows at
-most eight rows and then scrolls. "Create new..." stays in view below them.
+After: a pill takes one of the seven tag colour pairs of `palette.html`
+(vinous, sage, navy, umber, plum, teal, olive), picked from the tag name, so
+a tag keeps its colour across selections and runs. Pills have the page's
+padding and radius and use the Roboto Medium face. The x shows only while the
+pointer is over the pill. Its room is always reserved, so the pill does not
+change size on hover. The "+ Tag" pill follows the last tag on the same row.
+Its menu keeps the tags that only some of the selected images carry, so the
+user can apply them to all of them. It leaves out a tag only when every
+selected image has it. The 210 px minimum width is dropped. The menu is as
+wide as its widest row, up to the width of the pane, and a long name ends in
+an ellipsis. The menu shows at most eight rows and then scrolls.
+"Create new..." stays in view below them.
 
-Reason: a permanent x on every pill adds noise, and the mockup has no spacing
-token for 3 px. A tag that only some images carry still needs a way to reach the
-rest. A fixed wide menu could run past the edge of a narrow pane.
+Reason: the page shows colours but no rule, and a colour that changed with
+every selection would carry no meaning. A permanent x on every pill adds
+noise. A tag that only some images carry still needs a way to reach the rest.
+A fixed wide menu could run past the edge of a narrow pane.
 
 ## Preview mosaic
 
@@ -607,20 +622,6 @@ Reason: the 1024 tier is the cache tier made for the preview. The 320 tier is
 the grid thumbnail, which is better than an empty box. The budget caps the
 texture memory.
 
-## Preview colour square click
-
-Before: the mockup shows the colour squares and does not say what a click does.
-
-After: a click on a colour square toggles that colour tag on all selected
-files. When every selected file has the colour, the click removes it from all of
-them. Otherwise the click adds it to all of them. The Python application did the
-same. The next render of a file replaces its colour tags, so a manual change
-does not survive it.
-
-Reason: the squares show the state of the colour tags, so a click that changes
-them is the expected action. The render replaces the colour tags because they
-come from the picture.
-
 ## Colour tag timing and settings
 
 Before: nothing says when the colour tags of a file are written, or when a
@@ -677,16 +678,38 @@ folder is never deleted.
 Reason: old rows and cache files would grow without limit. Keeping the tags
 protects the work of the user when a file is moved away and back.
 
-## Preview format detail
+## Preview details and open button
 
-Before: the mockup shows a format in the details of a single image and does not
-say where it comes from.
+Before: the mockups show a Metadata block of label and value rows, and give a
+format without saying where it comes from. `design/redesign/main-window.html`
+puts the name over one line of "pixel size · file size · format · date" beside an
+"Open in Krita" button and an arrow button.
 
-After: the format is the file extension in capitals. A file with no extension
-shows the unknown mark.
+After: the name uses the title size in Roboto Medium and ends in an ellipsis.
+The line under it reads `W × H · size · FORMAT · date`, and a value that is not
+known is left out. The format is the file extension in capitals, or
+`Unknown`. The date is the modified time of the file, as stored with its row
+or read from the disk, in the time zone the app had at start, as
+`Mon D, YYYY`. The coral button opens the file:
+
+- With an editor row for the extension, or for `*`, it opens with that
+  template, and the button names the program with a capital first letter,
+  such as "Open in Krita".
+- With no row, it opens with the system opener. On Linux the button names
+  the default app from its desktop entry, looked up in the background, such
+  as "Open in GIMP". The button reads "Open" until the name is known, when no
+  name is found, after an `xdg-mime` query passes its deadline, and on Windows
+  and macOS.
+
+The arrow button lists the extension row, the `*` row when it differs, and
+the default app, by name when known and as "Default app" otherwise. A row
+opens the file with that app.
 
 Reason: the file extension is the only format fact the Preview can read
-without opening the file.
+without opening the file. The app stores no display name for an editor, so the
+program name and the desktop entry are the names it has. A session that
+crosses a change of daylight saving time keeps the start offset, as the log
+times do.
 
 ## Busy strip
 
@@ -830,7 +853,7 @@ drawn dim at the right.
   All scope.
 - Show in file manager opens the folder of the file through the system opener
   (`xdg-open` on Linux). Copy path puts the file path on the clipboard as text.
-- Add tag... opens, at the pointer, the same menu as the Preview "+ add" button: the
+- Add tag... opens, at the pointer, the same menu as the Preview "+ Tag" button: the
   known tags and Create new.... The chosen tag goes to every selected file.
 - Regenerate Thumbnail queues a new render of each selected file.
 - Rename... opens a dialog with the name without its extension. The extension shows

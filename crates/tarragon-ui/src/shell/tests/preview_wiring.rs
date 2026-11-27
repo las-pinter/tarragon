@@ -1,11 +1,9 @@
 //! Tests for the Preview events and the selection hand-off through a full Shell.
 
-use super::{draw, input, leaf_rect};
+use super::{draw, input};
 use crate::grid::GridItem;
-use crate::layout::Pane;
-use crate::preview::{Meta, PreviewEvent};
+use crate::preview::{Meta, OpenButton, PreviewEvent};
 use crate::shell::Shell;
-use crate::swatch::{self, Swatch};
 use crate::theme::apply_theme;
 use egui::{Context, Event, Modifiers, PointerButton, Pos2, RawInput, Rect, vec2};
 use std::path::PathBuf;
@@ -20,6 +18,7 @@ fn setup() -> (Context, Shell) {
         dimensions: None,
         size: None,
         format: "PNG".into(),
+        modified: None,
     }));
     draw(&ctx, &mut shell);
     draw(&ctx, &mut shell);
@@ -75,23 +74,17 @@ fn is_drawn(ctx: &Context, shell: &mut Shell, label: &str) -> bool {
 }
 
 #[test]
-fn a_colour_click_in_the_preview_comes_out_of_the_shell_once() {
+fn an_open_click_in_the_preview_comes_out_of_the_shell_once() {
     let (ctx, mut shell) = setup();
-    let leaf = leaf_rect(&shell, Pane::Preview);
-    let mut squares: Vec<Rect> = frame(&ctx, &mut shell, vec![])
-        .1
-        .into_iter()
-        .filter(|r| r.size() == vec2(swatch::SIZE, swatch::SIZE) && leaf.contains_rect(*r))
-        .collect();
-    squares.sort_by(|a, b| a.min.x.total_cmp(&b.min.x));
-    assert_eq!(squares.len(), 11, "the colour row is painted");
+    shell.preview_mut().set_open(Some(OpenButton {
+        label: "Open in Krita".into(),
+        choices: vec!["Krita".into()],
+    }));
+    let at = text_pos(&ctx, &mut shell, "Open in Krita") + vec2(4.0, 4.0);
     assert_eq!(shell.take_preview_events(), Vec::<PreviewEvent>::new());
 
-    click(&ctx, &mut shell, squares[6].center());
-    assert_eq!(
-        shell.take_preview_events(),
-        [PreviewEvent::ColorClicked(Swatch::ALL[6])]
-    );
+    click(&ctx, &mut shell, at);
+    assert_eq!(shell.take_preview_events(), [PreviewEvent::Open]);
     assert_eq!(
         shell.take_preview_events(),
         Vec::<PreviewEvent>::new(),
@@ -115,7 +108,7 @@ fn a_selection_change_closes_the_add_menu_and_a_quiet_frame_keeps_it() {
         [PathBuf::from("/images/a.png")],
         "the click selected the tile"
     );
-    let add = text_pos(&ctx, &mut shell, "+ add") + vec2(3.0, 3.0);
+    let add = text_pos(&ctx, &mut shell, "+ Tag") + vec2(3.0, 3.0);
     click(&ctx, &mut shell, add);
     assert!(is_drawn(&ctx, &mut shell, "hands"), "the menu is open");
 
@@ -151,7 +144,7 @@ fn a_gallery_click_that_changes_the_selection_leaves_the_menu_closed_next_frame(
 
     let first = text_pos(&ctx, &mut shell, "a.png") + vec2(3.0, 3.0);
     click(&ctx, &mut shell, first);
-    let add = text_pos(&ctx, &mut shell, "+ add") + vec2(3.0, 3.0);
+    let add = text_pos(&ctx, &mut shell, "+ Tag") + vec2(3.0, 3.0);
     click(&ctx, &mut shell, add);
     assert!(is_drawn(&ctx, &mut shell, "hands"), "the menu is open");
 

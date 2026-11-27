@@ -149,6 +149,7 @@ fn the_hint_counts_the_selected_images_the_mosaic_does_not_draw() {
 fn each_painted_picture_carries_the_cell_corner_radius() {
     use super::{PreviewImage, show};
     let ctx = egui::Context::default();
+    crate::fonts::install(&ctx);
     let input = egui::RawInput {
         screen_rect: Some(Rect::from_min_size(
             pos2(0.0, 0.0),

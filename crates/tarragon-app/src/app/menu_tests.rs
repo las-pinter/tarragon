@@ -15,7 +15,8 @@ use crate::app::tests::db_key;
 const LIMIT: Duration = Duration::from_secs(10);
 
 /// The Dimensions row the Preview shows for the stored rows.
-const DIMENSIONS: &str = "64 x 48";
+/// The start of the details line of the sample rows.
+const DIMENSIONS: &str = "64 × 48";
 
 fn path_of(rig: &Rig, name: &str) -> PathBuf {
     rig.dir.0.join(name)
@@ -52,7 +53,12 @@ fn tag_paths_writes_the_tag_to_every_path_and_refreshes_the_preview() {
     let mut rig = Rig::new(&["a.png", "b.png"], &[], 9);
     // One file is selected, so the Preview shows its pills.
     rig.click("a.png", false);
-    assert!(rig.frame(Vec::new()).0.iter().any(|t| t == DIMENSIONS));
+    assert!(
+        rig.frame(Vec::new())
+            .0
+            .iter()
+            .any(|t| t.starts_with(DIMENSIONS))
+    );
     assert!(!rig.frame(Vec::new()).0.iter().any(|t| t == "cats"));
 
     let paths = vec![path_of(&rig, "a.png"), path_of(&rig, "b.png")];

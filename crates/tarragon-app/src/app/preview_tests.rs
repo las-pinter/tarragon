@@ -20,7 +20,8 @@ use crate::test_ui;
 const LIMIT: Duration = Duration::from_secs(10);
 
 /// The Dimensions row the Preview shows for the stored rows.
-const DIMENSIONS: &str = "64 x 48";
+/// The start of the details line of the sample rows.
+const DIMENSIONS: &str = "64 × 48";
 
 pub(super) struct Rig {
     pub(super) dir: TempDir,
@@ -141,8 +142,9 @@ impl Rig {
         }
     }
 
+    /// Whether a painted text starts with `text`.
     fn has_text(&mut self, text: &str) -> bool {
-        self.frame(Vec::new()).0.iter().any(|t| t == text)
+        self.frame(Vec::new()).0.iter().any(|t| t.starts_with(text))
     }
 }
 

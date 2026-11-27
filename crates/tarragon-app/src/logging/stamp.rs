@@ -1,6 +1,11 @@
 //! Time text for log lines and crash files.
 
+use std::sync::OnceLock;
+
 use time::{OffsetDateTime, UtcOffset};
+
+/// The offset that [`local_offset`] read, for text shown in the window.
+static DISPLAY_OFFSET: OnceLock<UtcOffset> = OnceLock::new();
 
 /// The local UTC offset, or UTC when the system gives none.
 ///
@@ -11,7 +16,16 @@ use time::{OffsetDateTime, UtcOffset};
 /// give the offset once more than one thread runs.
 #[must_use]
 pub fn local_offset() -> UtcOffset {
-    UtcOffset::current_local_offset().unwrap_or(UtcOffset::UTC)
+    let offset = UtcOffset::current_local_offset().unwrap_or(UtcOffset::UTC);
+    let _ = DISPLAY_OFFSET.set(offset);
+    offset
+}
+
+/// The offset for dates shown in the window: the one [`local_offset`] read
+/// at start, or UTC when it never ran, as in tests.
+#[must_use]
+pub fn display_offset() -> UtcOffset {
+    DISPLAY_OFFSET.get().copied().unwrap_or(UtcOffset::UTC)
 }
 
 /// The current time in `offset`.

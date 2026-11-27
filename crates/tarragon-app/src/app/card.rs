@@ -25,7 +25,7 @@ impl App {
         self.shell.preview_mut().set_failure(failure);
     }
 
-    /// Act on the card buttons for the one selected file.
+    /// Act on the card buttons and the open button for the one selected file.
     pub(super) fn apply_card_events(&mut self, events: &[PreviewEvent]) {
         for event in events {
             let Some(path) = self.shell.sole_selected().map(Path::to_path_buf) else {
@@ -40,6 +40,10 @@ impl App {
                 }
                 _ => {}
             }
+        }
+        let opener = self.opener_path.as_deref();
+        if let Some(error) = self.open_button.apply(events, opener) {
+            self.notice_failure("cannot open the file", &error);
         }
     }
 }

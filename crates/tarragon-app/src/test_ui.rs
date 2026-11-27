@@ -4,7 +4,8 @@ use eframe::egui::epaint::Shape;
 use eframe::egui::{
     Color32, Context, Event, Modifiers, PointerButton, Pos2, RawInput, Rect, TextureId, Ui, vec2,
 };
-use tarragon_ui::swatch::{self, FILTER_SIZE};
+use tarragon_ui::preview::COLOR_BAR;
+use tarragon_ui::swatch::FILTER_SIZE;
 
 /// What one frame painted.
 pub struct Painted {
@@ -68,15 +69,14 @@ fn tally(shape: &Shape, painted: &mut Painted) {
     }
 }
 
-/// The fill of each Preview colour square that one frame paints.
+/// The fill of each Preview colour bar that one frame paints, left to right.
 ///
-/// The transparent square paints smaller checker cells, so 11 squares match,
-/// not 12.
-pub fn square_fills(ctx: &Context, run: &mut impl FnMut(&mut Ui)) -> Vec<Color32> {
+/// The transparent bar paints smaller checker cells, so it never matches.
+pub fn bar_fills(ctx: &Context, run: &mut impl FnMut(&mut Ui)) -> Vec<Color32> {
     fn collect(shape: &Shape, found: &mut Vec<Color32>) {
         match shape {
             Shape::Vec(shapes) => shapes.iter().for_each(|s| collect(s, found)),
-            Shape::Rect(r) if r.rect.size() == vec2(swatch::SIZE, swatch::SIZE) => {
+            Shape::Rect(r) if r.rect.size() == COLOR_BAR => {
                 found.push(r.fill);
             }
             _ => {}

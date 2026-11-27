@@ -123,7 +123,7 @@ fn a_known_tag_name_is_valid_and_applies_that_tag() {
         preview.take_events(),
         [PreviewEvent::TagApplied("hands".into())]
     );
-    assert!(has(&frame(&ctx, &mut preview, vec![]), "+ add"));
+    assert!(has(&frame(&ctx, &mut preview, vec![]), "+ Tag"));
 }
 
 #[test]
@@ -132,7 +132,7 @@ fn one_escape_after_a_refusal_closes_the_input_with_no_event() {
     frame(&ctx, &mut preview, vec![]);
     frame(&ctx, &mut preview, vec![key(Key::Escape)]);
     let texts = frame(&ctx, &mut preview, vec![]);
-    assert!(has(&texts, "+ add") && !has(&texts, "Name is reserved"));
+    assert!(has(&texts, "+ Tag") && !has(&texts, "Name is reserved"));
     assert_eq!(input(&preview), None);
     assert_eq!(preview.take_events(), Vec::<PreviewEvent>::new());
 }
@@ -142,7 +142,7 @@ fn focus_loss_after_a_refusal_closes_the_input_with_no_event() {
     let (ctx, mut preview) = entered(&[], "red");
     frame(&ctx, &mut preview, vec![]);
     frame(&ctx, &mut preview, super::click(Pos2::new(380.0, 580.0)));
-    assert!(has(&frame(&ctx, &mut preview, vec![]), "+ add"));
+    assert!(has(&frame(&ctx, &mut preview, vec![]), "+ Tag"));
     assert_eq!(preview.take_events(), Vec::<PreviewEvent>::new());
 }
 

@@ -1,6 +1,7 @@
 //! Binary entry point for the tarragon image browser.
 
 mod app;
+mod app_names;
 mod cli;
 mod clipboard;
 mod colorflag;

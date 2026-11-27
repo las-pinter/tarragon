@@ -1,8 +1,9 @@
 //! Gallery strip and virtual grid.
 //!
-//! The strip holds the scope tabs, the search field, the info bar, and the sort
-//! pills. The grid paints the visible items. [`Gallery::set_items`] sorts the
-//! items; the scope and name filters run when a filter input changes.
+//! The strip holds the header, the info row, the filter bar, and the busy
+//! strip; the search field lives in the top bar. The grid paints the visible
+//! items. [`Gallery::set_items`] sorts the items; the scope and name filters
+//! run when a filter input changes.
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -30,6 +31,7 @@ mod busy;
 mod context_menu;
 mod delete_dialog;
 mod empty;
+mod header;
 mod info;
 mod keys;
 mod manager;
@@ -112,6 +114,8 @@ pub struct Gallery {
     order: Vec<usize>,
     /// Item indices in display order, after the scope and name filters.
     visible: Vec<usize>,
+    /// How many items the scope holds, before the filters.
+    scoped: usize,
     /// Item index by path, so a thumbnail setter does not scan the list.
     index: HashMap<PathBuf, usize>,
     /// Item indices of the tiles the last frame painted.
@@ -171,6 +175,7 @@ impl Gallery {
             sort_changed: false,
             order: Vec::new(),
             visible: Vec::new(),
+            scoped: 0,
             index: HashMap::new(),
             painted: Vec::new(),
             painted_scratch: Vec::new(),
@@ -337,6 +342,17 @@ impl Gallery {
         self.visible.len()
     }
 
+    /// Number of items the scope holds, before the filters.
+    #[must_use]
+    pub fn scoped_len(&self) -> usize {
+        self.scoped
+    }
+
+    /// The text the search field edits.
+    pub(crate) fn search_mut(&mut self) -> &mut String {
+        &mut self.search
+    }
+
     /// The cached item indices in display order, after the filters.
     #[cfg(test)]
     pub(crate) fn visible_order(&self) -> &[usize] {
@@ -345,8 +361,8 @@ impl Gallery {
 
     /// Draw the top strip and the grid.
     ///
-    /// The tabs and the search field draw first and refresh the cached view.
-    /// The info bar and the grid then paint that one set in this frame.
+    /// The header draws first and refreshes the cached view. The info row and
+    /// the grid then paint that one set in this frame.
     pub fn show(&mut self, ui: &mut Ui) {
         self.show_at(ui, Instant::now());
     }
@@ -355,7 +371,7 @@ impl Gallery {
     /// time of the frame.
     fn show_at(&mut self, ui: &mut Ui, now: Instant) {
         self.apply_pending_search(now);
-        self.strip(ui, now);
+        self.strip(ui);
         self.request_search_wake(ui, now);
         self.tag_manager.show(ui.ctx());
         self.show_rename(ui.ctx());
@@ -377,7 +393,7 @@ impl Gallery {
     }
 
     /// Arm the search timer at `now`.
-    fn arm_search(&mut self, now: Instant) {
+    pub(crate) fn arm_search(&mut self, now: Instant) {
         self.debouncer.arm(now);
     }
 

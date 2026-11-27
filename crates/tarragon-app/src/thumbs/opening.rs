@@ -13,8 +13,8 @@ impl Thumbs {
             || self.library == Library::Wanted
     }
 
-    /// The folder that opens now or waits to open, for the info bar. A library
-    /// open has no folder.
+    /// The folder that opens now or waits to open, for the gallery header. A
+    /// library open has no folder.
     #[must_use]
     pub(crate) fn loading_folder(&self) -> Option<&Path> {
         if let Some(folder) = &self.pending {

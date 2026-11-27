@@ -1,4 +1,4 @@
-//! Tests for the filter pill in the info bar.
+//! Tests for the filter pill in the info row.
 
 use super::*;
 use crate::test_support;
@@ -8,7 +8,7 @@ use tarragon_core::color::ColorBucket;
 use tarragon_core::filter_bar::ColorChoice;
 use tarragon_core::filter_state::{FilterScope, FilterState};
 
-/// The filter count that the info bar shows for `state` in `scope`.
+/// The filter count that the info row shows for `state` in `scope`.
 fn count(state: &FilterState, scope: Scope) -> usize {
     let scope = match scope {
         Scope::All => FilterScope::Global,
@@ -93,18 +93,11 @@ fn the_pill_and_the_sort_pills_keep_their_slots_at_a_narrow_width() {
         let date = rect_of(&painted, "Date");
         let name = rect_of(&painted, "Name");
         let sort = rect_of(&painted, "Sort");
-        let info = painted
-            .iter()
-            .find(|(t, _)| t.ends_with("files"))
-            .map(|(_, rect)| *rect)
-            .expect("the info text was painted");
         assert!(name.max.x <= date.min.x, "{width}: the sort pills overlap");
         assert!(
             date.max.x <= filter.min.x,
             "{width}: the pill overlaps Date"
         );
         assert!(sort.max.x <= name.min.x, "{width}: Sort overlaps Name");
-        // This y check is for the stacked layout. The controls do not fit beside the info text, so they take a row below.
-        assert!(info.max.y <= sort.min.y, "{width}: the info text overlaps");
     }
 }

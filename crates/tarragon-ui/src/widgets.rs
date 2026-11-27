@@ -2,8 +2,8 @@
 
 use egui::{Button, FontFamily, RichText};
 use egui::{
-    Color32, CornerRadius, CursorIcon, FontId, Pos2, Response, Sense, Stroke, StrokeKind, Ui, Vec2,
-    WidgetInfo, WidgetType, vec2,
+    Color32, CornerRadius, CursorIcon, FontId, Id, Pos2, Rect, Response, Sense, Stroke, StrokeKind,
+    Ui, Vec2, WidgetInfo, WidgetType, vec2,
 };
 
 use crate::fonts;
@@ -11,6 +11,14 @@ use crate::tokens;
 
 /// The height of a flat button, in points, as the redesign components page.
 pub const BUTTON_HEIGHT: f32 = 36.0;
+/// The size of an icon button, in points, as the redesign top bar shows it.
+pub(crate) const ICON_BUTTON_SIZE: f32 = 36.0;
+/// The painted size of an icon, in points. A smaller icon scales down from it.
+const ICON_SIZE: f32 = 18.0;
+/// The grid that the search mark is drawn on, in points.
+const SEARCH_GRID: f32 = 16.0;
+/// The stroke width of an icon, in points at `ICON_SIZE`.
+const ICON_STROKE: f32 = 1.6;
 /// The width and height of the toggle switch, in points.
 const TOGGLE_SIZE: Vec2 = Vec2::new(36.0, 20.0);
 /// The room between the toggle track and its knob, in points.
@@ -175,6 +183,119 @@ pub fn toggle(ui: &mut Ui, on: &mut bool) -> Response {
     painter.rect_filled(rect, radius, track);
     painter.circle_filled(center, KNOB_DIAMETER / 2.0, knob);
     response
+}
+
+/// An icon that a flat top-bar button paints.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Icon {
+    /// The log panel icon.
+    Log,
+    /// The settings gear.
+    Settings,
+    /// The search mark inside the top-bar field.
+    Search,
+}
+
+impl Icon {
+    /// The accessible name of the icon.
+    const fn label(self) -> &'static str {
+        match self {
+            Self::Log => "Show log",
+            Self::Settings => "Settings",
+            Self::Search => "Search",
+        }
+    }
+}
+
+/// A flat icon button: no fill at rest, the hover fill under the pointer, and
+/// primary text while `selected`.
+pub(crate) fn icon_button(ui: &mut Ui, icon: Icon, selected: bool) -> Response {
+    let enabled = ui.is_enabled();
+    let (rect, _) = ui.allocate_exact_size(Vec2::splat(ICON_BUTTON_SIZE), Sense::hover());
+    let response = ui.interact(
+        rect,
+        Id::new(("tarragon-icon-button", icon.label())),
+        Sense::click(),
+    );
+    response
+        .widget_info(|| WidgetInfo::selected(WidgetType::Button, enabled, selected, icon.label()));
+    let response = response.on_hover_cursor(CursorIcon::PointingHand);
+    let color = if selected {
+        tokens::TEXT_PRIMARY
+    } else {
+        tokens::TEXT_TERTIARY
+    };
+    let painter = ui.painter();
+    let radius = CornerRadius::same(tokens::RADIUS_L);
+    if response.hovered() || response.has_focus() {
+        painter.rect_filled(rect, radius, tokens::SURFACE_HOVER);
+    }
+    // egui lets a focused button act on Space or Enter, so the focus shows.
+    if response.has_focus() {
+        painter.rect_stroke(
+            rect,
+            radius,
+            Stroke::new(tokens::STROKE_WIDTH, tokens::CORAL_STRONG),
+            StrokeKind::Inside,
+        );
+    }
+    paint_icon(
+        painter,
+        Rect::from_center_size(rect.center(), Vec2::splat(ICON_SIZE)),
+        icon,
+        color,
+    );
+    response
+}
+
+/// Paint `icon` inside `rect`, which is a square of the icon size or less.
+pub(crate) fn paint_icon(painter: &egui::Painter, rect: Rect, icon: Icon, color: Color32) {
+    let scale = rect.width() / ICON_SIZE;
+    let at = |x: f32, y: f32| rect.min + vec2(x, y) * scale;
+    let stroke = Stroke::new(ICON_STROKE * scale, color);
+    let line = |from: (f32, f32), to: (f32, f32)| {
+        painter.line_segment([at(from.0, from.1), at(to.0, to.1)], stroke);
+    };
+    match icon {
+        Icon::Log => {
+            painter.rect_stroke(
+                Rect::from_min_max(at(2.0, 3.0), at(16.0, 15.0)),
+                // The page rounds the log box on its own 2 point corner.
+                CornerRadius::same(2),
+                stroke,
+                StrokeKind::Inside,
+            );
+            painter.add(egui::Shape::line(
+                vec![at(5.0, 7.0), at(7.0, 9.0), at(5.0, 11.0)],
+                stroke,
+            ));
+            line((9.0, 11.0), (13.0, 11.0));
+        }
+        Icon::Settings => {
+            painter.circle_stroke(at(9.0, 9.0), 2.5 * scale, stroke);
+            for (from, to) in [
+                ((9.0, 1.5), (9.0, 4.0)),
+                ((9.0, 14.0), (9.0, 16.5)),
+                ((1.5, 9.0), (4.0, 9.0)),
+                ((14.0, 9.0), (16.5, 9.0)),
+                ((3.7, 3.7), (5.5, 5.5)),
+                ((12.5, 12.5), (14.3, 14.3)),
+                ((3.7, 14.3), (5.5, 12.5)),
+                ((12.5, 5.5), (14.3, 3.7)),
+            ] {
+                line(from, to);
+            }
+        }
+        Icon::Search => {
+            // The page draws this mark on a 16 unit grid of its own, and its
+            // stroke follows that grid rather than the icon grid.
+            let unit = rect.width() / SEARCH_GRID;
+            let at = |x: f32, y: f32| rect.min + vec2(x, y) * unit;
+            let stroke = Stroke::new(ICON_STROKE * unit, color);
+            painter.circle_stroke(at(7.0, 7.0), 4.5 * unit, stroke);
+            painter.line_segment([at(10.5, 10.5), at(14.0, 14.0)], stroke);
+        }
+    }
 }
 
 /// A ghost button: a transparent pill with a thin border, caption-size
@@ -419,6 +540,24 @@ mod tests {
             !has_fill(&shapes, tokens::SURFACE_HIGHLIGHT.gamma_multiply(0.5)),
             "{shapes:?}"
         );
+    }
+
+    #[test]
+    fn a_focused_icon_button_shows_the_ring() {
+        let ctx = ready();
+        let id = Id::new(("tarragon-icon-button", "Show log"));
+        ctx.memory_mut(|memory| memory.request_focus(id));
+        let shapes = shapes(&ctx, |ui| {
+            icon_button(ui, Icon::Log, false);
+        });
+        assert!(has_fill(&shapes, tokens::SURFACE_HOVER), "{shapes:?}");
+        let ring = shapes.iter().any(|shape| {
+            matches!(
+                shape,
+                Shape::Rect(rect) if rect.stroke.color == tokens::CORAL_STRONG
+            )
+        });
+        assert!(ring, "the focused button has no ring: {shapes:?}");
     }
 
     #[test]

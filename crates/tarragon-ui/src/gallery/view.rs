@@ -20,7 +20,7 @@ impl Scope {
     pub const fn label(self) -> &'static str {
         match self {
             Self::Folder => "Folder",
-            Self::All => "All Images",
+            Self::All => "All images",
         }
     }
 }
@@ -56,12 +56,18 @@ impl Gallery {
     /// The call runs only on a filter input change, so a quiet frame reads the
     /// cache instead of rebuilding it.
     pub(super) fn refresh_view(&mut self) {
-        let visible: Vec<usize> = self
-            .order
-            .iter()
-            .copied()
-            .filter(|&index| self.in_scope(index) && self.matches(index))
-            .collect();
+        let mut scoped = 0;
+        let mut visible = Vec::new();
+        for &index in &self.order {
+            if !self.in_scope(index) {
+                continue;
+            }
+            scoped += 1;
+            if self.matches(index) {
+                visible.push(index);
+            }
+        }
+        self.scoped = scoped;
         self.visible = visible;
         // A display position is stale once the view is rebuilt.
         self.scroll_to = None;

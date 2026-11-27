@@ -149,6 +149,9 @@ pub(crate) fn dialog_frame() -> Frame {
 /// 8 px side padding is fixed inside `egui_dock` and equals `SPACING_S`, so it
 /// is not set here.
 pub(crate) fn dock_title_style(style: &mut egui_dock::Style, text_height: f32) {
+    // The design draws no border between two panels. The separator keeps its
+    // grab area and shows while the pointer hovers it or drags it.
+    style.separator.color_idle = Color32::TRANSPARENT;
     let bar = &mut style.tab_bar;
     bar.bg_fill = tokens::BG_TERTIARY;
     bar.height = text_height + 2.0 * tokens::SPACING_XS;

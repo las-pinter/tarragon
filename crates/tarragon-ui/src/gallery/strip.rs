@@ -1,24 +1,16 @@
-//! The gallery top strip: tabs, search field, info bar, filter pill, and sort pills.
-
-use std::time::Instant;
+//! The gallery top strip: header, info row, filter pill, and sort pills.
 
 use egui::{
-    Align, Color32, CornerRadius, FontId, Frame, Id, Label, Layout, Margin, Rect, Response,
-    RichText, Sense, Stroke, StrokeKind, TextEdit, Ui, Vec2, vec2,
+    Align, Color32, CornerRadius, FontId, Frame, Id, Layout, Margin, Rect, Response, RichText,
+    Sense, Stroke, StrokeKind, Ui, Vec2, vec2,
 };
 use tarragon_core::sorting::SortMode;
 
-use super::{Gallery, Scope};
+use super::Gallery;
 use crate::filter_bar;
 use crate::theme::points;
 use crate::tokens;
 
-/// Horizontal tab padding, in points. The stylesheet sets 16 px.
-const TAB_PAD_X: f32 = 16.0;
-/// Vertical tab padding, in points. The stylesheet sets 5 px.
-const TAB_PAD_Y: f32 = 5.0;
-/// Gap between two tabs, in points. The stylesheet sets 2 px.
-const TAB_GAP: f32 = 2.0;
 /// Gap between the sort label and a pill, in points.
 const SORT_GAP: f32 = 6.0;
 /// Horizontal pill padding, in points.
@@ -31,11 +23,11 @@ const FILTER_PAD_X: f32 = 8.0;
 const FILTER_PAD_Y: f32 = 2.0;
 
 impl Gallery {
-    /// Draw the tab bar, the search field, the info bar, and the sort pills.
+    /// Draw the header, the info row, the filter bar, and the busy strip.
     ///
-    /// The tabs and the search field draw first and refresh the cached view.
-    /// The info bar and the grid then paint one set in one frame.
-    pub(super) fn strip(&mut self, ui: &mut Ui, now: Instant) {
+    /// The header draws first and refreshes the cached view. The info row and
+    /// the grid then paint one set in one frame.
+    pub(super) fn strip(&mut self, ui: &mut Ui) {
         Frame::new()
             .fill(tokens::BG_PRIMARY)
             .inner_margin(Margin::symmetric(
@@ -43,29 +35,8 @@ impl Gallery {
                 points(tokens::SPACING_S),
             ))
             .show(ui, |ui| {
-                let width = ui.available_width();
-                let tabs = ui.horizontal(|ui| {
-                    ui.spacing_mut().item_spacing.x = TAB_GAP;
-                    let mut picked = None;
-                    for scope in [Scope::Folder, Scope::All] {
-                        if tab(ui, scope.label(), self.scope == scope).clicked() {
-                            picked = Some(scope);
-                        }
-                    }
-                    picked
-                });
-                let row = tabs.response.rect;
-                ui.painter().hline(
-                    row.min.x..=row.min.x + width,
-                    row.max.y,
-                    Stroke::new(1.0, tokens::SEPARATOR),
-                );
-                if let Some(scope) = tabs.inner {
-                    self.set_scope(scope);
-                }
-
-                ui.add_space(tokens::SPACING_XS);
-                self.search_field(ui, now);
+                self.header(ui);
+                ui.add_space(tokens::SPACING_S);
                 let picked = self.sort_segment(ui);
                 if let Some(mode) = picked {
                     self.pick_sort_mode(mode);
@@ -87,78 +58,38 @@ impl Gallery {
             });
     }
 
-    /// Draw the search field and re-arm the timer on a change.
-    fn search_field(&mut self, ui: &mut Ui, now: Instant) {
-        let output = TextEdit::singleline(&mut self.search)
-            .id(Id::new("tarragon-gallery-search"))
-            .hint_text("Search file names")
-            .text_color(tokens::TEXT_SECONDARY)
-            .desired_width(f32::INFINITY)
-            .frame(
-                Frame::new()
-                    .fill(tokens::BG_SECONDARY)
-                    .corner_radius(CornerRadius::same(tokens::RADIUS_M))
-                    .inner_margin(Margin::symmetric(
-                        points(tokens::SPACING_S),
-                        points(tokens::SPACING_XS),
-                    )),
-            )
-            .show(ui);
-        let response = output.response.clone();
-        self.apply_search_focus(ui, output);
-        if response.has_focus() {
-            ui.painter().rect_stroke(
-                response.rect,
-                CornerRadius::same(tokens::RADIUS_M),
-                Stroke::new(1.0, tokens::CORAL_STRONG),
-                StrokeKind::Inside,
-            );
-        }
-        if response.changed() {
-            // The gallery asks for the wake frame again on every pass.
-            self.arm_search(now);
-        }
-    }
-
-    /// Draw the info bar, the filter pill, and the sort pills. Returns the
-    /// picked sort mode.
+    /// Draw the selection text, the filter pill, and the sort pills. Returns
+    /// the picked sort mode.
+    ///
+    /// The row always holds one line: the selection text takes the width that
+    /// the controls leave, and the dock keeps the gallery wide enough for the
+    /// controls.
     fn sort_segment(&self, ui: &mut Ui) -> Option<SortMode> {
         let mut picked = None;
-        // Measure before drawing, so the layout never waits a frame.
-        // The slack absorbs rounding in the measured widths.
-        let needed = self.info_min_width(ui) + self.controls_width(ui);
-        let stacked = needed > ui.available_width() + 0.5;
-        if stacked {
-            // The info line takes the whole row and the controls drop below.
-            ui.vertical(|ui| {
-                self.info_label(ui);
-                ui.horizontal(|ui| {
-                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                        picked = self.sort_controls(ui);
-                    });
+        ui.horizontal(|ui| {
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                picked = self.sort_controls(ui);
+                ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
+                    self.selection_label(ui);
                 });
             });
-        } else {
-            ui.horizontal(|ui| {
-                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    picked = self.sort_controls(ui);
-                    // The info text takes the width that the controls leave.
-                    ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
-                        self.info_label(ui);
-                    });
-                });
-            });
-        }
+        });
         picked
     }
 
-    /// Draw the info text, cut to the width left in `ui`.
-    fn info_label(&self, ui: &mut Ui) {
-        let info = self.info_text_fitted(ui, ui.available_width());
-        let text = RichText::new(info)
-            .size(tokens::SIZE_CAPTION)
-            .color(tokens::TEXT_SECONDARY);
-        ui.add(Label::new(text).truncate());
+    /// Draw the selection text when anything is selected.
+    fn selection_label(&self, ui: &mut Ui) {
+        let Some(text) = self.selection_text() else {
+            return;
+        };
+        ui.add(
+            egui::Label::new(
+                RichText::new(text)
+                    .size(tokens::SIZE_CAPTION)
+                    .color(tokens::TEXT_SECONDARY),
+            )
+            .truncate(),
+        );
     }
 
     /// The filter pill text, or none when no filter is active.
@@ -190,59 +121,6 @@ impl Gallery {
         );
         picked
     }
-
-    /// The width of the controls and the gap after each, in points.
-    fn controls_width(&self, ui: &Ui) -> f32 {
-        let text_width = |text: &str, size: f32| {
-            ui.painter()
-                .layout_no_wrap(text.to_owned(), FontId::proportional(size), Color32::WHITE)
-                .size()
-                .x
-        };
-        let pill = |text: &str, pad_x: f32| text_width(text, tokens::SIZE_CAPTION) + 2.0 * pad_x;
-        let mut widths = vec![text_width("Sort", tokens::SIZE_SMALL)];
-        widths.extend(
-            SortMode::ALL
-                .into_iter()
-                .map(|mode| pill(sort_label(mode), PILL_PAD_X)),
-        );
-        widths.extend(self.active_filter_text().map(|t| pill(&t, FILTER_PAD_X)));
-        widths.iter().map(|width| width + SORT_GAP).sum()
-    }
-}
-
-/// Draw one scope tab and return its click response.
-fn tab(ui: &mut Ui, label: &str, active: bool) -> Response {
-    let (fill, color) = if active {
-        (tokens::BG_SECONDARY, tokens::AMBER_ACCENT)
-    } else {
-        (tokens::BG_TERTIARY, tokens::TEXT_SECONDARY)
-    };
-    let galley = ui.painter().layout_no_wrap(
-        label.to_owned(),
-        FontId::proportional(tokens::SIZE_BODY),
-        color,
-    );
-    let size = galley.size() + vec2(2.0 * TAB_PAD_X, 2.0 * TAB_PAD_Y);
-    let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
-    let response = ui.interact(rect, Id::new(("tarragon-scope-tab", label)), Sense::click());
-    let radius = CornerRadius {
-        nw: tokens::RADIUS_S,
-        ne: tokens::RADIUS_S,
-        sw: 0,
-        se: 0,
-    };
-    let painter = ui.painter();
-    painter.rect(rect, radius, fill, Stroke::NONE, StrokeKind::Inside);
-    painter.galley(rect.center() - galley.size() / 2.0, galley, color);
-    if active {
-        painter.hline(
-            rect.x_range(),
-            rect.max.y - 0.5,
-            Stroke::new(1.0, tokens::AMBER_ACCENT),
-        );
-    }
-    response
 }
 
 /// Draw one sort pill and return its click response.

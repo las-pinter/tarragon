@@ -3,14 +3,15 @@
 //! The values come from the `:root` block of `design/mockups/theme.css`. Each
 //! doc comment names its stylesheet token, so the two stay traceable. The
 //! exceptions are `BUCKET_PINK`, `CHECKER_LIGHT`, `CHECKER_DARK`,
-//! `WINDOW_SIZE`, and `GALLERY_MIN_WIDTH`, which have no stylesheet row.
+//! `WINDOW_SIZE`, `GALLERY_MIN_WIDTH`, `SIZE_DISPLAY`, and `SIZE_TITLE`, which
+//! have no stylesheet row.
 //! Colors convert to `egui::Color32` at compile time.
 
 use egui::Color32;
 
 // The whole `:root` block of `theme.css` is ported on purpose, plus
-// `BUCKET_PINK`, the checker greys, `WINDOW_SIZE` and `GALLERY_MIN_WIDTH`.
-// Some values have no consumer yet.
+// `BUCKET_PINK`, the checker greys, `WINDOW_SIZE`, `GALLERY_MIN_WIDTH`, and the
+// two redesign sizes. Some values have no consumer yet.
 
 /// `--bg-primary`: window and gallery background.
 pub const BG_PRIMARY: Color32 = Color32::from_rgb(0x16, 0x15, 0x1a);
@@ -181,7 +182,7 @@ pub const THUMBNAIL_SIZE: f32 = 160.0;
 /// Default window size in points. The dock split shares are computed for its
 /// width, so the app and the layout must read the same value.
 pub const WINDOW_SIZE: [f32; 2] = [1280.0, 800.0];
-/// Least Gallery dock width, in points. Below it the info bar clips. It has no
+/// Least Gallery dock width, in points. Below it the info row clips. It has no
 /// stylesheet row.
 pub const GALLERY_MIN_WIDTH: f32 = 260.0;
 /// `--sidebar-width`: default Library dock width, in points.
@@ -230,6 +231,12 @@ pub const FONT_MONO: &str = "ui-monospace, \"Consolas\", \"Courier New\", monosp
 pub const SIZE_BODY: f32 = 12.0;
 /// `--size-heading`: heading text size, in points.
 pub const SIZE_HEADING: f32 = 16.0;
+/// The display heading size of the redesign: the gallery folder heading. The
+/// stylesheet has no row; the redesign palette page gives 22 px.
+pub const SIZE_DISPLAY: f32 = 22.0;
+/// The title size of the redesign: the product wordmark and a card title. The
+/// stylesheet has no row; the redesign palette page gives 15 px.
+pub const SIZE_TITLE: f32 = 15.0;
 /// `--size-small`: small text size, in points.
 pub const SIZE_SMALL: f32 = 10.0;
 /// `--size-log`: log line text size, in points.

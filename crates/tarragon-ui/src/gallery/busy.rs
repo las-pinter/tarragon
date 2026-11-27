@@ -15,7 +15,7 @@ pub(super) struct Busy {
     /// Whether work runs and the strip shows.
     working: bool,
     /// The folder that opens now. The gallery still holds the old folder's
-    /// items, so the info bar names this one without taking it early.
+    /// items, so the header names this one without taking it early.
     loading: Option<PathBuf>,
 }
 
@@ -27,7 +27,7 @@ impl Busy {
 }
 
 impl Gallery {
-    /// Name the folder that opens now in the info bar, or `None` when no open
+    /// Name the folder that opens now in the header, or `None` when no open
     /// runs. The old folder shows again by itself when an open fails.
     pub fn set_loading_folder(&mut self, folder: Option<PathBuf>) {
         self.busy.loading = folder;

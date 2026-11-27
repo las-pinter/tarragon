@@ -49,7 +49,7 @@ fn rows_are_twelve_points_apart() {
     let mut bar = FilterBar::default();
     let (global, _) = draw(FilterScope::Global, false, &mut bar);
     let (folder, _) = draw(FilterScope::Folder, false, &mut bar);
-    // The info bar space less the parent spacing, then 4 pt padding twice.
+    // The row above the bar less the parent spacing, then 4 pt padding twice.
     let pads = 4.0 - egui::Spacing::default().item_spacing.y + 8.0;
     let row = folder - pads;
     assert!(

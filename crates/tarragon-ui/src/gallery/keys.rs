@@ -52,10 +52,15 @@ impl Gallery {
         self.search_focus_requested = true;
     }
 
+    /// Forget a pending focus request.
+    pub(crate) fn drop_search_focus_request(&mut self) {
+        self.search_focus_requested = false;
+    }
+
     /// Act on a focus request once: focus the field and select its text.
     ///
     /// The request clears here, so later frames leave the focus alone.
-    pub(super) fn apply_search_focus(&mut self, ui: &Ui, output: TextEditOutput) {
+    pub(crate) fn apply_search_focus(&mut self, ui: &Ui, output: TextEditOutput) {
         if !std::mem::take(&mut self.search_focus_requested) {
             return;
         }

@@ -5,12 +5,12 @@ use crate::crash_card::CrashReport;
 use crate::grid::GridItem;
 use crate::prefs::PrefsValues;
 use crate::test_support;
-use egui::{Context, Event, Id, Key, Modifiers, Pos2, Rect};
+use egui::{Context, Event, Id, Key, Modifiers, PointerButton, Pos2, Rect};
 use std::path::PathBuf;
 
 /// The id of the gallery search field.
 pub(super) fn search_id() -> Id {
-    Id::new("tarragon-gallery-search")
+    Id::new(crate::shell::top_bar::SEARCH_ID)
 }
 
 /// What the real keyboard reports for Ctrl held on Linux.
@@ -70,6 +70,7 @@ pub(super) fn frame_at(
             Key::O,
             Key::Comma,
             Key::F,
+            Key::K,
             Key::A,
             Key::Enter,
             Key::F2,
@@ -122,18 +123,22 @@ pub(super) fn setup() -> (Context, Shell) {
 
 /// One press of each shortcut key with Ctrl.
 fn all_shortcuts() -> Vec<Event> {
-    [Key::O, Key::Comma, Key::F, Key::A]
+    [Key::O, Key::Comma, Key::F, Key::K, Key::A]
         .map(|key| press(key, ctrl()))
         .to_vec()
 }
 
-/// Assert that the four shortcuts did nothing and stayed in the input.
+/// Assert that the five shortcuts did nothing and stayed in the input.
 fn assert_shortcuts_blocked(ctx: &Context, shell: &mut Shell) {
     let left = frame(ctx, shell, all_shortcuts());
     assert_eq!(shell.take_menu_events(), vec![]);
     assert!(shell.selected_paths().is_empty(), "nothing was selected");
     assert!(!ctx.memory(|m| m.has_focus(search_id())), "search is idle");
-    assert_eq!(left, [Key::O, Key::Comma, Key::F, Key::A], "keys kept");
+    assert_eq!(
+        left,
+        [Key::O, Key::Comma, Key::F, Key::K, Key::A],
+        "keys kept"
+    );
 }
 
 #[test]
@@ -170,6 +175,116 @@ fn ctrl_f_focuses_the_search_field() {
 }
 
 #[test]
+fn ctrl_k_focuses_the_search_field() {
+    let (ctx, mut shell) = setup();
+    assert!(!ctx.memory(|m| m.has_focus(search_id())));
+    frame(&ctx, &mut shell, vec![press(Key::K, ctrl())]);
+    frame(&ctx, &mut shell, vec![]);
+    assert!(ctx.memory(|m| m.has_focus(search_id())));
+}
+
+#[test]
+fn the_focus_request_takes_once_and_a_click_elsewhere_removes_it() {
+    let (ctx, mut shell) = setup();
+    shell.gallery_mut().focus_search();
+    frame(&ctx, &mut shell, vec![]);
+    assert!(
+        ctx.memory(|m| m.has_focus(search_id())),
+        "the field focused"
+    );
+
+    frame(&ctx, &mut shell, vec![]);
+    assert!(
+        ctx.memory(|m| m.has_focus(search_id())),
+        "a quiet frame keeps the focus"
+    );
+
+    let tab = Id::new(("tarragon-scope-tab", "All images"));
+    let pos = ctx
+        .read_response(tab)
+        .expect("the tab registered a response")
+        .rect
+        .center();
+    let button = |pressed| Event::PointerButton {
+        pos,
+        button: PointerButton::Primary,
+        pressed,
+        modifiers: Modifiers::NONE,
+    };
+    frame(
+        &ctx,
+        &mut shell,
+        vec![Event::PointerMoved(pos), button(true)],
+    );
+    frame(&ctx, &mut shell, vec![button(false)]);
+    frame(&ctx, &mut shell, vec![]);
+    assert!(
+        !ctx.memory(|m| m.has_focus(search_id())),
+        "the request did not focus the field again"
+    );
+}
+
+#[test]
+fn escape_leaves_the_search_field() {
+    let (ctx, mut shell) = setup();
+    shell.gallery_mut().focus_search();
+    frame(&ctx, &mut shell, vec![]);
+    assert!(
+        ctx.memory(|m| m.has_focus(search_id())),
+        "the field focused"
+    );
+
+    frame(&ctx, &mut shell, vec![press(Key::Escape, Modifiers::NONE)]);
+    frame(&ctx, &mut shell, vec![]);
+
+    assert!(
+        !ctx.memory(|m| m.has_focus(search_id())),
+        "Esc leaves the field"
+    );
+}
+
+#[test]
+fn a_focus_request_selects_the_whole_text() {
+    let (ctx, mut shell) = setup();
+    *shell.gallery_mut().search_mut() = "abc".to_owned();
+    shell.gallery_mut().focus_search();
+    frame(&ctx, &mut shell, vec![]);
+
+    let state = egui::TextEdit::load_state(&ctx, search_id()).expect("the field stored its state");
+    assert_eq!(
+        state.cursor.char_range(),
+        Some(egui::text::CCursorRange::two(
+            egui::text::CCursor::new(0),
+            egui::text::CCursor::new(3)
+        ))
+    );
+
+    frame(&ctx, &mut shell, vec![Event::Text("x".to_owned())]);
+    assert_eq!(
+        shell.gallery_mut().search_mut().as_str(),
+        "x",
+        "the typed text replaced the old text"
+    );
+}
+
+#[test]
+fn a_focus_request_counts_characters_not_bytes() {
+    let (ctx, mut shell) = setup();
+    *shell.gallery_mut().search_mut() = "äö".to_owned();
+    shell.gallery_mut().focus_search();
+    frame(&ctx, &mut shell, vec![]);
+
+    let state = egui::TextEdit::load_state(&ctx, search_id()).expect("the field stored its state");
+    assert_eq!(
+        state.cursor.char_range(),
+        Some(egui::text::CCursorRange::two(
+            egui::text::CCursor::new(0),
+            egui::text::CCursor::new(2)
+        ))
+    );
+}
+
+#[test]
 fn ctrl_a_leaves_a_focused_text_field_its_own_select_all() {
     let (ctx, mut shell) = setup();
     frame(&ctx, &mut shell, vec![press(Key::F, ctrl())]);
@@ -184,7 +299,7 @@ fn ctrl_a_leaves_a_focused_text_field_its_own_select_all() {
 #[test]
 fn ctrl_a_works_while_a_non_text_widget_has_focus() {
     let (ctx, mut shell) = setup();
-    let tab = Id::new(("tarragon-scope-tab", "All Images"));
+    let tab = Id::new(("tarragon-scope-tab", "All images"));
     ctx.memory_mut(|m| m.request_focus(tab));
     frame(&ctx, &mut shell, vec![]);
     assert!(ctx.memory(|m| m.has_focus(tab)), "the tab holds focus");
@@ -308,7 +423,7 @@ fn enter_queues_nothing_for_no_or_two_selected_images() {
 fn enter_with_a_focused_button_queues_nothing_and_stays_for_the_button() {
     let (ctx, mut shell) = setup();
     select_one(&ctx, &mut shell, 1);
-    let tab = Id::new(("tarragon-scope-tab", "All Images"));
+    let tab = Id::new(("tarragon-scope-tab", "All images"));
     ctx.memory_mut(|m| m.request_focus(tab));
     frame(&ctx, &mut shell, vec![]);
     assert!(ctx.memory(|m| m.has_focus(tab)), "the tab holds focus");

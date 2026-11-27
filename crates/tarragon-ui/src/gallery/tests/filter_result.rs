@@ -55,11 +55,12 @@ fn a_selected_item_that_becomes_hidden_leaves_the_selection() {
 }
 
 #[test]
-fn the_info_bar_count_matches_the_visible_count() {
+fn the_header_count_matches_the_visible_count() {
     let mut gallery = gallery();
     gallery.set_filter_result(Some(set_of(&["/library/sketches/b.png"])));
     assert_eq!(gallery.visible_len(), 1);
-    assert_eq!(gallery.info_text(), "All Images - 1 file");
+    assert_eq!(gallery.scoped_len(), 4);
+    assert_eq!(gallery.count_text(), "1 of 4 files");
 }
 
 #[test]

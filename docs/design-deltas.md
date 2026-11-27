@@ -180,9 +180,9 @@ extra-small spacing of 4 px by 8 px. Panel titles use the semibold weight of
 title bar, the menu bar, the sidebar, the preview, and the log each take a one
 pixel separator border in the stylesheet, and the frame paints none of them.
 
-After: the frame draws the title bar text at the heading size, gives the panel
-titles the extra-small vertical padding and the Roboto Medium face, and paints
-no separator borders.
+After: the frame draws the wordmark in the top bar at the redesign's title size,
+gives the panel titles the extra-small vertical padding and the Roboto Medium
+face, and paints no separator borders.
 
 Reason: these four differences are visual only. Every colour, region, label,
 and interaction stays as designed. egui 0.36.2 has no weight selection, so the
@@ -486,12 +486,12 @@ Reason: a pill that shrinks or wraps becomes hard to read and hard to click.
 Before: `design/mockups/main-window.html` lines 57-71 put the swatches and the
 "Filter Tags" button in one `filterbar` row.
 
-After: the bar stacks three rows below the info bar with 12 pt gaps: colours,
+After: the bar stacks three rows below the info row with 12 pt gaps: colours,
 then tags, then folders. The tag button and its chips share the tags row. The
 folder button and its chips share the folders row.
 
 Reason: the chips of each kind wrap in their own row. The folder row shows only
-in All Images scope, or when it has chips.
+in All images scope, or when it has chips.
 
 ## Gallery minimum width
 
@@ -500,14 +500,14 @@ Before: the mockups set no minimum width for the Gallery panel.
 After: the Gallery panel is never narrower than 260 pt. The dock keeps this
 width when the user drags a separator.
 
-Reason: below about 224 pt the info bar clips on the left. The pills and the
-info text need the width.
+Reason: below about 224 pt the info row clips on the left. The pills and the
+selection text need the width.
 
-## All Images scope
+## All images scope
 
-Before: the mockups do not say which files All Images lists.
+Before: the mockups do not say which files All images lists.
 
-After: All Images shows the whole library, read from the `thumbnails` rows. It
+After: All images shows the whole library, read from the `thumbnails` rows. It
 includes files that no longer exist on disk. They stay in the list until a
 later rescan step removes their rows. The Python application behaves the same.
 
@@ -657,10 +657,10 @@ height while it shows. The filter buttons stay still. The strip takes no space w
 idle. The cache clean-up at start does not show it. The Preferences purge strip
 uses the same painter. No decode strip exists. The strip ends when the file list is
 ready, not when the tiles render. Each tile shows its own loading cell. While a
-folder opens, the info bar names that folder. The count still belongs to the files
+folder opens, the gallery header names that folder. The count still belongs to the files
 on screen, so a switch from one folder to another shows the new name with the old
-count, and a first open shows 0. The mockup shows the count of the new folder. All
-Images keeps its own name. When an open fails, the info bar shows the old folder again.
+count, and a first open shows 0. The mockup shows the count of the new folder. The
+All images scope keeps its own name. When an open fails, the header shows the old folder again.
 
 Reason: one state machine runs all the thumbnail work, so one flag is enough. Below
 the filter bar, the strip does not move the controls under the pointer. A decode
@@ -886,7 +886,7 @@ needs its own text, and a button there would not help.
 Before: the mockup menu bar shows no shortcut text and no Quit item. The Python application
 had mnemonics only, such as `&File`.
 
-After: five shortcuts exist. The command key is Ctrl on Linux and Windows, and Cmd on macOS.
+After: six shortcuts exist. The command key is Ctrl on Linux and Windows, and Cmd on macOS.
 A chord with an extra Shift or Alt does not act.
 
 | Shortcut | Action                                        | Off when                                       |
@@ -894,11 +894,13 @@ A chord with an extra Shift or Alt does not act.
 | Ctrl+O   | Open Folder, as File > Open Folder...         | A dialog window is open                        |
 | Ctrl+,   | Preferences, as Settings > Preferences...     | A dialog window is open                        |
 | Ctrl+F   | Focus the search field and select its text    | A dialog window is open                        |
+| Ctrl+K   | The same as Ctrl+F                            | A dialog window is open                        |
 | Ctrl+A   | Select every visible image                    | A dialog window is open, or a text field has focus |
 | Enter    | Open the selected image in its editor, when exactly one image is selected | A dialog window is open, or a widget other than a tile has focus |
 
 - The windows are the crash card, Preferences, and Manage tags. While one is open, no
   shortcut acts.
+- Ctrl+K is the key the redesign top bar prints in its search field, so both keys act.
 - Ctrl+A leaves a focused text field its own select all. Focus on a tile or a button does
   not block it. An image that the search hides is not selected.
 - No menu bar menu shows these shortcuts, because the mockup shows none. This list is the

@@ -153,9 +153,8 @@ tessellation. It measures no GPU work.
 
 Two passes run at each width. The first pass paints the grid container only and
 sweeps the whole 10,000 item list. The second pass paints the whole gallery
-(`Gallery::show`: the tabs, the search field, the info bar, the sort pills, and
-the grid) and sends no input, so it measures one quiet frame that reads the
-cached visible order.
+(`Gallery::show`: the header, the info row, and the grid) and sends no input,
+so it measures one quiet frame that reads the cached visible order.
 
 Warning: the run covers the simplified data set. A tile carries a file name, a
 badge derived from the path, and no texture. A real frame adds the uploaded

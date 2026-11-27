@@ -103,7 +103,7 @@ fn an_open_tile_menu_keeps_ctrl_z_and_it_works_again_after_the_menu_closes() {
 fn a_focused_button_and_an_open_window_keep_ctrl_z() {
     let (ctx, mut shell) = setup();
     shell.gallery_mut().set_undo_available(true);
-    let tab = egui::Id::new(("tarragon-scope-tab", "All Images"));
+    let tab = egui::Id::new(("tarragon-scope-tab", "All images"));
     ctx.memory_mut(|m| m.request_focus(tab));
     frame(&ctx, &mut shell, vec![]);
     assert!(ctx.memory(|m| m.has_focus(tab)), "the tab holds focus");

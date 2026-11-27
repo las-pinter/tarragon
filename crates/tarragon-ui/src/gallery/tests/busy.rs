@@ -84,12 +84,12 @@ fn the_frame_asks_for_a_repaint_only_while_busy() {
 }
 
 #[test]
-fn the_loading_folder_names_the_info_bar_until_it_ends() {
+fn the_loading_folder_names_the_header_until_it_ends() {
     let (_ctx, mut gallery) = setup();
     gallery.set_loading_folder(Some(PathBuf::from("/other")));
-    assert_eq!(gallery.info_text(), "other - 4 files");
+    assert_eq!(gallery.scope_name(), "other");
     gallery.set_loading_folder(None);
-    assert_eq!(gallery.info_text(), "images - 4 files");
+    assert_eq!(gallery.scope_name(), "images");
 }
 
 /// The rects of the filter buttons and the top of the grid in one frame. The

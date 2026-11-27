@@ -1,4 +1,4 @@
-//! Tests for the scope filter, the info bar, and selection pruning.
+//! Tests for the scope filter, the header, and selection pruning.
 
 use super::*;
 
@@ -41,7 +41,8 @@ fn the_folder_scope_without_a_folder_shows_nothing() {
     let mut gallery = Gallery::new(SortMode::Natural);
     gallery.set_items(items_in_two_folders());
     assert_eq!(gallery.visible_len(), 0, "no folder is set");
-    assert_eq!(gallery.info_text(), "No folder - 0 files");
+    assert_eq!(gallery.scope_name(), "No folder");
+    assert_eq!(gallery.count_text(), "0 files");
 
     gallery.set_scope(Scope::All);
     assert_eq!(gallery.visible_len(), 4, "the global scope stays full");
@@ -77,40 +78,62 @@ fn set_folder_normalizes_the_path_once() {
 }
 
 #[test]
-fn the_info_bar_names_the_folder_and_the_count() {
+fn the_header_names_the_folder_and_the_count() {
     let mut gallery = Gallery::new(SortMode::Natural);
     gallery.set_items(items());
     gallery.set_folder(Some(PathBuf::from("/images")));
-    assert_eq!(gallery.info_text(), "images - 4 files");
+    assert_eq!(gallery.scope_name(), "images");
+    assert_eq!(gallery.count_text(), "4 files");
 
     gallery.set_scope(Scope::All);
-    assert_eq!(gallery.info_text(), "All Images - 4 files");
+    assert_eq!(gallery.scope_name(), "All images");
+    assert_eq!(gallery.count_text(), "4 files");
 }
 
 #[test]
-fn the_info_bar_uses_the_singular_for_one_file() {
+fn the_header_uses_the_singular_for_one_file() {
     let mut gallery = Gallery::new(SortMode::Natural);
     let mut one = items();
     one.truncate(1);
     gallery.set_items(one);
     gallery.set_scope(Scope::All);
-    assert_eq!(gallery.info_text(), "All Images - 1 file");
+    assert_eq!(gallery.count_text(), "1 file");
 }
 
 #[test]
-fn the_info_bar_adds_the_selection_count() {
+fn the_info_row_shows_the_selection_count_only() {
     let mut gallery = Gallery::new(SortMode::Natural);
     gallery.set_items(items());
     gallery.set_folder(Some(PathBuf::from("/images")));
+    assert_eq!(gallery.selection_text(), None);
     gallery.selection.select_only(1);
     gallery.selection.toggle(2);
-    assert_eq!(gallery.info_text(), "images - 4 files - 2 selected");
+    assert_eq!(gallery.selection_text().as_deref(), Some("2 selected"));
 }
 
 #[test]
 fn the_scope_name_falls_back_when_no_folder_exists() {
     let gallery = Gallery::new(SortMode::Natural);
     assert_eq!(gallery.scope_name(), "No folder");
+}
+
+#[test]
+fn the_breadcrumb_shows_the_last_two_folder_parts_above_the_heading() {
+    let mut gallery = Gallery::new(SortMode::Natural);
+    gallery.set_folder(Some(PathBuf::from("/a/b/c/d")));
+    assert_eq!(gallery.breadcrumb().as_deref(), Some("b / c"));
+}
+
+#[test]
+fn the_breadcrumb_hides_at_the_root_and_in_the_all_scope() {
+    let mut gallery = Gallery::new(SortMode::Natural);
+    assert_eq!(gallery.breadcrumb(), None, "no folder");
+    gallery.set_folder(Some(PathBuf::from("/pics")));
+    assert_eq!(gallery.breadcrumb(), None, "the folder sits at the root");
+    gallery.set_folder(Some(PathBuf::from("/a/b")));
+    assert!(gallery.breadcrumb().is_some());
+    gallery.set_scope(Scope::All);
+    assert_eq!(gallery.breadcrumb(), None, "the whole library has no path");
 }
 
 #[test]

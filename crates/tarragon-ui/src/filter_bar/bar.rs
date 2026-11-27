@@ -12,9 +12,9 @@ use crate::tokens;
 
 /// The bar padding on each side, in points. The stylesheet sets 4 px.
 const BAR_PAD: i8 = 4;
-/// The info bar bottom padding above the bar, in points. The stylesheet sets
-/// 4 px.
-const INFO_PAD: f32 = 4.0;
+/// The room that the row above the bar adds below itself, in points. The
+/// stylesheet sets 4 px.
+const ROW_PAD: f32 = 4.0;
 
 /// Draw the color, tag, and folder rows and report what happened.
 ///
@@ -33,9 +33,9 @@ pub fn show(
 ) -> Shown {
     let mut shown = Shown::default();
     // The bar pads 4 px on every side and puts 12 px between rows. The info
-    // bar adds 4 px below itself.
+    // row adds 4 px below itself.
     let outer = ui.spacing().item_spacing.y;
-    ui.add_space((INFO_PAD - outer).max(0.0));
+    ui.add_space((ROW_PAD - outer).max(0.0));
     Frame::new()
         .inner_margin(Margin::same(BAR_PAD))
         .show(ui, |ui| {

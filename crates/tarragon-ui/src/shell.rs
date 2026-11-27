@@ -1,8 +1,8 @@
-//! Application shell: the window frame, the menu bar, and the dock panels.
+//! Application shell: the window frame, the top bar, and the dock panels.
 //!
 //! The four panels sit in a dock, so the user can resize and move them.
 
-use egui::{CentralPanel, Frame, Margin, MenuBar, Panel, RichText, Ui};
+use egui::{CentralPanel, Frame, Margin, Panel, Ui};
 use egui_dock::{DockArea, DockState, Style};
 use tarragon_core::sorting::SortMode;
 
@@ -23,10 +23,11 @@ mod keys;
 mod log_panel;
 mod menu;
 mod prefs;
+mod top_bar;
 pub use log_panel::{LogLevel, LogLine, LogPanelEvents, LogSlice, LogSource, LogView};
 pub use prefs::MenuEvent;
 
-/// The product name shown in the title bar.
+/// The product name shown in the wordmark.
 pub const PRODUCT_NAME: &str = "Tarragon";
 
 /// The Library dock name: the menu label, the panel id, and the panel title.
@@ -37,11 +38,6 @@ pub const DOCK_GALLERY: &str = "Gallery";
 pub const DOCK_PREVIEW: &str = "Preview";
 /// The Log dock name: the menu label, the panel id, and the panel title.
 pub const DOCK_LOG: &str = "Log";
-
-/// Title bar height, in points.
-const TITLEBAR_HEIGHT: f32 = 30.0;
-/// Menu bar height, in points.
-const MENUBAR_HEIGHT: f32 = 26.0;
 
 /// The window frame. The dock holds which panels show and where they sit.
 pub struct Shell {
@@ -257,27 +253,15 @@ impl Shell {
             self.preview.selection_changed();
         }
 
-        Panel::top("tarragon-titlebar")
-            .exact_size(TITLEBAR_HEIGHT)
+        Panel::top("tarragon-topbar")
+            .exact_size(top_bar::TOP_BAR_HEIGHT)
             .resizable(false)
-            .frame(panel_frame(tokens::BG_SECONDARY, Margin::symmetric(10, 0)))
-            .show(ui, |ui| {
-                ui.horizontal_centered(|ui| {
-                    ui.label(
-                        RichText::new(PRODUCT_NAME)
-                            .size(tokens::SIZE_HEADING)
-                            .family(egui::FontFamily::Name(crate::fonts::BOLD_FAMILY.into())),
-                    );
-                });
-            });
-
-        Panel::top("tarragon-menubar")
-            .exact_size(MENUBAR_HEIGHT)
-            .resizable(false)
-            .frame(panel_frame(tokens::BG_SECONDARY, Margin::symmetric(6, 0)))
-            .show(ui, |ui| {
-                MenuBar::new().ui(ui, |ui| self.menu_bar(ui, &ctx));
-            });
+            .show_separator_line(false)
+            .frame(panel_frame(
+                tokens::BG_SECONDARY,
+                Margin::symmetric(top_bar::BAR_PAD_X, 0),
+            ))
+            .show(ui, |ui| self.top_bar(ui, &ctx));
 
         // The dock fills what the bars leave. It owns the panel sizes and places.
         CentralPanel::default().frame(Frame::NONE).show(ui, |ui| {

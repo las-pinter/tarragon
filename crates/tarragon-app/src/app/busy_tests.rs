@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 
 use eframe::App as _;
 use eframe::Frame;
-use eframe::egui::{Context, Ui};
+use eframe::egui::{Context, Pos2, Ui};
 use image::RgbaImage;
 
 use crate::app::tests::{TempDir, new_dir};
@@ -73,11 +73,15 @@ impl Rig {
         }
     }
 
+    /// The texts of one more frame, with where they were painted.
+    fn painted_texts(&mut self) -> Vec<(String, Pos2)> {
+        let mut run = |ui: &mut Ui| self.app.ui(ui, &mut self.frame);
+        frame(&self.ctx, Vec::new(), &mut run).texts
+    }
+
     /// The texts of one more frame.
     fn texts(&mut self) -> Vec<String> {
-        let mut run = |ui: &mut Ui| self.app.ui(ui, &mut self.frame);
-        let painted = frame(&self.ctx, Vec::new(), &mut run);
-        painted.texts.into_iter().map(|t| t.0).collect()
+        self.painted_texts().into_iter().map(|t| t.0).collect()
     }
 
     /// Whether one more frame shows the strip.
@@ -158,35 +162,47 @@ fn a_failed_open_ends_with_the_flag_false() {
     assert!(!rig.strip());
 }
 
-/// Whether one frame shows an info bar text that starts with `name`.
-fn info_starts_with(texts: &[String], name: &str) -> bool {
-    texts.iter().any(|t| t.starts_with(&format!("{name} - ")))
+/// Whether one frame names the folder in the gallery header.
+///
+/// The name must sit right of the GALLERY tab, so a sidebar row of the same
+/// name cannot satisfy it.
+fn header_names(painted: &[(String, Pos2)], name: &str) -> bool {
+    let Some(gallery) = painted
+        .iter()
+        .find(|(text, _)| *text == tarragon_ui::shell::DOCK_GALLERY.to_uppercase())
+        .map(|(_, pos)| pos.x)
+    else {
+        return false;
+    };
+    painted
+        .iter()
+        .any(|(text, pos)| text == name && pos.x > gallery)
 }
 
 #[test]
-fn the_first_open_names_the_folder_in_the_info_bar_before_it_ends() {
+fn the_first_open_names_the_folder_in_the_header_before_it_ends() {
     let mut rig = Rig::new();
     let folder = rig.folder.clone();
     rig.app.navigate(&folder);
-    let texts = rig.texts();
+    let texts = rig.painted_texts();
     assert!(rig.app.thumbs.is_busy(), "the open still runs");
-    assert!(info_starts_with(&texts, "pics"), "{texts:?}");
-    assert!(!texts.iter().any(|t| t.starts_with("No folder")));
+    assert!(header_names(&texts, "pics"), "{texts:?}");
+    assert!(!header_names(&texts, "No folder"));
 }
 
 #[test]
-fn a_failed_open_leaves_the_info_bar_on_the_old_folder() {
+fn a_failed_open_leaves_the_header_on_the_old_folder() {
     let mut rig = Rig::new();
     let folder = rig.folder.clone();
     rig.app.navigate(&folder);
     rig.settle();
     rig.app.navigate(Path::new("/nonexistent/x"));
-    let during = rig.texts();
-    assert!(info_starts_with(&during, "x"), "{during:?}");
+    let during = rig.painted_texts();
+    assert!(header_names(&during, "x"), "{during:?}");
     rig.settle();
-    let after = rig.texts();
-    assert!(info_starts_with(&after, "pics"), "{after:?}");
-    assert!(!info_starts_with(&after, "x"));
+    let after = rig.painted_texts();
+    assert!(header_names(&after, "pics"), "{after:?}");
+    assert!(!header_names(&after, "x"));
 }
 
 #[test]

@@ -592,7 +592,7 @@ fn a_focused_text_field_keeps_all_five_keys() {
 fn a_focused_button_keeps_all_five_keys() {
     let (ctx, mut shell) = setup();
     select_one(&ctx, &mut shell, 1);
-    let tab = egui::Id::new(("tarragon-scope-tab", "All Images"));
+    let tab = egui::Id::new(("tarragon-scope-tab", "All images"));
     ctx.memory_mut(|m| m.request_focus(tab));
     frame(&ctx, &mut shell, vec![]);
     assert!(ctx.memory(|m| m.has_focus(tab)), "the tab holds focus");

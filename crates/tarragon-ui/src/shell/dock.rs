@@ -4,10 +4,12 @@ use egui::{FontFamily, Id, Margin, RichText, Ui, WidgetText};
 use egui_dock::{NodePath, TabViewer};
 
 use super::log_panel::{self, LogPanelEvents, LogView};
+use super::menu::RESET_LAYOUT;
 use super::{DOCK_GALLERY, DOCK_LIBRARY, DOCK_LOG, DOCK_PREVIEW};
 use crate::fonts;
 use crate::gallery::Gallery;
 use crate::layout::Pane;
+use crate::popup::Rows;
 use crate::preview::Preview;
 use crate::sidebar::panel::Sidebar;
 use crate::theme::panel_frame;
@@ -39,6 +41,9 @@ pub(super) enum TabMenu {
     Reset,
 }
 
+/// The tab menu row that hides the panel.
+const HIDE_PANEL: &str = "Hide panel";
+
 impl TabViewer for Panes<'_> {
     type Tab = Pane;
 
@@ -59,11 +64,13 @@ impl TabViewer for Panes<'_> {
     }
 
     fn context_menu(&mut self, ui: &mut Ui, tab: &mut Pane, _path: NodePath) {
-        if ui.button("Hide panel").clicked() {
+        ui.spacing_mut().item_spacing.y = 0.0;
+        let rows = Rows::new(ui, &[HIDE_PANEL, RESET_LAYOUT], false);
+        if rows.row(ui, HIDE_PANEL, false) {
             *self.menu = Some(TabMenu::Hide(*tab));
             ui.close();
         }
-        if ui.button("Reset Window Layout").clicked() {
+        if rows.row(ui, RESET_LAYOUT, false) {
             *self.menu = Some(TabMenu::Reset);
             ui.close();
         }

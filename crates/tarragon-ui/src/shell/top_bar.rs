@@ -5,8 +5,8 @@ use std::time::Instant;
 
 use egui::epaint::{PathShape, PathStroke};
 use egui::{
-    Align, Color32, CornerRadius, FontFamily, FontId, Frame, Galley, Id, Layout, Margin, Pos2,
-    RichText, Sense, TextEdit, Ui, Vec2, vec2,
+    Align, Color32, CornerRadius, FontFamily, FontId, Frame, Galley, Id, Layout, Margin, Popup,
+    Pos2, RichText, Sense, TextEdit, Ui, Vec2, vec2,
 };
 
 use super::Shell;
@@ -241,8 +241,19 @@ pub(super) fn menu(ui: &mut Ui, label: &str, menus: impl FnOnce(&mut Ui)) {
             state.weak_bg_fill = tokens::SURFACE_HIGHLIGHT;
             state.fg_stroke.color = tokens::TEXT_PRIMARY;
         }
+        // egui lights an open menu button only inside its own menu bar, so
+        // the rest look takes the open look while this button's menu shows.
+        // The button takes the next automatic id, and its popup derives from it.
+        if Popup::is_id_open(ui.ctx(), ui.next_auto_id().with("popup")) {
+            let widgets = &mut ui.style_mut().visuals.widgets;
+            widgets.inactive = widgets.open;
+        }
         ui.spacing_mut().button_padding = MENU_PAD;
-        ui.menu_button(RichText::new(label).size(tokens::SIZE_BODY), menus);
+        ui.menu_button(RichText::new(label).size(tokens::SIZE_BODY), |ui| {
+            // The rows meet, as in the other menus.
+            ui.spacing_mut().item_spacing.y = 0.0;
+            menus(ui);
+        });
     });
 }
 

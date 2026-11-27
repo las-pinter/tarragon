@@ -1,12 +1,22 @@
 //! The menus of the top bar and the tab menu, which change the dock.
 
-use egui::{Button, Context, Ui, ViewportCommand};
+use egui::{Context, Ui, ViewportCommand};
 
 use super::Shell;
 use super::dock::{self, TabMenu};
 use super::prefs::MenuEvent;
 use super::top_bar;
 use crate::layout::{Pane, is_visible, set_visible};
+use crate::popup::Rows;
+
+/// The File menu row that opens the folder dialog.
+pub(super) const OPEN_FOLDER: &str = "Open Folder...";
+/// The File menu row that closes the window.
+pub(super) const QUIT: &str = "Quit";
+/// The View menu row that puts every panel back.
+pub(super) const RESET_LAYOUT: &str = "Reset Window Layout";
+/// The Settings menu row that opens the dialog.
+pub(super) const PREFERENCES: &str = "Preferences...";
 
 impl Shell {
     /// Apply one choice from the tab context menu.
@@ -24,33 +34,36 @@ impl Shell {
         ui.scope(|ui| {
             ui.spacing_mut().item_spacing.x = top_bar::MENU_GAP;
             top_bar::menu(ui, "File", |ui| {
-                if ui.button("Open Folder...").clicked() {
+                let rows = Rows::new(ui, &[OPEN_FOLDER, QUIT], false);
+                if rows.row(ui, OPEN_FOLDER, false) {
                     self.menu_events.push(MenuEvent::OpenFolder);
                     ui.close();
                 }
-                if ui.button("Quit").clicked() {
+                if rows.row(ui, QUIT, false) {
                     ctx.send_viewport_cmd(ViewportCommand::Close);
                     // The menu must close before the window goes away.
                     ui.close();
                 }
             });
             top_bar::menu(ui, "View", |ui| {
-                for pane in [Pane::Library, Pane::Gallery, Pane::Preview, Pane::Log] {
+                let panes = [Pane::Library, Pane::Gallery, Pane::Preview, Pane::Log];
+                let mut labels: Vec<&str> = panes.iter().map(|pane| dock::name(*pane)).collect();
+                labels.push(RESET_LAYOUT);
+                let rows = Rows::new(ui, &labels, true);
+                for pane in panes {
                     let visible = is_visible(&self.dock, pane);
-                    if ui
-                        .add(Button::new(dock::name(pane)).selected(visible))
-                        .clicked()
-                    {
+                    if rows.row(ui, dock::name(pane), visible) {
                         set_visible(&mut self.dock, pane, !visible);
                     }
                 }
                 ui.separator();
-                if ui.button("Reset Window Layout").clicked() {
+                if rows.row(ui, RESET_LAYOUT, false) {
                     self.reset_layout();
                 }
             });
             top_bar::menu(ui, "Settings", |ui| {
-                if ui.button("Preferences...").clicked() {
+                let rows = Rows::new(ui, &[PREFERENCES], false);
+                if rows.row(ui, PREFERENCES, false) {
                     self.menu_events.push(MenuEvent::OpenPreferences);
                 }
             });

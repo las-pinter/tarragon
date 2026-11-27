@@ -1059,7 +1059,10 @@ names a section holds its detail there.
 - The File, View, and Settings menu buttons take the raised `#3d3b44` fill
   and the primary text under the pointer and while open. The pages draw them
   at rest only, and the hover step `#2a2836` is too faint on the `#1c1b22`
-  bar.
+  bar. The rows of these menus and of the panel title menu are drawn like the
+  page's context menu rows, with the `#4a1b0c` hover fill and the `#f0997b`
+  text, because the hover step is the menu fill itself. The View menu marks
+  each shown panel with the amber tick of the Tags menu.
 - The preview colour bars all have the same width, because no colour share is
   stored. See "Preview colour bars".
 - The grid context menu keeps the app's items and keys. The page's "Open

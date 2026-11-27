@@ -13,6 +13,7 @@ mod empty_card;
 mod grid_key_gates;
 mod grid_keys;
 mod keys;
+mod menu_rows;
 mod min_width;
 mod preview_wiring;
 mod status_bar;

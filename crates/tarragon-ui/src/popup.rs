@@ -2,11 +2,16 @@
 
 use egui::{
     Align2, Color32, CornerRadius, CursorIcon, FontId, Frame, Margin, Pos2, Rect, Response, Sense,
-    Stroke, Ui, vec2,
+    Stroke, Ui, WidgetInfo, WidgetType, vec2,
 };
 
 use crate::theme::points;
 use crate::tokens;
+
+/// `.tick` width, in points.
+pub(crate) const TICK_WIDTH: f32 = 12.0;
+/// `.menu-row .lead` gap between the tick and the text, in points.
+pub(crate) const LEAD_GAP: f32 = 8.0;
 
 /// Where a menu `height` tall opens: under `button`, or above it when it does
 /// not fit under and does fit above. The corner is the one that touches the
@@ -54,4 +59,74 @@ pub(crate) fn text_width(ui: &Ui, text: &str) -> f32 {
         .painter()
         .layout_no_wrap(text.to_owned(), font, tokens::TEXT_PRIMARY);
     galley.size().x
+}
+
+/// Draw a check mark in the tick box `tick`.
+pub(crate) fn paint_tick(ui: &Ui, tick: Rect) {
+    let at = |x: f32, y: f32| Pos2::new(tick.min.x + x, tick.center().y + y);
+    let points = vec![at(1.0, 0.0), at(4.5, 3.5), at(11.0, -3.5)];
+    ui.painter()
+        .line(points, Stroke::new(1.5, tokens::AMBER_ACCENT));
+}
+
+/// The tick box at the start of `row`, after the row padding.
+pub(crate) fn tick_box(row: Rect) -> Rect {
+    let min = row.left_center() + vec2(tokens::MENU_ROW_PAD_X, -tokens::MENU_ROW_HEIGHT / 2.0);
+    Rect::from_min_size(min, vec2(TICK_WIDTH, tokens::MENU_ROW_HEIGHT))
+}
+
+/// The rows of one menu, all as wide as the widest label.
+///
+/// Each row takes the coral-deep hover fill and the light coral text of the
+/// other menus. With ticks, every row leaves room for the tick column, and a
+/// checked row paints the tick.
+pub(crate) struct Rows {
+    width: f32,
+    ticks: bool,
+}
+
+impl Rows {
+    /// Rows for `labels`, with a tick column when `ticks` is set.
+    #[must_use]
+    pub(crate) fn new(ui: &Ui, labels: &[&str], ticks: bool) -> Self {
+        let widest = labels
+            .iter()
+            .map(|label| text_width(ui, label))
+            .fold(0.0, f32::max);
+        let lead = if ticks { TICK_WIDTH + LEAD_GAP } else { 0.0 };
+        Self {
+            width: widest + lead + 2.0 * tokens::MENU_ROW_PAD_X,
+            ticks,
+        }
+    }
+
+    /// Draw a row with `label`, ticked when `checked`. Returns whether it was
+    /// clicked.
+    pub(crate) fn row(&self, ui: &mut Ui, label: &str, checked: bool) -> bool {
+        let (rect, response, color) = row_frame(ui, self.width);
+        let mut at = rect.left_center() + vec2(tokens::MENU_ROW_PAD_X, 0.0);
+        if self.ticks {
+            if checked {
+                paint_tick(ui, tick_box(rect));
+            }
+            at.x += TICK_WIDTH + LEAD_GAP;
+        }
+        ui.painter().text(
+            at,
+            Align2::LEFT_CENTER,
+            label,
+            FontId::proportional(tokens::SIZE_BODY),
+            color,
+        );
+        // Screen readers get the label and, with ticks, the checked state.
+        let enabled = ui.is_enabled();
+        response.widget_info(|| {
+            if self.ticks {
+                WidgetInfo::selected(WidgetType::Button, enabled, checked, label)
+            } else {
+                WidgetInfo::labeled(WidgetType::Button, enabled, label)
+            }
+        });
+        response.clicked()
+    }
 }

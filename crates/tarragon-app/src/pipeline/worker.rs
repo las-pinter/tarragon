@@ -58,13 +58,17 @@ pub(super) fn run(shared: &Shared) {
             continue;
         }
         let asked = asked_count(shared, &job);
-        let outcome =
+        let processed =
             catch_unwind(AssertUnwindSafe(|| process(shared, &job))).unwrap_or_else(|_| {
                 Err(ThumbError {
                     kind: ErrorKind::Panicked,
                     message: "the worker panicked".to_owned(),
                 })
             });
+        let (outcome, dimensions) = match processed {
+            Ok((thumb, dimensions)) => (Ok(thumb), dimensions),
+            Err(error) => (Err(error), None),
+        };
         // The folder may have changed while the file rendered.
         if !record(shared, &job, &outcome, asked) {
             continue;
@@ -73,6 +77,7 @@ pub(super) fn run(shared: &Shared) {
             generation: job.generation,
             key: job.path,
             outcome,
+            dimensions,
         };
         match send(shared, result) {
             Sent::Yes => {
@@ -160,8 +165,9 @@ fn send(shared: &Shared, mut result: ThumbResult) -> Sent {
     }
 }
 
-/// Serve one file from the cache, or render it.
-fn process(shared: &Shared, job: &Job) -> Result<RgbaImage, ThumbError> {
+/// Serve one file from the cache, or render it. A fresh render also gives
+/// the pixel size of the original.
+fn process(shared: &Shared, job: &Job) -> Result<(RgbaImage, Option<(u32, u32)>), ThumbError> {
     if let Some(error) = &job.known_failure {
         return Err(error.clone());
     }
@@ -185,7 +191,7 @@ fn process(shared: &Shared, job: &Job) -> Result<RgbaImage, ThumbError> {
         if job.needs_colors {
             send_colors(shared, job, &image);
         }
-        return Ok(image.into_rgba8());
+        return Ok((image.into_rgba8(), None));
     }
     let image = (shared.render)(&job.path).map_err(|error| {
         let error = ThumbError {
@@ -208,7 +214,7 @@ fn process(shared: &Shared, job: &Job) -> Result<RgbaImage, ThumbError> {
     }
     let thumb = thumb_image(&image);
     send_colors(shared, job, &thumb);
-    Ok(thumb.into_rgba8())
+    Ok((thumb.into_rgba8(), Some((image.width(), image.height()))))
 }
 
 /// Write the log line the error card points to. A stopped render is not a

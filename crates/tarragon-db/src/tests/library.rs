@@ -70,6 +70,8 @@ fn fields_equal_the_stored_row() {
             mtime: 77,
             size: 1234,
             cached: true,
+            width: 4,
+            height: 4,
         }]
     );
 }

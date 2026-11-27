@@ -51,6 +51,15 @@ impl Gallery {
         true
     }
 
+    /// Record the pixel size of the original on the item at `key`. An
+    /// unknown key changes nothing, and a zero side leaves the size unknown.
+    pub fn set_dimensions(&mut self, key: &Path, dimensions: (u32, u32)) {
+        if let Some(item) = self.item_mut(key) {
+            let (width, height) = dimensions;
+            item.dimensions = (width > 0 && height > 0).then_some(dimensions);
+        }
+    }
+
     /// Paths of the tiles the last frame painted, in display order.
     ///
     /// The list is empty before the first frame.

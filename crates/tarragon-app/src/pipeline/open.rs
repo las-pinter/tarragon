@@ -6,6 +6,8 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::Ordering;
 
 use tarragon_cache::store::SourceStamp;
+use tarragon_core::entity::FileInfo;
+use tarragon_db::repository::Thumbnail;
 use tarragon_scan::scan::{build_pool, scan_folder};
 
 use super::job::{ColorState, Job};
@@ -124,6 +126,87 @@ impl Pipeline {
             .map(|job| (job.path.clone(), job.clone()))
             .collect();
         self.queue.replace(jobs);
+        let mut files = files;
+        copy_stored_sizes(&mut files, &rows);
         Ok(Opened { generation, files })
+    }
+}
+
+/// Copy the pixel size of each stored row whose stamp matches the scan, so
+/// the grid knows it before any render. A file that changed since its row was
+/// written keeps an unknown size until it renders again.
+fn copy_stored_sizes(files: &mut [FileInfo], rows: &HashMap<String, Thumbnail>) {
+    for file in files {
+        let key = tarragon_core::path_key::path_key(&file.path);
+        let Some(row) = rows.get(&key) else {
+            continue;
+        };
+        let same = row.mtime == file.mtime && u64::try_from(row.size).ok() == Some(file.size);
+        if same {
+            (file.width, file.height) = (row.width, row.height);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn file(path: &str, size: u64, mtime: i64) -> FileInfo {
+        FileInfo {
+            path: PathBuf::from(path),
+            size,
+            mtime,
+            width: 0,
+            height: 0,
+        }
+    }
+
+    fn row(path: &str, size: i64, mtime: i64) -> Thumbnail {
+        Thumbnail {
+            path: path.to_owned(),
+            mtime,
+            size,
+            thumb_hash: None,
+            width: 640,
+            height: 480,
+            created_at: String::new(),
+            cache_uuid: None,
+            thumbnail_cache_path: None,
+            preview_cache_path: None,
+            full_cache_path: None,
+            last_accessed: 0,
+        }
+    }
+
+    #[test]
+    fn a_row_with_the_same_stamp_gives_its_pixel_size() {
+        let mut files = [file("/images/a.png", 10, 5)];
+        let rows = HashMap::from([(
+            tarragon_core::path_key::path_key(Path::new("/images/a.png")),
+            row("/images/a.png", 10, 5),
+        )]);
+        copy_stored_sizes(&mut files, &rows);
+        assert_eq!((files[0].width, files[0].height), (640, 480));
+    }
+
+    #[test]
+    fn a_changed_file_or_a_missing_row_keeps_the_size_unknown() {
+        let mut files = [
+            file("/images/newer.png", 10, 6),
+            file("/images/bigger.png", 11, 5),
+            file("/images/new.png", 10, 5),
+        ];
+        let rows = ["/images/newer.png", "/images/bigger.png"]
+            .into_iter()
+            .map(|path| {
+                (
+                    tarragon_core::path_key::path_key(Path::new(path)),
+                    row(path, 10, 5),
+                )
+            })
+            .collect();
+        copy_stored_sizes(&mut files, &rows);
+        assert!(files.iter().all(|f| (f.width, f.height) == (0, 0)));
     }
 }

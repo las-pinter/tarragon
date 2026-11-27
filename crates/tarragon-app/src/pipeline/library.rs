@@ -20,7 +20,8 @@ impl Pipeline {
     /// files. Jobs of the old open are dropped.
     ///
     /// The database reads run on the calling thread, so call it from a
-    /// worker thread and not from the UI. The files have no pixel size.
+    /// worker thread and not from the UI. The files carry the stored pixel
+    /// size, zero when no render stored one.
     /// It keeps the remembered failures: a file outside the old folder may
     /// have failed before.
     ///
@@ -76,8 +77,8 @@ impl Pipeline {
                 path: PathBuf::from(row.path),
                 size: u64::try_from(row.size).unwrap_or(0),
                 mtime: row.mtime,
-                width: 0,
-                height: 0,
+                width: row.width,
+                height: row.height,
             })
             .collect();
         Ok(Opened { generation, files })

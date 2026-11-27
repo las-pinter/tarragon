@@ -37,6 +37,8 @@ pub trait Tiles {
     fn clear_texture(&mut self, key: &Path);
     /// Show the error mark on the tile. Return false for an unknown key.
     fn mark_failed(&mut self, key: &Path, error: TileError) -> bool;
+    /// Record the pixel size of the original on the tile.
+    fn set_dimensions(&mut self, key: &Path, dimensions: (u32, u32));
 }
 
 /// What `apply` did with one result.
@@ -147,6 +149,10 @@ impl Feed {
         if !tiles.contains(&key) {
             return Applied::Unknown;
         }
+        // A fresh render knows the pixel size even when the texture waits.
+        if let Some(dimensions) = result.dimensions {
+            tiles.set_dimensions(&key, dimensions);
+        }
         match result.outcome {
             Ok(image) => {
                 let bytes =
@@ -234,6 +240,7 @@ mod tests {
         known: HashSet<PathBuf>,
         textures: HashMap<PathBuf, u32>,
         failed: HashMap<PathBuf, TileError>,
+        dimensions: HashMap<PathBuf, (u32, u32)>,
     }
 
     impl Fake {
@@ -273,6 +280,10 @@ mod tests {
             self.failed.insert(key.to_path_buf(), error);
             true
         }
+
+        fn set_dimensions(&mut self, key: &Path, dimensions: (u32, u32)) {
+            self.dimensions.insert(key.to_path_buf(), dimensions);
+        }
     }
 
     /// One 2x2 thumbnail is 16 bytes.
@@ -283,6 +294,7 @@ mod tests {
             generation,
             key: PathBuf::from(key),
             outcome: Ok(RgbaImage::new(2, 2)),
+            dimensions: None,
         }
     }
 
@@ -294,6 +306,7 @@ mod tests {
                 kind,
                 message: "failed".to_owned(),
             }),
+            dimensions: None,
         }
     }
 
@@ -345,6 +358,24 @@ mod tests {
         assert_eq!(feed.apply(&mut tiles, ok(3, "a"), |_| 7), Applied::Textured);
         assert_eq!(tiles.textures.get(Path::new("a")), Some(&7));
         assert!(feed.all_settled());
+    }
+
+    #[test]
+    fn a_fresh_render_gives_the_tile_its_pixel_size() {
+        let mut feed = feed_for(&["a"], 1000);
+        let mut tiles = Fake::with(&["a"]);
+        let fresh = ThumbResult {
+            dimensions: Some((640, 480)),
+            ..ok(3, "a")
+        };
+        feed.apply(&mut tiles, fresh, |_| 7);
+        let unknown = ThumbResult {
+            dimensions: Some((1, 1)),
+            ..ok(3, "gone")
+        };
+        feed.apply(&mut tiles, unknown, |_| 8);
+        assert_eq!(tiles.dimensions.len(), 1, "an unknown key gets no size");
+        assert_eq!(tiles.dimensions.get(Path::new("a")), Some(&(640, 480)));
     }
 
     #[test]

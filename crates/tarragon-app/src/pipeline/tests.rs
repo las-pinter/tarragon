@@ -417,6 +417,7 @@ fn the_consumer_drops_a_result_of_an_old_generation() {
         generation,
         key: PathBuf::from(name),
         outcome: Ok(RgbaImage::new(1, 1)),
+        dimensions: None,
     };
     tx.send(make(1, "old")).expect("send");
     tx.send(make(2, "new")).expect("send");
@@ -538,6 +539,7 @@ fn drain_returns_at_most_max_current_results() {
             generation: u64::from(index != 0),
             key: PathBuf::from(format!("{index}")),
             outcome: Ok(RgbaImage::new(1, 1)),
+            dimensions: None,
         })
         .expect("send");
     }

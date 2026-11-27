@@ -121,7 +121,8 @@ impl Database {
     pub fn library_files(&self) -> Result<Vec<LibraryFile>, DbError> {
         let conn = self.lock()?;
         let mut stmt = conn.prepare(
-            "SELECT path, mtime, size, thumbnail_cache_path IS NOT NULL FROM thumbnails",
+            "SELECT path, mtime, size, thumbnail_cache_path IS NOT NULL, width, height \
+             FROM thumbnails",
         )?;
         let rows = stmt.query_map([], |row| {
             Ok(LibraryFile {
@@ -129,6 +130,8 @@ impl Database {
                 mtime: row.get(1)?,
                 size: row.get(2)?,
                 cached: row.get(3)?,
+                width: row.get(4)?,
+                height: row.get(5)?,
             })
         })?;
         let mut out = Vec::new();

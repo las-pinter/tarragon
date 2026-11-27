@@ -146,7 +146,8 @@ none.
 ### Grid benchmark
 
 The grid benchmark measures the CPU cost of one frame at the target geometry:
-196 pt minimum tracks, 208 pt cell height, and a 14 pt gap. The run covers two
+168 pt minimum tracks, a square thumbnail with a 24 pt name block under it, and
+gaps of 16 pt across and 20 pt down. The run covers two
 widths: 874 by 900 pt for the shell grid width, and 1600 by 900 pt for a wide
 viewport. It runs headless. It measures egui layout, the paint list build, and
 tessellation. It measures no GPU work.

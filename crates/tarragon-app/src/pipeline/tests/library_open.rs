@@ -41,12 +41,16 @@ fn the_library_lists_the_files_of_both_folders() {
     files.sort();
     paths.sort();
     assert_eq!(files, paths);
-    assert!(
-        opened
-            .files
+    // The pixel size comes from the stored row, so the grid can show it.
+    let rows = setup.db.library_files().expect("read the library");
+    for file in &opened.files {
+        let row = rows
             .iter()
-            .all(|file| file.width == 0 && file.height == 0 && file.size > 0)
-    );
+            .find(|row| row.path == file.path)
+            .expect("a row");
+        assert_eq!((file.width, file.height), (row.width, row.height));
+        assert!(file.size > 0 && file.width > 0 && file.height > 0);
+    }
 }
 
 #[test]

@@ -44,6 +44,10 @@ impl Tiles for Gallery {
     fn mark_failed(&mut self, key: &Path, error: TileError) -> bool {
         Self::mark_failed(self, key, error)
     }
+
+    fn set_dimensions(&mut self, key: &Path, dimensions: (u32, u32)) {
+        Self::set_dimensions(self, key, dimensions);
+    }
 }
 
 /// What an open loads.
@@ -448,7 +452,10 @@ impl Thumbs {
                 let items = opened
                     .files
                     .into_iter()
-                    .map(|file| GridItem::new(file.path, file.mtime, None))
+                    .map(|file| {
+                        GridItem::new(file.path, file.mtime, None)
+                            .with_meta(file.size, (file.width, file.height))
+                    })
                     .collect();
                 gallery.set_folder(Some(folder.clone()));
                 gallery.set_items(items);
@@ -482,7 +489,10 @@ impl Thumbs {
                 let items = opened
                     .files
                     .into_iter()
-                    .map(|file| GridItem::new(file.path, file.mtime, None))
+                    .map(|file| {
+                        GridItem::new(file.path, file.mtime, None)
+                            .with_meta(file.size, (file.width, file.height))
+                    })
                     .collect();
                 gallery.set_items(items);
                 self.library = Library::Loaded;

@@ -30,7 +30,9 @@ pub fn frame_at(
     events: Vec<Event>,
     run: &mut impl FnMut(&mut Ui),
 ) -> Painted {
-    let screen = Rect::from_min_size(Pos2::ZERO, vec2(1200.0, 800.0));
+    // Tall enough for two rows of gallery tiles below the header and the
+    // filter bar.
+    let screen = Rect::from_min_size(Pos2::ZERO, vec2(1200.0, 1100.0));
     let input = RawInput {
         screen_rect: Some(screen),
         time,
@@ -80,7 +82,9 @@ pub fn square_fills(ctx: &Context, run: &mut impl FnMut(&mut Ui)) -> Vec<Color32
             _ => {}
         }
     }
-    let screen = Rect::from_min_size(Pos2::ZERO, vec2(1200.0, 800.0));
+    // Tall enough for two rows of gallery tiles below the header and the
+    // filter bar.
+    let screen = Rect::from_min_size(Pos2::ZERO, vec2(1200.0, 1100.0));
     let input = RawInput {
         screen_rect: Some(screen),
         ..Default::default()

@@ -15,7 +15,7 @@ fn metrics() -> GridMetrics {
     GridMetrics {
         columns: 6,
         cell: vec2(240.0, 180.0),
-        spacing: 8.0,
+        gap: Vec2::splat(8.0),
     }
 }
 
@@ -125,51 +125,53 @@ fn zero_columns_show_nothing() {
 }
 
 #[test]
-fn the_cell_size_comes_from_the_stylesheet() {
-    assert_eq!(cell_size(), vec2(196.0, 208.0));
-    assert_eq!(cell_size(), metrics_for(616.0).cell);
-    assert_eq!(metrics_for(616.0).spacing, tokens::GRID_GAP);
+fn the_cell_size_comes_from_the_page() {
+    let label = cell::LABEL_BLOCK;
+    assert_eq!(label, 24.0, "an 8 point gap and a 16 point name line");
+    assert_eq!(cell_size(), vec2(168.0, 168.0 + label));
+    assert_eq!(cell_size(), metrics_for(536.0).cell);
+    assert_eq!(metrics_for(536.0).gap, vec2(16.0, 20.0));
 }
 
 #[test]
 fn metrics_for_fills_the_available_width() {
-    // Three 196 point tracks and two 14 point gaps need 616 points.
-    assert_eq!(metrics_for(616.0).columns, 3);
-    assert_eq!(metrics_for(615.0).columns, 2);
+    // Three 168 point tracks and two 16 point gaps need 536 points.
+    assert_eq!(metrics_for(536.0).columns, 3);
+    assert_eq!(metrics_for(535.0).columns, 2);
     assert_eq!(
         metrics_for(0.0).columns,
         1,
         "a narrow grid keeps one column"
     );
     assert_eq!(metrics_for(-50.0).columns, 1);
-    assert_eq!(metrics_for(5000.0).columns, 23);
+    assert_eq!(metrics_for(5000.0).columns, 27);
 }
 
 #[test]
-fn the_cell_width_stretches_to_fill_the_row() {
-    // Four tracks at the shell grid width: (874 - 3 * 14) / 4.
+fn the_cell_stretches_to_fill_the_row_and_stays_square_above_the_name() {
+    // Four tracks at 874 points: (874 - 3 * 16) / 4.
     let shell = metrics_for(874.0);
     assert_eq!(shell.columns, 4);
-    assert!((shell.cell.x - 208.0).abs() < f32::EPSILON);
+    assert!((shell.cell.x - 206.5).abs() < f32::EPSILON);
     assert!(
-        (shell.cell.y - 208.0).abs() < f32::EPSILON,
-        "the height stays"
+        (shell.cell.y - shell.cell.x - cell::LABEL_BLOCK).abs() < f32::EPSILON,
+        "the thumbnail stays square"
     );
 
-    // A 196 point track divides 616 points exactly.
-    let exact = metrics_for(616.0);
-    assert_eq!(exact.cell.x, 196.0);
+    // A 168 point track divides 536 points exactly.
+    let exact = metrics_for(536.0);
+    assert_eq!(exact.cell.x, 168.0);
 
     // The last column ends on the right edge of the row.
-    let width = exact.cell.x * 3.0 + exact.spacing * 2.0;
-    assert!((width - 616.0).abs() < f32::EPSILON);
+    let width = exact.cell.x * 3.0 + exact.gap.x * 2.0;
+    assert!((width - 536.0).abs() < f32::EPSILON);
 }
 
 #[test]
-fn a_stretched_track_never_goes_below_the_stylesheet_width() {
+fn a_stretched_track_never_goes_below_the_page_minimum() {
     let narrow = metrics_for(100.0);
     assert_eq!(narrow.columns, 1);
-    assert_eq!(narrow.cell.x, 196.0, "the track keeps its minimum width");
+    assert_eq!(narrow.cell.x, 168.0, "the track keeps its minimum width");
 }
 
 #[test]
@@ -237,6 +239,8 @@ fn offset_items() -> Vec<GridItem> {
 #[test]
 fn a_click_at_a_non_zero_offset_reports_the_tile_under_the_pointer() {
     let ctx = Context::default();
+    // A selected name paints in the medium face, which the theme installs.
+    crate::apply_theme(&ctx);
     let items = offset_items();
     let order: Vec<usize> = (0..items.len()).collect();
     let selection = Selection::default();
@@ -246,21 +250,27 @@ fn a_click_at_a_non_zero_offset_reports_the_tile_under_the_pointer() {
     };
     let scroll_y = 500.0;
 
+    // Several frames, so the themed scroll bar has taken its width and the
+    // tiles sit where the click lands.
     let mut painted = 0;
-    ctx.run_ui(input(Vec::new()), |ui| {
-        painted = grid
-            .show_items_at(ui, scroll_y, &items, &order, &selection)
-            .painted;
-    })
-    .drop_without_applying_deltas();
+    for _ in 0..8 {
+        ctx.run_ui(input(Vec::new()), |ui| {
+            painted = grid
+                .show_items_at(ui, scroll_y, &items, &order, &selection)
+                .painted;
+        })
+        .drop_without_applying_deltas();
+    }
     assert!(painted > 0, "the pinned grid painted nothing");
 
     let (index, rect) = (0..items.len())
         .find_map(|index| {
             ctx.read_response(Id::new(("tarragon-grid-tile", index)))
                 .map(|response| (index, response.rect))
+                // A row cut by the top of the view lies under the clip.
+                .filter(|(_, rect)| rect.min.y >= 0.0)
         })
-        .expect("a tile registered");
+        .expect("a whole tile registered");
     assert_ne!(index, 0, "the offset must move the first painted tile");
 
     let pos = rect.center();

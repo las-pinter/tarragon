@@ -5,7 +5,7 @@ use crate::grid::{CellClick, GridResponse, VirtualGrid, metrics_for};
 use egui::{Context, Event, Modifiers, PointerButton, Pos2, RawInput};
 
 /// A headless screen with the given events.
-fn input(events: Vec<Event>) -> RawInput {
+pub(super) fn input(events: Vec<Event>) -> RawInput {
     RawInput {
         screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(900.0, 700.0))),
         events,
@@ -14,12 +14,12 @@ fn input(events: Vec<Event>) -> RawInput {
 }
 
 /// One item with no texture.
-fn item(name: &str) -> GridItem {
+pub(super) fn item(name: &str) -> GridItem {
     GridItem::new(Path::new("/images").join(name), 1, None)
 }
 
 /// Every text shape in the output, as `(text, font size)`.
-fn painted_texts(output: &egui::FullOutput) -> Vec<(String, f32)> {
+pub(super) fn painted_texts(output: &egui::FullOutput) -> Vec<(String, f32)> {
     fn collect(shape: &epaint::Shape, text: &mut Vec<(String, f32)>) {
         match shape {
             epaint::Shape::Text(shape) => {
@@ -47,7 +47,7 @@ fn painted_texts(output: &egui::FullOutput) -> Vec<(String, f32)> {
 }
 
 /// Draw one frame over `items` with `selection` and return the output.
-fn draw_with(
+pub(super) fn draw_with(
     ctx: &Context,
     raw: RawInput,
     items: &[GridItem],
@@ -105,15 +105,22 @@ fn a_tile_paints_a_placeholder_and_a_badge() {
 }
 
 #[test]
-fn the_thumbnail_is_one_token_tall() {
-    let cell = Rect::from_min_size(pos2(0.0, 0.0), vec2(200.0, 208.0));
+fn the_thumbnail_is_the_square_at_the_top_of_the_cell() {
+    let cell = Rect::from_min_size(pos2(10.0, 20.0), vec2(200.0, 200.0 + LABEL_BLOCK));
     let thumb = thumbnail_rect(cell);
-    assert!(
-        (thumb.height() - tokens::THUMBNAIL_SIZE).abs() < f32::EPSILON,
-        "the thumbnail is {} points tall",
-        thumb.height()
+    assert_eq!(
+        thumb,
+        Rect::from_min_size(pos2(10.0, 20.0), vec2(200.0, 200.0))
     );
-    assert!((tokens::THUMBNAIL_SIZE - 160.0).abs() < f32::EPSILON);
+}
+
+#[test]
+fn a_letterboxed_picture_rounds_only_the_corners_it_shares() {
+    let square = Rect::from_min_size(pos2(0.0, 0.0), vec2(100.0, 100.0));
+    let radius = CornerRadius::same(8);
+    let wide = fit_rect(square, vec2(200.0, 100.0));
+    assert_eq!(touching_corners(wide, square, radius), CornerRadius::ZERO);
+    assert_eq!(touching_corners(square, square, radius), radius);
 }
 
 #[test]
@@ -237,29 +244,49 @@ fn a_click_reports_the_index_and_the_modifiers() {
 
 #[test]
 fn the_badge_colours_come_from_the_extension() {
-    // The pairs follow `design/mockups/busy-states.html` lines 55-62.
-    let pairs = [
-        ("a.jpg", tokens::BADGE_BG_SAGE, tokens::BADGE_FG_SAGE),
-        ("a.JPEG", tokens::BADGE_BG_SAGE, tokens::BADGE_FG_SAGE),
-        ("a.png", tokens::BADGE_BG_NAVY, tokens::BADGE_FG_NAVY),
-        ("a.psd", tokens::BADGE_BG_VINOUS, tokens::BADGE_FG_VINOUS),
-        ("a.psb", tokens::BADGE_BG_VINOUS, tokens::BADGE_FG_VINOUS),
-        ("a.webp", tokens::BADGE_BG_TEAL, tokens::BADGE_FG_TEAL),
-        ("a.gif", tokens::BADGE_BG_PLUM, tokens::BADGE_FG_PLUM),
-        ("a.tif", tokens::BADGE_BG_UMBER, tokens::BADGE_FG_UMBER),
-        ("a.tiff", tokens::BADGE_BG_UMBER, tokens::BADGE_FG_UMBER),
-        ("a.bmp", tokens::BADGE_BG_OLIVE, tokens::BADGE_FG_OLIVE),
-        ("a.kra", tokens::BADGE_BG_PLUM, tokens::BADGE_FG_PLUM),
-        ("a.clip", tokens::BADGE_BG_AZURE, tokens::BADGE_FG_AZURE),
-        ("noext", tokens::BADGE_BG_NEUTRAL, tokens::BADGE_FG_NEUTRAL),
+    // The page gives PNG, JPG, PSD, and WEBP; the rest keep the mockup text
+    // colours of `design/mockups/busy-states.html`.
+    let colours = [
+        ("a.jpg", tokens::BADGE_FG_SAGE),
+        ("a.JPEG", tokens::BADGE_FG_SAGE),
+        ("a.png", tokens::BADGE_FG_NAVY),
+        ("a.psd", tokens::BADGE_FG_VINOUS),
+        ("a.psb", tokens::BADGE_FG_VINOUS),
+        ("a.webp", tokens::BADGE_FG_TEAL),
+        ("a.gif", tokens::BADGE_FG_PLUM),
+        ("a.tif", tokens::BADGE_FG_UMBER),
+        ("a.tiff", tokens::BADGE_FG_UMBER),
+        ("a.bmp", tokens::BADGE_FG_OLIVE),
+        ("a.kra", tokens::BADGE_FG_PLUM),
+        ("a.clip", tokens::BADGE_FG_AZURE),
+        ("noext", tokens::BADGE_FG_NEUTRAL),
     ];
-    for (name, fill, text) in pairs {
-        assert_eq!(
-            badge_colors(Path::new(name)),
-            (fill, text),
-            "the badge pair for {name}"
-        );
+    for (name, colour) in colours {
+        assert_eq!(badge_color(Path::new(name)), colour, "the badge of {name}");
     }
+    assert_eq!(tokens::BADGE_FG_NAVY, Color32::from_rgb(0x7b, 0xa8, 0xc8));
+    assert_eq!(tokens::BADGE_FG_VINOUS, Color32::from_rgb(0xf0, 0x99, 0x7b));
+}
+
+#[test]
+fn the_badge_sits_on_the_base_fill_eight_points_in() {
+    let ctx = Context::default();
+    crate::apply_theme(&ctx);
+    let output = draw_with(
+        &ctx,
+        input(Vec::new()),
+        &[item("a.png")],
+        &Selection::default(),
+    );
+    let thumb = ctx
+        .read_response(Id::new(("tarragon-grid-tile", 0)))
+        .map(|r| thumbnail_rect(r.rect))
+        .expect("the tile registered");
+    let badge = rects(&output)
+        .into_iter()
+        .find(|r| r.fill == tokens::BG_PRIMARY && r.rect.min == thumb.min + Vec2::splat(8.0));
+    output.drop_without_applying_deltas();
+    assert!(badge.is_some(), "no base-fill badge at the corner inset");
 }
 
 #[test]
@@ -268,111 +295,6 @@ fn the_badge_text_comes_from_the_path() {
     assert_eq!(extension_label(Path::new("/images/matte.BMP")), "BMP");
     assert_eq!(extension_label(Path::new("/images/concept.kra")), "KRA");
     assert_eq!(extension_label(Path::new("/images/noext")), "FILE");
-}
-
-#[test]
-fn a_selected_tile_outlines_the_thumbnail() {
-    let ctx = Context::default();
-    crate::apply_theme(&ctx);
-    let items = [item("sketch.psd")];
-    let grid = VirtualGrid {
-        metrics: metrics_for(700.0),
-        item_count: 1,
-    };
-    let mut selection = Selection::default();
-    selection.select_only(0);
-    let order = [0];
-    let output = ctx.run_ui(input(Vec::new()), |ui| {
-        grid.show_items_at(ui, 0.0, &items, &order, &selection);
-    });
-    let outlined = output.shapes.iter().any(|clipped| match &clipped.shape {
-        epaint::Shape::Rect(rect) => rect.stroke.color == tokens::CORAL_MUTED,
-        _ => false,
-    });
-    output.drop_without_applying_deltas();
-    assert!(outlined, "the selected tile painted no coral outline");
-}
-
-#[test]
-fn a_multi_selection_paints_the_check_badge() {
-    let ctx = Context::default();
-    crate::apply_theme(&ctx);
-    let items = [item("a.png"), item("b.png")];
-    let mut selection = Selection::default();
-    selection.select_only(0);
-    selection.toggle(1);
-
-    let output = draw_with(&ctx, input(Vec::new()), &items, &selection);
-    let checks = output
-        .shapes
-        .iter()
-        .filter(|clipped| match &clipped.shape {
-            epaint::Shape::Circle(circle) => {
-                circle.fill == tokens::CORAL_MUTED && (circle.radius - CHECK_SIZE / 2.0).abs() < 0.5
-            }
-            _ => false,
-        })
-        .count();
-    output.drop_without_applying_deltas();
-    assert_eq!(checks, 2, "each selected tile paints one check badge");
-}
-
-#[test]
-fn one_selected_tile_paints_no_check_badge() {
-    let ctx = Context::default();
-    crate::apply_theme(&ctx);
-    let items = [item("a.png")];
-    let mut selection = Selection::default();
-    selection.select_only(0);
-
-    let output = draw_with(&ctx, input(Vec::new()), &items, &selection);
-    let checks = output
-        .shapes
-        .iter()
-        .filter(|clipped| {
-            matches!(&clipped.shape, epaint::Shape::Circle(circle) if circle.fill == tokens::CORAL_MUTED)
-        })
-        .count();
-    output.drop_without_applying_deltas();
-    assert_eq!(checks, 0, "one selected tile needs no check badge");
-}
-
-#[test]
-fn a_hovered_tile_paints_the_hover_border() {
-    let ctx = Context::default();
-    crate::apply_theme(&ctx);
-    let items = [item("a.png")];
-    let selection = Selection::default();
-    draw_with(&ctx, input(Vec::new()), &items, &selection).drop_without_applying_deltas();
-    let pos = ctx
-        .read_response(Id::new(("tarragon-grid-tile", 0)))
-        .expect("the tile registered")
-        .rect
-        .center();
-
-    // The hover fade runs 150 ms, so it needs more than nine 60 Hz frames.
-    let mut output = draw_with(
-        &ctx,
-        input(vec![Event::PointerMoved(pos)]),
-        &items,
-        &selection,
-    );
-    for _ in 0..12 {
-        output.drop_without_applying_deltas();
-        output = draw_with(
-            &ctx,
-            input(vec![Event::PointerMoved(pos)]),
-            &items,
-            &selection,
-        );
-    }
-
-    let hovered = output.shapes.iter().any(|clipped| match &clipped.shape {
-        epaint::Shape::Rect(rect) => rect.stroke.color == tokens::BORDER_CARD,
-        _ => false,
-    });
-    output.drop_without_applying_deltas();
-    assert!(hovered, "the hovered tile painted no card border");
 }
 
 /// Draw one tile of `item` and return the shapes.
@@ -467,71 +389,18 @@ fn a_texture_wins_over_an_error() {
     assert!(!coral_name, "the name is coral over a texture");
 }
 
-/// Count the rect shapes in the output that stroke with the selection colour.
-fn selection_strokes(output: &egui::FullOutput) -> usize {
-    fn count(shape: &epaint::Shape) -> usize {
+/// Every rect shape in the output.
+pub(super) fn rects(output: &egui::FullOutput) -> Vec<epaint::RectShape> {
+    fn collect(shape: &epaint::Shape, found: &mut Vec<epaint::RectShape>) {
         match shape {
-            epaint::Shape::Rect(rect)
-                if rect.stroke.width > 0.0 && rect.stroke.color == tokens::CORAL_MUTED =>
-            {
-                1
-            }
-            epaint::Shape::Vec(shapes) => shapes.iter().map(count).sum(),
-            _ => 0,
+            epaint::Shape::Rect(rect) => found.push(rect.clone()),
+            epaint::Shape::Vec(shapes) => shapes.iter().for_each(|s| collect(s, found)),
+            _ => {}
         }
     }
-    output
-        .shapes
-        .iter()
-        .map(|clipped| count(&clipped.shape))
-        .sum()
-}
-
-/// Draw one selected tile and count its selection strokes.
-fn selected_strokes(ctx: &Context, item: GridItem) -> usize {
-    let mut selection = Selection::default();
-    selection.select_only(0);
-    let output = draw_with(ctx, input(Vec::new()), &[item], &selection);
-    let strokes = selection_strokes(&output);
-    output.drop_without_applying_deltas();
-    strokes
-}
-
-#[test]
-fn a_selected_tile_with_a_texture_paints_one_selection_stroke() {
-    let ctx = Context::default();
-    crate::apply_theme(&ctx);
-    let texture = ctx.load_texture(
-        "selected",
-        egui::ColorImage::filled([4, 4], Color32::RED),
-        egui::TextureOptions::NEAREST,
-    );
-    let item = GridItem::new(
-        Path::new("/images/shot.png").to_path_buf(),
-        1,
-        Some(texture),
-    );
-    assert_eq!(selected_strokes(&ctx, item), 1);
-}
-
-#[test]
-fn a_selected_placeholder_tile_paints_one_selection_stroke() {
-    let ctx = Context::default();
-    crate::apply_theme(&ctx);
-    assert_eq!(selected_strokes(&ctx, item("sketch.psd")), 1);
-}
-
-#[test]
-fn an_unselected_tile_paints_no_selection_stroke() {
-    let ctx = Context::default();
-    crate::apply_theme(&ctx);
-    let output = draw_with(
-        &ctx,
-        input(Vec::new()),
-        &[item("a.png")],
-        &Selection::default(),
-    );
-    let strokes = selection_strokes(&output);
-    output.drop_without_applying_deltas();
-    assert_eq!(strokes, 0);
+    let mut found = Vec::new();
+    for clipped in &output.shapes {
+        collect(&clipped.shape, &mut found);
+    }
+    found
 }

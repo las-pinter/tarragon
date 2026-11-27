@@ -117,11 +117,12 @@ fn print_report(report: &Report) {
     println!();
     println!("-- grid, viewport {}x{VIEW_HEIGHT} pt --", report.width);
     println!(
-        "grid:             {} columns, cell {:.1}x{:.1} pt, spacing {:.1} pt",
+        "grid:             {} columns, cell {:.1}x{:.1} pt, gap {:.1}x{:.1} pt",
         report.metrics.columns,
         report.metrics.cell.x,
         report.metrics.cell.y,
-        report.metrics.spacing
+        report.metrics.gap.x,
+        report.metrics.gap.y
     );
     println!("pixels per point: {}", report.pixels_per_point);
     println!(

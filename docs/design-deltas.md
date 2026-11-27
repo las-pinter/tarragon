@@ -26,8 +26,9 @@ After: the first tier is 320 px on the longest edge. The settings text reads
 `Cache tiers: 320, 1024, full.` and the log line reads
 `tier 320 hit for sketch_014.png`. The app no longer reads old 256 folders.
 
-Reason: a grid cell of 160 pt at a display scale of 2.0 needs 320 px, so the
-thumbnail stays sharp up to that scale.
+Reason: a 160 pt thumbnail at a display scale of 2.0 needs 320 px. The grid
+tracks start at 168 pt and stretch to fill the row, so at a high display scale
+or in a narrow pane a thumbnail can be drawn larger than its 320 px tier.
 
 ## Outside references in the design folder
 
@@ -199,16 +200,31 @@ metric layer.
 
 Reason: one value set for the stylesheet and the code keeps the two in step.
 
-## Grid hover scale
+## Grid tile
 
 Before: `design/mockups/theme.css` line 765 scales a hovered cell by 1.02 over
-150 ms, so the hovered cell lifts above its neighbours.
+150 ms, and a cell is a bordered card. `design/redesign/main-window.html` draws
+no card: a square thumbnail with an 8 px radius, the name under it, a 2 px
+`#e06540` selection outline 3 px outside the square, a hover outline in
+`#3d3b44`, and a bottom bar with the pixel size and the file size.
 
-After: the tile keeps its size. The hover fade changes the fill, the border,
-and the shadow only.
+After: the tile is the redesign tile. The picture is fitted inside the square
+on the field fill and never cropped, so a wide or tall picture leaves bands of
+the field fill. Only the picture corners that meet a corner of the square are
+round. The name sits 8 pt under the square in the tertiary text, and a selected
+name takes the light coral and the Roboto Medium face. Hover shows the outline
+and the info bar at once, with no scale, fade, or shadow. The bar reads
+`W × H · size`, and only the file size when the pixel size is not known yet.
+The pixel size comes from the stored row when the file has not changed since,
+or from a new render. The format badge sits 8 pt inside the top-left corner on
+the base fill with the format text colour. The grid tracks are at least 168 pt
+wide, with 16 pt between columns and 20 pt between rows, and the grid keeps a
+5 pt edge so an outline at the side is not cut off. The name stays at the
+12 pt body size.
 
-Reason: a scaled tile overlaps its neighbours, and the grid does not reflow
-its clip rect for the larger cell. The difference is visual only.
+Reason: a scaled tile overlaps its neighbours. A cropped picture would hide
+part of a reference image. A file that changed since its row was written may
+have a new pixel size, so its old one is not shown.
 
 ## New row fade
 
@@ -250,11 +266,14 @@ caption size.
 
 Before: the multi-select badge is an 18 pt coral circle with an 11 pt bold `v`
 glyph, as `design/mockups/theme.css` line 810 shows.
+`design/redesign/main-multi-select.html` draws a 22 px `#e06540` circle with a
+dark check.
 
-After: the badge paints the same circle and draws the check with two line
-segments. The filter menu tick, a `v` in `design/mockups/filter-tags.html`
-line 47, is also a painted check. It is amber when checked. An unchecked row
-keeps a blank of the same width.
+After: the badge is the redesign's 22 pt circle, 8 pt inside the top-right
+corner of the square, with the check painted as a dark line. The filter menu
+tick, a `v` in `design/mockups/filter-tags.html` line 47, is also a painted
+check. It is amber when checked. An unchecked row keeps a blank of the same
+width.
 
 Reason: the vendored Roboto family has no check glyph, and a text `v` reads as
 a letter at the caption size. The difference is visual only.
@@ -265,11 +284,10 @@ Before: `design/mockups/theme.css` drew a selected tile with two frames: the
 1.5 px coral border of `.cell.selected`, and a second 1 px coral outline on the
 thumbnail (`.cell.selected .thumb`, with an offset of -1 px).
 
-After: a selected tile draws one frame, the cell border. The mockup rule for
-the thumbnail outline is removed.
+After: a selected tile draws one frame, the redesign's 2 pt outline 3 pt
+outside the square (see "Grid tile").
 
-Reason: the second stroke over the thumbnail doubled the frame. One frame marks
-the selection clearly.
+Reason: the redesign draws one outline, and a second stroke doubled the frame.
 
 ## Log levels and toolbar
 

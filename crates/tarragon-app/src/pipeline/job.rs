@@ -76,6 +76,9 @@ pub struct ThumbResult {
     pub key: PathBuf,
     /// The 320 px thumbnail as RGBA8, or the failure.
     pub outcome: Result<RgbaImage, ThumbError>,
+    /// The pixel size of the original after a fresh render. A cache hit gives
+    /// none, because the stored row already gave it at the open.
+    pub dimensions: Option<(u32, u32)>,
 }
 
 /// One unit of work for a worker.

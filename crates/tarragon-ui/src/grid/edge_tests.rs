@@ -3,7 +3,7 @@
 
 use egui::{Context, Pos2, RawInput, Rect, Vec2, vec2};
 
-use super::{VirtualGrid, metrics_for};
+use super::{EDGE, VirtualGrid, metrics_for};
 use crate::tokens;
 
 /// Grid width in points.
@@ -39,7 +39,8 @@ fn raw(scale: f32, size: Vec2) -> RawInput {
     }
 }
 
-/// Largest right edge of any painted cell in the last frame, in points.
+/// Largest right edge of any painted cell in the last frame, in points, with
+/// the outline reach, so a selection outline is part of the measure.
 fn cells_right(scale: f32, item_count: usize, height: f32) -> f32 {
     let ctx = Context::default();
     crate::install(&ctx);
@@ -58,7 +59,7 @@ fn cells_right(scale: f32, item_count: usize, height: f32) -> f32 {
         })
         .drop_without_applying_deltas();
     }
-    right
+    right + EDGE
 }
 
 #[test]
